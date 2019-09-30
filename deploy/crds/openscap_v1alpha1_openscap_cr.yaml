@@ -1,0 +1,9 @@
+apiVersion: openscap.compliance.openshift.io/v1alpha1
+kind: OpenScap
+metadata:
+  name: example-openscap
+spec:
+  # Add fields here
+  rule: xccdf_org.ssgproject.content_rule_no_empty_passwords
+  profile: xccdf_org.ssgproject.content_profile_ospp
+  content: ssg-rhel8-ds.xml
