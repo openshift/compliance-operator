@@ -164,16 +164,12 @@ func (r *ReconcileOpenScap) phaseLaunchingHandler(instance *openscapv1alpha1.Ope
 		}
 
 		// ..and launch it..
-		created, err := r.launchPod(pod, logger)
+		err := r.launchPod(pod, logger)
 		if err != nil {
 			log.Error(err, "Failed to launch a pod", "pod", pod)
 			return reconcile.Result{}, err
 		}
-
-		if created {
-			// If we created a pod, just return to the reconcile loop
-			return reconcile.Result{}, nil
-		}
+		logger.Info("Launched a pod", "pod", pod)
 	}
 
 	// if we got here, there are no new pods to be created, move to the next phase
@@ -268,32 +264,45 @@ func getPodForNode(r *ReconcileOpenScap, openScapCr *openscapv1alpha1.OpenScap, 
 func newPodForNode(openScapCr *openscapv1alpha1.OpenScap, node *corev1.Node, logger logr.Logger) *corev1.Pod {
 	logger.Info("Creating a pod for node", "node", node.Name)
 
-	cmd := createOscapCommand(&openScapCr.Spec, logger)
-	if cmd == "" {
-		logger.Info("Could not create command")
-		return nil
-	}
-	logger.Info("The pod will run command", "command", cmd)
-
 	// FIXME: this is for now..
 	podName := fmt.Sprintf("%s-%s-pod", openScapCr.Name, node.Name)
-	labels := map[string]string{
+	podLabels := map[string]string{
 		"openscapScan": openScapCr.Name,
 		"targetNode":   node.Name,
 	}
+	openScapContainerEnv := getOscapContainerEnv(&openScapCr.Spec, logger)
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: openScapCr.Namespace,
-			Labels:    labels,
+			Labels:    podLabels,
 		},
 		Spec: corev1.PodSpec{
+			ServiceAccountName: "openscap-operator",
 			Containers: []corev1.Container{
 				{
-					Name:    "openscap-ocp",
-					Image:   "quay.io/jhrozek/openscap-ocp:latest",
-					Command: strings.Split(cmd, " "),
+					Name:  "log-collector",
+					Image: "quay.io/jhrozek/scapresults-k8s:latest",
+					Args: []string{
+						"--file=/reports/report.xml",
+						"--config-map-name=" + podName,
+						"--owner=" + openScapCr.Name,
+						"--namespace=" + openScapCr.Namespace,
+					},
+					SecurityContext: &corev1.SecurityContext{
+						Privileged: &trueVal,
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						corev1.VolumeMount{
+							Name:      "report-dir",
+							MountPath: "/reports",
+						},
+					},
+				},
+				{
+					Name:  "openscap-ocp",
+					Image: "quay.io/jhrozek/openscap-ocp:latest",
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &trueVal,
 					},
@@ -302,7 +311,12 @@ func newPodForNode(openScapCr *openscapv1alpha1.OpenScap, node *corev1.Node, log
 							Name:      "host",
 							MountPath: "/host",
 						},
+						corev1.VolumeMount{
+							Name:      "report-dir",
+							MountPath: "/reports",
+						},
 					},
+					Env: openScapContainerEnv,
 				},
 			},
 			NodeName:      node.Name,
@@ -317,6 +331,12 @@ func newPodForNode(openScapCr *openscapv1alpha1.OpenScap, node *corev1.Node, log
 						},
 					},
 				},
+				corev1.Volume{
+					Name: "report-dir",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
 			},
 		},
 	}
@@ -324,7 +344,7 @@ func newPodForNode(openScapCr *openscapv1alpha1.OpenScap, node *corev1.Node, log
 
 // TODO: this probably should not be a method, it doesn't modify reconciler, maybe we
 // should just pass reconciler as param
-func (r *ReconcileOpenScap) launchPod(pod *corev1.Pod, logger logr.Logger) (bool, error) {
+func (r *ReconcileOpenScap) launchPod(pod *corev1.Pod, logger logr.Logger) error {
 	found := &corev1.Pod{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
 	// Try to see if the pod already exists and if not
@@ -333,51 +353,50 @@ func (r *ReconcileOpenScap) launchPod(pod *corev1.Pod, logger logr.Logger) (bool
 		err = r.client.Create(context.TODO(), pod)
 		if err != nil {
 			logger.Error(err, "Cannot create pod", "pod", pod)
-			return false, err
+			return err
 		}
 		logger.Info("Pod launched", "name", pod.Name)
-		return true, nil
+		return nil
 	} else if err != nil {
 		logger.Error(err, "Cannot retrieve pod", "pod", pod)
-		return false, err
+		return err
 	}
 
 	// The pod already exists, re-enter the reconcile loop
-	return false, nil
+	return nil
 }
 
-func createOscapCommand(scanSpec *openscapv1alpha1.OpenScapSpec, logger logr.Logger) string {
-	var cmd strings.Builder
-
-	/* FIXME: the operator panicked at one point when this function returned "". Why? Test it again */
-	cmd.WriteString("oscap-chroot /host xccdf eval")
-
-	// FIXME FIXME: This needs to go to a storage volume
-	cmd.WriteString(" --report /tmp/report.xml")
-
-	if scanSpec.Profile == "" {
-		logger.Info("No profile in spec", "scanSpec", scanSpec)
-		return ""
+func getOscapContainerEnv(scanSpec *openscapv1alpha1.OpenScapSpec, logger logr.Logger) []corev1.EnvVar {
+	content := scanSpec.Content
+	if !strings.HasPrefix(scanSpec.Content, "/") {
+		content = "/var/lib/content/" + scanSpec.Content
 	}
-	cmd.WriteString(" --profile ")
-	cmd.WriteString(scanSpec.Profile)
+
+	env := []corev1.EnvVar{
+		corev1.EnvVar{
+			Name:  "HOSTROOT",
+			Value: "/host",
+		},
+		corev1.EnvVar{
+			Name:  "PROFILE",
+			Value: scanSpec.Profile,
+		},
+		corev1.EnvVar{
+			Name:  "CONTENT",
+			Value: content,
+		},
+		corev1.EnvVar{
+			Name:  "REPORT_DIR",
+			Value: "/reports",
+		},
+	}
 
 	if scanSpec.Rule != "" {
-		cmd.WriteString(" --rule ")
-		cmd.WriteString(scanSpec.Rule)
+		env = append(env, corev1.EnvVar{
+			Name:  "RULE",
+			Value: scanSpec.Rule,
+		})
 	}
 
-	if scanSpec.Content == "" {
-		logger.Info("No content in spec", "scanSpec", scanSpec)
-		return ""
-	}
-
-	cmd.WriteString(" ")
-	if !strings.HasPrefix(scanSpec.Content, "/") {
-		cmd.WriteString("/var/lib/content/")
-	}
-	cmd.WriteString(scanSpec.Content)
-
-	logger.Info("Resulting command", "command", cmd.String())
-	return cmd.String()
+	return env
 }
