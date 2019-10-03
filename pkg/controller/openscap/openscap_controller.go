@@ -294,7 +294,7 @@ func newPodForNode(openScapCr *openscapv1alpha1.OpenScap, node *corev1.Node, log
 						Privileged: &trueVal,
 					},
 					VolumeMounts: []corev1.VolumeMount{
-						corev1.VolumeMount{
+						{
 							Name:      "report-dir",
 							MountPath: "/reports",
 						},
@@ -307,11 +307,11 @@ func newPodForNode(openScapCr *openscapv1alpha1.OpenScap, node *corev1.Node, log
 						Privileged: &trueVal,
 					},
 					VolumeMounts: []corev1.VolumeMount{
-						corev1.VolumeMount{
+						{
 							Name:      "host",
 							MountPath: "/host",
 						},
-						corev1.VolumeMount{
+						{
 							Name:      "report-dir",
 							MountPath: "/reports",
 						},
@@ -322,7 +322,7 @@ func newPodForNode(openScapCr *openscapv1alpha1.OpenScap, node *corev1.Node, log
 			NodeName:      node.Name,
 			RestartPolicy: corev1.RestartPolicyNever,
 			Volumes: []corev1.Volume{
-				corev1.Volume{
+				{
 					Name: "host",
 					VolumeSource: corev1.VolumeSource{
 						HostPath: &corev1.HostPathVolumeSource{
@@ -331,7 +331,7 @@ func newPodForNode(openScapCr *openscapv1alpha1.OpenScap, node *corev1.Node, log
 						},
 					},
 				},
-				corev1.Volume{
+				{
 					Name: "report-dir",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{},
@@ -373,19 +373,19 @@ func getOscapContainerEnv(scanSpec *openscapv1alpha1.OpenScapSpec, logger logr.L
 	}
 
 	env := []corev1.EnvVar{
-		corev1.EnvVar{
+		{
 			Name:  "HOSTROOT",
 			Value: "/host",
 		},
-		corev1.EnvVar{
+		{
 			Name:  "PROFILE",
 			Value: scanSpec.Profile,
 		},
-		corev1.EnvVar{
+		{
 			Name:  "CONTENT",
 			Value: content,
 		},
-		corev1.EnvVar{
+		{
 			Name:  "REPORT_DIR",
 			Value: "/reports",
 		},
