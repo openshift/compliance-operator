@@ -10,6 +10,9 @@ and is work-in-progress.
 ```
 $ (clone repo)
 $ oc create -f deploy/ns.yaml
+$ oc create -f deploy/role.yaml
+$ oc create -f deploy/service_account.yaml
+$ oc create -f deploy/role_binding.yaml
 $ oc create -f deploy/crds/openscap_v1alpha1_openscap_crd.yaml
 $ vim deploy/crds/openscap_v1alpha1_openscap_cr.yaml
 # edit the file to your liking
@@ -17,6 +20,8 @@ $ oc create -f deploy/crds/openscap_v1alpha1_openscap_cr.yaml
 ```
 
 ### Running the operator:
+At the moment, I only tried running the operator out of the cluster.
+
 ```
 OPERATOR_NAME=openscap-scan operator-sdk up local --namespace "openscap"
 ```
@@ -29,22 +34,34 @@ You can watch the node progress with:
 ```
 $ oc get pods -w
 ```
-At the moment, the scan result can only be viewed with:
+
+When the scan is done, the operator would change the state of the OpenScap
+object to "Done" and all the pods would be "Completed". You can then view
+the results in configmaps, e.g.:
 ```
-$ oc logs $PODNAME
+$ oc get cm
+NAME                                                DATA   AGE
+example-openscap-ip-10-0-133-236.ec2.internal-pod   1      7m17s
+example-openscap-ip-10-0-134-19.ec2.internal-pod    1      7m19s
+example-openscap-ip-10-0-152-226.ec2.internal-pod   1      7m20s
+example-openscap-ip-10-0-156-38.ec2.internal-pod    1      7m19s
+example-openscap-ip-10-0-162-167.ec2.internal-pod   1      7m20s
+example-openscap-ip-10-0-166-21.ec2.internal-pod    1      7m19s
+$ oc describe cm/example-openscap-ip-10-0-133-236.ec2.internal-pod
 ```
 
-The pods are not garbage-collected automatically, but are owned by the CRD,
+The pods and the configMaps are not garbage-collected automatically, but are owned by the CRD,
 so removing the CRD removes the pods.
 
 ## TODO
-- log reporting via a configmap or a volume
+- using a configMap for reporting is not very nice using a volume would be nicer
+  - but using a volume across nodes seems to be tricky, maybe we could at least
+  collect the configMap contents to the volume?
+  - alternatively, provide a command line tool to fetch results from the configMap
 - packaging
 - permissions
-    - service account, RBAC
+  - tighten up, service account, RBAC
 - use a NodeSelector to select the nodes to scan
 - should the operator be cluster-wise and nor require its own namespace?
 - container todo:
-    - the host mount/chroot is hardcoded at the moment, this should be
-      configured by the operator via env var
-    - the container should probably use an entrypoint
+  - Use UBI as the base image, not Fedora
