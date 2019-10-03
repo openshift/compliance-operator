@@ -53,6 +53,12 @@ $ oc describe cm/example-openscap-ip-10-0-133-236.ec2.internal-pod
 The pods and the configMaps are not garbage-collected automatically, but are owned by the CRD,
 so removing the CRD removes the pods.
 
+### Related repositories
+The pods that the operator consist of two containers. One is the openscap
+container itself at [https://github.com/jhrozek/openscap-ocp](jhrozek/openscap-ocp)
+and the other is a log-collector at [https://github.com/jhrozek/scapresults-k8s](jhrozek/scapresults-k8s)
+
+
 ## TODO
 - using a configMap for reporting is not very nice using a volume would be nicer
   - but using a volume across nodes seems to be tricky, maybe we could at least
