@@ -8,54 +8,20 @@ rules:
   - ""
   resources:
   - pods
-  - services
-  - services/finalizers
-  - endpoints
-  - persistentvolumeclaims
-  - events
-  - configmaps
-  - secrets
   verbs:
-  - '*'
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  - daemonsets
-  - replicasets
-  - statefulsets
-  verbs:
-  - '*'
-- apiGroups:
-  - monitoring.coreos.com
-  resources:
-  - servicemonitors
-  verbs:
-  - get
+  - watch
   - create
-- apiGroups:
-  - apps
-  resourceNames:
-  - openscap-operator
-  resources:
-  - deployments/finalizers
-  verbs:
-  - update
 - apiGroups:
   - ""
   resources:
-  - pods
+  - configmaps
   verbs:
-  - get
-- apiGroups:
-  - apps
-  resources:
-  - replicasets
-  verbs:
-  - get
+  - create
 - apiGroups:
   - openscap.compliance.openshift.io
   resources:
-  - '*'
+  - openscaps
   verbs:
-  - '*'
+  - watch
+  - patch
+  - get

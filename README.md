@@ -65,8 +65,7 @@ and the other is a log-collector at [https://github.com/jhrozek/scapresults-k8s]
   collect the configMap contents to the volume?
   - alternatively, provide a command line tool to fetch results from the configMap
 - packaging
-- permissions
-  - tighten up, service account, RBAC
+- review the container/pod permissions
 - use a NodeSelector to select the nodes to scan
 - should the operator be cluster-wise and nor require its own namespace?
 - container todo:
