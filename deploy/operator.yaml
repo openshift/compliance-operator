@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: openscap-operator
+  namespace: openscap
 spec:
   replicas: 1
   selector:
@@ -16,7 +17,7 @@ spec:
       containers:
         - name: openscap-operator
           # Replace this with the built image name
-          image: REPLACE_IMAGE
+          image: quay.io/jhrozek/openscap-operator
           command:
           - openscap-operator
           imagePullPolicy: Always
