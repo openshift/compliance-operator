@@ -10,17 +10,18 @@ and is work-in-progress.
 ```
 $ (clone repo)
 $ oc create -f deploy/ns.yaml
-$ oc create -f deploy/role.yaml
-$ oc create -f deploy/service_account.yaml
-$ oc create -f deploy/role_binding.yaml
 $ oc create -f deploy/crds/openscap_v1alpha1_openscap_crd.yaml
+$ oc create -f deploy/
 $ vim deploy/crds/openscap_v1alpha1_openscap_cr.yaml
 # edit the file to your liking
 $ oc create -f deploy/crds/openscap_v1alpha1_openscap_cr.yaml
 ```
 
 ### Running the operator:
-At the moment, I only tried running the operator out of the cluster.
+If you followed the steps above, the file called `deplou/operator.yaml`
+also creates a deployment that runs the operator. If you want to run
+the operator from the command line instead, delete the deployment and then
+run:
 
 ```
 OPERATOR_NAME=openscap-scan operator-sdk up local --namespace "openscap"
