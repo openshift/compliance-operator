@@ -70,6 +70,16 @@ The pods that the operator consist of two containers. One is the openscap
 container itself at [https://github.com/jhrozek/openscap-ocp](jhrozek/openscap-ocp)
 and the other is a log-collector at [https://github.com/jhrozek/scapresults-k8s](jhrozek/scapresults-k8s)
 
+### Overriding container images
+Should you wish to override any of the two container images in the pod, you can
+do so using environment variables:
+    * `OPENSCAP_IMAGE` for the scanner container
+    * `LOG_COLLECTOR_IMAGE` for the log collecting container
+
+For example, to run the log collector from a different branch:
+```
+make run LOG_COLLECTOR_IMAGE=quay.io/jhrozek/scapresults-k8s:testbranch
+```
 
 ## TODO
 - using a configMap for reporting is not very nice using a volume would be nicer

@@ -283,7 +283,7 @@ func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *
 			Containers: []corev1.Container{
 				{
 					Name:  "log-collector",
-					Image: "quay.io/jhrozek/scapresults-k8s:latest",
+					Image: GetComponentImage(LOG_COLLECTOR),
 					Args: []string{
 						"--file=/reports/report.xml",
 						"--config-map-name=" + podName,
@@ -302,7 +302,7 @@ func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *
 				},
 				{
 					Name:  "openscap-ocp",
-					Image: "quay.io/jhrozek/openscap-ocp:latest",
+					Image: GetComponentImage(OPENSCAP),
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &trueVal,
 					},
