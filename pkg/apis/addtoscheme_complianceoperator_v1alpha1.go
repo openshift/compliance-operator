@@ -1,7 +1,7 @@
 package apis
 
 import (
-	"github.com/jhrozek/openscap-operator/pkg/apis/openscap/v1alpha1"
+	"github.com/jhrozek/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
 )
 
 func init() {

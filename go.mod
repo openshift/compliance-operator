@@ -1,10 +1,10 @@
-module github.com/jhrozek/openscap-operator
+module github.com/jhrozek/compliance-operator
 
 require (
-	github.com/NYTimes/gziphandler v1.0.1 // indirect
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/spec v0.19.0
-	github.com/operator-framework/operator-sdk v0.10.1-0.20190927145452-3c62be47a083
+	github.com/jhrozek/openscap-operator v0.0.0-20191013183412-7efbff965f32
+	github.com/operator-framework/operator-sdk v0.11.1-0.20191022185856-7f46876e746d
 	github.com/spf13/pflag v1.0.3
 	k8s.io/api v0.0.0-20190612125737-db0771252981
 	k8s.io/apimachinery v0.0.0-20190612125636-6a5db36e93ad

@@ -4,8 +4,8 @@ metadata:
   name: read-secrets-global
 subjects:
 - kind: ServiceAccount
-  namespace: openscap
-  name: openscap-operator
+  namespace: compliance
+  name: compliance-operator
 roleRef:
   kind: ClusterRole
   name: system:node-reader

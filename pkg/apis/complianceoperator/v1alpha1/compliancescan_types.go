@@ -14,9 +14,9 @@ const (
 	PhaseDone      = "DONE"
 )
 
-// OpenScapSpec defines the desired state of OpenScap
+// ComplianceScanSpec defines the desired state of ComplianceScan
 // +k8s:openapi-gen=true
-type OpenScapSpec struct {
+type ComplianceScanSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
@@ -25,9 +25,9 @@ type OpenScapSpec struct {
 	Content string `json:"content,omitempty"`
 }
 
-// OpenScapStatus defines the observed state of OpenScap
+// ComplianceScanStatus defines the observed state of ComplianceScan
 // +k8s:openapi-gen=true
-type OpenScapStatus struct {
+type ComplianceScanStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
@@ -36,26 +36,26 @@ type OpenScapStatus struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// OpenScap is the Schema for the openscaps API
+// ComplianceScan is the Schema for the compliancescans API
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
-type OpenScap struct {
+type ComplianceScan struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OpenScapSpec   `json:"spec,omitempty"`
-	Status OpenScapStatus `json:"status,omitempty"`
+	Spec   ComplianceScanSpec   `json:"spec,omitempty"`
+	Status ComplianceScanStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// OpenScapList contains a list of OpenScap
-type OpenScapList struct {
+// ComplianceScanList contains a list of ComplianceScan
+type ComplianceScanList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []OpenScap `json:"items"`
+	Items           []ComplianceScan `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&OpenScap{}, &OpenScapList{})
+	SchemeBuilder.Register(&ComplianceScan{}, &ComplianceScanList{})
 }

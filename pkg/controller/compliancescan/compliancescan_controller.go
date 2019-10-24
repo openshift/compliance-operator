@@ -1,11 +1,11 @@
-package openscap
+package compliancescan
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
-	openscapv1alpha1 "github.com/jhrozek/openscap-operator/pkg/apis/openscap/v1alpha1"
+	complianceoperatorv1alpha1 "github.com/jhrozek/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 
@@ -24,14 +24,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var log = logf.Log.WithName("controller_openscap")
+var log = logf.Log.WithName("controller_compliancescan")
 
 var (
 	trueVal     = true
 	hostPathDir = corev1.HostPathDirectory
 )
 
-// Add creates a new OpenScap Controller and adds it to the Manager. The Manager will set fields on the Controller
+// Add creates a new ComplianceScan Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
@@ -39,28 +39,28 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileOpenScap{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+	return &ReconcileComplianceScan{client: mgr.GetClient(), scheme: mgr.GetScheme()}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
-	c, err := controller.New("openscap-controller", mgr, controller.Options{Reconciler: r})
+	c, err := controller.New("compliancescan-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
 	}
 
-	// Watch for changes to primary resource OpenScap
-	err = c.Watch(&source.Kind{Type: &openscapv1alpha1.OpenScap{}}, &handler.EnqueueRequestForObject{})
+	// Watch for changes to primary resource ComplianceScan
+	err = c.Watch(&source.Kind{Type: &complianceoperatorv1alpha1.ComplianceScan{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
 	// TODO(user): Modify this to be the types you create that are owned by the primary resource
-	// Watch for changes to secondary resource Pods and requeue the owner OpenScap
+	// Watch for changes to secondary resource Pods and requeue the owner ComplianceScan
 	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
-		OwnerType:    &openscapv1alpha1.OpenScap{},
+		OwnerType:    &complianceoperatorv1alpha1.ComplianceScan{},
 	})
 	if err != nil {
 		return err
@@ -69,30 +69,30 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-// blank assignment to verify that ReconcileOpenScap implements reconcile.Reconciler
-var _ reconcile.Reconciler = &ReconcileOpenScap{}
+// blank assignment to verify that ReconcileComplianceScan implements reconcile.Reconciler
+var _ reconcile.Reconciler = &ReconcileComplianceScan{}
 
-// ReconcileOpenScap reconciles a OpenScap object
-type ReconcileOpenScap struct {
+// ReconcileComplianceScan reconciles a ComplianceScan object
+type ReconcileComplianceScan struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client client.Client
 	scheme *runtime.Scheme
 }
 
-// Reconcile reads that state of the cluster for a OpenScap object and makes changes based on the state read
-// and what is in the OpenScap.Spec
+// Reconcile reads that state of the cluster for a ComplianceScan object and makes changes based on the state read
+// and what is in the ComplianceScan.Spec
 // TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
 // a Pod as an example
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcileOpenScap) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling OpenScap")
+	reqLogger.Info("Reconciling ComplianceScan")
 
-	// Fetch the OpenScap instance
-	instance := &openscapv1alpha1.OpenScap{}
+	// Fetch the ComplianceScan instance
+	instance := &complianceoperatorv1alpha1.ComplianceScan{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -107,29 +107,29 @@ func (r *ReconcileOpenScap) Reconcile(request reconcile.Request) (reconcile.Resu
 
 	// If no phase set, default to pending (the initial phase):
 	if instance.Status.Phase == "" {
-		instance.Status.Phase = openscapv1alpha1.PhasePending
+		instance.Status.Phase = complianceoperatorv1alpha1.PhasePending
 	}
 
 	switch instance.Status.Phase {
-	case openscapv1alpha1.PhasePending:
+	case complianceoperatorv1alpha1.PhasePending:
 		return r.phasePendingHandler(instance, reqLogger)
-	case openscapv1alpha1.PhaseLaunching:
+	case complianceoperatorv1alpha1.PhaseLaunching:
 		return r.phaseLaunchingHandler(instance, reqLogger)
-	case openscapv1alpha1.PhaseRunning:
+	case complianceoperatorv1alpha1.PhaseRunning:
 		return r.phaseRunningHandler(instance, reqLogger)
-	case openscapv1alpha1.PhaseDone:
+	case complianceoperatorv1alpha1.PhaseDone:
 		return r.phaseDoneHandler(instance, reqLogger)
 	}
 
-	// the default catch-all, just requeue
+	// the default catch-all, just remove the request from the queue
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileOpenScap) phasePendingHandler(instance *openscapv1alpha1.OpenScap, logger logr.Logger) (reconcile.Result, error) {
-	logger.Info("Phase: Pending", "OpenScap scan", instance.ObjectMeta.Name)
+func (r *ReconcileComplianceScan) phasePendingHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+	logger.Info("Phase: Pending", "ComplianceScan", instance.ObjectMeta.Name)
 
 	// Update the scan instance, the next phase is running
-	instance.Status.Phase = openscapv1alpha1.PhaseLaunching
+	instance.Status.Phase = complianceoperatorv1alpha1.PhaseLaunching
 	err := r.client.Status().Update(context.TODO(), instance)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -141,11 +141,11 @@ func (r *ReconcileOpenScap) phasePendingHandler(instance *openscapv1alpha1.OpenS
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileOpenScap) phaseLaunchingHandler(instance *openscapv1alpha1.OpenScap, logger logr.Logger) (reconcile.Result, error) {
+func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	var nodes corev1.NodeList
 	var err error
 
-	logger.Info("Phase: Launching", "OpenScap scan", instance.ObjectMeta.Name)
+	logger.Info("Phase: Launching", "ComplianceScan", instance.ObjectMeta.Name)
 
 	if nodes, err = getTargetNodes(r); err != nil {
 		log.Error(err, "Cannot get nodes")
@@ -173,7 +173,7 @@ func (r *ReconcileOpenScap) phaseLaunchingHandler(instance *openscapv1alpha1.Ope
 	}
 
 	// if we got here, there are no new pods to be created, move to the next phase
-	instance.Status.Phase = openscapv1alpha1.PhaseRunning
+	instance.Status.Phase = complianceoperatorv1alpha1.PhaseRunning
 	err = r.client.Status().Update(context.TODO(), instance)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -182,11 +182,11 @@ func (r *ReconcileOpenScap) phaseLaunchingHandler(instance *openscapv1alpha1.Ope
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileOpenScap) phaseRunningHandler(instance *openscapv1alpha1.OpenScap, logger logr.Logger) (reconcile.Result, error) {
+func (r *ReconcileComplianceScan) phaseRunningHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	var nodes corev1.NodeList
 	var err error
 
-	logger.Info("Phase: Running", "OpenScap scan", instance.ObjectMeta.Name)
+	logger.Info("Phase: Running", "ComplianceScan scan", instance.ObjectMeta.Name)
 
 	if nodes, err = getTargetNodes(r); err != nil {
 		log.Error(err, "Cannot get nodes")
@@ -209,7 +209,7 @@ func (r *ReconcileOpenScap) phaseRunningHandler(instance *openscapv1alpha1.OpenS
 	}
 
 	// if we got here, there are no pods running, move to the Done phase
-	instance.Status.Phase = openscapv1alpha1.PhaseDone
+	instance.Status.Phase = complianceoperatorv1alpha1.PhaseDone
 	err = r.client.Status().Update(context.TODO(), instance)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -218,13 +218,13 @@ func (r *ReconcileOpenScap) phaseRunningHandler(instance *openscapv1alpha1.OpenS
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileOpenScap) phaseDoneHandler(instance *openscapv1alpha1.OpenScap, logger logr.Logger) (reconcile.Result, error) {
-	logger.Info("Phase: Done", "OpenScap scan", instance.ObjectMeta.Name)
+func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+	logger.Info("Phase: Done", "ComplianceScan scan", instance.ObjectMeta.Name)
 	// Todo maybe clean up the pods?
 	return reconcile.Result{}, nil
 }
 
-func getTargetNodes(r *ReconcileOpenScap) (corev1.NodeList, error) {
+func getTargetNodes(r *ReconcileComplianceScan) (corev1.NodeList, error) {
 	var nodes corev1.NodeList
 
 	// TODO: Use a selector
@@ -238,7 +238,7 @@ func getTargetNodes(r *ReconcileOpenScap) (corev1.NodeList, error) {
 }
 
 // returns true if the pod is still running, false otherwise
-func getPodForNode(r *ReconcileOpenScap, openScapCr *openscapv1alpha1.OpenScap, node *corev1.Node, logger logr.Logger) (bool, error) {
+func getPodForNode(r *ReconcileComplianceScan, openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
 	logger.Info("Retrieving a pod for node", "node", node.Name)
 
 	podName := fmt.Sprintf("%s-%s-pod", openScapCr.Name, node.Name)
@@ -261,14 +261,14 @@ func getPodForNode(r *ReconcileOpenScap, openScapCr *openscapv1alpha1.OpenScap, 
 
 }
 
-func newPodForNode(openScapCr *openscapv1alpha1.OpenScap, node *corev1.Node, logger logr.Logger) *corev1.Pod {
+func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
 	logger.Info("Creating a pod for node", "node", node.Name)
 
 	// FIXME: this is for now..
 	podName := fmt.Sprintf("%s-%s-pod", openScapCr.Name, node.Name)
 	podLabels := map[string]string{
-		"openscapScan": openScapCr.Name,
-		"targetNode":   node.Name,
+		"complianceScan": openScapCr.Name,
+		"targetNode":     node.Name,
 	}
 	openScapContainerEnv := getOscapContainerEnv(&openScapCr.Spec, logger)
 
@@ -279,7 +279,7 @@ func newPodForNode(openScapCr *openscapv1alpha1.OpenScap, node *corev1.Node, log
 			Labels:    podLabels,
 		},
 		Spec: corev1.PodSpec{
-			ServiceAccountName: "openscap-operator",
+			ServiceAccountName: "compliance-operator",
 			Containers: []corev1.Container{
 				{
 					Name:  "log-collector",
@@ -344,7 +344,7 @@ func newPodForNode(openScapCr *openscapv1alpha1.OpenScap, node *corev1.Node, log
 
 // TODO: this probably should not be a method, it doesn't modify reconciler, maybe we
 // should just pass reconciler as param
-func (r *ReconcileOpenScap) launchPod(pod *corev1.Pod, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) launchPod(pod *corev1.Pod, logger logr.Logger) error {
 	found := &corev1.Pod{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
 	// Try to see if the pod already exists and if not
@@ -366,7 +366,7 @@ func (r *ReconcileOpenScap) launchPod(pod *corev1.Pod, logger logr.Logger) error
 	return nil
 }
 
-func getOscapContainerEnv(scanSpec *openscapv1alpha1.OpenScapSpec, logger logr.Logger) []corev1.EnvVar {
+func getOscapContainerEnv(scanSpec *complianceoperatorv1alpha1.ComplianceScanSpec, logger logr.Logger) []corev1.EnvVar {
 	content := scanSpec.Content
 	if !strings.HasPrefix(scanSpec.Content, "/") {
 		content = "/var/lib/content/" + scanSpec.Content

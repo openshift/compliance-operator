@@ -1,25 +1,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: openscap-operator
-  namespace: openscap
+  name: compliance-operator
+  namespace: compliance
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: openscap-operator
+      name: compliance-operator
   template:
     metadata:
       labels:
-        name: openscap-operator
+        name: compliance-operator
     spec:
-      serviceAccountName: openscap-operator
+      serviceAccountName: compliance-operator
       containers:
-        - name: openscap-operator
+        - name: compliance-operator
           # Replace this with the built image name
-          image: quay.io/jhrozek/openscap-operator
+          image: quay.io/jhrozek/compliance-operator
           command:
-          - openscap-operator
+          - compliance-operator
           imagePullPolicy: Always
           env:
             - name: WATCH_NAMESPACE
@@ -31,4 +31,4 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
-              value: "openscap-operator"
+              value: "compliance-operator"

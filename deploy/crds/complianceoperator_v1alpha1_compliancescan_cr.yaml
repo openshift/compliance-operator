@@ -1,7 +1,7 @@
-apiVersion: openscap.compliance.openshift.io/v1alpha1
-kind: OpenScap
+apiVersion: complianceoperator.compliance.openshift.io/v1alpha1
+kind: ComplianceScan
 metadata:
-  name: example-openscap
+  name: example-compliancescan
 spec:
   # Add fields here
   rule: xccdf_org.ssgproject.content_rule_no_empty_passwords

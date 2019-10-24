@@ -6,11 +6,11 @@ GO=GO111MODULE=on go
 GOBUILD=$(GO) build
 BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
 
-export APP_NAME=openscap-operator
+export APP_NAME=compliance-operator
 APP_REPO=github.com/jhrozek/$(APP_NAME)
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 MAIN_PKG=cmd/manager/main.go
-export NAMESPACE?=openscap
+export NAMESPACE?=compliance
 
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 
@@ -49,8 +49,8 @@ build: fmt
 	@GOPATH=$(BUILD_GOPATH) $(GOBUILD) $(LDFLAGS) -o $(TARGET) $(MAIN_PKG)
 
 run:
-	OPERATOR_NAME=openscap-operator \
-	WATCH_NAMESPACE=openscap \
+	OPERATOR_NAME=compliance-operator \
+	WATCH_NAMESPACE=compliance \
 	KUBERNETES_CONFIG=$(KUBECONFIG) \
 	$(GO) run ${MAIN_PKG}
 

@@ -1,10 +1,10 @@
 package controller
 
 import (
-	"github.com/jhrozek/openscap-operator/pkg/controller/openscap"
+	"github.com/jhrozek/compliance-operator/pkg/controller/compliancescan"
 )
 
 func init() {
 	// AddToManagerFuncs is a list of functions to create controllers and add them to a manager.
-	AddToManagerFuncs = append(AddToManagerFuncs, openscap.Add)
+	AddToManagerFuncs = append(AddToManagerFuncs, compliancescan.Add)
 }

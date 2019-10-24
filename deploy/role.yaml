@@ -1,13 +1,13 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  namespace: openscap
-  name: openscap-operator
+  namespace: compliance
+  name: compliance-operator
 rules:
 - apiGroups:
   - ""
   resources:
-  - pods        # Pods are used to run the openscap container
+  - pods        # Pods are used to run the compliance container
   verbs:
   - watch       # The operator needs to watch for the container status
   - create      # The operator needs to spawn the containers
@@ -27,16 +27,16 @@ rules:
   verbs:
   - get         # Otherwise the operator errors out when creating initializing metrics
 - apiGroups:
-  - openscap.compliance.openshift.io
+  - complianceoperator.compliance.openshift.io
   resources:
-  - openscaps   # The operator's custom CRD
+  - compliancescans   # The operator's custom CRD
   verbs:
   - watch       # The operator must be able to watch the CR for changes
   - patch       # The operator changes the CR status to run a state machine
   - get         # The operator must be able to read the CR
   - list        # The operator must be able to read the CR
 - apiGroups:
-  - openscap.compliance.openshift.io
+  - complianceoperator.compliance.openshift.io
   resources:
   - '*'
   verbs:
@@ -44,7 +44,7 @@ rules:
 - apiGroups:
   - apps
   resourceNames:
-  - openscap-operator
+  - compliance-operator
   resources:
   - deployments/finalizers
   verbs:
@@ -54,7 +54,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: scc-priv
-  namespace: openscap
+  namespace: compliance
 rules:
   - apiGroups:
       - security.openshift.io

@@ -1,11 +1,11 @@
 FROM registry.access.redhat.com/ubi7/ubi-minimal:latest
 
-ENV OPERATOR=/usr/local/bin/openscap-operator \
+ENV OPERATOR=/usr/local/bin/compliance-operator \
     USER_UID=1001 \
-    USER_NAME=openscap-operator
+    USER_NAME=compliance-operator
 
 # install operator binary
-COPY build/_output/bin/openscap-operator ${OPERATOR}
+COPY build/_output/bin/compliance-operator ${OPERATOR}
 
 COPY build/bin /usr/local/bin
 RUN  /usr/local/bin/user_setup

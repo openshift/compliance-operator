@@ -11,8 +11,8 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 
-	"github.com/jhrozek/openscap-operator/pkg/apis"
-	"github.com/jhrozek/openscap-operator/pkg/controller"
+	"github.com/jhrozek/compliance-operator/pkg/apis"
+	"github.com/jhrozek/compliance-operator/pkg/controller"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"
@@ -82,7 +82,7 @@ func main() {
 
 	ctx := context.TODO()
 	// Become the leader before proceeding
-	err = leader.Become(ctx, "openscap-operator-lock")
+	err = leader.Become(ctx, "compliance-operator-lock")
 	if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
