@@ -51,6 +51,20 @@ example-compliancescan-ip-10-0-171-129.ec2.internal-pod   1      81s
 example-compliancescan-ip-10-0-175-130.ec2.internal-pod   1      80s
 ```
 
+In case there's multiple scans running, it might be handy to distinguish
+between scan results coming from different scans. You can take advantage
+of the configmaps being labeled with the scan name to do that:
+```
+$ oc get cm --show-labels
+NAME                                                      DATA   AGE     LABELS
+example-compliancescan-ip-10-0-131-249.ec2.internal-pod   1      2m16s   compliance-scan=example-compliancescan
+example-compliancescan-ip-10-0-132-37.ec2.internal-pod    1      2m16s   compliance-scan=example-compliancescan
+example-compliancescan-ip-10-0-144-8.ec2.internal-pod     1      2m10s   compliance-scan=example-compliancescan
+example-compliancescan-ip-10-0-149-53.ec2.internal-pod    1      2m20s   compliance-scan=example-compliancescan
+example-compliancescan-ip-10-0-164-150.ec2.internal-pod   1      2m9s    compliance-scan=example-compliancescan
+example-compliancescan-ip-10-0-174-131.ec2.internal-pod   1      2m16s   compliance-scan=example-compliancescan
+```
+
 A more convenient way to fetch the results is using
 [a script](https://github.com/jhrozek/scapresults-k8s/blob/master/scapresults/fetchresults.py)
 To use the script, clone the [scapresults-k8s repo](jhrozek/scapresults-k8s),
