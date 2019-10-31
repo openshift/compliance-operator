@@ -4,6 +4,8 @@ import (
 	"os"
 )
 
+const DefaultContentContainerImage string = "quay.io/jhrozek/ocp4-openscap-content:latest"
+
 type ComplianceComponent uint
 
 const (

@@ -4,6 +4,5 @@ metadata:
   name: example-compliancescan
 spec:
   # Add fields here
-  rule: xccdf_org.ssgproject.content_rule_no_empty_passwords
-  profile: xccdf_org.ssgproject.content_profile_ospp
-  content: ssg-rhel8-ds.xml
+  profile: xccdf_org.ssgproject.content_profile_coreos-ncp
+  content: ssg-ocp4-ds.xml
