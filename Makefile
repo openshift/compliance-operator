@@ -10,7 +10,7 @@ export APP_NAME=compliance-operator
 APP_REPO=github.com/jhrozek/$(APP_NAME)
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 MAIN_PKG=cmd/manager/main.go
-export NAMESPACE?=compliance
+export NAMESPACE?=openshift-compliance
 
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 
@@ -50,7 +50,7 @@ build: fmt
 
 run:
 	OPERATOR_NAME=compliance-operator \
-	WATCH_NAMESPACE=compliance \
+	WATCH_NAMESPACE=$(NAMESPACE) \
 	KUBERNETES_CONFIG=$(KUBECONFIG) \
 	$(GO) run ${MAIN_PKG}
 

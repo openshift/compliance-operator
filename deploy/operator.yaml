@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: compliance-operator
-  namespace: compliance
+  namespace: openshift-compliance
 spec:
   replicas: 1
   selector:

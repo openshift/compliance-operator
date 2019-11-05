@@ -4,7 +4,7 @@ metadata:
   name: read-secrets-global
 subjects:
 - kind: ServiceAccount
-  namespace: compliance
+  namespace: openshift-compliance
   name: compliance-operator
 roleRef:
   kind: ClusterRole

@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  namespace: compliance
+  namespace: openshift-compliance
   name: compliance-operator
 rules:
 - apiGroups:
@@ -54,7 +54,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: scc-priv
-  namespace: compliance
+  namespace: openshift-compliance
 rules:
   - apiGroups:
       - security.openshift.io
