@@ -24,7 +24,7 @@ the operator from the command line instead, delete the deployment and then
 run:
 
 ```
-OPERATOR_NAME=compliance-scan operator-sdk up local --namespace "compliance"
+OPERATOR_NAME=compliance-scan operator-sdk up local --namespace "openshift-compliance"
 ```
 
 At this point the operator would pick up the CRD, create a pod for every
@@ -70,7 +70,7 @@ A more convenient way to fetch the results is using
 To use the script, clone the [scapresults-k8s repo](jhrozek/scapresults-k8s),
 then run the `scapresults/fetchresults.py` script:
 ```
-$ python3 scapresults/fetchresults.py --owner=example-openscap --namespace=compliance --dir=/tmp/results
+$ python3 scapresults/fetchresults.py --owner=example-openscap --namespace=openshift-compliance --dir=/tmp/results
 ```
 The parameters you need to supply is the name of the scan CRD through the
 `--owner` CLI flag and the namespace. The output directory is optional and
