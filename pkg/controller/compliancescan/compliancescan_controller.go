@@ -5,23 +5,23 @@ import (
 	"fmt"
 	"strings"
 
-	complianceoperatorv1alpha1 "github.com/jhrozek/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-
-	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	complianceoperatorv1alpha1 "github.com/jhrozek/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
 )
 
 var log = logf.Log.WithName("controller_compliancescan")
@@ -147,7 +147,7 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *complianceoper
 
 	logger.Info("Phase: Launching", "ComplianceScan", instance.ObjectMeta.Name)
 
-	if nodes, err = getTargetNodes(r); err != nil {
+	if nodes, err = getTargetNodes(r, instance); err != nil {
 		log.Error(err, "Cannot get nodes")
 		return reconcile.Result{}, err
 	}
@@ -188,7 +188,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *complianceoperat
 
 	logger.Info("Phase: Running", "ComplianceScan scan", instance.ObjectMeta.Name)
 
-	if nodes, err = getTargetNodes(r); err != nil {
+	if nodes, err = getTargetNodes(r, instance); err != nil {
 		log.Error(err, "Cannot get nodes")
 		return reconcile.Result{}, err
 	}
@@ -224,11 +224,12 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv
 	return reconcile.Result{}, nil
 }
 
-func getTargetNodes(r *ReconcileComplianceScan) (corev1.NodeList, error) {
+func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan) (corev1.NodeList, error) {
 	var nodes corev1.NodeList
 
-	// TODO: Use a selector
-	listOpts := client.ListOptions{}
+	listOpts := client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(instance.Spec.NodeSelector),
+	}
 
 	if err := r.client.List(context.TODO(), &listOpts, &nodes); err != nil {
 		return nodes, err
