@@ -79,6 +79,22 @@ defaults to the current working directory.
 The pods and the configMaps are not garbage-collected automatically, but are owned by the CRD,
 so removing the CRD removes the dependent artifacts.
 
+#### Scan only a subset of nodes
+It might be handy to run different compliance checks
+on some nodes, but not others. For example, some nodes might run a different
+OS than others or a particular check might make sense for master
+nodes only.
+
+To constrain a scan to a subset of nodes, define a `nodeSelector`
+in the CR. For example, to run a scan on master nodes only, add this:
+```
+nodeSelector:
+    node-role.kubernetes.io/master: ""
+```
+
+To see the available labels, run `oc get nodes --show-labels` or
+`oc describe node/$nodename`.
+
 ### Related repositories
 The pods that the operator consist of two containers. One is the openscap
 container itself at [https://github.com/jhrozek/openscap-ocp](jhrozek/openscap-ocp)
