@@ -1,5 +1,5 @@
 CURPATH=$(PWD)
-TARGET_DIR=$(CURPATH)/_output
+TARGET_DIR=$(CURPATH)/build/_output
 KUBECONFIG?=$(HOME)/.kube/config
 
 GO=GO111MODULE=on go
@@ -7,7 +7,7 @@ GOBUILD=$(GO) build
 BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
 
 export APP_NAME=compliance-operator
-APP_REPO=github.com/jhrozek/$(APP_NAME)
+IMAGE_PATH=quay.io/jhrozek/$(APP_NAME)
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=openshift-compliance
@@ -33,26 +33,13 @@ SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./
 
 all: build #check install
 
-operator-sdk:
-	@if ! type -p operator-sdk ; \
-	then if [ ! -d $(GOPATH)/src/github.com/operator-framework/operator-sdk ] ; \
-	  then git clone https://github.com/operator-framework/operator-sdk --branch master $(GOPATH)/src/github.com/operator-framework/operator-sdk ; \
-	  fi ; \
-	  cd $(GOPATH)/src/github.com/operator-framework/operator-sdk ; \
-	  make dep ; \
-	  make install || sudo make install || cd commands/operator-sdk && sudo $(GO) install ; \
-	fi
-
 build: fmt
-	@mkdir -p $(TARGET_DIR)/src/$(APP_REPO)
-	@cp -ru $(CURPATH)/pkg $(TARGET_DIR)/src/$(APP_REPO)
-	@GOPATH=$(BUILD_GOPATH) $(GOBUILD) $(LDFLAGS) -o $(TARGET) $(MAIN_PKG)
+	operator-sdk build $(IMAGE_PATH)
 
 run:
-	OPERATOR_NAME=compliance-operator \
 	WATCH_NAMESPACE=$(NAMESPACE) \
 	KUBERNETES_CONFIG=$(KUBECONFIG) \
-	$(GO) run ${MAIN_PKG}
+	operator-sdk up local --namespace $(NAMESPACE)
 
 clean:
 	@rm -rf $(TARGET_DIR)
