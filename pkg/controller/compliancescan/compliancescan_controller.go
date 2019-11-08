@@ -231,7 +231,7 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1al
 		LabelSelector: labels.SelectorFromSet(instance.Spec.NodeSelector),
 	}
 
-	if err := r.client.List(context.TODO(), &listOpts, &nodes); err != nil {
+	if err := r.client.List(context.TODO(), &nodes, &listOpts); err != nil {
 		return nodes, err
 	}
 
