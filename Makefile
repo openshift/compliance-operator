@@ -5,9 +5,12 @@ KUBECONFIG?=$(HOME)/.kube/config
 GO=GO111MODULE=on go
 GOBUILD=$(GO) build
 BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
+RUNTIME?=docker
 
 export APP_NAME=compliance-operator
-IMAGE_PATH=quay.io/jhrozek/$(APP_NAME)
+IMAGE_REPO?=quay.io/jhrozek
+IMAGE_PATH?=$(IMAGE_REPO)/$(APP_NAME)
+TAG?=latest
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=openshift-compliance
@@ -56,3 +59,7 @@ gendeepcopy: operator-sdk
 
 test-unit: fmt
 	@$(GO) test $(TEST_OPTIONS) $(PKGS)
+
+push: build
+	$(RUNTIME) tag $(IMAGE_PATH) $(IMAGE_PATH):$(TAG)
+	$(RUNTIME) push $(IMAGE_PATH):$(TAG)
