@@ -21,7 +21,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	complianceoperatorv1alpha1 "github.com/jhrozek/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
 )
 
 var log = logf.Log.WithName("controller_compliancescan")

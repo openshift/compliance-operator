@@ -1,4 +1,4 @@
-module github.com/jhrozek/compliance-operator
+module github.com/openshift/compliance-operator
 
 go 1.13
 
