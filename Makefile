@@ -49,8 +49,7 @@ clean:
 	@rm -rf $(TARGET_DIR)
 
 fmt:
-	@gofmt -l -w cmd && \
-	gofmt -l -w pkg
+	@go fmt $(PKGS)
 
 simplify:
 	@gofmt -s -l -w $(SRC)
