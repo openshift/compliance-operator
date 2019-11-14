@@ -42,6 +42,7 @@ build: fmt
 run:
 	WATCH_NAMESPACE=$(NAMESPACE) \
 	KUBERNETES_CONFIG=$(KUBECONFIG) \
+	OPERATOR_NAME=compliance-operator \
 	operator-sdk up local --namespace $(NAMESPACE)
 
 clean:
