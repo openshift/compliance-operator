@@ -32,7 +32,7 @@ OC?=oc
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./_output/*")
 
 #.PHONY: all build clean install uninstall fmt simplify check run
-.PHONY: all operator-sdk build clean fmt simplify gendeepcopy test-unit run
+.PHONY: all operator-sdk build clean fmt simplify verify vet mod-verify gosec gendeepcopy test-unit run
 
 all: build #check install
 
@@ -49,10 +49,21 @@ clean:
 	@rm -rf $(TARGET_DIR)
 
 fmt:
-	@go fmt $(PKGS)
+	@$(GO) fmt $(PKGS)
 
 simplify:
 	@gofmt -s -l -w $(SRC)
+
+verify: vet mod-verify gosec
+
+vet:
+	@$(GO) vet $(PKGS)
+
+mod-verify:
+	@$(GO) mod verify
+
+gosec:
+	@$(GO) run github.com/securego/gosec/cmd/gosec -severity medium -confidence medium -quiet ./...
 
 gendeepcopy: operator-sdk
 	@GO111MODULE=on operator-sdk generate k8s
