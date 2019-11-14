@@ -271,7 +271,7 @@ func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *
 		"complianceScan": openScapCr.Name,
 		"targetNode":     node.Name,
 	}
-	openScapContainerEnv := getOscapContainerEnv(&openScapCr.Spec, logger)
+	openScapContainerEnv := getOscapContainerEnv(&openScapCr.Spec)
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -395,7 +395,7 @@ func (r *ReconcileComplianceScan) launchPod(pod *corev1.Pod, logger logr.Logger)
 	return nil
 }
 
-func getOscapContainerEnv(scanSpec *complianceoperatorv1alpha1.ComplianceScanSpec, logger logr.Logger) []corev1.EnvVar {
+func getOscapContainerEnv(scanSpec *complianceoperatorv1alpha1.ComplianceScanSpec) []corev1.EnvVar {
 	content := scanSpec.Content
 	if !strings.HasPrefix(scanSpec.Content, "/") {
 		content = "/content/" + scanSpec.Content
