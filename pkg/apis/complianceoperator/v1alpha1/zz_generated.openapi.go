@@ -11,9 +11,9 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/jhrozek/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScan":       schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScan(ref),
-		"github.com/jhrozek/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScanSpec":   schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanSpec(ref),
-		"github.com/jhrozek/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScanStatus": schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanStatus(ref),
+		"github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScan":       schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScan(ref),
+		"github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScanSpec":   schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanSpec(ref),
+		"github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScanStatus": schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanStatus(ref),
 	}
 }
 
@@ -44,19 +44,19 @@ func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScan(ref common.Refer
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/jhrozek/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScanSpec"),
+							Ref: ref("github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScanSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/jhrozek/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScanStatus"),
+							Ref: ref("github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScanStatus"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/jhrozek/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScanSpec", "github.com/jhrozek/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScanStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScanSpec", "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1.ComplianceScanStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
