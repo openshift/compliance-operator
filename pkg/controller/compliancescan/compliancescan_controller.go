@@ -281,6 +281,24 @@ func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: "compliance-operator",
+			InitContainers: []corev1.Container{
+				{
+					Name:  "content-container",
+					Image: getInitContainerImage(&openScapCr.Spec, logger),
+					Command: []string{
+						"sh",
+						"-c",
+						"cp /*.xml /content",
+					},
+					ImagePullPolicy: corev1.PullAlways,
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "content-dir",
+							MountPath: "/content",
+						},
+					},
+				},
+			},
 			Containers: []corev1.Container{
 				{
 					Name:  "log-collector",
@@ -316,6 +334,10 @@ func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *
 							Name:      "report-dir",
 							MountPath: "/reports",
 						},
+						{
+							Name:      "content-dir",
+							MountPath: "/content",
+						},
 					},
 					Env: openScapContainerEnv,
 				},
@@ -334,6 +356,12 @@ func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *
 				},
 				{
 					Name: "report-dir",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "content-dir",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
@@ -370,7 +398,7 @@ func (r *ReconcileComplianceScan) launchPod(pod *corev1.Pod, logger logr.Logger)
 func getOscapContainerEnv(scanSpec *complianceoperatorv1alpha1.ComplianceScanSpec, logger logr.Logger) []corev1.EnvVar {
 	content := scanSpec.Content
 	if !strings.HasPrefix(scanSpec.Content, "/") {
-		content = "/var/lib/content/" + scanSpec.Content
+		content = "/content/" + scanSpec.Content
 	}
 
 	env := []corev1.EnvVar{
@@ -400,4 +428,15 @@ func getOscapContainerEnv(scanSpec *complianceoperatorv1alpha1.ComplianceScanSpe
 	}
 
 	return env
+}
+
+func getInitContainerImage(scanSpec *complianceoperatorv1alpha1.ComplianceScanSpec, logger logr.Logger) string {
+	image := DefaultContentContainerImage
+
+	if scanSpec.ContentImage != "" {
+		image = scanSpec.ContentImage
+	}
+
+	logger.Info("Content image", "image", image)
+	return image
 }
