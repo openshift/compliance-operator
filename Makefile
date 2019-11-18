@@ -32,7 +32,7 @@ OC?=oc
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./_output/*")
 
 #.PHONY: all build clean install uninstall fmt simplify check run
-.PHONY: all operator-sdk build clean fmt simplify verify vet mod-verify gosec gendeepcopy test-unit run
+.PHONY: all operator-sdk build clean clean-cache clean-modcache clean-output fmt simplify verify vet mod-verify gosec gendeepcopy test-unit run
 
 all: build #check install
 
@@ -45,8 +45,16 @@ run:
 	OPERATOR_NAME=compliance-operator \
 	operator-sdk up local --namespace $(NAMESPACE)
 
-clean:
-	@rm -rf $(TARGET_DIR)
+clean: clean-modcache clean-cache clean-output
+
+clean-output:
+	rm -rf $(TARGET_DIR)
+
+clean-cache:
+	$(GO) clean -cache -testcache $(PKGS)
+
+clean-modcache:
+	$(GO) clean -modcache $(PKGS)
 
 fmt:
 	@$(GO) fmt $(PKGS)
