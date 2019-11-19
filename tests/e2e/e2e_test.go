@@ -19,7 +19,7 @@ var (
 	cleanupTimeout       = time.Second * 5
 )
 
-func TestSingleScan(t *testing.T) {
+func TestSingleScanSucceeds(t *testing.T) {
 	ctx := setupTestRequirements(t)
 	defer ctx.Cleanup()
 
@@ -53,5 +53,42 @@ func doSingleComplianceScanTest(t *testing.T, f *framework.Framework, ctx *frame
 	if err != nil {
 		return err
 	}
-	return waitForScanDoneStatus(t, f, namespace, "example-scan")
+	return waitForScanStatus(t, f, namespace, "example-scan", complianceoperatorv1alpha1.PhaseDone)
+}
+
+func TestScanWithInvalidContentFails(t *testing.T) {
+	ctx := setupTestRequirements(t)
+	defer ctx.Cleanup()
+
+	setupComplianceOperatorCluster(t, ctx)
+
+	// get global framework variables
+	f := framework.Global
+
+	if err := doScanWithInvalidContentFails(t, f, ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func doScanWithInvalidContentFails(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) error {
+	namespace, err := ctx.GetNamespace()
+	if err != nil {
+		return fmt.Errorf("could not get namespace: %v", err)
+	}
+	exampleComplianceScan := &complianceoperatorv1alpha1.ComplianceScan{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "example-scan",
+			Namespace: namespace,
+		},
+		Spec: complianceoperatorv1alpha1.ComplianceScanSpec{
+			Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
+			Content: "ssg-ocp4-non-existent.xml",
+		},
+	}
+	// use TestCtx's create helper to create the object and add a cleanup function for the new object
+	err = f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+	if err != nil {
+		return err
+	}
+	return waitForScanStatus(t, f, namespace, "example-scan", complianceoperatorv1alpha1.PhaseDone)
 }

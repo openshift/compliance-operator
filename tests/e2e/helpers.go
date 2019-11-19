@@ -42,7 +42,7 @@ func setupComplianceOperatorCluster(t *testing.T, ctx *framework.TestCtx) {
 	}
 }
 
-func waitForScanDoneStatus(t *testing.T, f *framework.Framework, namespace, name string) error {
+func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStaus complianceoperatorv1alpha1.ComplianceScanStatusPhase) error {
 	exampleComplianceScan := &complianceoperatorv1alpha1.ComplianceScan{}
 	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
 		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, exampleComplianceScan)
@@ -54,7 +54,7 @@ func waitForScanDoneStatus(t *testing.T, f *framework.Framework, namespace, name
 			return false, err
 		}
 
-		if exampleComplianceScan.Status.Phase == complianceoperatorv1alpha1.PhaseDone {
+		if exampleComplianceScan.Status.Phase == targetStaus {
 			return true, nil
 		}
 		t.Logf("Waiting for run of %s compliancescan (%s)\n", name, exampleComplianceScan.Status.Phase)
