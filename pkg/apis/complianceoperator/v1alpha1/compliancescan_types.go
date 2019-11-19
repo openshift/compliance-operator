@@ -4,14 +4,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// +genclient
+
+type ComplianceScanStatusPhase string
 
 const (
-	PhasePending   = "PENDING"
-	PhaseLaunching = "LAUNCHING"
-	PhaseRunning   = "RUNNING"
-	PhaseDone      = "DONE"
+	PhasePending   ComplianceScanStatusPhase = "PENDING"
+	PhaseLaunching ComplianceScanStatusPhase = "LAUNCHING"
+	PhaseRunning   ComplianceScanStatusPhase = "RUNNING"
+	PhaseDone      ComplianceScanStatusPhase = "DONE"
 )
 
 // ComplianceScanSpec defines the desired state of ComplianceScan
@@ -33,7 +34,7 @@ type ComplianceScanStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-	Phase string `json:"phase,omitempty"`
+	Phase ComplianceScanStatusPhase `json:"phase,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -32,7 +32,7 @@ OC?=oc
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./_output/*")
 
 #.PHONY: all build clean install uninstall fmt simplify check run
-.PHONY: all operator-sdk build clean clean-cache clean-modcache clean-output fmt simplify verify vet mod-verify gosec gendeepcopy test-unit run
+.PHONY: all operator-sdk build clean clean-cache clean-modcache clean-output fmt simplify verify vet mod-verify gosec gendeepcopy test-unit run e2e
 
 all: build #check install
 
@@ -78,6 +78,12 @@ gendeepcopy: operator-sdk
 
 test-unit: fmt
 	@$(GO) test $(TEST_OPTIONS) $(PKGS)
+
+e2e:
+	@echo "Creating '$(NAMESPACE)' namespace/project"
+	@oc create -f deploy/ns.yaml || true
+	@echo "Running e2e tests"
+	@operator-sdk test local ./tests/e2e --namespace "$(NAMESPACE)" --go-test-flags "-v"
 
 push: build
 	$(RUNTIME) tag $(IMAGE_PATH) $(IMAGE_PATH):$(TAG)
