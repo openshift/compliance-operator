@@ -1,0 +1,145 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "complianceoperator.compliance.openshift.io/v1alpha1",
+          "kind": "ComplianceScan",
+          "metadata": {
+            "name": "example-compliancescan"
+          },
+          "spec": {
+            "content": "ssg-ocp4-ds.xml",
+            "profile": "xccdf_org.ssgproject.content_profile_coreos-ncp"
+          }
+        }
+      ]
+    capabilities: Basic Install
+  name: compliance-operator.v0.0.1
+  namespace: openshift-compliance
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - kind: ComplianceScan
+      name: compliancescans.complianceoperator.compliance.openshift.io
+      version: v1alpha1
+  description: Placeholder description
+  displayName: Compliance Operator
+  install:
+    spec:
+      deployments:
+      - name: compliance-operator
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              name: compliance-operator
+          strategy: {}
+          template:
+            metadata:
+              labels:
+                name: compliance-operator
+            spec:
+              containers:
+              - command:
+                - compliance-operator
+                env:
+                - name: WATCH_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.annotations['olm.targetNamespaces']
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                - name: OPERATOR_NAME
+                  value: compliance-operator
+                image: quay.io/jhrozek/compliance-operator
+                imagePullPolicy: Always
+                name: compliance-operator
+                resources: {}
+              serviceAccountName: compliance-operator
+      clusterpermissions:
+        rules:
+        - apiGroups:
+          - ""
+          resources:
+          - nodes
+          verbs:
+          - list
+        serviceAccountName: compliance-operator
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - watch
+          - create
+          - get
+          - list
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - create
+          - get
+        - apiGroups:
+          - apps
+          resources:
+          - replicasets
+          verbs:
+          - get
+        - apiGroups:
+          - complianceoperator.compliance.openshift.io
+          resources:
+          - compliancescans
+          verbs:
+          - watch
+          - patch
+          - get
+          - list
+        - apiGroups:
+          - complianceoperator.compliance.openshift.io
+          resources:
+          - '*'
+          verbs:
+          - '*'
+        - apiGroups:
+          - apps
+          resourceNames:
+          - compliance-operator
+          resources:
+          - deployments/finalizers
+          verbs:
+          - update
+        serviceAccountName: compliance-operator
+      - rules:
+        - apiGroups:
+          - security.openshift.io
+          resourceNames:
+          - privileged
+          resources:
+          - securitycontextconstraints
+          verbs:
+          - use
+        serviceAccountName: scc-priv
+    strategy: deployment
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  maturity: alpha
+  provider: {}
+  replaces: compliance-operator.v0.0.0
+  version: 0.0.1
