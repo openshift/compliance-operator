@@ -5,5 +5,5 @@
 package tools
 
 import (
-	github.com/securego/gosec/cmd/gosec
+	_ "github.com/securego/gosec/cmd/gosec"
 )
