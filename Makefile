@@ -35,7 +35,7 @@ OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/dow
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./_output/*")
 
 #.PHONY: all build clean install uninstall fmt simplify check run
-.PHONY: all operator-sdk image build clean clean-cache clean-modcache clean-output fmt simplify verify vet mod-verify gosec gendeepcopy test-unit run e2e
+.PHONY: all operator-sdk image build clean clean-cache clean-modcache clean-output fmt simplify verify vet mod-verify gosec gendeepcopy test-unit run e2e check-if-ci
 
 all: build #check install
 
@@ -91,11 +91,21 @@ gendeepcopy: operator-sdk
 test-unit: fmt
 	@$(GO) test $(TEST_OPTIONS) $(PKGS)
 
-e2e: operator-sdk
+e2e: operator-sdk check-if-ci
 	@echo "Creating '$(NAMESPACE)' namespace/project"
 	@oc create -f deploy/ns.yaml || true
 	@echo "Running e2e tests"
-	@$(GOPATH)/bin/operator-sdk test local ./tests/e2e --namespace "$(NAMESPACE)" --go-test-flags "-v"
+	$(GOPATH)/bin/operator-sdk test local ./tests/e2e --image "$(IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "-v"
+
+# The IMAGE_FORMAT variable comes from CI. It is of the format:
+#     <image path in CI registry>:${component}
+# Here define the `component` variable, so, when we overwrite the
+# IMAGE_PATH variable, it'll expand to the component we need.
+check-if-ci:
+ifdef IMAGE_FORMAT
+	$(eval component = $(APP_NAME))
+	$(eval IMAGE_PATH = $(IMAGE_FORMAT))
+endif
 
 push: image
 	$(RUNTIME) tag $(IMAGE_PATH) $(IMAGE_PATH):$(TAG)
