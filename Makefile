@@ -101,6 +101,9 @@ gendeepcopy: operator-sdk
 test-unit: fmt
 	@$(GO) test $(TEST_OPTIONS) $(PKGS)
 
+# This runs the end-to-end tests. If not running this on CI, it'll try to
+# push the operator image to the cluster's registry. This behavior can be
+# avoided with the E2E_SKIP_CONTAINER_PUSH environment variable.
 ifeq ($(E2E_SKIP_CONTAINER_PUSH), false)
 e2e: operator-sdk check-if-ci image-to-cluster
 else
@@ -111,6 +114,10 @@ endif
 	@echo "Running e2e tests"
 	$(GOPATH)/bin/operator-sdk test local ./tests/e2e --image "$(IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "-v"
 
+# This checks if we're in a CI environment by checking the IMAGE_FORMAT
+# environmnet variable. if we are, lets ues the image from CI and use this
+# operator as the component.
+#
 # The IMAGE_FORMAT variable comes from CI. It is of the format:
 #     <image path in CI registry>:${component}
 # Here define the `component` variable, so, when we overwrite the
@@ -121,6 +128,10 @@ ifdef IMAGE_FORMAT
 	$(eval IMAGE_PATH = $(IMAGE_FORMAT))
 endif
 
+# If IMAGE_FORMAT is not defined, it means that we're not running on CI, so we
+# probably want to push the compliance-operator image to the cluster we're
+# developing on. This target exposes temporarily the image registry, pushes the
+# image, and remove the route in the end.
 .PHONY: image-to-cluster
 image-to-cluster: openshift-user image
 ifndef IMAGE_FORMAT
