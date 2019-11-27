@@ -35,6 +35,9 @@ func waitForScanDoneStatus(t *testing.T, f *framework.Framework, namespace, name
 			} else if apierrors.IsServiceUnavailable(err) {
 				t.Logf("The cluster is currently unavailable... Lets keep waiting. Got: %v\n", err)
 				return false, nil
+			} else if apierrors.IsTimeout(err) {
+				t.Logf("The get call timed out... Lets keep waiting. Might be a temporary issue. Got: %v\n", err)
+				return false, nil
 			}
 			return false, err
 		}
