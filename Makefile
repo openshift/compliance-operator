@@ -136,8 +136,11 @@ endif
 # developing on. This target exposes temporarily the image registry, pushes the
 # image, and remove the route in the end.
 .PHONY: image-to-cluster
+ifdef IMAGE_FORMAT
+image-to-cluster:
+	@echo "We're in a CI environment, skipping image-to-cluster target."
+else
 image-to-cluster: openshift-user image
-ifndef IMAGE_FORMAT
 	@echo "Temporarily exposing the default route to the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
 	@echo "Pushing image $(IMAGE_PATH):$(TAG) to the image registry"
