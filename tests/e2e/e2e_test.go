@@ -14,9 +14,9 @@ import (
 
 var (
 	retryInterval        = time.Second * 5
-	timeout              = time.Second * 120
+	timeout              = time.Minute * 10
 	cleanupRetryInterval = time.Second * 1
-	cleanupTimeout       = time.Second * 5
+	cleanupTimeout       = time.Minute * 2
 )
 
 func TestSingleScanSucceeds(t *testing.T) {
