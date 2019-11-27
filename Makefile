@@ -47,7 +47,7 @@ build: fmt
 
 operator-sdk:
 ifeq ("$(wildcard $(GOPATH)/bin/operator-sdk)","")
-	wget $(OPERATOR_SDK_URL) -O $(GOPATH)/bin/operator-sdk || (echo "wget returned $$? trying to fetch operator-sdk. please install operator-sdk and try again"; exit 1)
+	wget -nv $(OPERATOR_SDK_URL) -O $(GOPATH)/bin/operator-sdk || (echo "wget returned $$? trying to fetch operator-sdk. please install operator-sdk and try again"; exit 1)
 	chmod +x $(GOPATH)/bin/operator-sdk
 endif
 
