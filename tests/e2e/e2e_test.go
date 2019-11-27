@@ -4,19 +4,11 @@ import (
 	goctx "context"
 	"fmt"
 	"testing"
-	"time"
 
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
-)
-
-var (
-	retryInterval        = time.Second * 5
-	timeout              = time.Minute * 10
-	cleanupRetryInterval = time.Second * 1
-	cleanupTimeout       = time.Minute * 2
 )
 
 func TestSingleScanSucceeds(t *testing.T) {
