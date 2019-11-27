@@ -124,8 +124,11 @@ endif
 # IMAGE_PATH variable, it'll expand to the component we need.
 check-if-ci:
 ifdef IMAGE_FORMAT
+	@echo "IMAGE_FORMAT variable detected. We're in a CI enviornment."
 	$(eval component = $(APP_NAME))
 	$(eval IMAGE_PATH = $(IMAGE_FORMAT))
+else
+	@echo "IMAGE_FORMAT variable missing. We're in local enviornment."
 endif
 
 # If IMAGE_FORMAT is not defined, it means that we're not running on CI, so we
