@@ -197,7 +197,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *complianceoperat
 
 	// On each eligible node..
 	for _, node := range nodes.Items {
-		running, err := getPodForNode(r, instance, &node, logger)
+		running, err := isPodRunningInNode(r, instance, &node, logger)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -239,7 +239,7 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1al
 }
 
 // returns true if the pod is still running, false otherwise
-func getPodForNode(r *ReconcileComplianceScan, openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
+func isPodRunningInNode(r *ReconcileComplianceScan, openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
 	logger.Info("Retrieving a pod for node", "node", node.Name)
 
 	podName := fmt.Sprintf("%s-%s-pod", openScapCr.Name, node.Name)
@@ -254,12 +254,26 @@ func getPodForNode(r *ReconcileComplianceScan, openScapCr *complianceoperatorv1a
 	} else if foundPod.Status.Phase == corev1.PodFailed || foundPod.Status.Phase == corev1.PodSucceeded {
 		logger.Info("Pod on node has finished", "node", node.Name)
 		return false, nil
+	} else if aContainerHasFailed(foundPod.Status.ContainerStatuses) {
+		logger.Info("Container on the pod on node has failed", "node", node.Name, "pod", podName)
+		return false, nil
 	}
 
 	// the pod is still running or being created etc
 	logger.Info("Pod on node still running", "node", node.Name)
 	return true, nil
 
+}
+
+func aContainerHasFailed(statuses []corev1.ContainerStatus) bool {
+	for _, status := range statuses {
+		if status.State.Terminated != nil {
+			if status.State.Terminated.ExitCode != 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
