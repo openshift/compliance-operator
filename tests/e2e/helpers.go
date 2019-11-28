@@ -44,14 +44,17 @@ func setupComplianceOperatorCluster(t *testing.T, ctx *framework.TestCtx) {
 
 func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStaus complianceoperatorv1alpha1.ComplianceScanStatusPhase) error {
 	exampleComplianceScan := &complianceoperatorv1alpha1.ComplianceScan{}
-	err := wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, exampleComplianceScan)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
+	var lastErr error
+	// retry and ignore errors until timeout
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, exampleComplianceScan)
+		if lastErr != nil {
+			if apierrors.IsNotFound(lastErr) {
 				t.Logf("Waiting for availability of %s compliancescan\n", name)
 				return false, nil
 			}
-			return false, err
+			t.Logf("Retrying. Got error: %v\n", lastErr)
+			return false, nil
 		}
 
 		if exampleComplianceScan.Status.Phase == targetStaus {
@@ -60,8 +63,13 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 		t.Logf("Waiting for run of %s compliancescan (%s)\n", name, exampleComplianceScan.Status.Phase)
 		return false, nil
 	})
-	if err != nil {
-		return err
+	// Error in function call
+	if lastErr != nil {
+		return lastErr
+	}
+	// Timeout
+	if timeouterr != nil {
+		return timeouterr
 	}
 	t.Logf("ComplianceScan ready (%s)\n", exampleComplianceScan.Status.Phase)
 	return nil
