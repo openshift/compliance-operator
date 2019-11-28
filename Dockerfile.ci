@@ -1,7 +1,14 @@
 # Step one: build compliance-operator
 FROM registry.svc.ci.openshift.org/ocp/builder:golang-1.12 AS builder
 
+ARG ARG_GOPROXY="https://proxy.golang.org"
+ARG ARG_GOSUMDB="sum.golang.org"
+
+ENV GOPROXY=$ARG_GOPROXY
+ENV GOSUMDB=$ARG_GOSUMDB
+
 COPY . .
+
 RUN make
 
 # Step two: containerize compliance-operator
