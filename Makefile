@@ -105,12 +105,10 @@ test-unit: fmt
 # push the operator image to the cluster's registry. This behavior can be
 # avoided with the E2E_SKIP_CONTAINER_PUSH environment variable.
 ifeq ($(E2E_SKIP_CONTAINER_PUSH), false)
-e2e: operator-sdk check-if-ci image-to-cluster
+e2e: namespace operator-sdk check-if-ci image-to-cluster
 else
-e2e: operator-sdk check-if-ci
+e2e: namespace operator-sdk check-if-ci
 endif
-	@echo "Creating '$(NAMESPACE)' namespace/project"
-	@oc create -f deploy/ns.yaml || true
 	@echo "Running e2e tests"
 	$(GOPATH)/bin/operator-sdk test local ./tests/e2e --image "$(IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "-v"
 
@@ -140,7 +138,7 @@ ifdef IMAGE_FORMAT
 image-to-cluster:
 	@echo "We're in a CI environment, skipping image-to-cluster target."
 else
-image-to-cluster: openshift-user image
+image-to-cluster: namespace openshift-user image
 	@echo "Temporarily exposing the default route to the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
 	@echo "Pushing image $(IMAGE_PATH):$(TAG) to the image registry"
@@ -151,6 +149,11 @@ image-to-cluster: openshift-user image
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
 	$(eval IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(APP_NAME):$(TAG))
 endif
+
+.PHONY: namespace
+namespace:
+	@echo "Creating '$(NAMESPACE)' namespace/project"
+	@oc create -f deploy/ns.yaml || true
 
 .PHONY: openshift-user
 openshift-user:
