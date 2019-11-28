@@ -49,6 +49,7 @@ func doSingleComplianceScanTest(t *testing.T, f *framework.Framework, ctx *frame
 }
 
 func TestScanWithInvalidContentFails(t *testing.T) {
+	t.Skip("NOTE(jaosorior): We're skipping this test until we get CI to use the current built image.")
 	ctx := setupTestRequirements(t)
 	defer ctx.Cleanup()
 
