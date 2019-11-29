@@ -1,16 +1,11 @@
-CURPATH=$(PWD)
-TARGET_DIR=$(CURPATH)/build/_output
-KUBECONFIG?=$(HOME)/.kube/config
-# Skip pushing the container to your cluster
-E2E_SKIP_CONTAINER_PUSH?=false
-
-GO=GO111MODULE=on go
-GOBUILD=$(GO) build
-BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
-RUNTIME?=docker
-
+# Operator variables
+# ==================
 export APP_NAME=compliance-operator
+
+# Container image variables
+# =========================
 IMAGE_REPO?=quay.io/jhrozek
+RUNTIME?=docker
 
 # Image path to use. Set this if you want to use a specific path for building
 # or your e2e tests. This is overwritten if we bulid the image and push it to
@@ -21,91 +16,123 @@ IMAGE_PATH?=$(IMAGE_REPO)/$(APP_NAME)
 # or your e2e tests.
 TAG?=latest
 
+# Build variables
+# ===============
+CURPATH=$(PWD)
+TARGET_DIR=$(CURPATH)/build/_output
+GO=GO111MODULE=on go
+GOBUILD=$(GO) build
+BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 MAIN_PKG=cmd/manager/main.go
-export NAMESPACE?=openshift-compliance
-
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
-
-TEST_OPTIONS?=
-
-OC?=oc
-
-SDK_VERSION?=v0.12.0
-OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-x86_64-linux-gnu
-
-# These will be provided to the target
-#VERSION := 1.0.0
-#BUILD := `git rev-parse HEAD`
-
-# Use linker flags to provide version/build settings to the target
-#LDFLAGS=-ldflags "-X=main.Version=$(VERSION) -X=main.Build=$(BUILD)"
 
 # go source files, ignore vendor directory
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./_output/*")
 
-#.PHONY: all build clean install uninstall fmt simplify check run
-.PHONY: all operator-sdk image build clean clean-cache clean-modcache clean-output fmt simplify verify vet mod-verify gosec gendeepcopy test-unit run e2e check-if-ci
 
-all: build #check install
+# Kubernetes variables
+# ====================
+KUBECONFIG?=$(HOME)/.kube/config
+export NAMESPACE?=openshift-compliance
 
-image: fmt operator-sdk
+# Operator-sdk variables
+# ======================
+SDK_VERSION?=v0.12.0
+OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-x86_64-linux-gnu
+
+# Test variables
+# ==============
+TEST_OPTIONS?=
+# Skip pushing the container to your cluster
+E2E_SKIP_CONTAINER_PUSH?=false
+
+.PHONY: all
+all: build verify test-unit ## Test and Build the compliance-operator
+
+.PHONY: help
+help: ## Show this help screen
+	@echo 'Usage: make <OPTIONS> ... <TARGETS>'
+	@echo ''
+	@echo 'Available targets are:'
+	@echo ''
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z0-9_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+
+.PHONY: image
+image: fmt operator-sdk ## Build the compliance-operator container image
 	$(GOPATH)/bin/operator-sdk build $(IMAGE_PATH) --image-builder $(RUNTIME)
 
-build: fmt
+.PHONY: build
+build: fmt ## Build the compliance-operator binary
 	$(GO) build -o $(TARGET) github.com/openshift/compliance-operator/cmd/manager
 
+.PHONY: operator-sdk
 operator-sdk:
 ifeq ("$(wildcard $(GOPATH)/bin/operator-sdk)","")
 	wget -nv $(OPERATOR_SDK_URL) -O $(GOPATH)/bin/operator-sdk || (echo "wget returned $$? trying to fetch operator-sdk. please install operator-sdk and try again"; exit 1)
 	chmod +x $(GOPATH)/bin/operator-sdk
 endif
 
-run: operator-sdk
+.PHONY: run
+run: operator-sdk ## Run the compliance-operator locally
 	WATCH_NAMESPACE=$(NAMESPACE) \
 	KUBERNETES_CONFIG=$(KUBECONFIG) \
 	OPERATOR_NAME=compliance-operator \
 	$(GOPATH)/bin/operator-sdk up local --namespace $(NAMESPACE)
 
-clean: clean-modcache clean-cache clean-output
+.PHONY: clean
+clean: clean-modcache clean-cache clean-output ## Clean the golang environment
 
+.PHONY: clean-output
 clean-output:
 	rm -rf $(TARGET_DIR)
 
+.PHONY: clean-cache
 clean-cache:
 	$(GO) clean -cache -testcache $(PKGS)
 
+.PHONY: clean-modcache
 clean-modcache:
 	$(GO) clean -modcache $(PKGS)
 
-fmt:
+.PHONY: fmt
+fmt:  ## Run the `go fmt` tool
 	@$(GO) fmt $(PKGS)
 
+.PHONY: simplify
 simplify:
 	@gofmt -s -l -w $(SRC)
 
-verify: vet mod-verify gosec
+.PHONY: verify
+verify: vet mod-verify gosec ## Run code lint checks
 
+.PHONY: vet
 vet:
 	@$(GO) vet $(PKGS)
 
+.PHONY: mod-verify
 mod-verify:
 	@$(GO) mod verify
 
+.PHONY: gosec
 gosec:
 	@$(GO) run github.com/securego/gosec/cmd/gosec -severity medium -confidence medium -quiet ./...
 
-gendeepcopy: operator-sdk
+.PHONY: gendeepcopy
+gendeepcopy: operator-sdk ## Run operator-sdk's k8s code generation
 	@GO111MODULE=on $(GOPATH)/bin/operator-sdk generate k8s
 
-test-unit: fmt
+.PHONY: test-unit
+test-unit: fmt ## Run the unit tests
 	@$(GO) test $(TEST_OPTIONS) $(PKGS)
 
 # This runs the end-to-end tests. If not running this on CI, it'll try to
 # push the operator image to the cluster's registry. This behavior can be
 # avoided with the E2E_SKIP_CONTAINER_PUSH environment variable.
+.PHONY: e2e
 ifeq ($(E2E_SKIP_CONTAINER_PUSH), false)
-e2e: namespace operator-sdk check-if-ci image-to-cluster
+e2e: namespace operator-sdk check-if-ci image-to-cluster ## Run the end-to-end tests
 else
 e2e: namespace operator-sdk check-if-ci
 endif
@@ -120,6 +147,7 @@ endif
 #     <image path in CI registry>:${component}
 # Here define the `component` variable, so, when we overwrite the
 # IMAGE_PATH variable, it'll expand to the component we need.
+.PHONY: check-if-ci
 check-if-ci:
 ifdef IMAGE_FORMAT
 	@echo "IMAGE_FORMAT variable detected. We're in a CI enviornment."
@@ -163,6 +191,7 @@ else
 	$(eval OPENSHIFT_USER = $(oc whoami))
 endif
 
+.PHONY: push
 push: image
 	$(RUNTIME) tag $(IMAGE_PATH) $(IMAGE_PATH):$(TAG)
 	$(RUNTIME) push $(IMAGE_PATH):$(TAG)
