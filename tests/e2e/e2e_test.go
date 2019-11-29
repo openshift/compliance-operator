@@ -51,3 +51,24 @@ func TestScanWithInvalidContentFails(t *testing.T) {
 		return waitForScanStatus(t, f, namespace, "example-scan", complianceoperatorv1alpha1.PhaseDone)
 	})
 }
+
+func TestScanWithInvalidProfileFails(t *testing.T) {
+	executeTest(t, func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, namespace string) error {
+		exampleComplianceScan := &complianceoperatorv1alpha1.ComplianceScan{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "example-scan",
+				Namespace: namespace,
+			},
+			Spec: complianceoperatorv1alpha1.ComplianceScanSpec{
+				Profile: "xccdf_org.ssgproject.content_profile_coreos-unexistent",
+				Content: "ssg-ocp4-ds.xml",
+			},
+		}
+		// use TestCtx's create helper to create the object and add a cleanup function for the new object
+		err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+		if err != nil {
+			return err
+		}
+		return waitForScanStatus(t, f, namespace, "example-scan", complianceoperatorv1alpha1.PhaseDone)
+	})
+}
