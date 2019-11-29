@@ -6,9 +6,12 @@ import (
 
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/compliance-operator/pkg/apis"
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
@@ -101,4 +104,27 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 	}
 	t.Logf("ComplianceScan ready (%s)\n", exampleComplianceScan.Status.Phase)
 	return nil
+}
+
+// getNodesWithSelector lists nodes according to a specific selector
+func getNodesWithSelector(f *framework.Framework, labelselector map[string]string) []corev1.Node {
+	var nodes corev1.NodeList
+	lo := &client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(labelselector),
+	}
+	f.Client.List(goctx.TODO(), &nodes, lo)
+	return nodes.Items
+}
+
+// getConfigMapsFromScan lists the configmaps from the specified openscap scan instance
+func getConfigMapsFromScan(f *framework.Framework, scaninstance *complianceoperatorv1alpha1.ComplianceScan) []corev1.ConfigMap {
+	var configmaps corev1.ConfigMapList
+	labelselector := map[string]string{
+		"compliance-scan": scaninstance.Name,
+	}
+	lo := &client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(labelselector),
+	}
+	f.Client.List(goctx.TODO(), &configmaps, lo)
+	return configmaps.Items
 }
