@@ -32,7 +32,6 @@ func TestSingleScanSucceeds(t *testing.T) {
 }
 
 func TestScanWithInvalidContentFails(t *testing.T) {
-	t.Skip("NOTE(jaosorior): We're skipping this test until we get CI to use the current built image.")
 	executeTest(t, func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, namespace string) error {
 		exampleComplianceScan := &complianceoperatorv1alpha1.ComplianceScan{
 			ObjectMeta: metav1.ObjectMeta{
