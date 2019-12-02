@@ -31,7 +31,12 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return waitForScanStatus(t, f, namespace, "test-single-scan", complianceoperatorv1alpha1.PhaseDone)
+				err = waitForScanStatus(t, f, namespace, "test-single-scan", complianceoperatorv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+
+				return scanResultIsExpected(t, f, namespace, "test-single-scan", complianceoperatorv1alpha1.ResultCompliant)
 			},
 		},
 		testExecution{
@@ -67,7 +72,7 @@ func TestE2E(t *testing.T) {
 						"The number of reports doesn't match the number of selected nodes: "+
 							"%d reports / %d nodes", len(configmaps), len(nodes))
 				}
-				return nil
+				return scanResultIsExpected(t, f, namespace, "test-filtered-scan", complianceoperatorv1alpha1.ResultCompliant)
 			},
 		},
 		testExecution{
@@ -88,7 +93,11 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return waitForScanStatus(t, f, namespace, "test-scan-w-invalid-content", complianceoperatorv1alpha1.PhaseDone)
+				err = waitForScanStatus(t, f, namespace, "test-scan-w-invalid-content", complianceoperatorv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+				return scanResultIsExpected(t, f, namespace, "test-scan-w-invalid-content", complianceoperatorv1alpha1.ResultError)
 			},
 		},
 		testExecution{
@@ -109,7 +118,11 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return waitForScanStatus(t, f, namespace, "test-scan-w-invalid-profile", complianceoperatorv1alpha1.PhaseDone)
+				err = waitForScanStatus(t, f, namespace, "test-scan-w-invalid-profile", complianceoperatorv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+				return scanResultIsExpected(t, f, namespace, "test-scan-w-invalid-profile", complianceoperatorv1alpha1.ResultError)
 			},
 		},
 	)

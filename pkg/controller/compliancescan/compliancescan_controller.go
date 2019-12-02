@@ -31,6 +31,11 @@ var (
 	hostPathDir = corev1.HostPathDirectory
 )
 
+const (
+	// OpenSCAPScanContainerName defines the name of the contianer that will run OpenSCAP
+	OpenSCAPScanContainerName = "openscap-ocp"
+)
+
 // Add creates a new ComplianceScan Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
@@ -220,8 +225,23 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *complianceoperat
 
 func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	logger.Info("Phase: Done", "ComplianceScan scan", instance.ObjectMeta.Name)
-	// Todo maybe clean up the pods?
-	return reconcile.Result{}, nil
+
+	var nodes corev1.NodeList
+	var err error
+
+	if nodes, err = getTargetNodes(r, instance); err != nil {
+		log.Error(err, "Cannot get nodes")
+		return reconcile.Result{}, err
+	}
+
+	result, err := gatherResults(r, instance, nodes)
+
+	instance.Status.Result = result
+	if err != nil {
+		instance.Status.ErrorMessage = err.Error()
+	}
+	err = r.client.Status().Update(context.TODO(), instance)
+	return reconcile.Result{}, err
 }
 
 func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan) (corev1.NodeList, error) {
@@ -262,7 +282,6 @@ func isPodRunningInNode(r *ReconcileComplianceScan, openScapCr *complianceoperat
 	// the pod is still running or being created etc
 	logger.Info("Pod on node still running", "node", node.Name)
 	return true, nil
-
 }
 
 func aContainerHasFailed(statuses []corev1.ContainerStatus) bool {
@@ -274,6 +293,57 @@ func aContainerHasFailed(statuses []corev1.ContainerStatus) bool {
 		}
 	}
 	return false
+}
+
+func getScanResult(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node) (complianceoperatorv1alpha1.ComplianceScanStatusResult, error) {
+	podName := fmt.Sprintf("%s-%s-pod", instance.Name, node.Name)
+	p := &corev1.Pod{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: instance.Namespace}, p)
+	if err != nil {
+		return complianceoperatorv1alpha1.ResultError, err
+	}
+	for _, status := range p.Status.ContainerStatuses {
+		if status.Name == OpenSCAPScanContainerName {
+			if status.State.Terminated != nil {
+				switch status.State.Terminated.ExitCode {
+				case 0:
+					return complianceoperatorv1alpha1.ResultCompliant, nil
+				case 2:
+					return complianceoperatorv1alpha1.ResultNonCompliant, nil
+				default:
+					return complianceoperatorv1alpha1.ResultError, fmt.Errorf(status.State.Terminated.Message)
+				}
+			} else {
+				return complianceoperatorv1alpha1.ResultError, fmt.Errorf("The pod '%s' was missing 'terminated' status", p.Name)
+			}
+		}
+	}
+	return complianceoperatorv1alpha1.ResultError, fmt.Errorf("Couldn't find '%s' container in '%s' pod status", OpenSCAPScanContainerName, p.Name)
+}
+
+func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan, nodes corev1.NodeList) (complianceoperatorv1alpha1.ComplianceScanStatusResult, error) {
+	var err error
+	var lastNonCompliance complianceoperatorv1alpha1.ComplianceScanStatusResult
+	var result complianceoperatorv1alpha1.ComplianceScanStatusResult
+	compliant := true
+	for _, node := range nodes.Items {
+		result, err = getScanResult(r, instance, &node)
+		// we output the last result if it was an error
+		if result == complianceoperatorv1alpha1.ResultError {
+			return result, err
+		}
+		// Store the last non-compliance, so we can output that if
+		// there were no errors.
+		if result == complianceoperatorv1alpha1.ResultNonCompliant {
+			lastNonCompliance = result
+			compliant = false
+		}
+	}
+
+	if !compliant {
+		return lastNonCompliance, nil
+	}
+	return result, nil
 }
 
 func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
@@ -334,7 +404,7 @@ func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *
 					},
 				},
 				{
-					Name:  "openscap-ocp",
+					Name:  OpenSCAPScanContainerName,
 					Image: GetComponentImage(OPENSCAP),
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &trueVal,

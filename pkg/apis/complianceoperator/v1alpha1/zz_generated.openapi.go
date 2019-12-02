@@ -70,9 +70,8 @@ func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanSpec(ref common.R
 				Properties: map[string]spec.Schema{
 					"contentImage": {
 						SchemaProps: spec.SchemaProps{
-							Description: "INSERT ADDITIONAL SPEC FIELDS - desired state of cluster Important: Run \"operator-sdk generate k8s\" to regenerate code after modifying this file Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html",
-							Type:        []string{"string"},
-							Format:      "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"profile": {
@@ -122,9 +121,20 @@ func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanStatus(ref common
 				Properties: map[string]spec.Schema{
 					"phase": {
 						SchemaProps: spec.SchemaProps{
-							Description: "INSERT ADDITIONAL STATUS FIELD - define observed state of cluster Important: Run \"operator-sdk generate k8s\" to regenerate code after modifying this file Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html",
-							Type:        []string{"string"},
-							Format:      "",
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"result": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"errormsg": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 				},

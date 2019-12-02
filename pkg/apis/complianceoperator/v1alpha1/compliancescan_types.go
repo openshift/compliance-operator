@@ -6,7 +6,7 @@ import (
 
 // +genclient
 
-// ComplianceScanStatusPhase represents the status of the compliancescan run.
+// Represents the status of the compliance scan run.
 type ComplianceScanStatusPhase string
 
 const (
@@ -18,6 +18,18 @@ const (
 	PhaseRunning ComplianceScanStatusPhase = "RUNNING"
 	// PhaseDone represents the scan pods being done and the results being available
 	PhaseDone ComplianceScanStatusPhase = "DONE"
+)
+
+// Represents the result of the compliance scan
+type ComplianceScanStatusResult string
+
+const (
+	// ResultCompliant represents the compliance scan having succeeded
+	ResultCompliant ComplianceScanStatusResult = "COMPLIANT"
+	// ResultError represents a compliance scan pod having failed to run the scan or encountered an error
+	ResultError ComplianceScanStatusResult = "ERROR"
+	// ResultNonCompliant represents the compliance scan having found a gap
+	ResultNonCompliant ComplianceScanStatusResult = "NON-COMPLIANT"
 )
 
 // ComplianceScanSpec defines the desired state of ComplianceScan
@@ -33,7 +45,9 @@ type ComplianceScanSpec struct {
 // ComplianceScanStatus defines the observed state of ComplianceScan
 // +k8s:openapi-gen=true
 type ComplianceScanStatus struct {
-	Phase ComplianceScanStatusPhase `json:"phase,omitempty"`
+	Phase        ComplianceScanStatusPhase  `json:"phase,omitempty"`
+	Result       ComplianceScanStatusResult `json:"result,omitempty"`
+	ErrorMessage string                     `json:"errormsg,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

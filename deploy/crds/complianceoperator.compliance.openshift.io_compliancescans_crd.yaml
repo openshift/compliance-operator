@@ -34,10 +34,6 @@ spec:
             content:
               type: string
             contentImage:
-              description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                Important: Run "operator-sdk generate k8s" to regenerate code after
-                modifying this file Add custom validation using kubebuilder tags:
-                https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
               type: string
             nodeSelector:
               additionalProperties:
@@ -51,11 +47,13 @@ spec:
         status:
           description: ComplianceScanStatus defines the observed state of ComplianceScan
           properties:
+            errormsg:
+              type: string
             phase:
-              description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                of cluster Important: Run "operator-sdk generate k8s" to regenerate
-                code after modifying this file Add custom validation using kubebuilder
-                tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
+              description: Represents the status of the compliance scan run.
+              type: string
+            result:
+              description: Represents the result of the compliance scan
               type: string
           type: object
       type: object
