@@ -6,21 +6,23 @@ import (
 
 // +genclient
 
+// ComplianceScanStatusPhase represents the status of the compliancescan run.
 type ComplianceScanStatusPhase string
 
 const (
-	PhasePending   ComplianceScanStatusPhase = "PENDING"
+	// PhasePending represents the scan pending to be scheduled
+	PhasePending ComplianceScanStatusPhase = "PENDING"
+	// PhaseLaunching represents being scheduled and launching pods to run the scans
 	PhaseLaunching ComplianceScanStatusPhase = "LAUNCHING"
-	PhaseRunning   ComplianceScanStatusPhase = "RUNNING"
-	PhaseDone      ComplianceScanStatusPhase = "DONE"
+	// PhaseRunning represents the scan being ran by the pods and waiting for the results
+	PhaseRunning ComplianceScanStatusPhase = "RUNNING"
+	// PhaseDone represents the scan pods being done and the results being available
+	PhaseDone ComplianceScanStatusPhase = "DONE"
 )
 
 // ComplianceScanSpec defines the desired state of ComplianceScan
 // +k8s:openapi-gen=true
 type ComplianceScanSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	ContentImage string            `json:"contentImage,omitempty"`
 	Profile      string            `json:"profile,omitempty"`
 	Rule         string            `json:"rule,omitempty"`
@@ -31,9 +33,6 @@ type ComplianceScanSpec struct {
 // ComplianceScanStatus defines the observed state of ComplianceScan
 // +k8s:openapi-gen=true
 type ComplianceScanStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	Phase ComplianceScanStatusPhase `json:"phase,omitempty"`
 }
 
