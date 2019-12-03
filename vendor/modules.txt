@@ -13,6 +13,8 @@ github.com/PuerkitoBio/purell
 github.com/PuerkitoBio/urlesc
 # github.com/ajeddeloh/go-json v0.0.0-20170920214419-6a2fe990e083
 github.com/ajeddeloh/go-json
+# github.com/antchfx/xpath v0.0.0-20170515025933-1f3266e77307
+github.com/antchfx/xpath
 # github.com/beorn7/perks v1.0.0
 github.com/beorn7/perks/quantile
 # github.com/coreos/go-semver v0.2.0
@@ -227,6 +229,8 @@ github.com/spf13/afero/mem
 github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.3
 github.com/spf13/pflag
+# github.com/subchen/go-xmldom v1.1.2
+github.com/subchen/go-xmldom
 # github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50
 github.com/vincent-petithory/dataurl
 # go.uber.org/atomic v1.4.0
