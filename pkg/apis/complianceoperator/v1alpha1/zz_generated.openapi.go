@@ -11,12 +11,18 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"./pkg/apis/complianceoperator/v1alpha1.ComplianceRemediation":       schema_pkg_apis_complianceoperator_v1alpha1_ComplianceRemediation(ref),
-		"./pkg/apis/complianceoperator/v1alpha1.ComplianceRemediationSpec":   schema_pkg_apis_complianceoperator_v1alpha1_ComplianceRemediationSpec(ref),
-		"./pkg/apis/complianceoperator/v1alpha1.ComplianceRemediationStatus": schema_pkg_apis_complianceoperator_v1alpha1_ComplianceRemediationStatus(ref),
-		"./pkg/apis/complianceoperator/v1alpha1.ComplianceScan":              schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScan(ref),
-		"./pkg/apis/complianceoperator/v1alpha1.ComplianceScanSpec":          schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanSpec(ref),
-		"./pkg/apis/complianceoperator/v1alpha1.ComplianceScanStatus":        schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanStatus(ref),
+		"./pkg/apis/complianceoperator/v1alpha1.ComplianceRemediation":           schema_pkg_apis_complianceoperator_v1alpha1_ComplianceRemediation(ref),
+		"./pkg/apis/complianceoperator/v1alpha1.ComplianceRemediationNameStatus": schema_pkg_apis_complianceoperator_v1alpha1_ComplianceRemediationNameStatus(ref),
+		"./pkg/apis/complianceoperator/v1alpha1.ComplianceRemediationSpec":       schema_pkg_apis_complianceoperator_v1alpha1_ComplianceRemediationSpec(ref),
+		"./pkg/apis/complianceoperator/v1alpha1.ComplianceRemediationStatus":     schema_pkg_apis_complianceoperator_v1alpha1_ComplianceRemediationStatus(ref),
+		"./pkg/apis/complianceoperator/v1alpha1.ComplianceScan":                  schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScan(ref),
+		"./pkg/apis/complianceoperator/v1alpha1.ComplianceScanSpec":              schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanSpec(ref),
+		"./pkg/apis/complianceoperator/v1alpha1.ComplianceScanSpecWrapper":       schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanSpecWrapper(ref),
+		"./pkg/apis/complianceoperator/v1alpha1.ComplianceScanStatus":            schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanStatus(ref),
+		"./pkg/apis/complianceoperator/v1alpha1.ComplianceScanStatusWrapper":     schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanStatusWrapper(ref),
+		"./pkg/apis/complianceoperator/v1alpha1.ComplianceSuite":                 schema_pkg_apis_complianceoperator_v1alpha1_ComplianceSuite(ref),
+		"./pkg/apis/complianceoperator/v1alpha1.ComplianceSuiteSpec":             schema_pkg_apis_complianceoperator_v1alpha1_ComplianceSuiteSpec(ref),
+		"./pkg/apis/complianceoperator/v1alpha1.ComplianceSuiteStatus":           schema_pkg_apis_complianceoperator_v1alpha1_ComplianceSuiteStatus(ref),
 	}
 }
 
@@ -61,6 +67,45 @@ func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceRemediation(ref commo
 		},
 		Dependencies: []string{
 			"./pkg/apis/complianceoperator/v1alpha1.ComplianceRemediationSpec", "./pkg/apis/complianceoperator/v1alpha1.ComplianceRemediationStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceRemediationNameStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Remediation type specifies the artifact the remediation is based on. For now, only MachineConfig is supported",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apply": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Whether the remediation should be picked up and applied by the operator",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"remediationName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"scanName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+				Required: []string{"apply", "remediationName", "scanName"},
+			},
+		},
 	}
 }
 
@@ -215,6 +260,64 @@ func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanSpec(ref common.R
 	}
 }
 
+func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanSpecWrapper(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ComplianceScanSpecWrapper provides a ComplianceScanSpec and a Name",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"contentImage": {
+						SchemaProps: spec.SchemaProps{
+							Description: "INSERT ADDITIONAL SPEC FIELDS - desired state of cluster Important: Run \"operator-sdk generate k8s\" to regenerate code after modifying this file Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"profile": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"rule": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"content": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -243,5 +346,165 @@ func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanStatus(ref common
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceScanStatusWrapper(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ComplianceScanStatusWrapper provides a ComplianceScanStatus and a Name",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "INSERT ADDITIONAL STATUS FIELD - define observed state of cluster Important: Run \"operator-sdk generate k8s\" to regenerate code after modifying this file Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceSuite(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ComplianceSuite is the Schema for the compliancesuites API",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("./pkg/apis/complianceoperator/v1alpha1.ComplianceSuiteSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("./pkg/apis/complianceoperator/v1alpha1.ComplianceSuiteStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"./pkg/apis/complianceoperator/v1alpha1.ComplianceSuiteSpec", "./pkg/apis/complianceoperator/v1alpha1.ComplianceSuiteStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceSuiteSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ComplianceSuiteSpec defines the desired state of ComplianceSuite",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"autoApplyRemediations": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Should remediations be applied automatically?",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"scans": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("./pkg/apis/complianceoperator/v1alpha1.ComplianceScanSpecWrapper"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"scans"},
+			},
+		},
+		Dependencies: []string{
+			"./pkg/apis/complianceoperator/v1alpha1.ComplianceScanSpecWrapper"},
+	}
+}
+
+func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceSuiteStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ComplianceSuiteStatus defines the observed state of ComplianceSuite",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"scanStatuses": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("./pkg/apis/complianceoperator/v1alpha1.ComplianceScanStatusWrapper"),
+									},
+								},
+							},
+						},
+					},
+					"remediationOverview": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("./pkg/apis/complianceoperator/v1alpha1.ComplianceRemediationNameStatus"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"scanStatuses"},
+			},
+		},
+		Dependencies: []string{
+			"./pkg/apis/complianceoperator/v1alpha1.ComplianceRemediationNameStatus", "./pkg/apis/complianceoperator/v1alpha1.ComplianceScanStatusWrapper"},
 	}
 }
