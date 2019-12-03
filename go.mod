@@ -17,6 +17,7 @@ require (
 	github.com/prometheus/procfs v0.0.5 // indirect
 	github.com/securego/gosec v0.0.0-20191119104125-df484bfa9e9f
 	github.com/spf13/pflag v1.0.3
+	github.com/subchen/go-xmldom v1.1.2
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	go.uber.org/zap v1.10.0
 	go4.org v0.0.0-20191010144846-132d2879e1e9 // indirect
