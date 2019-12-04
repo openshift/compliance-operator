@@ -5,7 +5,7 @@ export APP_NAME=compliance-operator
 # Container image variables
 # =========================
 IMAGE_REPO?=quay.io/jhrozek
-RUNTIME?=docker
+RUNTIME?=podman
 
 # Image path to use. Set this if you want to use a specific path for building
 # or your e2e tests. This is overwritten if we bulid the image and push it to
