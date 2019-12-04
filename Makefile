@@ -119,9 +119,10 @@ mod-verify:
 gosec:
 	@$(GO) run github.com/securego/gosec/cmd/gosec -severity medium -confidence medium -quiet ./...
 
-.PHONY: gendeepcopy
-gendeepcopy: operator-sdk ## Run operator-sdk's k8s code generation
-	@GO111MODULE=on $(GOPATH)/bin/operator-sdk generate k8s
+.PHONY: generate
+generate: operator-sdk ## Run operator-sdk's code generation (k8s and openapi)
+	$(GOPATH)/bin/operator-sdk generate k8s
+	$(GOPATH)/bin/operator-sdk generate openapi
 
 .PHONY: test-unit
 test-unit: fmt ## Run the unit tests
