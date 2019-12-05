@@ -17,8 +17,13 @@ import (
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
 )
 
+type testExecution struct {
+	Name   string
+	TestFn func(*testing.T, *framework.Framework, *framework.TestCtx, string) error
+}
+
 // executeTest sets up everything that a e2e test needs to run, and executes the test.
-func executeTest(t *testing.T, doTestFn func(*testing.T, *framework.Framework, *framework.TestCtx, string) error) {
+func executeTests(t *testing.T, tests ...testExecution) {
 	ctx := setupTestRequirements(t)
 	defer ctx.Cleanup()
 
@@ -32,8 +37,13 @@ func executeTest(t *testing.T, doTestFn func(*testing.T, *framework.Framework, *
 		t.Fatalf("could not get namespace: %v", err)
 	}
 
-	if err := doTestFn(t, f, ctx, ns); err != nil {
-		t.Fatal(err)
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			if err := test.TestFn(t, f, ctx, ns); err != nil {
+				t.Error(err)
+			}
+		})
+
 	}
 }
 
