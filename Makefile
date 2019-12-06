@@ -20,7 +20,9 @@ TAG?=latest
 # ===============
 CURPATH=$(PWD)
 TARGET_DIR=$(CURPATH)/build/_output
-GO=GO111MODULE=on go
+export GO111MODULE=auto
+export GOFLAGS?=-mod=vendor
+GO=go
 GOBUILD=$(GO) build
 BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
@@ -105,7 +107,7 @@ simplify:
 	@gofmt -s -l -w $(SRC)
 
 .PHONY: verify
-verify: vet mod-verify gosec ## Run code lint checks
+verify: vet gosec ## Run code lint checks
 
 .PHONY: vet
 vet:
