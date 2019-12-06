@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"os"
 	"runtime"
 
@@ -12,6 +13,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/openshift/compliance-operator/pkg/apis"
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 	"github.com/openshift/compliance-operator/pkg/controller"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
@@ -155,7 +157,7 @@ func main() {
 func serveCRMetrics(cfg *rest.Config) error {
 	// Below function returns filtered operator/CustomResource specific GVKs.
 	// For more control override the below GVK list with your own custom logic.
-	filteredGVK, err := k8sutil.GetGVKsFromAddToScheme(apis.AddToScheme)
+	allGVK, err := k8sutil.GetGVKsFromAddToScheme(apis.AddToScheme)
 	if err != nil {
 		return err
 	}
@@ -164,10 +166,24 @@ func serveCRMetrics(cfg *rest.Config) error {
 	if err != nil {
 		return err
 	}
+
+	// FIXME: Work around https://github.com/operator-framework/operator-sdk/issues/1858
+	// Since we started operating on cluster-scoped MachineConfigs, we started getting:
+	// E1206 12:31:46.322933       1 reflector.go:125] go/pkg/mod/k8s.io/client-go@v0.0.0-20190918200256-06eb1244587a/tools/cache/reflector.go:98: Failed to list *unstructured.Unstructured: the server could not find the requested resource
+	// This is because mcfg is cluster-scoped, but operator-sdk assumes that all CRs are
+	// namespaced. So let's just filter out the MC API group.
+	ownGVKs := []schema.GroupVersionKind{}
+	for _, gvk := range allGVK {
+		if gvk.Group == mcfgv1.GroupName {
+			continue
+		}
+		ownGVKs = append(ownGVKs, gvk)
+	}
+
 	// To generate metrics in other namespaces, add the values below.
 	ns := []string{operatorNs}
 	// Generate and serve custom resource specific metrics.
-	err = kubemetrics.GenerateAndServeCRMetrics(cfg, ns, filteredGVK, metricsHost, operatorMetricsPort)
+	err = kubemetrics.GenerateAndServeCRMetrics(cfg, ns, ownGVKs, metricsHost, operatorMetricsPort)
 	if err != nil {
 		return err
 	}
