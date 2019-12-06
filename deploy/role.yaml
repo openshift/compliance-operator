@@ -20,10 +20,15 @@ rules:
   verbs:
   - create      # The sidecar must create the configmap to store results in
   - get
+  - list       # The Suite controller must list configMaps
+  - watch      # The Suite controller must watch configMaps
+  - patch      # The Suite controller annotates configMaps
+  - update     # The Suite controller annotates configMaps
 - apiGroups:
   - apps
   resources:
   - replicasets
+  - deployments
   verbs:
   - get         # Otherwise the operator errors out when creating initializing metrics
 - apiGroups:
@@ -31,6 +36,7 @@ rules:
   resources:
   - compliancescans   # The operator's custom CRD
   verbs:
+  - create      # The Suite ctrl must be able to create Scans
   - watch       # The operator must be able to watch the CR for changes
   - patch       # The operator changes the CR status to run a state machine
   - get         # The operator must be able to read the CR
@@ -76,4 +82,14 @@ rules:
   - nodes  # We need to list the nodes to be able to selectively scan
   verbs:
   - list
+  - watch
+- apiGroups:
+  - machineconfiguration.openshift.io
+  resources:
+  - machineconfigs  # The compliance remediation controller operates on MachineConfigs
+  verbs:
+  - list
+  - get
+  - patch
+  - create
   - watch
