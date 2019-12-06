@@ -20,7 +20,10 @@ TAG?=latest
 # ===============
 CURPATH=$(PWD)
 TARGET_DIR=$(CURPATH)/build/_output
-GO=GO111MODULE=on go
+export GO111MODULE=on
+# Always replace mod=vendor
+export GOFLAGS=$(shell go env | grep GOFLAGS | sed 's/GOFLAGS=//' | sed 's/mod=vendor/mod=readonly/' | sed 's/"//g')
+GO=GO111MODULE=on GOFLAGS=$(GOFLAGS) go
 GOBUILD=$(GO) build
 BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
@@ -65,7 +68,8 @@ image: fmt operator-sdk ## Build the compliance-operator container image
 
 .PHONY: build
 build: fmt ## Build the compliance-operator binary
-	$(GO) build -o $(TARGET) github.com/openshift/compliance-operator/cmd/manager
+	$(GO) mod download
+	$(GO) build $(GOFLAGS) -o $(TARGET) github.com/openshift/compliance-operator/cmd/manager
 
 .PHONY: operator-sdk
 operator-sdk:
@@ -125,7 +129,7 @@ generate: operator-sdk ## Run operator-sdk's code generation (k8s and openapi)
 	$(GOPATH)/bin/operator-sdk generate openapi
 
 .PHONY: test-unit
-test-unit: fmt ## Run the unit tests
+test-unit: fmt build ## Run the unit tests
 	@$(GO) test $(TEST_OPTIONS) $(PKGS)
 
 # This runs the end-to-end tests. If not running this on CI, it'll try to
