@@ -67,6 +67,12 @@ image: fmt operator-sdk ## Build the compliance-operator container image
 build: fmt ## Build the compliance-operator binary
 	$(GO) build -o $(TARGET) github.com/openshift/compliance-operator/cmd/manager
 
+.PHONY: go-env
+go-env:
+	@echo "Setting Go env variables"
+	$(GO) env -w GO111MODULE=on
+	$(GO) env -w GOFLAGS=""
+
 .PHONY: operator-sdk
 operator-sdk:
 ifeq ("$(wildcard $(GOPATH)/bin/operator-sdk)","")
@@ -105,7 +111,7 @@ simplify:
 	@gofmt -s -l -w $(SRC)
 
 .PHONY: verify
-verify: vet mod-verify gosec ## Run code lint checks
+verify: vet mod-verify gosec go-env ## Run code lint checks
 
 .PHONY: vet
 vet:
@@ -125,7 +131,7 @@ generate: operator-sdk ## Run operator-sdk's code generation (k8s and openapi)
 	$(GOPATH)/bin/operator-sdk generate openapi
 
 .PHONY: test-unit
-test-unit: fmt ## Run the unit tests
+test-unit: fmt go-env ## Run the unit tests
 	@$(GO) test $(TEST_OPTIONS) $(PKGS)
 
 # This runs the end-to-end tests. If not running this on CI, it'll try to
