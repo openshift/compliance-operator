@@ -186,7 +186,7 @@ namespace:
 
 .PHONY: openshift-user
 openshift-user:
-ifeq ($(shell oc whoami),kube:admin)
+ifeq ($(shell oc whoami 2> /dev/null),kube:admin)
 	$(eval OPENSHIFT_USER = kubeadmin)
 else
 	$(eval OPENSHIFT_USER = $(oc whoami))
