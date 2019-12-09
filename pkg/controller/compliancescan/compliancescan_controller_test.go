@@ -102,16 +102,16 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 						Name: fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name),
 					},
 				})
-				// Set state to LAUNCHING
-				compliancescaninstance.Status.Phase = complianceoperatorv1alpha1.PhaseLaunching
+				// Set state to RUNNING
+				compliancescaninstance.Status.Phase = complianceoperatorv1alpha1.PhaseRunning
 				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
 			})
 
-			It("should stay in LAUNCHING state", func() {
+			It("should stay in RUNNING state", func() {
 				result, err := reconciler.phaseRunningHandler(compliancescaninstance, logger)
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
-				Expect(compliancescaninstance.Status.Phase).To(Equal(complianceoperatorv1alpha1.PhaseLaunching))
+				Expect(compliancescaninstance.Status.Phase).To(Equal(complianceoperatorv1alpha1.PhaseRunning))
 			})
 		})
 	})
