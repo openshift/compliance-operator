@@ -81,11 +81,11 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 
 	Context("On the RUNNING phase", func() {
 		Context("With no pods in the cluster", func() {
-			It("should update the compliancescan instance to phase DONE", func() {
+			It("should update the compliancescan instance to phase LAUNCHING", func() {
 				result, err := reconciler.phaseRunningHandler(compliancescaninstance, logger)
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
-				Expect(compliancescaninstance.Status.Phase).To(Equal(complianceoperatorv1alpha1.PhaseDone))
+				Expect(compliancescaninstance.Status.Phase).To(Equal(complianceoperatorv1alpha1.PhaseLaunching))
 			})
 		})
 
@@ -112,6 +112,38 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
 				Expect(compliancescaninstance.Status.Phase).To(Equal(complianceoperatorv1alpha1.PhaseRunning))
+			})
+		})
+
+		Context("With two pods that succeeded in the cluster", func() {
+			BeforeEach(func() {
+				// Create the pods for the test
+				reconciler.client.Create(context.TODO(), &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name),
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodSucceeded,
+					},
+				})
+				reconciler.client.Create(context.TODO(), &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name),
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodSucceeded,
+					},
+				})
+				// Set state to RUNNING
+				compliancescaninstance.Status.Phase = complianceoperatorv1alpha1.PhaseRunning
+				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+			})
+
+			It("should move to DONE state", func() {
+				result, err := reconciler.phaseRunningHandler(compliancescaninstance, logger)
+				Expect(result).ToNot(BeNil())
+				Expect(err).To(BeNil())
+				Expect(compliancescaninstance.Status.Phase).To(Equal(complianceoperatorv1alpha1.PhaseDone))
 			})
 		})
 	})

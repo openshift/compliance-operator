@@ -170,11 +170,14 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *complianceoper
 
 		// ..and launch it..
 		err := r.launchPod(pod, logger)
-		if err != nil {
+		if errors.IsAlreadyExists(err) {
+			logger.Info("Pod already exists. This is fine.", "pod", pod)
+		} else if err != nil {
 			log.Error(err, "Failed to launch a pod", "pod", pod)
 			return reconcile.Result{}, err
+		} else {
+			logger.Info("Launched a pod", "pod", pod)
 		}
-		logger.Info("Launched a pod", "pod", pod)
 	}
 
 	// if we got here, there are no new pods to be created, move to the next phase
@@ -203,7 +206,17 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *complianceoperat
 	// On each eligible node..
 	for _, node := range nodes.Items {
 		running, err := isPodRunningInNode(r, instance, &node, logger)
-		if err != nil {
+		if errors.IsNotFound(err) {
+			// Let's go back to the previous state and make sure all the nodes are covered.
+			logger.Info("Phase: Running: A pod is missing. Going to state LAUNCHING to make sure we launch it",
+				"compliancescan", instance.ObjectMeta.Name, "node", node.Name)
+			instance.Status.Phase = complianceoperatorv1alpha1.PhaseLaunching
+			err = r.client.Status().Update(context.TODO(), instance)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+			return reconcile.Result{}, nil
+		} else if err != nil {
 			return reconcile.Result{}, err
 		}
 
@@ -265,10 +278,7 @@ func isPodRunningInNode(r *ReconcileComplianceScan, openScapCr *complianceoperat
 	podName := fmt.Sprintf("%s-%s-pod", openScapCr.Name, node.Name)
 	foundPod := &corev1.Pod{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: openScapCr.Namespace}, foundPod)
-	if err != nil && errors.IsNotFound(err) {
-		// The pod no longer exists, this is OK
-		return false, nil
-	} else if err != nil {
+	if err != nil {
 		logger.Error(err, "Cannot retrieve pod", "pod", podName)
 		return false, err
 	} else if foundPod.Status.Phase == corev1.PodFailed || foundPod.Status.Phase == corev1.PodSucceeded {
