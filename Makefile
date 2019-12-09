@@ -48,7 +48,7 @@ TEST_OPTIONS?=
 E2E_SKIP_CONTAINER_PUSH?=false
 
 .PHONY: all
-all: build verify test-unit ## Test and Build the compliance-operator
+all: build ## Test and Build the compliance-operator
 
 .PHONY: help
 help: ## Show this help screen
