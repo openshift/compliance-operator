@@ -2,6 +2,7 @@ package e2e
 
 import (
 	goctx "context"
+	"fmt"
 	"testing"
 
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
@@ -113,6 +114,18 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 		return timeouterr
 	}
 	t.Logf("ComplianceScan ready (%s)\n", exampleComplianceScan.Status.Phase)
+	return nil
+}
+
+func scanResultIsExpected(t *testing.T, f *framework.Framework, namespace, name string, expectedResult complianceoperatorv1alpha1.ComplianceScanStatusResult) error {
+	cs := &complianceoperatorv1alpha1.ComplianceScan{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, cs)
+	if err != nil {
+		return err
+	}
+	if cs.Status.Result != expectedResult {
+		return fmt.Errorf("The ComplianceScan Result wasn't what we expected. Got '%s', expected '%s'", cs.Status.Result, expectedResult)
+	}
 	return nil
 }
 

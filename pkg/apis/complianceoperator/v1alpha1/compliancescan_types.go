@@ -6,21 +6,35 @@ import (
 
 // +genclient
 
+// Represents the status of the compliance scan run.
 type ComplianceScanStatusPhase string
 
 const (
-	PhasePending   ComplianceScanStatusPhase = "PENDING"
+	// PhasePending represents the scan pending to be scheduled
+	PhasePending ComplianceScanStatusPhase = "PENDING"
+	// PhaseLaunching represents being scheduled and launching pods to run the scans
 	PhaseLaunching ComplianceScanStatusPhase = "LAUNCHING"
-	PhaseRunning   ComplianceScanStatusPhase = "RUNNING"
-	PhaseDone      ComplianceScanStatusPhase = "DONE"
+	// PhaseRunning represents the scan being ran by the pods and waiting for the results
+	PhaseRunning ComplianceScanStatusPhase = "RUNNING"
+	// PhaseDone represents the scan pods being done and the results being available
+	PhaseDone ComplianceScanStatusPhase = "DONE"
+)
+
+// Represents the result of the compliance scan
+type ComplianceScanStatusResult string
+
+const (
+	// ResultCompliant represents the compliance scan having succeeded
+	ResultCompliant ComplianceScanStatusResult = "COMPLIANT"
+	// ResultError represents a compliance scan pod having failed to run the scan or encountered an error
+	ResultError ComplianceScanStatusResult = "ERROR"
+	// ResultNonCompliant represents the compliance scan having found a gap
+	ResultNonCompliant ComplianceScanStatusResult = "NON-COMPLIANT"
 )
 
 // ComplianceScanSpec defines the desired state of ComplianceScan
 // +k8s:openapi-gen=true
 type ComplianceScanSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 	ContentImage string            `json:"contentImage,omitempty"`
 	Profile      string            `json:"profile,omitempty"`
 	Rule         string            `json:"rule,omitempty"`
@@ -31,10 +45,9 @@ type ComplianceScanSpec struct {
 // ComplianceScanStatus defines the observed state of ComplianceScan
 // +k8s:openapi-gen=true
 type ComplianceScanStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-	Phase ComplianceScanStatusPhase `json:"phase,omitempty"`
+	Phase        ComplianceScanStatusPhase  `json:"phase,omitempty"`
+	Result       ComplianceScanStatusResult `json:"result,omitempty"`
+	ErrorMessage string                     `json:"errormsg,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
