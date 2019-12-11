@@ -53,7 +53,7 @@ E2E_SKIP_CONTAINER_PUSH?=false
 E2E_GO_TEST_FLAGS?="-v"
 
 .PHONY: all
-all: build verify test-unit ## Test and Build the compliance-operator
+all: build ## Test and Build the compliance-operator
 
 .PHONY: help
 help: ## Show this help screen
