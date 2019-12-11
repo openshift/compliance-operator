@@ -87,8 +87,6 @@ type ReconcileComplianceScan struct {
 
 // Reconcile reads that state of the cluster for a ComplianceScan object and makes changes based on the state read
 // and what is in the ComplianceScan.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
@@ -110,20 +108,23 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, err
 	}
 
+	// At this point, we make a copy of the instance, so we can modify it in the functions below.
+	scanToBeUpdated := instance.DeepCopy()
+
 	// If no phase set, default to pending (the initial phase):
-	if instance.Status.Phase == "" {
-		instance.Status.Phase = complianceoperatorv1alpha1.PhasePending
+	if scanToBeUpdated.Status.Phase == "" {
+		scanToBeUpdated.Status.Phase = complianceoperatorv1alpha1.PhasePending
 	}
 
-	switch instance.Status.Phase {
+	switch scanToBeUpdated.Status.Phase {
 	case complianceoperatorv1alpha1.PhasePending:
-		return r.phasePendingHandler(instance, reqLogger)
+		return r.phasePendingHandler(scanToBeUpdated, reqLogger)
 	case complianceoperatorv1alpha1.PhaseLaunching:
-		return r.phaseLaunchingHandler(instance, reqLogger)
+		return r.phaseLaunchingHandler(scanToBeUpdated, reqLogger)
 	case complianceoperatorv1alpha1.PhaseRunning:
-		return r.phaseRunningHandler(instance, reqLogger)
+		return r.phaseRunningHandler(scanToBeUpdated, reqLogger)
 	case complianceoperatorv1alpha1.PhaseDone:
-		return r.phaseDoneHandler(instance, reqLogger)
+		return r.phaseDoneHandler(scanToBeUpdated, reqLogger)
 	}
 
 	// the default catch-all, just remove the request from the queue
