@@ -139,6 +139,21 @@ func getNodesWithSelector(f *framework.Framework, labelselector map[string]strin
 	return nodes.Items
 }
 
+func getPodsForScan(f *framework.Framework, namespace, scanName string) ([]corev1.Pod, error) {
+	selectPods := map[string]string{
+		"complianceScan": scanName,
+	}
+	var pods corev1.PodList
+	lo := &client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(selectPods),
+	}
+	err := f.Client.List(goctx.TODO(), &pods, lo)
+	if err != nil {
+		return nil, err
+	}
+	return pods.Items, nil
+}
+
 // getConfigMapsFromScan lists the configmaps from the specified openscap scan instance
 func getConfigMapsFromScan(f *framework.Framework, scaninstance *complianceoperatorv1alpha1.ComplianceScan) []corev1.ConfigMap {
 	var configmaps corev1.ConfigMapList
