@@ -47,6 +47,11 @@ TEST_OPTIONS?=
 # Skip pushing the container to your cluster
 E2E_SKIP_CONTAINER_PUSH?=false
 
+# Pass extra flags to the e2e test run.
+# e.g. to run a specific test in the e2e test suite, do:
+# 	make e2e E2E_GO_TEST_FLAGS="-v -run TestE2E/TestScanWithNodeSelectorFiltersCorrectly"
+E2E_GO_TEST_FLAGS?="-v"
+
 .PHONY: all
 all: build verify test-unit ## Test and Build the compliance-operator
 
@@ -138,7 +143,7 @@ else
 e2e: namespace operator-sdk check-if-ci
 endif
 	@echo "Running e2e tests"
-	$(GOPATH)/bin/operator-sdk test local ./tests/e2e --image "$(IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "-v"
+	$(GOPATH)/bin/operator-sdk test local ./tests/e2e --image "$(IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 
 # This checks if we're in a CI environment by checking the IMAGE_FORMAT
 # environmnet variable. if we are, lets ues the image from CI and use this
