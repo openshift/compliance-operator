@@ -3,11 +3,7 @@ FROM registry.access.redhat.com/ubi8/go-toolset as builder
 
 WORKDIR /go/src/github.com/openshift/compliance-operator
 
-ARG ARG_GOPROXY="https://proxy.golang.org"
-ARG ARG_GOSUMDB="sum.golang.org"
-
-ENV GOPROXY=$ARG_GOPROXY
-ENV GOSUMDB=$ARG_GOSUMDB
+ENV GOFLAGS=-mod=vendor
 
 COPY . .
 RUN make
