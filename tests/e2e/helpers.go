@@ -84,7 +84,7 @@ func setupComplianceOperatorCluster(t *testing.T, ctx *framework.TestCtx) {
 
 // waitForScanStatus will poll until the compliancescan that we're lookingfor reaches a certain status, or until
 // a timeout is reached.
-func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStaus complianceoperatorv1alpha1.ComplianceScanStatusPhase) error {
+func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus complianceoperatorv1alpha1.ComplianceScanStatusPhase) error {
 	exampleComplianceScan := &complianceoperatorv1alpha1.ComplianceScan{}
 	var lastErr error
 	// retry and ignore errors until timeout
@@ -99,7 +99,7 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 			return false, nil
 		}
 
-		if exampleComplianceScan.Status.Phase == targetStaus {
+		if exampleComplianceScan.Status.Phase == targetStatus {
 			return true, nil
 		}
 		t.Logf("Waiting for run of %s compliancescan (%s)\n", name, exampleComplianceScan.Status.Phase)
