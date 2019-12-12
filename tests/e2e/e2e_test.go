@@ -38,7 +38,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				return scanResultIsExpected(t, f, namespace, "test-single-scan", complianceoperatorv1alpha1.ResultCompliant)
+				return scanResultIsExpected(f, namespace, "test-single-scan", complianceoperatorv1alpha1.ResultCompliant)
 			},
 		},
 		testExecution{
@@ -74,7 +74,7 @@ func TestE2E(t *testing.T) {
 						"The number of reports doesn't match the number of selected nodes: "+
 							"%d reports / %d nodes", len(configmaps), len(nodes))
 				}
-				return scanResultIsExpected(t, f, namespace, "test-filtered-scan", complianceoperatorv1alpha1.ResultCompliant)
+				return scanResultIsExpected(f, namespace, "test-filtered-scan", complianceoperatorv1alpha1.ResultCompliant)
 			},
 		},
 		testExecution{
@@ -99,7 +99,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return scanResultIsExpected(t, f, namespace, "test-scan-w-invalid-content", complianceoperatorv1alpha1.ResultError)
+				return scanResultIsExpected(f, namespace, "test-scan-w-invalid-content", complianceoperatorv1alpha1.ResultError)
 			},
 		},
 		testExecution{
@@ -124,7 +124,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return scanResultIsExpected(t, f, namespace, "test-scan-w-invalid-profile", complianceoperatorv1alpha1.ResultError)
+				return scanResultIsExpected(f, namespace, "test-scan-w-invalid-profile", complianceoperatorv1alpha1.ResultError)
 			},
 		},
 		testExecution{
@@ -149,7 +149,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				pods, err := getPodsForScan(f, namespace, "test-missing-pod-scan")
+				pods, err := getPodsForScan(f, "test-missing-pod-scan")
 				if err != nil {
 					return err
 				}
@@ -169,7 +169,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				return scanResultIsExpected(t, f, namespace, "test-missing-pod-scan", complianceoperatorv1alpha1.ResultCompliant)
+				return scanResultIsExpected(f, namespace, "test-missing-pod-scan", complianceoperatorv1alpha1.ResultCompliant)
 			},
 		},
 	)

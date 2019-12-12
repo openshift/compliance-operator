@@ -117,7 +117,7 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 	return nil
 }
 
-func scanResultIsExpected(t *testing.T, f *framework.Framework, namespace, name string, expectedResult complianceoperatorv1alpha1.ComplianceScanStatusResult) error {
+func scanResultIsExpected(f *framework.Framework, namespace, name string, expectedResult complianceoperatorv1alpha1.ComplianceScanStatusResult) error {
 	cs := &complianceoperatorv1alpha1.ComplianceScan{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, cs)
 	if err != nil {
@@ -139,7 +139,7 @@ func getNodesWithSelector(f *framework.Framework, labelselector map[string]strin
 	return nodes.Items
 }
 
-func getPodsForScan(f *framework.Framework, namespace, scanName string) ([]corev1.Pod, error) {
+func getPodsForScan(f *framework.Framework, scanName string) ([]corev1.Pod, error) {
 	selectPods := map[string]string{
 		"complianceScan": scanName,
 	}
