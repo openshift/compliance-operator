@@ -20,7 +20,7 @@ TAG?=latest
 # ===============
 CURPATH=$(PWD)
 TARGET_DIR=$(CURPATH)/build/_output
-GO=GO111MODULE=on go
+GO=GOFLAGS=-mod=vendor GO111MODULE=auto go
 GOBUILD=$(GO) build
 BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
@@ -50,7 +50,7 @@ E2E_SKIP_CONTAINER_PUSH?=false
 # Pass extra flags to the e2e test run.
 # e.g. to run a specific test in the e2e test suite, do:
 # 	make e2e E2E_GO_TEST_FLAGS="-v -run TestE2E/TestScanWithNodeSelectorFiltersCorrectly"
-E2E_GO_TEST_FLAGS?="-v"
+E2E_GO_TEST_FLAGS?=-v
 
 .PHONY: all
 all: build ## Test and Build the compliance-operator
@@ -69,7 +69,7 @@ image: fmt operator-sdk ## Build the compliance-operator container image
 	$(GOPATH)/bin/operator-sdk build $(IMAGE_PATH) --image-builder $(RUNTIME)
 
 .PHONY: build
-build: fmt ## Build the compliance-operator binary
+build: ## Build the compliance-operator binary
 	$(GO) build -o $(TARGET) github.com/openshift/compliance-operator/cmd/manager
 
 .PHONY: operator-sdk
