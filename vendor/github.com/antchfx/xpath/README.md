@@ -43,13 +43,13 @@ xquery
 
 - `a/b` : For each node matching a, add the nodes matching b to the result.
 
-- `a//b` : For each node matching a, add the descendant nodes matching b to the result.
+- `a//b` : For each node matching a, add the descendant nodes matching b to the result. 
 
 - `//b` : Returns elements in the entire document matching b.
 
 - `a|b` : All nodes matching a or b.
 
-#### Node Axes
+#### Node Axes 
 
 - `child::*` : The child axis selects children of the current node.
 
@@ -63,9 +63,9 @@ xquery
 
 - `preceding-sibling::*` : Selects nodes before the current node.
 
-- `following::*` : Selects the first matching node following in document order, excluding descendants.
+- `following::*` : Selects the first matching node following in document order, excluding descendants. 
 
-- `preceding::*` : Selects the first matching node preceding in document order, excluding ancestors.
+- `preceding::*` : Selects the first matching node preceding in document order, excluding ancestors. 
 
 - `parent::*` : Selects the parent if it matches. The '..' pattern from the core is equivalent to 'parent::node()'.
 
