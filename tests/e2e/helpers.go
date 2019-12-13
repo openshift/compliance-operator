@@ -3,6 +3,7 @@ package e2e
 import (
 	goctx "context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
 	"testing"
 
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
@@ -53,10 +54,14 @@ func executeTests(t *testing.T, tests ...testExecution) {
 //
 // NOTE: Whenever we add new types to the operator, we need to register them here for the e2e tests.
 func setupTestRequirements(t *testing.T) *framework.TestCtx {
-	compliancescan := &complianceoperatorv1alpha1.ComplianceScanList{}
-	err := framework.AddToFrameworkScheme(apis.AddToScheme, compliancescan)
-	if err != nil {
-		t.Fatalf("TEST SETUP: failed to add custom resource scheme to framework: %v", err)
+	objects := [3]runtime.Object{&complianceoperatorv1alpha1.ComplianceScanList{},
+								 &complianceoperatorv1alpha1.ComplianceRemediationList{},
+							     &complianceoperatorv1alpha1.ComplianceSuiteList{}}
+	for _, obj := range objects {
+		err := framework.AddToFrameworkScheme(apis.AddToScheme, obj)
+		if err != nil {
+			t.Fatalf("TEST SETUP: failed to add custom resource scheme to framework: %v", err)
+		}
 	}
 	return framework.NewTestCtx(t)
 }
@@ -117,6 +122,61 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 	return nil
 }
 
+// waitForScanStatus will poll until the compliancescan that we're lookingfor reaches a certain status, or until
+// a timeout is reached.
+func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus complianceoperatorv1alpha1.ComplianceScanStatusPhase) error {
+	suite := &complianceoperatorv1alpha1.ComplianceSuite{}
+	var lastErr error
+	// retry and ignore errors until timeout
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, suite)
+		if lastErr != nil {
+			if apierrors.IsNotFound(lastErr) {
+				t.Logf("Waiting for availability of %s compliancesuite\n", name)
+				return false, nil
+			}
+			t.Logf("Retrying. Got error: %v\n", lastErr)
+			return false, nil
+		}
+
+		// Got the suite. There should be at least one scan or else we're still initialising
+		if len(suite.Status.ScanStatuses) < 1 {
+			return false, nil
+		}
+
+		//Examine the scan status both in the suite status and the scan
+		for _, scanStatus := range suite.Status.ScanStatuses {
+			if scanStatus.Phase != targetStatus {
+				t.Logf("Waiting until scan %s is done", scanStatus.Name)
+				return false, nil
+			}
+
+			lastErr = waitForScanStatus(t, f, namespace, scanStatus.Name, targetStatus)
+			if lastErr != nil {
+				// If the status was present in the suite, then /any/ error
+				// should fail the test as the scans should be read /from/
+				// the scan itself
+				return true, nil
+			}
+		}
+
+		return true, nil
+	})
+
+	// Error in function call
+	if lastErr != nil {
+		return lastErr
+	}
+
+	// Timeout
+	if timeouterr != nil {
+		return timeouterr
+	}
+
+	t.Logf("All scans in ComplianceSuite have finished (%s)\n", suite.Name)
+	return nil
+}
+
 func scanResultIsExpected(f *framework.Framework, namespace, name string, expectedResult complianceoperatorv1alpha1.ComplianceScanStatusResult) error {
 	cs := &complianceoperatorv1alpha1.ComplianceScan{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, cs)
@@ -165,4 +225,33 @@ func getConfigMapsFromScan(f *framework.Framework, scaninstance *complianceopera
 	}
 	f.Client.List(goctx.TODO(), &configmaps, lo)
 	return configmaps.Items
+}
+
+func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string) []complianceoperatorv1alpha1.ComplianceRemediation {
+	var scanSuiteRemediations complianceoperatorv1alpha1.ComplianceRemediationList
+
+	scanSuiteSelector := make(map[string]string)
+	scanSuiteSelector[complianceoperatorv1alpha1.SuiteLabel] = suiteName
+	scanSuiteSelector[complianceoperatorv1alpha1.ScanLabel] = scanName
+
+	listOpts := client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(scanSuiteSelector),
+	}
+
+	f.Client.List(goctx.TODO(), &scanSuiteRemediations, &listOpts)
+	return scanSuiteRemediations.Items
+}
+
+func assertNumRemediations(f *framework.Framework, suiteName, scanName, roleLabel string, expRemediations int) error {
+	scanSuiteRemediations := getRemediationsFromScan(f, suiteName, scanName)
+	if len(scanSuiteRemediations) != expRemediations {
+		return fmt.Errorf("expected %d remediations, got %d", expRemediations, len(scanSuiteRemediations))
+	}
+
+	for _, rem := range scanSuiteRemediations {
+		if rem.Labels["machineconfiguration.openshift.io/role"] != roleLabel {
+			return fmt.Errorf("expected that scan %s is labeled for role %s", scanName, roleLabel)
+		}
+	}
+	return nil
 }

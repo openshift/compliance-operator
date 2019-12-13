@@ -3,18 +3,30 @@ module github.com/openshift/compliance-operator
 go 1.13
 
 require (
+	github.com/ajeddeloh/go-json v0.0.0-20170920214419-6a2fe990e083 // indirect
+	github.com/coreos/go-semver v0.3.0 // indirect
+	github.com/coreos/ignition v0.33.0
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.1
 	github.com/go-openapi/spec v0.19.0
+	github.com/google/go-cmp v0.3.1 // indirect
+	github.com/hashicorp/golang-lru v0.5.1 // indirect
 	github.com/onsi/ginkgo v1.10.3
 	github.com/onsi/gomega v1.7.1
 	github.com/operator-framework/operator-sdk v0.12.0
+	github.com/prometheus/client_golang v1.1.0 // indirect
+	github.com/prometheus/procfs v0.0.5 // indirect
 	github.com/securego/gosec v0.0.0-20191119104125-df484bfa9e9f
 	github.com/spf13/pflag v1.0.3
+	github.com/subchen/go-xmldom v1.1.2
+	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	go.uber.org/zap v1.10.0
+	go4.org v0.0.0-20191010144846-132d2879e1e9 // indirect
+	golang.org/x/crypto v0.0.0-20190927123631-a832865fa7ad // indirect
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v11.0.0+incompatible
+	k8s.io/code-generator v0.0.0
 	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d
 	sigs.k8s.io/controller-runtime v0.3.0
 )

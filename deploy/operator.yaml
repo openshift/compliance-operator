@@ -32,6 +32,8 @@ spec:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
               value: "compliance-operator"
+            - name: OPENSCAP_IMAGE
+              value: "quay.io/jhrozek/openscap-ocp:remediations_demo"
       nodeSelector:
         node-role.kubernetes.io/master: ""
       tolerations:
