@@ -145,6 +145,9 @@ endif
 	@echo "Running e2e tests"
 	unset GOFLAGS && $(GOPATH)/bin/operator-sdk test local ./tests/e2e --image "$(IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 
+e2e-local: operator-sdk ## Run the end-to-end tests on a locally running operator (e.g. using make run)
+	unset GOFLAGS && $(GOPATH)/bin/operator-sdk test local ./tests/e2e --up-local --image "$(IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
+
 # This checks if we're in a CI environment by checking the IMAGE_FORMAT
 # environmnet variable. if we are, lets ues the image from CI and use this
 # operator as the component.
