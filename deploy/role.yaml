@@ -55,6 +55,30 @@ rules:
   - deployments/finalizers
   verbs:
   - update
+- apiGroups:
+  - ""
+  resources:
+  - services    # Services is the way we provide metrics for the operator
+  - services/finalizers
+  verbs:
+  - create      # The operator needs to create a service to expose the metrics
+  - get
+  - update
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
+  verbs:
+  - "get"
+  - "create"
+- apiGroups:
+  - apps
+  resources:
+  - deployments/finalizers
+  resourceNames:
+  - compliance-operator
+  verbs:
+  - "update"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
