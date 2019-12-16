@@ -6,10 +6,10 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/go-logr/logr"
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/utils"
 	"io/ioutil"
+	"strings"
+
+	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,7 +24,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"strings"
+
+	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var log = logf.Log.WithName("controller_compliancesuite")
@@ -94,9 +97,6 @@ type ReconcileComplianceSuite struct {
 
 // Reconcile reads that state of the cluster for a ComplianceSuite object and makes changes based on the state read
 // and what is in the ComplianceSuite.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
-// Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -119,13 +119,11 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 	reqLogger.Info("Retrieved suite", "suite", suite)
 
 	if err := r.reconcileScans(suite, reqLogger); err != nil {
-		// TODO: Not all errors are recoverable..
-		return reconcile.Result{}, err
+		return common.ReturnWithRetriableError(reqLogger, err)
 	}
 
 	if err := r.reconcileRemediations(request.NamespacedName, reqLogger); err != nil {
-		// TODO: Not all errors are recoverable..
-		return reconcile.Result{}, err
+		return common.ReturnWithRetriableError(reqLogger, err)
 	}
 
 	return reconcile.Result{}, nil
@@ -213,12 +211,11 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *complianceoperatorv1a
 		return nil
 	}
 
-	// FIXME: Should we treat this as non-fatal (as we do now?) Or at least
-	// propagate the error to the caller?
 	if scan.Status.Phase == complianceoperatorv1alpha1.PhaseDone {
 		err := r.reconcileScanRemediations(suite, scan, logger)
 		if err != nil {
 			logger.Error(err, "Error reconciling remediations")
+			return err
 		}
 	}
 
@@ -254,7 +251,8 @@ func (r *ReconcileComplianceSuite) reconcileScanRemediations(suite *complianceop
 		resultRemediations, err := parseResultRemediations(r, scan.Name, scan.Namespace, &cm, logger)
 		if err != nil {
 			logger.Error(err, "cannot parse scan result")
-			return err
+			// If the results are not parseable, we cannot recover from this.
+			return common.WrapNonRetriableCtrlError(err)
 		} else if resultRemediations == nil {
 			logger.Info("Either no remediations found in result or result already processed")
 			// Already processed
@@ -280,7 +278,9 @@ func (r *ReconcileComplianceSuite) reconcileScanRemediations(suite *complianceop
 			// All remediation lists in the scan must be equal
 			ok := diffRemediationList(scanRemediations, resultRemediations)
 			if !ok {
-				return fmt.Errorf("the list of remediations differs")
+				// TODO(jaosorior): Update suite status to reflect that there's an issue
+				// either with MCO or a compromise on a host.
+				return common.WrapNonRetriableCtrlError(fmt.Errorf("the list of remediations differs"))
 			}
 		}
 	}
