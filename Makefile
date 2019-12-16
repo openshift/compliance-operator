@@ -205,23 +205,19 @@ push: image
 	$(RUNTIME) tag $(IMAGE_PATH) $(IMAGE_PATH):$(TAG)
 	$(RUNTIME) push $(IMAGE_PATH):$(TAG)
 
-codeGenFullPath=$(shell GO111MODULE=on go list -f {{.Dir}} k8s.io/code-generator/cmd/client-gen)
-codegeneratorRoot=$(codeGenFullPath:/cmd/client-gen=)
+versionPath=$(shell GO111MODULE=on go list -f {{.Dir}} k8s.io/code-generator/cmd/client-gen)
+codegeneratorRoot=$(versionPath:/cmd/client-gen=)
+codegeneratorTarget:=./vendor/k8s.io/code-generator
 
 # go mod doesn't mark scripts as executable, so we need to do that ourselves
 .PHONY: code-generator
 code-generator:
-	@chmod +x $(codegeneratorRoot)/generate-internal-groups.sh
-	@chmod +x $(codegeneratorRoot)/generate-groups.sh
+	@chmod +x $(codegeneratorTarget)/generate-groups.sh
+	@chmod +x $(codegeneratorTarget)/generate-internal-groups.sh
 
-# This is fugly, but code generator doesn't play nicely with go mod[1]. An alternative
-# is to vendor the generator so that we can always run it from the root of this
-# repo..that's what m-c-o and others do, but let's avoid vendoring..
-#
-# [1] https://github.com/kubernetes/code-generator/issues/57#issuecomment-498291246
 .PHONY: gen-mcfg-client
 gen-mcfg-client: code-generator
-	$(codegeneratorRoot)/generate-groups.sh client \
+	$(codegeneratorTarget)/generate-groups.sh client \
 		github.com/openshift/compliance-operator/pkg/generated \
 		github.com/openshift/compliance-operator/pkg/apis \
 		"machineconfiguration:v1" \
