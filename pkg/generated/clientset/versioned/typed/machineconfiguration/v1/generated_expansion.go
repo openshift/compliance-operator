@@ -3,3 +3,5 @@
 package v1
 
 type MachineConfigExpansion interface{}
+
+type MachineConfigPoolExpansion interface{}
