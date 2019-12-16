@@ -3,14 +3,10 @@ package complianceremediation
 import (
 	"context"
 	"fmt"
-	"github.com/go-logr/logr"
 	"sort"
 
 	ign "github.com/coreos/ignition/config/v2_2"
-
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
-	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -22,6 +18,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
+	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
 )
 
 var log = logf.Log.WithName("controller_complianceremediation")
@@ -30,22 +31,6 @@ var log = logf.Log.WithName("controller_complianceremediation")
 const (
 	mcRoleKey = "machineconfiguration.openshift.io/role"
 )
-
-type complianceCtrlError struct {
-	err      error
-	canRetry bool
-}
-
-func (cerr complianceCtrlError) Error() string {
-	return cerr.err.Error()
-}
-
-func wrapComplianceCtrlError(err error, canRetry bool) *complianceCtrlError {
-	return &complianceCtrlError{
-		canRetry: canRetry,
-		err:      err,
-	}
-}
 
 // Add creates a new ComplianceRemediation Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -132,30 +117,14 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 
 	// this would have been much nicer with go 1.13 using errors.Is()
 	if err != nil {
-		ccErr, ok := err.(*complianceCtrlError)
-		if ok {
-			if ccErr.canRetry {
-				reqLogger.Error(err, "Retrying error")
-				return reconcile.Result{}, err
-			}
-		}
-		reqLogger.Error(err, "Non-retriable error")
-		return reconcile.Result{}, nil
+		return common.ReturnWithRetriableError(reqLogger, err)
 	}
 
 	// Second, we'll reconcile the status of the Remediation itself
 	err = r.reconcileRemediationStatus(remediationInstance, reqLogger)
 	// this would have been much nicer with go 1.13 using errors.Is()
 	if err != nil {
-		ccErr, ok := err.(*complianceCtrlError)
-		if ok {
-			if ccErr.canRetry {
-				reqLogger.Error(err, "Retrying error")
-				return reconcile.Result{}, err
-			}
-		}
-		reqLogger.Error(err, "Non-retriable error")
-		return reconcile.Result{}, nil
+		return common.ReturnWithRetriableError(reqLogger, err)
 	}
 
 	reqLogger.Info("Done reconciling")
@@ -180,7 +149,8 @@ func (r *ReconcileComplianceRemediation) reconcileMcRemediation(instance *compli
 	// Merge that list of MCs into a single big one MC
 	name := instance.GetMcName()
 	if name == "" {
-		return fmt.Errorf("could not construct MC name, check if it has the correct labels")
+		return common.WrapNonRetriableCtrlError(
+			fmt.Errorf("could not construct MC name, check if it has the correct labels"))
 	}
 
 	logger.Info("Will create or update MC", "name", name)
@@ -215,7 +185,7 @@ func (r *ReconcileComplianceRemediation) reconcileRemediationStatus(instance *co
 	if err := r.client.Status().Update(context.TODO(), instanceCopy); err != nil {
 		logger.Error(err, "Failed to update the remediation status")
 		// This should be retried
-		return wrapComplianceCtrlError(err, true)
+		return err
 	}
 
 	return nil
@@ -255,7 +225,7 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compliance
 
 	if err := r.client.List(context.TODO(), &scanSuiteRemediations, &listOpts); err != nil {
 		// List should be retried
-		return nil, wrapComplianceCtrlError(err, true)
+		return nil, err
 	}
 
 	appliedRemediations := make([]*mcfgv1.MachineConfig, 0, len(scanSuiteRemediations.Items))
@@ -332,7 +302,7 @@ func createOrUpdateMachineConfig(r *ReconcileComplianceRemediation, merged *mcfg
 	} else if err != nil {
 		logger.Error(err, "Cannot retrieve MC", "MC", merged.Name)
 		// Get error should be retried
-		return wrapComplianceCtrlError(err, true)
+		return err
 	}
 
 	return updateMachineConfig(r, mc, merged, logger)
@@ -344,6 +314,7 @@ func deleteMachineConfig(r *ReconcileComplianceRemediation, name string, logger 
 		logger.Info("MC to be deleted was already deleted")
 		return nil
 	} else if err != nil {
+		// delete error should be retried
 		return err
 	}
 
@@ -355,7 +326,7 @@ func createMachineConfig(r *ReconcileComplianceRemediation, merged *mcfgv1.Machi
 	if err != nil {
 		logger.Error(err, "Cannot create MC", "mc name", merged.Name)
 		// Create error should be retried
-		return wrapComplianceCtrlError(err, true)
+		return err
 	}
 	logger.Info("MC created", "mc name", merged.Name)
 	return nil
@@ -369,7 +340,7 @@ func updateMachineConfig(r *ReconcileComplianceRemediation, current *mcfgv1.Mach
 	if err != nil {
 		logger.Error(err, "Cannot update MC", "mc name", merged.Name)
 		// Update should be retried
-		return wrapComplianceCtrlError(err, true)
+		return err
 	}
 	logger.Info("MC updated", "mc name", merged.Name)
 	return nil
