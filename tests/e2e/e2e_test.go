@@ -26,6 +26,7 @@ func TestE2E(t *testing.T) {
 					Spec: complianceoperatorv1alpha1.ComplianceScanSpec{
 						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
 						Content: "ssg-ocp4-ds.xml",
+						Rule:	 "xccdf_org.ssgproject.content_rule_no_netrc_files",
 					},
 				}
 				// use TestCtx's create helper to create the object and add a cleanup function for the new object
@@ -55,6 +56,7 @@ func TestE2E(t *testing.T) {
 					Spec: complianceoperatorv1alpha1.ComplianceScanSpec{
 						Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 						Content:      "ssg-ocp4-ds.xml",
+						Rule:	 	  "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						NodeSelector: selectWorkers,
 					},
 				}
@@ -138,6 +140,7 @@ func TestE2E(t *testing.T) {
 					Spec: complianceoperatorv1alpha1.ComplianceScanSpec{
 						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
 						Content: "ssg-ocp4-ds.xml",
+						Rule:	 "xccdf_org.ssgproject.content_rule_no_netrc_files",
 					},
 				}
 				// use TestCtx's create helper to create the object and add a cleanup function for the new object
