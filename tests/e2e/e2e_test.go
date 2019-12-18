@@ -231,12 +231,28 @@ func TestE2E(t *testing.T) {
 				}
 
 				// At this point, both scans should be non-compliant given our current content
-				scanResultIsExpected(f, namespace, workerScanName, complianceoperatorv1alpha1.ResultNonCompliant)
-				scanResultIsExpected(f, namespace, masterScanName, complianceoperatorv1alpha1.ResultNonCompliant)
+				err = scanResultIsExpected(f, namespace, workerScanName, complianceoperatorv1alpha1.ResultNonCompliant)
+				if err != nil {
+					return err
+				}
+
+				err = scanResultIsExpected(f, namespace, masterScanName, complianceoperatorv1alpha1.ResultNonCompliant)
+				if err != nil {
+					return err
+				}
+
 
 				// Each scan should produce two remediations
-				assertNumRemediations(f, suiteName, workerScanName, "worker", 2)
-				assertNumRemediations(f, suiteName, masterScanName, "master", 2)
+				err = assertNumRemediations(f, suiteName, workerScanName, "worker", 2)
+				if err != nil {
+					return err
+				}
+
+				err = assertNumRemediations(f, suiteName, masterScanName, "master", 2)
+				if err != nil {
+					return err
+				}
+
 
 				return nil
 			},
