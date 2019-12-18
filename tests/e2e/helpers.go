@@ -242,10 +242,19 @@ func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string)
 	return scanSuiteRemediations.Items
 }
 
-func assertNumRemediations(f *framework.Framework, suiteName, scanName, roleLabel string, expRemediations int) error {
+func assertHasRemediations(f *framework.Framework, suiteName, scanName, roleLabel string, remNameList []string) error {
+	var scanSuiteMapNames = make(map[string]bool)
+
 	scanSuiteRemediations := getRemediationsFromScan(f, suiteName, scanName)
-	if len(scanSuiteRemediations) != expRemediations {
-		return fmt.Errorf("expected %d remediations, got %d", expRemediations, len(scanSuiteRemediations))
+	for _, rem := range scanSuiteRemediations {
+		scanSuiteMapNames[rem.Name] = true
+	}
+
+	for _, expRem := range remNameList {
+		_, ok := scanSuiteMapNames[expRem]
+		if !ok {
+			return fmt.Errorf("expected remediation %s not found", expRem)
+		}
 	}
 
 	for _, rem := range scanSuiteRemediations {

@@ -241,14 +241,21 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-
 				// Each scan should produce two remediations
-				err = assertNumRemediations(f, suiteName, workerScanName, "worker", 2)
+				workerRemediations := []string {
+					fmt.Sprintf("%s-no-empty-passwords", workerScanName),
+					fmt.Sprintf("%s-no-direct-root-logins", workerScanName),
+				}
+				err = assertHasRemediations(f, suiteName, workerScanName, "worker",  workerRemediations)
 				if err != nil {
 					return err
 				}
 
-				err = assertNumRemediations(f, suiteName, masterScanName, "master", 2)
+				masterRemediations := []string {
+					fmt.Sprintf("%s-no-empty-passwords", masterScanName),
+					fmt.Sprintf("%s-no-direct-root-logins", masterScanName),
+				}
+				err = assertHasRemediations(f, suiteName, masterScanName, "master", masterRemediations)
 				if err != nil {
 					return err
 				}
