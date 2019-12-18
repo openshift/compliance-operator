@@ -11,6 +11,7 @@ import (
 type MachineconfigurationV1Interface interface {
 	RESTClient() rest.Interface
 	MachineConfigsGetter
+	MachineConfigPoolsGetter
 }
 
 // MachineconfigurationV1Client is used to interact with features provided by the machineconfiguration.openshift.io group.
@@ -20,6 +21,10 @@ type MachineconfigurationV1Client struct {
 
 func (c *MachineconfigurationV1Client) MachineConfigs() MachineConfigInterface {
 	return newMachineConfigs(c)
+}
+
+func (c *MachineconfigurationV1Client) MachineConfigPools() MachineConfigPoolInterface {
+	return newMachineConfigPools(c)
 }
 
 // NewForConfig creates a new MachineconfigurationV1Client for the given config.
