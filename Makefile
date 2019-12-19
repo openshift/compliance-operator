@@ -50,7 +50,7 @@ E2E_SKIP_CONTAINER_PUSH?=false
 # Pass extra flags to the e2e test run.
 # e.g. to run a specific test in the e2e test suite, do:
 # 	make e2e E2E_GO_TEST_FLAGS="-v -run TestE2E/TestScanWithNodeSelectorFiltersCorrectly"
-E2E_GO_TEST_FLAGS?=-v -timeout 30m
+E2E_GO_TEST_FLAGS?=-v -timeout 60m
 
 .PHONY: all
 all: build ## Test and Build the compliance-operator
