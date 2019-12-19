@@ -3,8 +3,12 @@ package e2e
 import (
 	goctx "context"
 	"fmt"
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
+	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"testing"
+	"time"
 
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
@@ -262,5 +266,65 @@ func assertHasRemediations(f *framework.Framework, suiteName, scanName, roleLabe
 			return fmt.Errorf("expected that scan %s is labeled for role %s", scanName, roleLabel)
 		}
 	}
+	return nil
+}
+
+type MachineConfigActionFunc func() (error)
+type PoolPredicate func(pool *mcfgv1.MachineConfigPool) (bool, error)
+
+func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, name string, action MachineConfigActionFunc, predicate PoolPredicate) error {
+	poolPre, err := mcClient.MachineConfigPools().Get(name, metav1.GetOptions{})
+	if err != nil {
+		t.Errorf("Could not find the pool pre update")
+		return err
+	}
+	t.Logf("Pre-update, MC Pool %s has generation %d", poolPre.Name, poolPre.Status.ObservedGeneration)
+
+	err = action()
+	if err != nil {
+		t.Errorf("Action failed %v", err)
+		return err
+	}
+
+	// Should we make this configurable? Maybe 5 minutes is not enough time for slower clusters?
+	wait.PollImmediate(5*time.Second, 5*time.Minute, func() (bool, error) {
+		pool, err := mcClient.MachineConfigPools().Get(name, metav1.GetOptions{})
+		if err != nil {
+			// even not found is a hard error here
+			t.Errorf("Could not find the pool post update")
+			return false, err
+		}
+
+		ok, err := predicate(pool)
+		if err != nil {
+			t.Errorf("Predicate failed %v", err)
+			return false, err
+		}
+
+		if !ok {
+			t.Logf("Predicate not true yet, waiting")
+			return false, nil
+		}
+
+		t.Logf("Will check for update, Gen: %d, previous %d updated %d/%d unavailable %d",
+			pool.Status.ObservedGeneration, poolPre.Status.ObservedGeneration,
+			pool.Status.UpdatedMachineCount, pool.Status.MachineCount,
+			pool.Status.UnavailableMachineCount)
+
+		// Check if the pool has finished updating yet
+		if (pool.Status.ObservedGeneration > poolPre.Status.ObservedGeneration) &&
+			(pool.Status.UpdatedMachineCount == pool.Status.MachineCount) &&
+			(pool.Status.UnavailableMachineCount == 0) {
+			t.Logf("The pool has updated")
+			return true, nil
+		}
+
+		t.Logf("The pool has not updated yet. Gen: %d, expected %d updated %d/%d unavailable %d",
+				pool.Status.ObservedGeneration, poolPre.Status.ObservedGeneration,
+				pool.Status.UpdatedMachineCount, pool.Status.MachineCount,
+				pool.Status.UnavailableMachineCount)
+		return false, nil
+	})
+
 	return nil
 }
