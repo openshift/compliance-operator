@@ -23,6 +23,10 @@ type MachineConfigSpec struct {
 	FIPS bool `json:"fips"`
 }
 
+const (
+	McRoleKey = "machineconfiguration.openshift.io/role"
+)
+
 // MachineConfig is the Schema for the machineconfigs API
 // +genclient
 // +genclient:noStatus
