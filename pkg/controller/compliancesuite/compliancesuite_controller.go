@@ -7,6 +7,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
+	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -278,8 +280,18 @@ func (r *ReconcileComplianceSuite) reconcileScanRemediations(suite *complianceop
 			// All remediation lists in the scan must be equal
 			ok := diffRemediationList(scanRemediations, resultRemediations)
 			if !ok {
-				// TODO(jaosorior): Update suite status to reflect that there's an issue
-				// either with MCO or a compromise on a host.
+				logger.Info("The remediations differ between machines, this should never happen as the machines in a pool should be identical")
+
+				// update the scan status, so that the reconciler would loop back
+				// and update the Suite status
+				scanCopy := scan.DeepCopy()
+				scanCopy.Status.Phase = complianceoperatorv1alpha1.PhaseDone
+				scanCopy.Status.Result = complianceoperatorv1alpha1.ResultError
+				err = r.client.Status().Update(context.TODO(), scanCopy)
+				if err != nil {
+					return common.WrapNonRetriableCtrlError(err)
+				}
+
 				return common.WrapNonRetriableCtrlError(fmt.Errorf("the list of remediations differs"))
 			}
 		}
@@ -438,6 +450,7 @@ func newScanForSuite(suite *complianceoperatorv1alpha1.ComplianceSuite, scanWrap
 	}
 }
 
+// returns true if the lists are the same, false if they differ
 func diffRemediationList(oldList, newList []*complianceoperatorv1alpha1.ComplianceRemediation) bool {
 	if newList == nil {
 		return oldList == nil
@@ -447,8 +460,33 @@ func diffRemediationList(oldList, newList []*complianceoperatorv1alpha1.Complian
 		return false
 	}
 
-	// Let's implement the rest later..
+	sortMcSlice := func(mcSlice []*complianceoperatorv1alpha1.ComplianceRemediation) {
+		sort.SliceStable(mcSlice, func(i, j int) bool { return mcSlice[i].Name < mcSlice[j].Name })
+	}
+
+	sortMcSlice(oldList)
+	sortMcSlice(newList)
+
+	for i, _ := range oldList {
+		ok := diffRemediations(oldList[i], newList[i])
+		if !ok {
+			return false
+		}
+	}
+
 	return true
+}
+
+// returns true if the remediations are the same, false if they differ
+// for now (?) just diffs the MC specs and the remediation type, not sure if we'll ever want to diff more
+func diffRemediations(old, new *complianceoperatorv1alpha1.ComplianceRemediation) bool {
+	if old.Spec.Type != new.Spec.Type {
+		return false
+	}
+
+	// should we be more picky and just compare what can be set with the remediations? e.g. OSImageURL can't
+	// be set with a remediation..
+	return reflect.DeepEqual(old.Spec.MachineConfigContents.Spec, new.Spec.MachineConfigContents.Spec)
 }
 
 func (r *ReconcileComplianceSuite) reconcileRemediations(namespacedName types.NamespacedName, logger logr.Logger) error {
