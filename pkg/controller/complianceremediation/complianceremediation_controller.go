@@ -28,11 +28,6 @@ import (
 
 var log = logf.Log.WithName("controller_complianceremediation")
 
-// FIXME: maybe move some of the constants into a separate file?
-const (
-	mcRoleKey = "machineconfiguration.openshift.io/role"
-)
-
 // Add creates a new ComplianceRemediation Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
@@ -155,7 +150,7 @@ func (r *ReconcileComplianceRemediation) reconcileMcRemediation(instance *compli
 	}
 
 	logger.Info("Will create or update MC", "name", name)
-	mergedMc := mergeMachineConfigs(mcList, name, instance.Labels[mcRoleKey])
+	mergedMc := mergeMachineConfigs(mcList, name, instance.Labels[mcfgv1.McRoleKey])
 
 	// if the mergedMc was nil, then we should remove the resulting MC, probably the last selected
 	// remediation was deselected
@@ -218,7 +213,7 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compliance
 	scanSuiteSelector := make(map[string]string)
 	scanSuiteSelector[complianceoperatorv1alpha1.SuiteLabel] = rem.Labels[complianceoperatorv1alpha1.SuiteLabel]
 	scanSuiteSelector[complianceoperatorv1alpha1.ScanLabel] = rem.Labels[complianceoperatorv1alpha1.ScanLabel]
-	scanSuiteSelector[mcRoleKey] = rem.Labels[mcRoleKey]
+	scanSuiteSelector[mcfgv1.McRoleKey] = rem.Labels[mcfgv1.McRoleKey]
 
 	listOpts := client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(scanSuiteSelector),
@@ -291,7 +286,7 @@ func mergeMachineConfigs(configs []*mcfgv1.MachineConfig, name string, roleLabel
 	}
 
 	mergedMc.Labels = make(map[string]string)
-	mergedMc.Labels[mcRoleKey] = roleLabel
+	mergedMc.Labels[mcfgv1.McRoleKey] = roleLabel
 
 	return mergedMc
 }

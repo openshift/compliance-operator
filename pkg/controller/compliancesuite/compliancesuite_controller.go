@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -345,10 +346,10 @@ func createRemediations(r *ReconcileComplianceSuite, suite *complianceoperatorv1
 		if rem.Labels == nil {
 			rem.Labels = make(map[string]string)
 		}
-		rem.Labels["complianceoperator.openshift.io/suite"] = suite.Name
-		rem.Labels["complianceoperator.openshift.io/scan"] = scan.Name
-		rem.Labels["machineconfiguration.openshift.io/role"] = getScanRoleLabel(scan.Spec.NodeSelector)
-		if rem.Labels["machineconfiguration.openshift.io/role"] == "" {
+		rem.Labels[complianceoperatorv1alpha1.SuiteLabel] = suite.Name
+		rem.Labels[complianceoperatorv1alpha1.ScanLabel] = scan.Name
+		rem.Labels[mcfgv1.McRoleKey] = getScanRoleLabel(scan.Spec.NodeSelector)
+		if rem.Labels[mcfgv1.McRoleKey] == "" {
 			return fmt.Errorf("scan %s has no role assignment", scan.Name)
 		}
 
@@ -472,7 +473,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(namespacedName types.Na
 	// Construct the list of the statuses
 	remOverview := make([]complianceoperatorv1alpha1.ComplianceRemediationNameStatus, len(remList.Items))
 	for idx, rem := range remList.Items {
-		remOverview[idx].ScanName = rem.Labels["complianceoperator.openshift.io/scan"]
+		remOverview[idx].ScanName = rem.Labels[complianceoperatorv1alpha1.ScanLabel]
 		remOverview[idx].RemediationName = rem.Name
 		remOverview[idx].Type = rem.Spec.Type
 		remOverview[idx].Apply = rem.Spec.Apply
