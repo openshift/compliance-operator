@@ -312,41 +312,14 @@ func TestE2E(t *testing.T) {
 
 				// - Get the no-root-logins remediation for workers
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
+				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker", true)
+
+				// Also get the remediation so that we can delete it later
 				rem := &complianceoperatorv1alpha1.ComplianceRemediation{}
 				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: workersNoRootLoginsRemName, Namespace: namespace}, rem)
 				if err != nil {
 					return err
 				}
-				t.Logf("Remediation found")
-
-				applyRemediation := func() error {
-					rem.Spec.Apply = true
-					err = f.Client.Update(goctx.TODO(), rem)
-					if err != nil {
-						t.Errorf("Cannot apply remediation")
-						return err
-					}
-					t.Logf("Remediation applied")
-					return nil
-				}
-
-				poolHasMc := func(pool *mcfgv1.MachineConfigPool) (bool, error) {
-					for _, mc := range pool.Status.Configuration.Source {
-						if mc.Name == rem.GetMcName() {
-							// Should we wait until the MC is created? I guess not, the poll later would bomb out
-							return true, nil
-						}
-					}
-
-					return false, nil
-				}
-
-				err = waitForMachinePoolUpdate(t, mcClient, "worker", applyRemediation, poolHasMc)
-				if err != nil {
-					t.Errorf("Failed to wait for workers to come back up after applying MC")
-					return err
-				}
-				t.Logf("Machines updated with remediation")
 
 				// We can re-run the scan at this moment and check that we got one less remediation
 				secondSuiteName := "test-recheck-remediations"
@@ -399,6 +372,7 @@ func TestE2E(t *testing.T) {
 
 				// The test should not leave junk around, let's remove the MC and wait for the nodes to stabilize
 				// again
+				t.Logf("Remediation found")
 				err = mcClient.MachineConfigs().Delete(rem.GetMcName(), &metav1.DeleteOptions{})
 				if err != nil {
 					return err
@@ -426,6 +400,81 @@ func TestE2E(t *testing.T) {
 				}
 
 				t.Logf("The test succeeded!")
+				return nil
+			},
+		},
+		testExecution{
+			Name: "TestUnapplyRemediation",
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, namespace string) error {
+				// FIXME, maybe have a func that returns a struct with suite name and scan names?
+				suiteName := "test-unapply-remediation"
+
+				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
+				selectWorkers := map[string]string{
+					"node-role.kubernetes.io/worker": "",
+				}
+
+				exampleComplianceSuite := &complianceoperatorv1alpha1.ComplianceSuite{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Spec: complianceoperatorv1alpha1.ComplianceSuiteSpec{
+						AutoApplyRemediations: false,
+						Scans: []complianceoperatorv1alpha1.ComplianceScanSpecWrapper{
+							{
+								ComplianceScanSpec: complianceoperatorv1alpha1.ComplianceScanSpec{
+									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:remediation_demo",
+									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+									Content:      "ssg-ocp4-ds.xml",
+									NodeSelector: selectWorkers,
+								},
+								Name: workerScanName,
+							},
+						},
+					},
+				}
+
+				// Should this be part of some utility function?
+				mcClient, err := mcfgClient.NewForConfig(f.KubeConfig)
+
+				err = f.Client.Create(goctx.TODO(), exampleComplianceSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				if err != nil {
+					return err
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, complianceoperatorv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+
+				// Apply both remediations
+				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
+				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker", true)
+				workersNoEmptyPassRemName := fmt.Sprintf("%s-no-empty-passwords", workerScanName)
+				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoEmptyPassRemName, "worker", true)
+
+				// Get the resulting MC
+				mcName := fmt.Sprintf("75-%s-%s", workerScanName, suiteName)
+				mcBoth, err := mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
+
+				// Revert one remediation. The MC should stay, but its generation should bump
+				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoEmptyPassRemName, "worker", false)
+				mcOne, err := mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
+
+				if mcOne.Generation <= mcBoth.Generation {
+					t.Errorf("Expected that the MC generation increases")
+				}
+
+				// When we unapply the second remediation, the MC should be deleted, too
+				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker", false)
+
+				_, err = mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
+				if err == nil {
+					t.Errorf("MC unexpectedly found")
+				}
+
 				return nil
 			},
 		},

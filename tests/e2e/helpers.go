@@ -328,3 +328,42 @@ func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.Machineconfigur
 
 	return nil
 }
+
+func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, namespace, name, pool string, apply bool) error {
+	rem := &complianceoperatorv1alpha1.ComplianceRemediation{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
+	if err != nil {
+		return err
+	}
+	t.Logf("Remediation found")
+
+	applyRemediation := func() error {
+		rem.Spec.Apply = apply
+		err = f.Client.Update(goctx.TODO(), rem)
+		if err != nil {
+			t.Errorf("Cannot apply remediation")
+			return err
+		}
+		t.Logf("Remediation applied")
+		return nil
+	}
+
+	poolHasMc := func(pool *mcfgv1.MachineConfigPool) (bool, error) {
+		for _, mc := range pool.Status.Configuration.Source {
+			if mc.Name == rem.GetMcName() {
+				// Should we wait until the MC is created? I guess not, the poll later would bomb out
+				return true, nil
+			}
+		}
+
+		return false, nil
+	}
+
+	err = waitForMachinePoolUpdate(t, mcClient, pool, applyRemediation, poolHasMc)
+	if err != nil {
+		t.Errorf("Failed to wait for workers to come back up after applying MC")
+		return err
+	}
+	t.Logf("Machines updated with remediation")
+	return nil
+}
