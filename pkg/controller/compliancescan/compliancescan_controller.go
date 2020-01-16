@@ -33,6 +33,8 @@ var (
 const (
 	// OpenSCAPScanContainerName defines the name of the contianer that will run OpenSCAP
 	OpenSCAPScanContainerName = "openscap-ocp"
+	OpenSCAPScriptCmLabel     = "cm-script"
+	OpenSCAPScriptEnvLabel    = "cm-env"
 )
 
 // Add creates a new ComplianceScan Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -133,9 +135,33 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 func (r *ReconcileComplianceScan) phasePendingHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	logger.Info("Phase: Pending", "ComplianceScan", instance.ObjectMeta.Name)
 
+	if instance.Labels == nil {
+		instance.Labels = make(map[string]string)
+	}
+
+	if instance.Labels[OpenSCAPScriptCmLabel] == "" {
+		instance.Labels[OpenSCAPScriptCmLabel] = scriptCmForScan(instance)
+	}
+
+	if instance.Labels[OpenSCAPScriptEnvLabel] == "" {
+		instance.Labels[OpenSCAPScriptEnvLabel] = envCmForScan(instance)
+	}
+
+	err := createConfigMaps(r, instance.Labels[OpenSCAPScriptCmLabel], instance.Labels[OpenSCAPScriptEnvLabel], instance)
+	if err != nil {
+		logger.Error(err, "Cannot create the configmaps")
+		return reconcile.Result{}, err
+	}
+
+	// Update the labels that hold the name of the configMaps
+	err = r.client.Update(context.TODO(), instance)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// Update the scan instance, the next phase is running
 	instance.Status.Phase = complianceoperatorv1alpha1.PhaseLaunching
-	err := r.client.Status().Update(context.TODO(), instance)
+	err = r.client.Status().Update(context.TODO(), instance)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -359,13 +385,14 @@ func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alp
 func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
 	logger.Info("Creating a pod for node", "node", node.Name)
 
+	mode := int32(0744)
+
 	// FIXME: this is for now..
 	podName := podForNodeName(scanInstance.Name, node.Name)
 	podLabels := map[string]string{
 		"complianceScan": scanInstance.Name,
 		"targetNode":     node.Name,
 	}
-	openScapContainerEnv := getOscapContainerEnv(&scanInstance.Spec)
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -414,8 +441,9 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 					},
 				},
 				{
-					Name:  OpenSCAPScanContainerName,
-					Image: GetComponentImage(OPENSCAP),
+					Name:    OpenSCAPScanContainerName,
+					Image:   GetComponentImage(OPENSCAP),
+					Command: []string{OpenScapScriptPath},
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &trueVal,
 					},
@@ -432,8 +460,20 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 							Name:      "content-dir",
 							MountPath: "/content",
 						},
+						{
+							Name:      scanInstance.Labels[OpenSCAPScriptCmLabel],
+							MountPath: "/scripts",
+						},
 					},
-					Env: openScapContainerEnv,
+					EnvFrom: []corev1.EnvFromSource{
+						{
+							ConfigMapRef: &corev1.ConfigMapEnvSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: scanInstance.Labels[OpenSCAPScriptEnvLabel],
+								},
+							},
+						},
+					},
 				},
 			},
 			NodeName:      node.Name,
@@ -460,6 +500,17 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
 				},
+				{
+					Name: scanInstance.Labels[OpenSCAPScriptCmLabel],
+					VolumeSource: corev1.VolumeSource{
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: scanInstance.Labels[OpenSCAPScriptCmLabel],
+							},
+							DefaultMode: &mode,
+						},
+					},
+				},
 			},
 		},
 	}
@@ -468,7 +519,7 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 // pod names are limited to 63 chars, inclusive. Try to use a friendly name, if that can't be done,
 // just use a hash. Either way, the node would be present in a label of the pod.
 func podForNodeName(scanName, nodeName string) string {
-	return dnsLengthName("openscap-pod","%s-%s-pod", scanName, nodeName)
+	return dnsLengthName("openscap-pod-", "%s-%s-pod", scanName, nodeName)
 }
 
 // TODO: this probably should not be a method, it doesn't modify reconciler, maybe we
@@ -493,41 +544,6 @@ func (r *ReconcileComplianceScan) launchPod(pod *corev1.Pod, logger logr.Logger)
 
 	// The pod already exists, re-enter the reconcile loop
 	return nil
-}
-
-func getOscapContainerEnv(scanSpec *complianceoperatorv1alpha1.ComplianceScanSpec) []corev1.EnvVar {
-	content := scanSpec.Content
-	if !strings.HasPrefix(scanSpec.Content, "/") {
-		content = "/content/" + scanSpec.Content
-	}
-
-	env := []corev1.EnvVar{
-		{
-			Name:  "HOSTROOT",
-			Value: "/host",
-		},
-		{
-			Name:  "PROFILE",
-			Value: scanSpec.Profile,
-		},
-		{
-			Name:  "CONTENT",
-			Value: content,
-		},
-		{
-			Name:  "REPORT_DIR",
-			Value: "/reports",
-		},
-	}
-
-	if scanSpec.Rule != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  "RULE",
-			Value: scanSpec.Rule,
-		})
-	}
-
-	return env
 }
 
 func getInitContainerImage(scanSpec *complianceoperatorv1alpha1.ComplianceScanSpec, logger logr.Logger) string {
