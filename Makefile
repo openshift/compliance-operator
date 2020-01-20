@@ -1,6 +1,7 @@
 # Operator variables
 # ==================
 export APP_NAME=compliance-operator
+OPENSCAP_IMAGE_NAME=openscap-ocp
 
 # Container image variables
 # =========================
@@ -11,6 +12,8 @@ RUNTIME?=podman
 # or your e2e tests. This is overwritten if we bulid the image and push it to
 # the cluster or if we're on CI.
 IMAGE_PATH?=$(IMAGE_REPO)/$(APP_NAME)
+OPENSCAP_IMAGE_PATH=$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME)
+OPENSCAP_DOCKERFILE_PATH=./images/openscap/Dockerfile
 
 # Image tag to use. Set this if you want to use a specific tag for building
 # or your e2e tests.
@@ -65,8 +68,11 @@ help: ## Show this help screen
 
 
 .PHONY: image
-image: fmt operator-sdk ## Build the compliance-operator container image
+image: fmt operator-sdk openscap-image ## Build the compliance-operator container image
 	$(GOPATH)/bin/operator-sdk build $(IMAGE_PATH) --image-builder $(RUNTIME)
+
+openscap-image:
+	$(RUNTIME) build -f $(OPENSCAP_DOCKERFILE_PATH) -t $(OPENSCAP_IMAGE_PATH):$(TAG)
 
 .PHONY: build
 build: ## Build the compliance-operator binary
@@ -181,7 +187,8 @@ image-to-cluster: namespace openshift-user image
 	@echo "Pushing image $(IMAGE_PATH):$(TAG) to the image registry"
 	IMAGE_REGISTRY_HOST=$$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}'); \
 		$(RUNTIME) login --tls-verify=false -u $(OPENSHIFT_USER) -p $(shell oc whoami -t) $${IMAGE_REGISTRY_HOST}; \
-		$(RUNTIME) push --tls-verify=false $(IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(APP_NAME):$(TAG)
+		$(RUNTIME) push --tls-verify=false $(IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(APP_NAME):$(TAG); \
+		$(RUNTIME) push --tls-verify=false $(OPENSCAP_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(OPENSCAP_IMAGE_NAME):$(TAG)
 	@echo "Removing the route from the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
 	$(eval IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(APP_NAME):$(TAG))
