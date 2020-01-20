@@ -278,12 +278,12 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1al
 }
 
 // returns true if the pod is still running, false otherwise
-func isPodRunningInNode(r *ReconcileComplianceScan, openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
+func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
 	logger.Info("Retrieving a pod for node", "node", node.Name)
 
-	podName := podForNodeName(openScapCr.Name, node.Name)
+	podName := podForNodeName(scanInstance.Name, node.Name)
 	foundPod := &corev1.Pod{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: openScapCr.Namespace}, foundPod)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: scanInstance.Namespace}, foundPod)
 	if err != nil {
 		logger.Error(err, "Cannot retrieve pod", "pod", podName)
 		return false, err
@@ -362,21 +362,21 @@ func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alp
 	return result, nil
 }
 
-func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
+func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
 	logger.Info("Creating a pod for node", "node", node.Name)
 
 	// FIXME: this is for now..
-	podName := podForNodeName(openScapCr.Name, node.Name)
+	podName := podForNodeName(scanInstance.Name, node.Name)
 	podLabels := map[string]string{
-		"complianceScan": openScapCr.Name,
+		"complianceScan": scanInstance.Name,
 		"targetNode":     node.Name,
 	}
-	openScapContainerEnv := getOscapContainerEnv(&openScapCr.Spec)
+	openScapContainerEnv := getOscapContainerEnv(&scanInstance.Spec)
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
-			Namespace: openScapCr.Namespace,
+			Namespace: scanInstance.Namespace,
 			Labels:    podLabels,
 		},
 		Spec: corev1.PodSpec{
@@ -384,7 +384,7 @@ func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *
 			InitContainers: []corev1.Container{
 				{
 					Name:  "content-container",
-					Image: getInitContainerImage(&openScapCr.Spec, logger),
+					Image: getInitContainerImage(&scanInstance.Spec, logger),
 					Command: []string{
 						"sh",
 						"-c",
@@ -406,8 +406,8 @@ func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *
 					Args: []string{
 						"--file=/reports/report.xml",
 						"--config-map-name=" + podName,
-						"--owner=" + openScapCr.Name,
-						"--namespace=" + openScapCr.Namespace,
+						"--owner=" + scanInstance.Name,
+						"--namespace=" + scanInstance.Namespace,
 					},
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &trueVal,
