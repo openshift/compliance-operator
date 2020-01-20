@@ -23,7 +23,6 @@ import (
 	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
-
 )
 
 var log = logf.Log.WithName("controller_complianceremediation")
