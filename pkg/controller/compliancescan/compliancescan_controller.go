@@ -35,6 +35,7 @@ const (
 	OpenSCAPScanContainerName = "openscap-ocp"
 	OpenSCAPScriptCmLabel     = "cm-script"
 	OpenSCAPScriptEnvLabel    = "cm-env"
+	OpenSCAPNodePodLabel      = "node-scan/"
 )
 
 // Add creates a new ComplianceScan Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -203,7 +204,15 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *complianceoper
 			return reconcile.Result{}, err
 		} else {
 			logger.Info("Launched a pod", "pod", pod)
+			// ..since the pod name can be random, store it in a label
+			setPodForNodeName(instance, node.Name, pod.Name)
 		}
+	}
+
+	// make sure the instance is updated with the node-pod labels
+	err = r.client.Update(context.TODO(), instance)
+	if err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// if we got here, there are no new pods to be created, move to the next phase
@@ -301,7 +310,7 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1al
 func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
 	logger.Info("Retrieving a pod for node", "node", node.Name)
 
-	podName := podForNodeName(scanInstance.Name, node.Name)
+	podName := getPodForNodeName(scanInstance, node.Name)
 	foundPod := &corev1.Pod{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: scanInstance.Namespace}, foundPod)
 	if err != nil {
@@ -332,7 +341,7 @@ func aContainerHasFailed(statuses []corev1.ContainerStatus) bool {
 }
 
 func getScanResult(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node) (complianceoperatorv1alpha1.ComplianceScanStatusResult, error) {
-	podName := podForNodeName(instance.Name, node.Name)
+	podName := getPodForNodeName(instance, node.Name)
 	p := &corev1.Pod{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: instance.Namespace}, p)
 	if err != nil {
@@ -387,8 +396,7 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 
 	mode := int32(0744)
 
-	// FIXME: this is for now..
-	podName := podForNodeName(scanInstance.Name, node.Name)
+	podName := createPodForNodeName(scanInstance.Name, node.Name)
 	podLabels := map[string]string{
 		"complianceScan": scanInstance.Name,
 		"targetNode":     node.Name,
@@ -518,8 +526,24 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 
 // pod names are limited to 63 chars, inclusive. Try to use a friendly name, if that can't be done,
 // just use a hash. Either way, the node would be present in a label of the pod.
-func podForNodeName(scanName, nodeName string) string {
+func createPodForNodeName(scanName, nodeName string) string {
 	return dnsLengthName("openscap-pod-", "%s-%s-pod", scanName, nodeName)
+}
+
+func getPodForNodeName(scanInstance *complianceoperatorv1alpha1.ComplianceScan, nodeName string) string {
+	return scanInstance.Labels[nodePodLabel(nodeName)]
+}
+
+func setPodForNodeName(scanInstance *complianceoperatorv1alpha1.ComplianceScan, nodeName, podName string) {
+	if scanInstance.Labels == nil {
+		scanInstance.Labels = make(map[string]string)
+	}
+
+	scanInstance.Labels[nodePodLabel(nodeName)] = podName
+}
+
+func nodePodLabel(nodeName string) string {
+	return OpenSCAPNodePodLabel + nodeName
 }
 
 // TODO: this probably should not be a method, it doesn't modify reconciler, maybe we
