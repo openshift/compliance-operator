@@ -1,6 +1,12 @@
 package compliancescan
 
 import (
+	// we can suppress the gosec warning about sha1 here because we don't use sha1 for crypto
+	// purposes, but only as a string shortener
+	// #nosec G505
+	"crypto/sha1"
+	"fmt"
+	"io"
 	"os"
 )
 
@@ -31,4 +37,22 @@ func GetComponentImage(component ComplianceComponent) string {
 		imageTag = comp.defaultImage
 	}
 	return imageTag
+}
+
+func dnsLengthName(hashPrefix string, format string, a ...interface{}) string {
+	const maxDnsLen = 64
+
+	friendlyName := fmt.Sprintf(format, a...)
+	if len(friendlyName) < maxDnsLen {
+		return friendlyName
+	}
+
+	// If that's too long, just hash the name. It's not very user friendly, but whatever
+	//
+	// We can suppress the gosec warning about sha1 here because we don't use sha1 for crypto
+	// purposes, but only as a string shortener
+	// #nosec G401
+	hasher := sha1.New()
+	io.WriteString(hasher, friendlyName)
+	return hashPrefix + fmt.Sprintf("%x", hasher.Sum(nil))
 }
