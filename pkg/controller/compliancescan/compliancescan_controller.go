@@ -2,7 +2,12 @@ package compliancescan
 
 import (
 	"context"
+	// we can suppress the gosec warning about sha1 here because we don't use sha1 for crypto
+	// purposes, but only as a string shortener
+	// #nosec G505
+	"crypto/sha1"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -273,12 +278,12 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1al
 }
 
 // returns true if the pod is still running, false otherwise
-func isPodRunningInNode(r *ReconcileComplianceScan, openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
+func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
 	logger.Info("Retrieving a pod for node", "node", node.Name)
 
-	podName := fmt.Sprintf("%s-%s-pod", openScapCr.Name, node.Name)
+	podName := podForNodeName(scanInstance.Name, node.Name)
 	foundPod := &corev1.Pod{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: openScapCr.Namespace}, foundPod)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: scanInstance.Namespace}, foundPod)
 	if err != nil {
 		logger.Error(err, "Cannot retrieve pod", "pod", podName)
 		return false, err
@@ -307,7 +312,7 @@ func aContainerHasFailed(statuses []corev1.ContainerStatus) bool {
 }
 
 func getScanResult(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node) (complianceoperatorv1alpha1.ComplianceScanStatusResult, error) {
-	podName := fmt.Sprintf("%s-%s-pod", instance.Name, node.Name)
+	podName := podForNodeName(instance.Name, node.Name)
 	p := &corev1.Pod{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: instance.Namespace}, p)
 	if err != nil {
@@ -357,21 +362,21 @@ func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alp
 	return result, nil
 }
 
-func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
+func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
 	logger.Info("Creating a pod for node", "node", node.Name)
 
 	// FIXME: this is for now..
-	podName := fmt.Sprintf("%s-%s-pod", openScapCr.Name, node.Name)
+	podName := podForNodeName(scanInstance.Name, node.Name)
 	podLabels := map[string]string{
-		"complianceScan": openScapCr.Name,
+		"complianceScan": scanInstance.Name,
 		"targetNode":     node.Name,
 	}
-	openScapContainerEnv := getOscapContainerEnv(&openScapCr.Spec)
+	openScapContainerEnv := getOscapContainerEnv(&scanInstance.Spec)
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
-			Namespace: openScapCr.Namespace,
+			Namespace: scanInstance.Namespace,
 			Labels:    podLabels,
 		},
 		Spec: corev1.PodSpec{
@@ -379,7 +384,7 @@ func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *
 			InitContainers: []corev1.Container{
 				{
 					Name:  "content-container",
-					Image: getInitContainerImage(&openScapCr.Spec, logger),
+					Image: getInitContainerImage(&scanInstance.Spec, logger),
 					Command: []string{
 						"sh",
 						"-c",
@@ -401,8 +406,8 @@ func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *
 					Args: []string{
 						"--file=/reports/report.xml",
 						"--config-map-name=" + podName,
-						"--owner=" + openScapCr.Name,
-						"--namespace=" + openScapCr.Namespace,
+						"--owner=" + scanInstance.Name,
+						"--namespace=" + scanInstance.Namespace,
 					},
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &trueVal,
@@ -464,6 +469,28 @@ func newPodForNode(openScapCr *complianceoperatorv1alpha1.ComplianceScan, node *
 			},
 		},
 	}
+}
+
+// pod names are limited to 63 chars, inclusive. Try to use a friendly name, if that can't be done,
+// just use a hash. Either way, the node would be present in a label of the pod.
+func podForNodeName(scanName, nodeName string) string {
+	const maxPodLen = 63
+
+	// first, try to use the full scan and node name
+	podName := fmt.Sprintf("%s-%s-pod", scanName, nodeName)
+	if len(podName) < maxPodLen {
+		return podName
+	}
+
+	// if that's too long, just hash the name. It's not very user friendly, but whatever
+	// we could in theory also use the nodeName up to the first dot, but that would open
+	// up conflicts, so let's not..
+	// we can suppress the gosec warning about sha1 here because we don't use sha1 for crypto
+	// purposes, but only as a string shortener
+	// #nosec G401
+	hasher := sha1.New()
+	io.WriteString(hasher, fmt.Sprintf("%s-%s-pod", scanName, nodeName))
+	return "openscap-pod-" + fmt.Sprintf("%x", hasher.Sum(nil))
 }
 
 // TODO: this probably should not be a method, it doesn't modify reconciler, maybe we
