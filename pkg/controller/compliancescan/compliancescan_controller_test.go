@@ -92,16 +92,25 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 		Context("With two pods in the cluster", func() {
 			BeforeEach(func() {
 				// Create the pods for the test
+				podName1 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name)
 				reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name),
+						Name: podName1,
 					},
 				})
+
+				podName2 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name)
 				reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name),
+						Name: podName2,
 					},
 				})
+
+				// Set the pod-node mappings in labels
+				setPodForNodeName(compliancescaninstance, nodeinstance1.Name, podName1)
+				setPodForNodeName(compliancescaninstance, nodeinstance2.Name, podName2)
+				reconciler.client.Update(context.TODO(), compliancescaninstance)
+
 				// Set state to RUNNING
 				compliancescaninstance.Status.Phase = complianceoperatorv1alpha1.PhaseRunning
 				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
@@ -118,22 +127,31 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 		Context("With two pods that succeeded in the cluster", func() {
 			BeforeEach(func() {
 				// Create the pods for the test
+				podName1 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name)
 				reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name),
+						Name: podName1,
 					},
 					Status: corev1.PodStatus{
 						Phase: corev1.PodSucceeded,
 					},
 				})
+
+				podName2 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name)
 				reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name),
+						Name: podName2,
 					},
 					Status: corev1.PodStatus{
 						Phase: corev1.PodSucceeded,
 					},
 				})
+
+				// Set the pod-node mappings in labels
+				setPodForNodeName(compliancescaninstance, nodeinstance1.Name, podName1)
+				setPodForNodeName(compliancescaninstance, nodeinstance2.Name, podName2)
+				reconciler.client.Update(context.TODO(), compliancescaninstance)
+
 				// Set state to RUNNING
 				compliancescaninstance.Status.Phase = complianceoperatorv1alpha1.PhaseRunning
 				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
