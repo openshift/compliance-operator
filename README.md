@@ -7,30 +7,31 @@ This repo is a POC for host openshift compliance detection and remediation
 and is work-in-progress.
 
 ### Deploying:
+First, become kubeadmin, either with `oc login` or by exporting `KUBECONFIG`.
 ```
 $ (clone repo)
 $ oc create -f deploy/ns.yaml
-$ oc create -f deploy/crds/complianceoperator_v1alpha1_compliancescan_crd.yaml
+$ for f in $(ls -1 deploy/crds/*crd.yaml); do oc create -f $f; done
 $ oc create -f deploy/
-$ vim deploy/crds/complianceoperator_v1alpha1_compliancescan_cr.yaml
+$ vim deploy/crds/complianceoperator.compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
 # edit the file to your liking
-$ oc create -f deploy/crds/complianceoperator_v1alpha1_compliancescan_cr.yaml
+$ oc create -f deploy/crds/complianceoperator.compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
 ```
 
 ### Running the operator:
-If you followed the steps above, the file called `deplou/operator.yaml`
+If you followed the steps above, the file called `deploy/operator.yaml`
 also creates a deployment that runs the operator. If you want to run
 the operator from the command line instead, delete the deployment and then
 run:
 
 ```
-OPERATOR_NAME=compliance-scan operator-sdk up local --namespace "openshift-compliance"
+make run
 ```
 
-At this point the operator would pick up the CRD, create a pod for every
-node in the cluster (this will change, see below), execute `openscap-scan`
-on every node and eventually report the results. The scan using one rule
-takes about a minute.
+At this point the operator would pick up the CRD, create a scan for the
+suite, the scan would create a pod for every node in the cluster (this will
+change, see below), execute `openscap-scan` on every node and eventually
+report the results. The scan using one rule takes about a minute.
 
 You can watch the node progress with:
 ```
@@ -65,6 +66,9 @@ example-compliancescan-ip-10-0-164-150.ec2.internal-pod   1      2m9s    complia
 example-compliancescan-ip-10-0-174-131.ec2.internal-pod   1      2m16s   compliance-scan=example-compliancescan
 ```
 
+At the moment, the scans produce XML-based ARF reports, which the operator
+is able to parse. You can fetch the results with `oc extract $cm_name`.
+
 A more convenient way to fetch the results is using
 [a script](https://github.com/jhrozek/scapresults-k8s/blob/master/scapresults/fetchresults.py)
 To use the script, clone the [scapresults-k8s repo](jhrozek/scapresults-k8s),
@@ -98,7 +102,7 @@ To see the available labels, run `oc get nodes --show-labels` or
 ### Related repositories
 The pods that the operator consist of two containers. One is the openscap
 container itself at [https://github.com/jhrozek/openscap-ocp](jhrozek/openscap-ocp)
-and the other is a log-collector at [https://github.com/jhrozek/scapresults-k8s](jhrozek/scapresults-k8s)
+and the other is a log-collector at [https://github.com/openshift/scapresults](openshift/scapresults-k8s)
 
 ### Overriding container images
 Should you wish to override any of the two container images in the pod, you can
@@ -108,16 +112,5 @@ do so using environment variables:
 
 For example, to run the log collector from a different branch:
 ```
-make run LOG_COLLECTOR_IMAGE=quay.io/jhrozek/scapresults-k8s:testbranch
+make run OPENSCAP_IMAGE=quay.io/jhrozek/openscap-ocp:rhel8-2-test
 ```
-
-## TODO
-- using a configMap for reporting is not very nice using a volume would be nicer
-  - but using a volume across nodes seems to be tricky, maybe we could at least
-  collect the configMap contents to the volume?
-- packaging
-- review the container/pod permissions
-- use a NodeSelector to select the nodes to scan
-- should the operator be cluster-wise and nor require its own namespace?
-- container todo:
-  - Use UBI as the base image, not Fedora
