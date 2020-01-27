@@ -15,6 +15,7 @@ $ for f in $(ls -1 deploy/crds/*crd.yaml); do oc create -f $f; done
 $ oc create -f deploy/
 $ vim deploy/crds/complianceoperator.compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
 # edit the file to your liking
+# oc project openshift-compliance
 $ oc create -f deploy/crds/complianceoperator.compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
 ```
 
