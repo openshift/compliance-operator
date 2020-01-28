@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/ajeddeloh/go-json v0.0.0-20170920214419-6a2fe990e083 // indirect
+	github.com/cenkalti/backoff/v3 v3.2.2
 	github.com/coreos/ignition v0.33.0
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.1
@@ -14,6 +15,7 @@ require (
 	github.com/operator-framework/operator-sdk v0.13.0
 	github.com/prometheus/procfs v0.0.5 // indirect
 	github.com/securego/gosec v0.0.0-20191119104125-df484bfa9e9f
+	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
 	github.com/subchen/go-xmldom v1.1.2
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
