@@ -203,7 +203,7 @@ func TestE2E(t *testing.T) {
 						Scans: []complianceoperatorv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: complianceoperatorv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:remediation_demo",
+									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: selectWorkers,
@@ -212,7 +212,7 @@ func TestE2E(t *testing.T) {
 							},
 							{
 								ComplianceScanSpec: complianceoperatorv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:remediation_demo",
+									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: selectMasters,
@@ -286,7 +286,7 @@ func TestE2E(t *testing.T) {
 						Scans: []complianceoperatorv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: complianceoperatorv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:remediation_demo",
+									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: selectWorkers,
@@ -336,7 +336,7 @@ func TestE2E(t *testing.T) {
 						Scans: []complianceoperatorv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: complianceoperatorv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:remediation_demo",
+									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: selectWorkers,
@@ -433,7 +433,7 @@ func TestE2E(t *testing.T) {
 						Scans: []complianceoperatorv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: complianceoperatorv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:remediation_demo",
+									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: selectWorkers,

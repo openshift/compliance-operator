@@ -14,9 +14,7 @@ import (
 )
 
 const (
-	// FIXME: we pretend that shell is MC..
-	machineConfigFixType   = "urn:xccdf:fix:script:sh"
-	machineConfigFixPrefix = "apiVersion: machineconfiguration.openshift.io/v1"
+	machineConfigFixType = "urn:xccdf:fix:script:ignition"
 )
 
 func ParseRemediationsFromArf(scheme *runtime.Scheme, scanName string, namespace string, arf string) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
@@ -64,7 +62,7 @@ func ParseRemediationsFromArf(scheme *runtime.Scheme, scanName string, namespace
 }
 
 func isMachineConfigFix(fix *xmldom.Node) bool {
-	if fix.GetAttributeValue("system") == machineConfigFixType && strings.HasPrefix(fix.Text, machineConfigFixPrefix) {
+	if fix.GetAttributeValue("system") == machineConfigFixType {
 		return true
 	}
 	return false
