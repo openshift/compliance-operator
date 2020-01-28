@@ -101,8 +101,8 @@ To see the available labels, run `oc get nodes --show-labels` or
 
 ### Related repositories
 The pods that the operator consist of two containers. One is the openscap
-container itself at [https://github.com/jhrozek/openscap-ocp](jhrozek/openscap-ocp)
-and the other is a log-collector at [https://github.com/openshift/scapresults](openshift/scapresults-k8s)
+container itself at [https://github.com/jhrozek/openscap-ocp](https://github.com/jhrozek/openscap-ocp)
+and the other is a log-collector at [https://github.com/openshift/scapresults](https://github.com/openshift/scapresults)
 
 ### Overriding container images
 Should you wish to override any of the two container images in the pod, you can
