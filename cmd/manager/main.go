@@ -13,8 +13,8 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/openshift/compliance-operator/pkg/apis"
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 	"github.com/openshift/compliance-operator/pkg/controller"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"

@@ -133,7 +133,7 @@ func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceRemediationSpec(ref c
 					"machineConfigContents": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The actual remediation payload",
-							Ref:         ref("github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1.MachineConfig"),
+							Ref:         ref("github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1.MachineConfig"),
 						},
 					},
 				},
@@ -141,7 +141,7 @@ func schema_pkg_apis_complianceoperator_v1alpha1_ComplianceRemediationSpec(ref c
 			},
 		},
 		Dependencies: []string{
-			"github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1.MachineConfig"},
+			"github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1.MachineConfig"},
 	}
 }
 
