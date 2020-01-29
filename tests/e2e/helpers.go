@@ -348,6 +348,29 @@ func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.Machineconfigur
 	return nil
 }
 
+func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
+	err := wait.PollImmediate(5*time.Second, 5*time.Minute, func() (bool, error) {
+		var nodes corev1.NodeList
+
+		f.Client.List(goctx.TODO(), &nodes, &client.ListOptions{})
+		for _, node := range nodes.Items {
+			if (node.Labels["machineconfiguration.openshift.io/currentConfig"] != node.Labels["machineconfiguration.openshift.io/desiredConfig"]) ||
+				(node.Labels["machineconfiguration.openshift.io/state"] != "Done") {
+				return false, nil
+			}
+		}
+
+		t.Logf("All machines updated")
+		return true, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, namespace, name, pool string, apply bool) error {
 	rem := &complianceoperatorv1alpha1.ComplianceRemediation{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
@@ -380,9 +403,16 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mc
 
 	err = waitForMachinePoolUpdate(t, mcClient, pool, applyRemediation, poolHasMc)
 	if err != nil {
-		t.Errorf("Failed to wait for workers to come back up after applying MC")
+		t.Errorf("Failed to wait for pool to update after applying MC")
 		return err
 	}
+
+	err = waitForNodesToBeReady(t, f)
+	if err != nil {
+		t.Errorf("Failed to wait for nodes to come back up after applying MC")
+		return err
+	}
+
 	t.Logf("Machines updated with remediation")
 	return nil
 }
