@@ -302,7 +302,7 @@ func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.Machineconfigur
 	}
 
 	// Should we make this configurable? Maybe 5 minutes is not enough time for slower clusters?
-	wait.PollImmediate(5*time.Second, 5*time.Minute, func() (bool, error) {
+	err = wait.PollImmediate(5*time.Second, 5*time.Minute, func() (bool, error) {
 		pool, err := mcClient.MachineConfigPools().Get(name, metav1.GetOptions{})
 		if err != nil {
 			// even not found is a hard error here
@@ -340,6 +340,10 @@ func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.Machineconfigur
 			pool.Status.UnavailableMachineCount)
 		return false, nil
 	})
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
