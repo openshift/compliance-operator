@@ -302,7 +302,7 @@ func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.Machineconfigur
 	}
 
 	// Should we make this configurable? Maybe 5 minutes is not enough time for slower clusters?
-	err = wait.PollImmediate(5*time.Second, 5*time.Minute, func() (bool, error) {
+	err = wait.PollImmediate(10*time.Second, 15*time.Minute, func() (bool, error) {
 		pool, err := mcClient.MachineConfigPools().Get(name, metav1.GetOptions{})
 		if err != nil {
 			// even not found is a hard error here
@@ -349,11 +349,12 @@ func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.Machineconfigur
 }
 
 func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
-	err := wait.PollImmediate(5*time.Second, 5*time.Minute, func() (bool, error) {
+	err := wait.PollImmediate(10*time.Second, 15*time.Minute, func() (bool, error) {
 		var nodes corev1.NodeList
 
 		f.Client.List(goctx.TODO(), &nodes, &client.ListOptions{})
 		for _, node := range nodes.Items {
+			t.Logf("%v", node)
 			if (node.Labels["machineconfiguration.openshift.io/currentConfig"] != node.Labels["machineconfiguration.openshift.io/desiredConfig"]) ||
 				(node.Labels["machineconfiguration.openshift.io/state"] != "Done") {
 				return false, nil
@@ -403,13 +404,13 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mc
 
 	err = waitForMachinePoolUpdate(t, mcClient, pool, applyRemediation, poolHasMc)
 	if err != nil {
-		t.Errorf("Failed to wait for pool to update after applying MC")
+		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
 		return err
 	}
 
 	err = waitForNodesToBeReady(t, f)
 	if err != nil {
-		t.Errorf("Failed to wait for nodes to come back up after applying MC")
+		t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
 		return err
 	}
 
