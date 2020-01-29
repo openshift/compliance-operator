@@ -252,8 +252,8 @@ func createRemediations(crClient *complianceCrClient, scan *complianceoperatorv1
 		}
 		rem.Labels[complianceoperatorv1alpha1.ScanLabel] = scan.Name
 		rem.Labels[complianceoperatorv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
-		rem.Labels[mcfgv1.McRoleKey] = getScanRoleLabel(scan.Spec.NodeSelector)
-		if rem.Labels[mcfgv1.McRoleKey] == "" {
+		rem.Labels[mcfgv1.MachineConfigRoleLabelKey] = getScanRoleLabel(scan.Spec.NodeSelector)
+		if rem.Labels[mcfgv1.MachineConfigRoleLabelKey] == "" {
 			return fmt.Errorf("scan %s has no role assignment", scan.Name)
 		}
 
