@@ -365,7 +365,7 @@ func TestE2E(t *testing.T) {
 				remCheck := &complianceoperatorv1alpha1.ComplianceRemediation{}
 				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: workersNoRootLoginsRemName, Namespace: namespace}, remCheck)
 				if err == nil {
-					return fmt.Errorf("remediation found unexpectedly")
+					return fmt.Errorf("remediation %s found unexpectedly", workersNoRootLoginsRemName)
 				} else if !errors.IsNotFound(err) {
 					t.Errorf("Unexpected error %v", err)
 					return err
