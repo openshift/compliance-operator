@@ -313,7 +313,7 @@ func TestE2E(t *testing.T) {
 
 				// - Get the no-root-logins remediation for workers
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
-				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker", true)
+				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker")
 
 				// Also get the remediation so that we can delete it later
 				rem := &complianceoperatorv1alpha1.ComplianceRemediation{}
@@ -365,7 +365,7 @@ func TestE2E(t *testing.T) {
 				remCheck := &complianceoperatorv1alpha1.ComplianceRemediation{}
 				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: workersNoRootLoginsRemName, Namespace: namespace}, remCheck)
 				if err == nil {
-					return fmt.Errorf("remediation found unexpectedly")
+					return fmt.Errorf("remediation %s found unexpectedly", workersNoRootLoginsRemName)
 				} else if !errors.IsNotFound(err) {
 					t.Errorf("Unexpected error %v", err)
 					return err
@@ -384,7 +384,7 @@ func TestE2E(t *testing.T) {
 				dummyAction := func() error {
 					return nil
 				}
-				poolHasNoMc := func(pool *mcfgv1.MachineConfigPool) (bool, error) {
+				poolHasNoMc := func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error) {
 					for _, mc := range pool.Status.Configuration.Source {
 						if mc.Name == rem.GetMcName() {
 							return false, nil
@@ -452,25 +452,31 @@ func TestE2E(t *testing.T) {
 
 				// Apply both remediations
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
-				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker", true)
+				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker")
 				if err != nil {
 					t.Logf("WARNING: Got an error while applying remediation '%s': %v", workersNoRootLoginsRemName, err)
 				}
+				t.Logf("Remediation %s applied", workersNoRootLoginsRemName)
+
 				workersNoEmptyPassRemName := fmt.Sprintf("%s-no-empty-passwords", workerScanName)
-				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoEmptyPassRemName, "worker", true)
+				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoEmptyPassRemName, "worker")
 				if err != nil {
 					t.Logf("WARNING: Got an error while applying remediation '%s': %v", workersNoEmptyPassRemName, err)
 				}
+				t.Logf("Remediation %s applied", workersNoEmptyPassRemName)
 
 				// Get the resulting MC
 				mcName := fmt.Sprintf("75-%s-%s", workerScanName, suiteName)
 				mcBoth, err := mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
+				t.Logf("MC %s exists", mcName)
 
 				// Revert one remediation. The MC should stay, but its generation should bump
-				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoEmptyPassRemName, "worker", false)
+				t.Logf("Will revert remediation %s", workersNoEmptyPassRemName)
+				err = unApplyRemediationAndCheck(t, f, mcClient, namespace, workersNoEmptyPassRemName, "worker", false)
 				if err != nil {
 					t.Logf("WARNING: Got an error while unapplying remediation '%s': %v", workersNoEmptyPassRemName, err)
 				}
+				t.Logf("Remediation %s reverted", workersNoEmptyPassRemName)
 				mcOne, err := mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
 
 				if mcOne.Generation == mcBoth.Generation {
@@ -478,11 +484,14 @@ func TestE2E(t *testing.T) {
 				}
 
 				// When we unapply the second remediation, the MC should be deleted, too
-				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker", false)
+				t.Logf("Will revert remediation %s", workersNoRootLoginsRemName)
+				err = unApplyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker", true)
+				t.Logf("Remediation %s reverted", workersNoEmptyPassRemName)
 
+				t.Logf("No remediation-based MCs should exist now")
 				_, err = mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
 				if err == nil {
-					t.Errorf("MC unexpectedly found")
+					t.Errorf("MC %s unexpectedly found", mcName)
 				}
 
 				return nil

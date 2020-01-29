@@ -296,7 +296,7 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 }
 
 type MachineConfigActionFunc func() error
-type PoolPredicate func(pool *mcfgv1.MachineConfigPool) (bool, error)
+type PoolPredicate func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error)
 
 func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, name string, action MachineConfigActionFunc, predicate PoolPredicate) error {
 	poolPre, err := mcClient.MachineConfigPools().Get(name, metav1.GetOptions{})
@@ -313,7 +313,7 @@ func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.Machineconfigur
 	}
 
 	// Should we make this configurable? Maybe 5 minutes is not enough time for slower clusters?
-	err = wait.PollImmediate(10*time.Second, timeout, func() (bool, error) {
+	err = wait.PollImmediate(10*time.Second, 20*time.Minute, func() (bool, error) {
 		pool, err := mcClient.MachineConfigPools().Get(name, metav1.GetOptions{})
 		if err != nil {
 			// even not found is a hard error here
@@ -321,7 +321,7 @@ func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.Machineconfigur
 			return false, err
 		}
 
-		ok, err := predicate(pool)
+		ok, err := predicate(t, pool)
 		if err != nil {
 			t.Errorf("Predicate failed %v", err)
 			return false, err
@@ -390,7 +390,7 @@ func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
 	return nil
 }
 
-func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, namespace, name, pool string, apply bool) error {
+func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, namespace, name, pool string) error {
 	rem := &complianceoperatorv1alpha1.ComplianceRemediation{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
 	if err != nil {
@@ -399,7 +399,7 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mc
 	t.Logf("Remediation found")
 
 	applyRemediation := func() error {
-		rem.Spec.Apply = apply
+		rem.Spec.Apply = true
 		err = f.Client.Update(goctx.TODO(), rem)
 		if err != nil {
 			t.Errorf("Cannot apply remediation")
@@ -409,18 +409,21 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mc
 		return nil
 	}
 
-	poolHasMc := func(pool *mcfgv1.MachineConfigPool) (bool, error) {
+	predicate := func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error) {
 		for _, mc := range pool.Status.Configuration.Source {
 			if mc.Name == rem.GetMcName() {
-				// Should we wait until the MC is created? I guess not, the poll later would bomb out
+				// When applying a remediation, check that the MC *is* in the pool
+				t.Logf("Remediation %s present in pool %s, returning true", mc.Name, pool.Name)
 				return true, nil
 			}
 		}
 
-		return false, nil
+		// When applying a remediation, check that the MC *is not* in the pool
+		t.Logf("Remediation %s not present in pool %s, returning false", rem.GetMcName(), pool.Name)
+		return true, nil
 	}
 
-	err = waitForMachinePoolUpdate(t, mcClient, pool, applyRemediation, poolHasMc)
+	err = waitForMachinePoolUpdate(t, mcClient, pool, applyRemediation, predicate)
 	if err != nil {
 		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
 		return err
@@ -435,3 +438,60 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mc
 	t.Logf("Machines updated with remediation")
 	return nil
 }
+
+func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, namespace, name, pool string, lastRemediation bool) error {
+	rem := &complianceoperatorv1alpha1.ComplianceRemediation{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
+	if err != nil {
+		return err
+	}
+	t.Logf("Remediation found")
+
+	applyRemediation := func() error {
+		rem.Spec.Apply = false
+		err = f.Client.Update(goctx.TODO(), rem)
+		if err != nil {
+			t.Errorf("Cannot apply remediation")
+			return err
+		}
+		t.Logf("Remediation applied")
+		return nil
+	}
+
+	predicate := func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error) {
+		// If the remediation that we deselect is NOT the last one, it is expected
+		// that the MC would still be present. Just return true in this case.
+		if lastRemediation == false {
+			return true, nil
+		}
+
+		// On the other hand, if the remediation we deselect WAS the last one, we want
+		// to check that the MC created by the operator went away. In that case, let's
+		// poll the pool until we no longer see the remediation in the status
+		for _, mc := range pool.Status.Configuration.Source {
+			if mc.Name == rem.GetMcName() {
+				t.Logf("Remediation %s present in pool %s, returning false", mc.Name, pool.Name)
+				return false, nil
+			}
+		}
+
+		t.Logf("Remediation %s not present in pool %s, returning true", rem.GetMcName(), pool.Name)
+		return true, nil
+	}
+
+	err = waitForMachinePoolUpdate(t, mcClient, pool, applyRemediation, predicate)
+	if err != nil {
+		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
+		return err
+	}
+
+	err = waitForNodesToBeReady(t, f)
+	if err != nil {
+		t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+		return err
+	}
+
+	t.Logf("Machines updated with remediation")
+	return nil
+}
+
