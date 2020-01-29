@@ -293,7 +293,7 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 	}
 
 	for _, rem := range scanSuiteRemediations {
-		if rem.Labels["machineconfiguration.openshift.io/role"] != roleLabel {
+		if rem.Labels[mcfgv1.MachineConfigRoleLabelKey] != roleLabel {
 			return fmt.Errorf("expected that scan %s is labeled for role %s", scanName, roleLabel)
 		}
 	}
