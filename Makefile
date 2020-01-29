@@ -206,7 +206,7 @@ image-to-cluster: namespace openshift-user image
 	IMAGE_REGISTRY_HOST=$$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}'); \
 		$(RUNTIME) login --tls-verify=false -u $(OPENSHIFT_USER) -p $(shell oc whoami -t) $${IMAGE_REGISTRY_HOST}; \
 		$(RUNTIME) push --tls-verify=false $(IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(APP_NAME):$(TAG); \
-		$(RUNTIME) push --tls-verify=false $(OPENSCAP_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(OPENSCAP_IMAGE_NAME):$(TAG) \
+		$(RUNTIME) push --tls-verify=false $(OPENSCAP_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(OPENSCAP_IMAGE_NAME):$(TAG); \
 		$(RUNTIME) push --tls-verify=false $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(RESULTSCOLLECTOR_IMAGE_NAME):$(TAG)
 	@echo "Removing the route from the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
