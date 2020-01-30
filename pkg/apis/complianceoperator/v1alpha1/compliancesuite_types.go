@@ -36,6 +36,12 @@ type ComplianceSuiteSpec struct {
 	Scans []ComplianceScanSpecWrapper `json:"scans"`
 }
 
+// GetScanNameFromSuite Gets us a predictable name for the underlying
+// ComplianceScans that the Suite deploys
+func GetScanNameFromSuite(suite *ComplianceSuite, scanWrapName string) string {
+	return suite.Name + "-" + scanWrapName
+}
+
 // ComplianceSuiteStatus defines the observed state of ComplianceSuite
 // +k8s:openapi-gen=true
 type ComplianceSuiteStatus struct {

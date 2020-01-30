@@ -3,8 +3,9 @@ package v1alpha1
 import (
 	"fmt"
 
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 )
 
 type RemediationApplicationState string
@@ -26,6 +27,8 @@ const (
 	SuiteLabel = "complianceoperator.openshift.io/suite"
 	// ScanLabel defines the label that associates the Remediation with the scan
 	ScanLabel = "complianceoperator.openshift.io/scan"
+	// ScanWrapLabel defines the label that associates the scan with the suite's scan reference
+	ScanWrapLabel = "complianceoperator.openshift.io/suite-scan"
 )
 
 type ComplianceRemediationSpecMeta struct {

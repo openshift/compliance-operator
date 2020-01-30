@@ -166,7 +166,8 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 				return false, nil
 			}
 
-			lastErr = waitForScanStatus(t, f, namespace, scanStatus.Name, targetStatus)
+			scanName := complianceoperatorv1alpha1.GetScanNameFromSuite(suite, scanStatus.Name)
+			lastErr = waitForScanStatus(t, f, namespace, scanName, targetStatus)
 			if lastErr != nil {
 				// If the status was present in the suite, then /any/ error
 				// should fail the test as the scans should be read /from/
@@ -494,4 +495,3 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *
 	t.Logf("Machines updated with remediation")
 	return nil
 }
-

@@ -234,12 +234,14 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
+				realWorkerScanName := complianceoperatorv1alpha1.GetScanNameFromSuite(exampleComplianceSuite, workerScanName)
 				// At this point, both scans should be non-compliant given our current content
-				err = scanResultIsExpected(f, namespace, workerScanName, complianceoperatorv1alpha1.ResultNonCompliant)
+				err = scanResultIsExpected(f, namespace, realWorkerScanName, complianceoperatorv1alpha1.ResultNonCompliant)
 				if err != nil {
 					return err
 				}
-				err = scanResultIsExpected(f, namespace, masterScanName, complianceoperatorv1alpha1.ResultNonCompliant)
+				realMasterScanName := complianceoperatorv1alpha1.GetScanNameFromSuite(exampleComplianceSuite, masterScanName)
+				err = scanResultIsExpected(f, namespace, realMasterScanName, complianceoperatorv1alpha1.ResultNonCompliant)
 				if err != nil {
 					return err
 				}

@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"reflect"
 	"sort"
 	"strings"
@@ -20,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -147,7 +147,8 @@ func (r *ReconcileComplianceSuite) reconcileScans(suite *complianceoperatorv1alp
 		}
 
 		scan := &complianceoperatorv1alpha1.ComplianceScan{}
-		err := r.client.Get(context.TODO(), types.NamespacedName{Name: scanWrap.Name, Namespace: suite.Namespace}, scan)
+		scanName := complianceoperatorv1alpha1.GetScanNameFromSuite(suite, scanWrap.Name)
+		err := r.client.Get(context.TODO(), types.NamespacedName{Name: scanName, Namespace: suite.Namespace}, scan)
 		if err != nil && errors.IsNotFound(err) {
 			// If the scan was not found, launch it
 			logger.Info("Scan not found, launching..", "scan", scanWrap.Name)
@@ -189,7 +190,8 @@ func getScanRoleLabel(nodeSelector map[string]string) string {
 func (r *ReconcileComplianceSuite) reconcileScanStatus(suite *complianceoperatorv1alpha1.ComplianceSuite, scan *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
 	// See if we already have a ScanStatusWrapper for this name
 	for idx, scanStatusWrap := range suite.Status.ScanStatuses {
-		if scan.Name == scanStatusWrap.Name {
+		realScanName := complianceoperatorv1alpha1.GetScanNameFromSuite(suite, scanStatusWrap.Name)
+		if scan.Name == realScanName {
 			logger.Info("About to update scan status", "scan", scan.Name)
 			err := r.updateScanStatus(suite, idx, &scanStatusWrap, scan, logger)
 			if err != nil {
@@ -228,7 +230,7 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *complianceoperatorv1a
 		ComplianceScanStatus: complianceoperatorv1alpha1.ComplianceScanStatus{
 			Phase: scan.Status.Phase,
 		},
-		Name: scan.Name,
+		Name: scanStatusWrap.Name,
 	}
 
 	suiteCopy := suite.DeepCopy()
@@ -267,7 +269,8 @@ func (r *ReconcileComplianceSuite) reconcileScanRemediations(suite *complianceop
 	logger.Info("Scan has results", "scan", scan.Name)
 
 	for _, cm := range cMapList.Items {
-		resultRemediations, err := parseResultRemediations(r, scan.Name, scan.Namespace, &cm, logger)
+		wrappedScanName := scan.Labels[complianceoperatorv1alpha1.ScanWrapLabel]
+		resultRemediations, err := parseResultRemediations(r, wrappedScanName, scan.Namespace, &cm, logger)
 		if err != nil {
 			logger.Error(err, "cannot parse scan result")
 			// If the results are not parseable, we cannot recover from this.
@@ -375,7 +378,7 @@ func createRemediations(r *ReconcileComplianceSuite, suite *complianceoperatorv1
 			rem.Labels = make(map[string]string)
 		}
 		rem.Labels[complianceoperatorv1alpha1.SuiteLabel] = suite.Name
-		rem.Labels[complianceoperatorv1alpha1.ScanLabel] = scan.Name
+		rem.Labels[complianceoperatorv1alpha1.ScanLabel] = scan.Labels[complianceoperatorv1alpha1.ScanWrapLabel]
 		rem.Labels[mcfgv1.McRoleKey] = getScanRoleLabel(scan.Spec.NodeSelector)
 		if rem.Labels[mcfgv1.McRoleKey] == "" {
 			return fmt.Errorf("scan %s has no role assignment", scan.Name)
@@ -419,7 +422,7 @@ func (r *ReconcileComplianceSuite) addScanStatus(suite *complianceoperatorv1alph
 		ComplianceScanStatus: complianceoperatorv1alpha1.ComplianceScanStatus{
 			Phase: scan.Status.Phase,
 		},
-		Name: scan.Name,
+		Name: scan.Labels[complianceoperatorv1alpha1.ScanWrapLabel],
 	}
 
 	suiteCopy := suite.DeepCopy()
@@ -454,8 +457,12 @@ func launchScanForSuite(r *ReconcileComplianceSuite, suite *complianceoperatorv1
 func newScanForSuite(suite *complianceoperatorv1alpha1.ComplianceSuite, scanWrap *complianceoperatorv1alpha1.ComplianceScanSpecWrapper) *complianceoperatorv1alpha1.ComplianceScan {
 	return &complianceoperatorv1alpha1.ComplianceScan{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      scanWrap.Name,
+			Name:      complianceoperatorv1alpha1.GetScanNameFromSuite(suite, scanWrap.Name),
 			Namespace: suite.Namespace,
+			Labels: map[string]string{
+				complianceoperatorv1alpha1.SuiteLabel:    suite.Name,
+				complianceoperatorv1alpha1.ScanWrapLabel: scanWrap.Name,
+			},
 		},
 		Spec: complianceoperatorv1alpha1.ComplianceScanSpec{
 			ContentImage: scanWrap.ContentImage,
