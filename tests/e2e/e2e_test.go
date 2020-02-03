@@ -3,17 +3,18 @@ package e2e
 import (
 	goctx "context"
 	"fmt"
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
-	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
+	"math/rand"
+	"testing"
+
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"math/rand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"testing"
 
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
+	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
 )
 
 func TestE2E(t *testing.T) {
@@ -452,8 +453,14 @@ func TestE2E(t *testing.T) {
 				// Apply both remediations
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
 				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker", true)
+				if err != nil {
+					t.Logf("WARNING: Got an error while applying remediation '%s': %v", workersNoRootLoginsRemName, err)
+				}
 				workersNoEmptyPassRemName := fmt.Sprintf("%s-no-empty-passwords", workerScanName)
 				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoEmptyPassRemName, "worker", true)
+				if err != nil {
+					t.Logf("WARNING: Got an error while applying remediation '%s': %v", workersNoEmptyPassRemName, err)
+				}
 
 				// Get the resulting MC
 				mcName := fmt.Sprintf("75-%s-%s", workerScanName, suiteName)
@@ -461,10 +468,13 @@ func TestE2E(t *testing.T) {
 
 				// Revert one remediation. The MC should stay, but its generation should bump
 				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoEmptyPassRemName, "worker", false)
+				if err != nil {
+					t.Logf("WARNING: Got an error while unapplying remediation '%s': %v", workersNoEmptyPassRemName, err)
+				}
 				mcOne, err := mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
 
 				if mcOne.Generation == mcBoth.Generation {
-					t.Errorf("Expected that the MC generation changes")
+					t.Errorf("Expected that the MC generation changes. Got: %d, Expected: %d", mcOne.Generation, mcBoth.Generation)
 				}
 
 				// When we unapply the second remediation, the MC should be deleted, too
