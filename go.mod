@@ -28,6 +28,7 @@ require (
 	k8s.io/code-generator v0.17.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d
 	sigs.k8s.io/controller-runtime v0.4.0
+	github.com/openshift/machine-config-operator v0.0.1-0.20200202233235-09fe53e2e47b
 )
 
 // Pinned to kubernetes-1.16.2
@@ -53,4 +54,5 @@ replace (
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.0.0-20191016115753-cf0698c3a16b
 	k8s.io/metrics => k8s.io/metrics v0.0.0-20191016113814-3b1a734dba6e
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.0.0-20191016112829-06bb3c9d77c9
+	github.com/openshift/machine-config-operator => github.com/openshift/machine-config-operator v0.0.1-0.20200202233235-09fe53e2e47b
 )
