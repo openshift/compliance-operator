@@ -54,7 +54,7 @@ spec:
                 metadata:
                   type: object
                 spec:
-                  description: MachineConfigSpec defines the desired state of MachineConfig
+                  description: MachineConfigSpec is the spec for MachineConfig
                   properties:
                     config:
                       description: Config is a Ignition Config object.
@@ -343,12 +343,8 @@ spec:
                         type: string
                       type: array
                     osImageURL:
-                      description: 'INSERT ADDITIONAL SPEC FIELDS - desired state
-                        of cluster Important: Run "operator-sdk generate k8s" to regenerate
-                        code after modifying this file Add custom validation using
-                        kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-                        OSImageURL specifies the remote location that will be used
-                        to fetch the OS.'
+                      description: OSImageURL specifies the remote location that will
+                        be used to fetch the OS.
                       type: string
                   required:
                   - config
@@ -356,6 +352,8 @@ spec:
                   - kernelArguments
                   - osImageURL
                   type: object
+              required:
+              - spec
               type: object
             type:
               description: Remediation type specifies the artifact the remediation
