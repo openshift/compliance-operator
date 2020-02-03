@@ -230,13 +230,3 @@ endif
 push: image
 	$(RUNTIME) tag $(IMAGE_PATH) $(IMAGE_PATH):$(TAG)
 	$(RUNTIME) push $(IMAGE_PATH):$(TAG)
-
-versionPath=$(shell GO111MODULE=on go list -f {{.Dir}} k8s.io/code-generator/cmd/client-gen)
-codegeneratorRoot=$(versionPath:/cmd/client-gen=)
-codegeneratorTarget:=./vendor/k8s.io/code-generator
-
-# go mod doesn't mark scripts as executable, so we need to do that ourselves
-.PHONY: code-generator
-code-generator:
-	@chmod +x $(codegeneratorTarget)/generate-groups.sh
-	@chmod +x $(codegeneratorTarget)/generate-internal-groups.sh

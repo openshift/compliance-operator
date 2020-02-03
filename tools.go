@@ -6,5 +6,4 @@ package tools
 
 import (
 	_ "github.com/securego/gosec/cmd/gosec"
-	_ "k8s.io/code-generator"
 )
