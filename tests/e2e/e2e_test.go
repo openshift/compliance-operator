@@ -463,8 +463,8 @@ func TestE2E(t *testing.T) {
 				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoEmptyPassRemName, "worker", false)
 				mcOne, err := mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
 
-				if mcOne.Generation <= mcBoth.Generation {
-					t.Errorf("Expected that the MC generation increases")
+				if mcOne.Generation == mcBoth.Generation {
+					t.Errorf("Expected that the MC generation changes")
 				}
 
 				// When we unapply the second remediation, the MC should be deleted, too
