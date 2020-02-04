@@ -3,15 +3,23 @@ module github.com/openshift/compliance-operator
 go 1.13
 
 require (
+	cloud.google.com/go v0.40.0 // indirect
 	github.com/ajeddeloh/go-json v0.0.0-20170920214419-6a2fe990e083 // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2
+	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
 	github.com/coreos/ignition v0.33.0
+	github.com/emicklei/go-restful v2.10.0+incompatible // indirect
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.1
-	github.com/go-openapi/spec v0.19.2
+	github.com/go-openapi/spec v0.19.3
+	github.com/gogo/protobuf v1.3.1 // indirect
+	github.com/golang/groupcache v0.0.0-20191002201903-404acd9df4cc // indirect
 	github.com/google/go-cmp v0.3.1 // indirect
+	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/onsi/ginkgo v1.10.3
 	github.com/onsi/gomega v1.7.1
+	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible // indirect
+	github.com/openshift/machine-config-operator v4.2.0-alpha.0.0.20190917115525-033375cbe820+incompatible
 	github.com/operator-framework/operator-sdk v0.13.0
 	github.com/prometheus/procfs v0.0.5 // indirect
 	github.com/securego/gosec v0.0.0-20191119104125-df484bfa9e9f
@@ -22,17 +30,19 @@ require (
 	go.uber.org/zap v1.10.0
 	go4.org v0.0.0-20191010144846-132d2879e1e9 // indirect
 	golang.org/x/crypto v0.0.0-20190927123631-a832865fa7ad // indirect
-	k8s.io/api v0.0.0
-	k8s.io/apimachinery v0.0.0
+	golang.org/x/sys v0.0.0-20191002091554-b397fe3ad8ed // indirect
+	google.golang.org/appengine v1.6.1 // indirect
+	k8s.io/api v0.17.1
+	k8s.io/apiextensions-apiserver v0.17.1 // indirect
+	k8s.io/apimachinery v0.17.1
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/code-generator v0.17.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d
+	k8s.io/kube-openapi v0.0.0-20191107075043-30be4d16710a
 	sigs.k8s.io/controller-runtime v0.4.0
-	github.com/openshift/machine-config-operator v0.0.1-0.20200202233235-09fe53e2e47b
 )
 
 // Pinned to kubernetes-1.16.2
 replace (
+	github.com/go-log/log => github.com/go-log/log v0.1.1-0.20181211034820-a514cf01a3eb
 	k8s.io/api => k8s.io/api v0.0.0-20191016110408-35e52d86657a
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20191016113550-5357c4baaf65
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20191004115801-a2eda9f80ab8
@@ -51,9 +61,8 @@ replace (
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.0.0-20191016114748-65049c67a58b
 	k8s.io/kubectl => k8s.io/kubectl v0.0.0-20191016120415-2ed914427d51
 	k8s.io/kubelet => k8s.io/kubelet v0.0.0-20191016114556-7841ed97f1b2
+	k8s.io/kubernetes => k8s.io/kubernetes v1.17.1
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.0.0-20191016115753-cf0698c3a16b
 	k8s.io/metrics => k8s.io/metrics v0.0.0-20191016113814-3b1a734dba6e
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.0.0-20191016112829-06bb3c9d77c9
-	github.com/openshift/machine-config-operator => github.com/openshift/machine-config-operator v0.0.1-0.20200202233235-09fe53e2e47b
-	github.com/go-log/log => github.com/go-log/log v0.1.1-0.20181211034820-a514cf01a3eb
 )
