@@ -4,7 +4,7 @@ import (
 	goctx "context"
 	"fmt"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	mcfgClient "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
+	mcfgClient "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"testing"
