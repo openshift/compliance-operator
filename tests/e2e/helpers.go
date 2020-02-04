@@ -3,13 +3,11 @@ package e2e
 import (
 	goctx "context"
 	"fmt"
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
-	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"testing"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	corev1 "k8s.io/api/core/v1"
@@ -19,6 +17,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
+	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
 	"github.com/openshift/compliance-operator/pkg/apis"
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
 )
@@ -59,8 +59,8 @@ func executeTests(t *testing.T, tests ...testExecution) {
 // NOTE: Whenever we add new types to the operator, we need to register them here for the e2e tests.
 func setupTestRequirements(t *testing.T) *framework.TestCtx {
 	objects := [3]runtime.Object{&complianceoperatorv1alpha1.ComplianceScanList{},
-								 &complianceoperatorv1alpha1.ComplianceRemediationList{},
-							     &complianceoperatorv1alpha1.ComplianceSuiteList{}}
+		&complianceoperatorv1alpha1.ComplianceRemediationList{},
+		&complianceoperatorv1alpha1.ComplianceSuiteList{}}
 	for _, obj := range objects {
 		err := framework.AddToFrameworkScheme(apis.AddToScheme, obj)
 		if err != nil {
@@ -269,7 +269,7 @@ func assertHasRemediations(f *framework.Framework, suiteName, scanName, roleLabe
 	return nil
 }
 
-type MachineConfigActionFunc func() (error)
+type MachineConfigActionFunc func() error
 type PoolPredicate func(pool *mcfgv1.MachineConfigPool) (bool, error)
 
 func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, name string, action MachineConfigActionFunc, predicate PoolPredicate) error {
@@ -312,7 +312,7 @@ func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.Machineconfigur
 			pool.Status.UnavailableMachineCount)
 
 		// Check if the pool has finished updating yet
-		if (pool.Status.ObservedGeneration > poolPre.Status.ObservedGeneration) &&
+		if (pool.Status.ObservedGeneration != poolPre.Status.ObservedGeneration) &&
 			(pool.Status.UpdatedMachineCount == pool.Status.MachineCount) &&
 			(pool.Status.UnavailableMachineCount == 0) {
 			t.Logf("The pool has updated")
@@ -320,9 +320,9 @@ func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.Machineconfigur
 		}
 
 		t.Logf("The pool has not updated yet. Gen: %d, expected %d updated %d/%d unavailable %d",
-				pool.Status.ObservedGeneration, poolPre.Status.ObservedGeneration,
-				pool.Status.UpdatedMachineCount, pool.Status.MachineCount,
-				pool.Status.UnavailableMachineCount)
+			pool.Status.ObservedGeneration, poolPre.Status.ObservedGeneration,
+			pool.Status.UpdatedMachineCount, pool.Status.MachineCount,
+			pool.Status.UnavailableMachineCount)
 		return false, nil
 	})
 
