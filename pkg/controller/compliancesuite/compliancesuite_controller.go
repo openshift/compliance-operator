@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/go-logr/logr"
 	"github.com/dsnet/compress/bzip2"
+	"github.com/go-logr/logr"
 	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

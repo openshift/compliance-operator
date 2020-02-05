@@ -249,7 +249,7 @@ func TestE2E(t *testing.T) {
 					fmt.Sprintf("%s-no-empty-passwords", workerScanName),
 					fmt.Sprintf("%s-no-direct-root-logins", workerScanName),
 				}
-				err = assertHasRemediations(f, suiteName, workerScanName, "worker", workerRemediations)
+				err = assertHasRemediations(t, f, suiteName, workerScanName, "worker", workerRemediations)
 				if err != nil {
 					return err
 				}
@@ -258,7 +258,7 @@ func TestE2E(t *testing.T) {
 					fmt.Sprintf("%s-no-empty-passwords", masterScanName),
 					fmt.Sprintf("%s-no-direct-root-logins", masterScanName),
 				}
-				err = assertHasRemediations(f, suiteName, masterScanName, "master", masterRemediations)
+				err = assertHasRemediations(t, f, suiteName, masterScanName, "master", masterRemediations)
 				if err != nil {
 					return err
 				}

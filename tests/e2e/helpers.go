@@ -246,19 +246,34 @@ func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string)
 	return scanSuiteRemediations.Items
 }
 
-func assertHasRemediations(f *framework.Framework, suiteName, scanName, roleLabel string, remNameList []string) error {
+func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scanName, roleLabel string, remNameList []string) error {
 	var scanSuiteMapNames = make(map[string]bool)
+	var scanSuiteRemediations []complianceoperatorv1alpha1.ComplianceRemediation
 
-	scanSuiteRemediations := getRemediationsFromScan(f, suiteName, scanName)
-	for _, rem := range scanSuiteRemediations {
-		scanSuiteMapNames[rem.Name] = true
-	}
-
-	for _, expRem := range remNameList {
-		_, ok := scanSuiteMapNames[expRem]
-		if !ok {
-			return fmt.Errorf("expected remediation %s not found", expRem)
+	// FIXME: This is a temporary hack. At the moment, the ARF parser is too slow
+	// and it might take a bit for the remediations to appear. It would be cleaner
+	// to signify somehow that the remediations were already processed, but in the
+	// meantime, poll for 5 minutes while the remediations are being created
+	err := wait.PollImmediate(5*time.Second, 10*time.Minute, func() (bool, error) {
+		scanSuiteRemediations = getRemediationsFromScan(f, suiteName, scanName)
+		for _, rem := range scanSuiteRemediations {
+			scanSuiteMapNames[rem.Name] = true
 		}
+
+		for _, expRem := range remNameList {
+			_, ok := scanSuiteMapNames[expRem]
+			if !ok {
+				t.Logf("expected remediation %s not yet found", expRem)
+				return false, nil
+			}
+		}
+		t.Logf("expected remediations found!")
+		return true, nil
+	})
+
+	if err != nil {
+		t.Errorf("Error waiting for remediations to appear")
+		return err
 	}
 
 	for _, rem := range scanSuiteRemediations {
