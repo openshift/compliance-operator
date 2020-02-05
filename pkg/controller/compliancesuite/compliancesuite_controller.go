@@ -2,7 +2,6 @@ package compliancesuite
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -12,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	"github.com/dsnet/compress/bzip2"
 	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -382,14 +382,14 @@ func readCompressedData(compressed string) (string, error) {
 	}
 
 	compressedReader := bytes.NewReader(decoded)
-	gzReader, err := gzip.NewReader(compressedReader)
+	bzReader, err := bzip2.NewReader(compressedReader, &bzip2.ReaderConfig{})
 	if err != nil {
 		return "", err
 	}
-	defer gzReader.Close()
+	defer bzReader.Close()
 
 	// FIXME: probably unsafe, see https://haisum.github.io/2017/09/11/golang-ioutil-readall/
-	b, err := ioutil.ReadAll(gzReader)
+	b, err := ioutil.ReadAll(bzReader)
 	if err != nil {
 		return "", err
 	}

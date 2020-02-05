@@ -6,6 +6,7 @@ require (
 	github.com/ajeddeloh/go-json v0.0.0-20170920214419-6a2fe990e083 // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2
 	github.com/coreos/ignition v0.33.0
+	github.com/dsnet/compress v0.0.1
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.1
 	github.com/go-openapi/spec v0.19.2
