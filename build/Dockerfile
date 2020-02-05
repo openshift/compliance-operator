@@ -6,7 +6,7 @@ WORKDIR /go/src/github.com/openshift/compliance-operator
 ENV GOFLAGS=-mod=vendor
 
 COPY . .
-RUN make
+RUN make manager
 
 # Step two: containerize compliance-operator
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
