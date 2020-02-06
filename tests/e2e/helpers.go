@@ -6,21 +6,21 @@ import (
 	"testing"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
-	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
 	"github.com/openshift/compliance-operator/pkg/apis"
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
+	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
 )
 
 type testExecution struct {
@@ -254,7 +254,7 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 	// and it might take a bit for the remediations to appear. It would be cleaner
 	// to signify somehow that the remediations were already processed, but in the
 	// meantime, poll for 5 minutes while the remediations are being created
-	err := wait.PollImmediate(5*time.Second, 10*time.Minute, func() (bool, error) {
+	err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
 		scanSuiteRemediations = getRemediationsFromScan(f, suiteName, scanName)
 		for _, rem := range scanSuiteRemediations {
 			scanSuiteMapNames[rem.Name] = true
