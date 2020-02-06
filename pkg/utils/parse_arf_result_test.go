@@ -105,7 +105,7 @@ var _ = Describe("ARF parser", func() {
 					Expect(remList).To(HaveLen(6))
 				})
 
-				Ω(runtime.Seconds()).Should(BeNumerically("<", 1.8), "ParseRemediationsFromArf() shouldn't take too long.")
+				Ω(runtime.Seconds()).Should(BeNumerically("<", 1.7), "ParseRemediationsFromArf() shouldn't take too long.")
 			}, 100)
 		})
 	})
