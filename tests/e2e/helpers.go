@@ -265,7 +265,7 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 	// and it might take a bit for the remediations to appear. It would be cleaner
 	// to signify somehow that the remediations were already processed, but in the
 	// meantime, poll for 5 minutes while the remediations are being created
-	err := wait.PollImmediate(5*time.Second, 10*time.Minute, func() (bool, error) {
+	err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
 		scanSuiteRemediations = getRemediationsFromScan(f, suiteName, scanName)
 		for _, rem := range scanSuiteRemediations {
 			scanSuiteMapNames[rem.Name] = true
