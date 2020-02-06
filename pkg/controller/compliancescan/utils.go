@@ -23,7 +23,7 @@ var componentDefaults = []struct {
 	defaultImage string
 	envVar       string
 }{
-	{"quay.io/jhrozek/scapresults-k8s:latest", "LOG_COLLECTOR_IMAGE"},
+	{"quay.io/jhrozek/scapresults:compress", "LOG_COLLECTOR_IMAGE"},
 	{"quay.io/jhrozek/openscap-ocp:latest", "OPENSCAP_IMAGE"},
 }
 
