@@ -34,6 +34,8 @@ TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 RESULTSCOLLECTOR_TARGET=$(TARGET_DIR)/bin/$(RESULTSCOLLECTORBIN)
 MAIN_PKG=cmd/manager/main.go
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
+# This is currently hardcoded to our most performance sensitive package
+BENCHMARK_PKG?=github.com/openshift/compliance-operator/pkg/utils
 
 # go source files, ignore vendor directory
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./_output/*")
@@ -156,6 +158,11 @@ generate: operator-sdk ## Run operator-sdk's code generation (k8s and openapi)
 .PHONY: test-unit
 test-unit: fmt ## Run the unit tests
 	@$(GO) test $(TEST_OPTIONS) $(PKGS)
+
+.PHONY: test-benchmark
+test-benchmark: ## Run the benchmark tests -- Note that this can only be ran for one package. You can set $BENCHMARK_PKG for this. cpu.prof and mem.prof will be generated
+	@$(GO) test -cpuprofile cpu.prof -memprofile mem.prof -bench . $(TEST_OPTIONS) $(BENCHMARK_PKG)
+	@echo "The pprof files generated are: cpu.prof and mem.prof"
 
 # This runs the end-to-end tests. If not running this on CI, it'll try to
 # push the operator image to the cluster's registry. This behavior can be
