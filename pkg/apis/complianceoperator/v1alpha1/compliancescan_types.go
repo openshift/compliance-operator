@@ -16,6 +16,8 @@ const (
 	PhaseLaunching ComplianceScanStatusPhase = "LAUNCHING"
 	// PhaseRunning represents the scan being ran by the pods and waiting for the results
 	PhaseRunning ComplianceScanStatusPhase = "RUNNING"
+	// PhaseAggregating represents the scan aggregating the results
+	PhaseAggregating ComplianceScanStatusPhase = "AGGREGATING"
 	// PhaseDone represents the scan pods being done and the results being available
 	PhaseDone ComplianceScanStatusPhase = "DONE"
 )
