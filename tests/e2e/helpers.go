@@ -6,21 +6,21 @@ import (
 	"testing"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
-	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
 	"github.com/openshift/compliance-operator/pkg/apis"
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
+	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
 )
 
 type testExecution struct {
@@ -49,7 +49,22 @@ func executeTests(t *testing.T, tests ...testExecution) {
 				t.Error(err)
 			}
 		})
+	}
 
+	var pods corev1.PodList
+	f.Client.List(goctx.TODO(), &pods, &client.ListOptions{Namespace: "openshift-compliance"})
+
+	for _, pod := range pods.Items {
+		log, err := f.KubeClient.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{}).DoRaw()
+
+		if err != nil {
+			t.Logf("WARNING: Couldn't get logs of pod %s", pod.Name)
+		} else {
+			t.Logf("Logs of pod: %s", pod.Name)
+			t.Log("====== BEGIN LOG ==========")
+			t.Log(string(log))
+			t.Log("====== END LOG ==========")
+		}
 	}
 }
 
