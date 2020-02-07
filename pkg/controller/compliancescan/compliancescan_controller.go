@@ -319,7 +319,7 @@ func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *complianceoper
 	} else if foundPod.Status.Phase == corev1.PodFailed || foundPod.Status.Phase == corev1.PodSucceeded {
 		logger.Info("Pod on node has finished", "node", node.Name)
 		return false, nil
-	} else if aContainerHasFailed(foundPod.Status.ContainerStatuses) {
+	} else if aContainerHasFailed(foundPod.Status.ContainerStatuses, logger, foundPod.Name) {
 		logger.Info("Container on the pod on node has failed", "node", node.Name, "pod", podName)
 		return false, nil
 	}
@@ -329,10 +329,13 @@ func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *complianceoper
 	return true, nil
 }
 
-func aContainerHasFailed(statuses []corev1.ContainerStatus) bool {
+func aContainerHasFailed(statuses []corev1.ContainerStatus, logger logr.Logger, podname string) bool {
 	for _, status := range statuses {
 		if status.State.Terminated != nil {
 			if status.State.Terminated.ExitCode != 0 {
+				logger.Info("container failed in pod",
+					"pod", podname, "container", status.Name,
+					"exit-code", status.State.Terminated.ExitCode)
 				return true
 			}
 		}
