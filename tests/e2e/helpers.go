@@ -6,21 +6,21 @@ import (
 	"testing"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
-	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
 	"github.com/openshift/compliance-operator/pkg/apis"
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
+	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
 )
 
 type testExecution struct {
@@ -31,7 +31,7 @@ type testExecution struct {
 // executeTest sets up everything that a e2e test needs to run, and executes the test.
 func executeTests(t *testing.T, tests ...testExecution) {
 	ctx := setupTestRequirements(t)
-	defer ctx.Cleanup()
+	defer cleanupTestEnv(t, ctx)
 
 	setupComplianceOperatorCluster(t, ctx)
 
@@ -50,6 +50,17 @@ func executeTests(t *testing.T, tests ...testExecution) {
 			}
 		})
 
+	}
+}
+
+func cleanupTestEnv(t *testing.T, ctx *framework.TestCtx) {
+	// If the tests didn't fail, clean up. Else, leave everything
+	// there so developers can debug the issue.
+	if !t.Failed() {
+		t.Log("The tests passed. Cleaning up.")
+		ctx.Cleanup()
+	} else {
+		t.Log("The tests failed. Leaving the env there so you can debug.")
 	}
 }
 
