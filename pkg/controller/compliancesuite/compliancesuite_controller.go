@@ -12,7 +12,6 @@ import (
 
 	"github.com/dsnet/compress/bzip2"
 	"github.com/go-logr/logr"
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
 )
@@ -519,6 +519,10 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(namespacedName types.Na
 
 	// Update the suite status
 	suiteCopy := suite.DeepCopy()
+	// Make sure we don't try to use the value as-is if it's nil
+	if suiteCopy.Status.ScanStatuses == nil {
+		suiteCopy.Status.ScanStatuses = []complianceoperatorv1alpha1.ComplianceScanStatusWrapper{}
+	}
 	suiteCopy.Status.RemediationOverview = remOverview
 	logger.Info("Remediations", "remOverview", remOverview)
 	return r.client.Status().Update(context.TODO(), suiteCopy)
