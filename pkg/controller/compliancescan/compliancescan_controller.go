@@ -125,6 +125,8 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 		return r.phaseLaunchingHandler(scanToBeUpdated, reqLogger)
 	case complianceoperatorv1alpha1.PhaseRunning:
 		return r.phaseRunningHandler(scanToBeUpdated, reqLogger)
+	case complianceoperatorv1alpha1.PhaseAggregating:
+		return r.phaseAggregatingHandler(scanToBeUpdated, reqLogger)
 	case complianceoperatorv1alpha1.PhaseDone:
 		return r.phaseDoneHandler(scanToBeUpdated, reqLogger)
 	}
@@ -261,8 +263,8 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *complianceoperat
 		}
 	}
 
-	// if we got here, there are no pods running, move to the Done phase
-	instance.Status.Phase = complianceoperatorv1alpha1.PhaseDone
+	// if we got here, there are no pods running, move to the Aggregating phase
+	instance.Status.Phase = complianceoperatorv1alpha1.PhaseAggregating
 	err = r.client.Status().Update(context.TODO(), instance)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -271,8 +273,8 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *complianceoperat
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
-	logger.Info("Phase: Done", "ComplianceScan scan", instance.ObjectMeta.Name)
+func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+	logger.Info("Phase: Aggregating", "ComplianceScan scan", instance.ObjectMeta.Name)
 
 	var nodes corev1.NodeList
 	var err error
@@ -285,11 +287,17 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv
 	result, err := gatherResults(r, instance, nodes)
 
 	instance.Status.Result = result
+	instance.Status.Phase = complianceoperatorv1alpha1.PhaseDone
 	if err != nil {
 		instance.Status.ErrorMessage = err.Error()
 	}
 	err = r.client.Status().Update(context.TODO(), instance)
 	return reconcile.Result{}, err
+}
+
+func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+	logger.Info("Phase: Done", "ComplianceScan scan", instance.ObjectMeta.Name)
+	return reconcile.Result{}, nil
 }
 
 func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan) (corev1.NodeList, error) {
@@ -319,7 +327,7 @@ func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *complianceoper
 	} else if foundPod.Status.Phase == corev1.PodFailed || foundPod.Status.Phase == corev1.PodSucceeded {
 		logger.Info("Pod on node has finished", "node", node.Name)
 		return false, nil
-	} else if aContainerHasFailed(foundPod.Status.ContainerStatuses) {
+	} else if aContainerHasFailed(foundPod.Status.ContainerStatuses, logger, foundPod.Name) {
 		logger.Info("Container on the pod on node has failed", "node", node.Name, "pod", podName)
 		return false, nil
 	}
@@ -329,10 +337,13 @@ func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *complianceoper
 	return true, nil
 }
 
-func aContainerHasFailed(statuses []corev1.ContainerStatus) bool {
+func aContainerHasFailed(statuses []corev1.ContainerStatus, logger logr.Logger, podname string) bool {
 	for _, status := range statuses {
 		if status.State.Terminated != nil {
 			if status.State.Terminated.ExitCode != 0 {
+				logger.Info("container failed in pod",
+					"pod", podname, "container", status.Name,
+					"exit-code", status.State.Terminated.ExitCode)
 				return true
 			}
 		}

@@ -157,11 +157,11 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
 			})
 
-			It("should move to DONE state", func() {
+			It("should move to AGGREGATING state", func() {
 				result, err := reconciler.phaseRunningHandler(compliancescaninstance, logger)
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
-				Expect(compliancescaninstance.Status.Phase).To(Equal(complianceoperatorv1alpha1.PhaseDone))
+				Expect(compliancescaninstance.Status.Phase).To(Equal(complianceoperatorv1alpha1.PhaseAggregating))
 			})
 		})
 	})
