@@ -1,4 +1,5 @@
-# Temporary Build Files
+# Temporary Build Files. cpu.prof and mem.prof will be generated
+*.prof
 build/_output
 build/_test
 _output

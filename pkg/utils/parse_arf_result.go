@@ -2,13 +2,15 @@ package utils
 
 import (
 	"fmt"
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
+	"strings"
+
 	"github.com/subchen/go-xmldom"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"strings"
+
+	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 )
 
 const (
@@ -29,15 +31,18 @@ func ParseRemediationsFromArf(scheme *runtime.Scheme, scanName string, namespace
 	// Get the checks that had failed
 	failedRuleResults := filterFailedResults(dom.Root.Query("//TestResult/rule-result"))
 
+	// Get group that contains remediations
+	relevantDom := dom.Root.Query("/report-requests/report-request/content/data-stream-collection/component/Benchmark")
+
 	// For each failed result, find the remediation
 	for _, frr := range failedRuleResults {
 		// Each result has the rule ID in the idref attribute
-		ruleIdRef := frr.GetAttributeValue("idref")
-		if ruleIdRef == "" {
+		ruleIDRef := frr.GetAttributeValue("idref")
+		if ruleIDRef == "" {
 			continue
 		}
 
-		ruleDefinition := dom.Root.FindByID(ruleIdRef)
+		ruleDefinition := relevantDom[0].FindByID(ruleIDRef)
 		if ruleDefinition == nil {
 			continue
 		}

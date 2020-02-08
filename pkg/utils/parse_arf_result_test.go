@@ -1,14 +1,16 @@
 package utils
 
 import (
+	"io/ioutil"
+
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
-	"io/ioutil"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+
+	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 )
 
 var _ = Describe("ARF parser", func() {
@@ -20,20 +22,20 @@ var _ = Describe("ARF parser", func() {
 		err             error
 	)
 
-	BeforeEach(func() {
-		mcInstance := &mcfgv1.MachineConfig{}
-		schema = scheme.Scheme
-		schema.AddKnownTypes(mcfgv1.SchemeGroupVersion, mcInstance)
-		resultsFilename = "results.arf.xml"
-	})
-
-	JustBeforeEach(func() {
-		arf, err = ioutil.ReadFile(resultsFilename)
-		Expect(err).NotTo(HaveOccurred())
-		remList, err = ParseRemediationsFromArf(schema, "testScan", "testNamespace", string(arf))
-	})
-
 	Describe("Load the ARF", func() {
+		BeforeEach(func() {
+			mcInstance := &mcfgv1.MachineConfig{}
+			schema = scheme.Scheme
+			schema.AddKnownTypes(mcfgv1.SchemeGroupVersion, mcInstance)
+			resultsFilename = "../../tests/data/results.arf.xml"
+		})
+
+		JustBeforeEach(func() {
+			arf, err = ioutil.ReadFile(resultsFilename)
+			Expect(err).NotTo(HaveOccurred())
+			remList, err = ParseRemediationsFromArf(schema, "testScan", "testNamespace", string(arf))
+		})
+
 		Context("Valid ARF with one remediation", func() {
 			It("Should parse the ARF without errors", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -79,6 +81,32 @@ var _ = Describe("ARF parser", func() {
 				})
 			})
 			// FIXME: maybe define Equal methods on the type and use go-cmp/cmp ?
+		})
+	})
+
+	Describe("Load the 18MB ARF", func() {
+		BeforeEach(func() {
+			mcInstance := &mcfgv1.MachineConfig{}
+			schema = scheme.Scheme
+			schema.AddKnownTypes(mcfgv1.SchemeGroupVersion, mcInstance)
+			resultsFilename = "../../tests/data/big-results.arf.xml"
+		})
+
+		JustBeforeEach(func() {
+			arf, err = ioutil.ReadFile(resultsFilename)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Context("Valid ARF with remediations", func() {
+			Measure("Should parse the ARF without errors", func(b Benchmarker) {
+				runtime := b.Time("runtime", func() {
+					remList, err = ParseRemediationsFromArf(schema, "testScan", "testNamespace", string(arf))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(remList).To(HaveLen(6))
+				})
+
+				Ω(runtime.Seconds()).Should(BeNumerically("<", 1.7), "ParseRemediationsFromArf() shouldn't take too long.")
+			}, 100)
 		})
 	})
 })

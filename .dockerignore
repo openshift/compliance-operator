@@ -1,0 +1,4 @@
+# Exclude test files
+*_test.go
+tests/
+.git/
