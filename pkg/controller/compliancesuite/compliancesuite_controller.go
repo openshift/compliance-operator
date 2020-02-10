@@ -6,9 +6,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/dsnet/compress/bzip2"
 	"github.com/go-logr/logr"
@@ -241,13 +243,27 @@ func (r *ReconcileComplianceSuite) reconcileScanRemediations(suite *complianceop
 	var scanRemediations []*complianceoperatorv1alpha1.ComplianceRemediation
 
 	// Look for configMap with this scan label
-	listOpts := client.ListOptions{
-		LabelSelector: labels.SelectorFromSet(labels.Set{"compliance-scan": scan.Name}),
-	}
+	err := wait.PollImmediate(5*time.Second, 10*time.Minute, func() (bool, error) {
+		listOpts := client.ListOptions{
+			LabelSelector: labels.SelectorFromSet(labels.Set{"compliance-scan": scan.Name}),
+		}
 
-	if err := r.client.List(context.TODO(), &cMapList, &listOpts); err != nil {
+		if err := r.client.List(context.TODO(), &cMapList, &listOpts); err != nil {
+			return false, err
+		}
+
+		if len(cMapList.Items) == 0 {
+			logger.Info("Scan has no results yet", "scan", scan.Name)
+			return false, nil
+		}
+		return true, nil
+	})
+
+	if err != nil {
+		logger.Error(err, "Error waiting for CMs to appear")
 		return err
 	}
+
 	logger.Info("Scan has results", "scan", scan.Name)
 
 	for _, cm := range cMapList.Items {
