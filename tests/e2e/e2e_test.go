@@ -394,9 +394,17 @@ func TestE2E(t *testing.T) {
 					return true, nil
 				}
 
+				// We need to wait for both the pool to update..
 				err = waitForMachinePoolUpdate(t, mcClient, "worker", dummyAction, poolHasNoMc)
 				if err != nil {
 					t.Errorf("Failed to wait for workers to come back up after deleting MC")
+					return err
+				}
+
+				// ..as well as the nodes
+				err = waitForNodesToBeReady(t, f)
+				if err != nil {
+					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
 				}
 
