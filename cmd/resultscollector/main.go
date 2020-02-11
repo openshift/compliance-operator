@@ -17,7 +17,6 @@ package main
 
 import (
 	"bytes"
-	"compress/gzip"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -26,6 +25,7 @@ import (
 	"time"
 
 	backoff "github.com/cenkalti/backoff/v3"
+	"github.com/dsnet/compress/bzip2"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -140,14 +140,17 @@ func resultNeedsCompression(contents []byte) bool {
 	return len(contents) > 1048570
 }
 
-func compressResults(contents []byte) []byte {
+func compressResults(contents []byte) ([]byte, error) {
 	// Encode the contents ascii, compress it with gzip, b64encode it so it
 	// can be stored in the configmap.
 	var buffer bytes.Buffer
-	w := gzip.NewWriter(&buffer)
+	w, err := bzip2.NewWriter(&buffer, &bzip2.WriterConfig{Level:bzip2.BestCompression})
+	if err != nil {
+		return nil, err
+	}
 	w.Write([]byte(contents))
 	w.Close()
-	return []byte(base64.StdEncoding.EncodeToString(buffer.Bytes()))
+	return []byte(base64.StdEncoding.EncodeToString(buffer.Bytes())), nil
 }
 
 func getConfigMap(owner *unstructured.Unstructured, configMapName, filename string, contents []byte, compressed bool) *corev1.ConfigMap {
@@ -218,9 +221,14 @@ func main() {
 
 			compressed := false
 			if resultNeedsCompression(contents) || scapresultsconf.Compress {
-				contents = compressResults(contents)
-				compressed = true
+				contents, err = compressResults(contents)
 				fmt.Println("Needs compression.")
+				if err != nil {
+					fmt.Println("Error: Compression failed")
+					os.Exit(1)
+				}
+				compressed = true
+				fmt.Printf("Compressed results are %d bytes in size", len(contents))
 			}
 
 			err = backoff.Retry(func() error {
