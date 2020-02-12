@@ -495,6 +495,13 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 					},
 				},
 			},
+			Tolerations: []corev1.Toleration{
+				{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: "Exists",
+					Effect:   "NoSchedule",
+				},
+			},
 			NodeName:      node.Name,
 			RestartPolicy: corev1.RestartPolicyNever,
 			Volumes: []corev1.Volume{
