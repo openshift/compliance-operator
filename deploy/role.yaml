@@ -8,6 +8,9 @@ rules:
   - ""
   resources:
   - pods        # Pods are used to run the compliance container
+  - persistentvolumeclaims
+  - persistentvolumes
+  - volumeattachments
   verbs:
   - watch       # The operator needs to watch for the container status
   - create      # The operator needs to spawn the containers
