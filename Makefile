@@ -87,7 +87,7 @@ openscap-image:
 
 .PHONY: resultscollector-image
 resultscollector-image:
-	$(RUNTIME) build -f $(RESULTSCOLLECTOR_DOCKERFILE_PATH) -t $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)
+	$(RUNTIME) build -f $(RESULTSCOLLECTOR_DOCKERFILE_PATH) -t $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG) .
 
 .PHONY: build
 build: manager resultscollector  ## Build the compliance-operator binary
