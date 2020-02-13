@@ -36,6 +36,7 @@ const (
 	OpenSCAPScriptCmLabel     = "cm-script"
 	OpenSCAPScriptEnvLabel    = "cm-env"
 	OpenSCAPNodePodLabel      = "node-scan/"
+	NodeHostnameLabel         = "kubernetes.io/hostname"
 )
 
 // Add creates a new ComplianceScan Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -502,7 +503,9 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 					Effect:   "NoSchedule",
 				},
 			},
-			NodeName:      node.Name,
+			NodeSelector: map[string]string{
+				NodeHostnameLabel: node.Labels[NodeHostnameLabel],
+			},
 			RestartPolicy: corev1.RestartPolicyNever,
 			Volumes: []corev1.Volume{
 				{
