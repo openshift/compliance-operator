@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -187,7 +188,11 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *complianceoper
 		return reconcile.Result{}, err
 	}
 
-	// TODO: test no eligible nodes in the cluster? should just loop through, though..
+	err = r.createPVCsForScan(instance, nodes.Items)
+	if err != nil {
+		logger.Error(err, "Cannot create the PersistentVolumeClaims")
+		return reconcile.Result{}, err
+	}
 
 	// On each eligible node..
 	for _, node := range nodes.Items {
@@ -315,6 +320,20 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1al
 	return nodes, nil
 }
 
+func (r *ReconcileComplianceScan) createPVCsForScan(instance *complianceoperatorv1alpha1.ComplianceScan, nodes []corev1.Node) error {
+	for _, node := range nodes {
+		pvc := getPVCForNodeScan(instance, &node)
+		if err := controllerutil.SetControllerReference(instance, pvc, r.scheme); err != nil {
+			log.Error(err, "Failed to set pvc ownership", "pvc", pvc.Name)
+			return err
+		}
+		if err := r.client.Create(context.TODO(), pvc); err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+	}
+	return nil
+}
+
 // returns true if the pod is still running, false otherwise
 func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
 	logger.Info("Retrieving a pod for node", "node", node.Name)
@@ -403,6 +422,34 @@ func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alp
 	return result, nil
 }
 
+func getPVCForNodeScan(instance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node) *corev1.PersistentVolumeClaim {
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      getPVCForNodeScanName(instance, node),
+			Namespace: instance.Namespace,
+			Labels: map[string]string{
+				"complianceScan": instance.Name,
+				"targetNode":     node.Name,
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			// NOTE(jaosorior): Currently we don't set a StorageClass
+			// so the default will be taken into use.
+			// TODO(jaosorior): Make StorageClass configurable
+			StorageClassName: nil,
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				"ReadWriteOnce",
+			},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					// TODO(jaosorior): Make this configurable
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			},
+		},
+	}
+}
+
 func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
 	logger.Info("Creating a pod for node", "node", node.Name)
 
@@ -457,6 +504,7 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 						{
 							Name:      "report-dir",
 							MountPath: "/reports",
+							ReadOnly:  true,
 						},
 					},
 				},
@@ -520,7 +568,9 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 				{
 					Name: "report-dir",
 					VolumeSource: corev1.VolumeSource{
-						EmptyDir: &corev1.EmptyDirVolumeSource{},
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: getPVCForNodeScanName(scanInstance, node),
+						},
 					},
 				},
 				{
@@ -565,6 +615,10 @@ func setPodForNodeName(scanInstance *complianceoperatorv1alpha1.ComplianceScan, 
 
 func nodePodLabel(nodeName string) string {
 	return OpenSCAPNodePodLabel + nodeName
+}
+
+func getPVCForNodeScanName(instance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node) string {
+	return instance.Name + "-" + node.Name
 }
 
 // TODO: this probably should not be a method, it doesn't modify reconciler, maybe we
