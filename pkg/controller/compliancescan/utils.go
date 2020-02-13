@@ -17,14 +17,16 @@ type ComplianceComponent uint
 const (
 	LOG_COLLECTOR = iota
 	OPENSCAP
+	RESULT_SERVER
 )
 
 var componentDefaults = []struct {
 	defaultImage string
 	envVar       string
 }{
-	{"quay.io/jhrozek/scapresults:compress", "LOG_COLLECTOR_IMAGE"},
+	{"quay.io/compliance-operator/resultscollector:latest", "LOG_COLLECTOR_IMAGE"},
 	{"quay.io/jhrozek/openscap-ocp:latest", "OPENSCAP_IMAGE"},
+	{"quay.io/compliance-operator/resultserver:latest", "RESULT_SERVER"},
 }
 
 // GetComponentImage returns a full image pull spec for a given component

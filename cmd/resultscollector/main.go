@@ -20,6 +20,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/http/httputil"
 	"os"
 	"path/filepath"
 	"time"
@@ -44,12 +46,13 @@ const (
 )
 
 type scapresultsConfig struct {
-	File          string
-	ScanName      string
-	ConfigMapName string
-	Namespace     string
-	Timeout       int64
-	Compress      bool
+	File            string
+	ScanName        string
+	ConfigMapName   string
+	Namespace       string
+	ResultServerURI string
+	Timeout         int64
+	Compress        bool
 }
 
 func defineFlags(cmd *cobra.Command) {
@@ -59,6 +62,7 @@ func defineFlags(cmd *cobra.Command) {
 	cmd.Flags().String("namespace", "Running pod namespace.", ".")
 	cmd.Flags().Int64("timeout", 3600, "How long to wait for the file.")
 	cmd.Flags().Bool("compress", false, "Always compress the results.")
+	cmd.Flags().String("resultserveruri", "", "The resultserver URI name.")
 }
 
 func parseConfig(cmd *cobra.Command) *scapresultsConfig {
@@ -69,6 +73,11 @@ func parseConfig(cmd *cobra.Command) *scapresultsConfig {
 	conf.Namespace = getValidStringArg(cmd, "namespace")
 	conf.Timeout, _ = cmd.Flags().GetInt64("timeout")
 	conf.Compress, _ = cmd.Flags().GetBool("compress")
+	conf.ResultServerURI, _ = cmd.Flags().GetString("resultserveruri")
+	// Set default if needed
+	if conf.ResultServerURI == "" {
+		conf.ResultServerURI = "http://" + conf.ScanName + "-rs:8080/"
+	}
 	return &conf
 }
 
@@ -144,7 +153,7 @@ func compressResults(contents []byte) ([]byte, error) {
 	// Encode the contents ascii, compress it with gzip, b64encode it so it
 	// can be stored in the configmap.
 	var buffer bytes.Buffer
-	w, err := bzip2.NewWriter(&buffer, &bzip2.WriterConfig{Level:bzip2.BestCompression})
+	w, err := bzip2.NewWriter(&buffer, &bzip2.WriterConfig{Level: bzip2.BestCompression})
 	if err != nil {
 		return nil, err
 	}
@@ -228,10 +237,43 @@ func main() {
 					os.Exit(1)
 				}
 				compressed = true
-				fmt.Printf("Compressed results are %d bytes in size", len(contents))
+				fmt.Printf("Compressed results are %d bytes in size\n", len(contents))
 			}
 
 			err = backoff.Retry(func() error {
+				url := scapresultsconf.ResultServerURI
+				fmt.Printf("Trying to upload to resultserver: %s\n", url)
+				reader := bytes.NewReader(contents)
+				client := &http.Client{}
+				req, _ := http.NewRequest("POST", url, reader)
+				req.Header.Add("Content-Type", "application/xml")
+				req.Header.Add("X-Report-Name", scapresultsconf.ConfigMapName)
+				if compressed {
+					req.Header.Add("Content-Encoding", "bzip2")
+				}
+				resp, err := client.Do(req)
+				if err != nil {
+					fmt.Println(err)
+					return err
+				}
+				defer resp.Body.Close()
+				bytesresp, err := httputil.DumpResponse(resp, true)
+				if err != nil {
+					fmt.Println(err)
+					return err
+				}
+				fmt.Println(string(bytesresp))
+				return nil
+			}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+			fmt.Println("Uploaded to resultserver")
+
+			err = backoff.Retry(func() error {
+				fmt.Println("Trying to upload ConfigMap")
 				openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, dynclient)
 				if err != nil {
 					return err
@@ -245,6 +287,7 @@ func main() {
 				fmt.Println(err)
 				os.Exit(1)
 			}
+			fmt.Println("Uploaded ConfigMap")
 		},
 	}
 

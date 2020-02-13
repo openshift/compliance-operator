@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -25,6 +26,8 @@ import (
 )
 
 var log = logf.Log.WithName("controller_compliancescan")
+
+var oneReplica int32 = 1
 
 var (
 	trueVal     = true
@@ -188,9 +191,8 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *complianceoper
 		return reconcile.Result{}, err
 	}
 
-	err = r.createPVCsForScan(instance, nodes.Items)
-	if err != nil {
-		logger.Error(err, "Cannot create the PersistentVolumeClaims")
+	if err = r.createResultServer(instance, logger); err != nil {
+		log.Error(err, "Cannot create result server")
 		return reconcile.Result{}, err
 	}
 
@@ -297,6 +299,10 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *complianceop
 	if err != nil {
 		instance.Status.ErrorMessage = err.Error()
 	}
+
+	// TODO(jaosorior): Delete resultServer resources, the persistent volume should
+	// already have all the reports in it.
+
 	err = r.client.Status().Update(context.TODO(), instance)
 	return reconcile.Result{}, err
 }
@@ -320,16 +326,56 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1al
 	return nodes, nil
 }
 
-func (r *ReconcileComplianceScan) createPVCsForScan(instance *complianceoperatorv1alpha1.ComplianceScan, nodes []corev1.Node) error {
-	for _, node := range nodes {
-		pvc := getPVCForNodeScan(instance, &node)
-		if err := controllerutil.SetControllerReference(instance, pvc, r.scheme); err != nil {
-			log.Error(err, "Failed to set pvc ownership", "pvc", pvc.Name)
-			return err
-		}
-		if err := r.client.Create(context.TODO(), pvc); err != nil && !errors.IsAlreadyExists(err) {
-			return err
-		}
+// The result-server is a pod that listens for results from other pods and
+// stores them in a PVC.
+// It's comprised of the PVC for the scan, the pod and a service that fronts it
+func (r *ReconcileComplianceScan) createResultServer(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	err := r.createPVCForScan(instance)
+	if err != nil {
+		logger.Error(err, "Cannot create the PersistentVolumeClaims")
+		return err
+	}
+
+	resultServerLabels := map[string]string{
+		"complianceScan": instance.Name,
+		"app":            "resultserver",
+	}
+	deployment := resultServer(instance, resultServerLabels, logger)
+	if err = controllerutil.SetControllerReference(instance, deployment, r.scheme); err != nil {
+		log.Error(err, "Failed to set deployment ownership", "deployment", deployment)
+		return err
+	}
+
+	err = r.client.Create(context.TODO(), deployment)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		logger.Error(err, "Cannot create deployment", "deployment", deployment)
+		return err
+	}
+	logger.Info("ResultServer Deployment launched", "name", deployment.Name)
+
+	service := resultServerService(instance, resultServerLabels)
+	if err = controllerutil.SetControllerReference(instance, service, r.scheme); err != nil {
+		log.Error(err, "Failed to set service ownership", "service", service)
+		return err
+	}
+
+	err = r.client.Create(context.TODO(), service)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		logger.Error(err, "Cannot create service", "service", service)
+		return err
+	}
+	logger.Info("ResultServer Service launched", "name", service.Name)
+	return nil
+}
+
+func (r *ReconcileComplianceScan) createPVCForScan(instance *complianceoperatorv1alpha1.ComplianceScan) error {
+	pvc := getPVCForScan(instance)
+	if err := controllerutil.SetControllerReference(instance, pvc, r.scheme); err != nil {
+		log.Error(err, "Failed to set pvc ownership", "pvc", pvc.Name)
+		return err
+	}
+	if err := r.client.Create(context.TODO(), pvc); err != nil && !errors.IsAlreadyExists(err) {
+		return err
 	}
 	return nil
 }
@@ -422,14 +468,13 @@ func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alp
 	return result, nil
 }
 
-func getPVCForNodeScan(instance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node) *corev1.PersistentVolumeClaim {
+func getPVCForScan(instance *complianceoperatorv1alpha1.ComplianceScan) *corev1.PersistentVolumeClaim {
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      getPVCForNodeScanName(instance, node),
+			Name:      getPVCForScanName(instance),
 			Namespace: instance.Namespace,
 			Labels: map[string]string{
 				"complianceScan": instance.Name,
-				"targetNode":     node.Name,
 			},
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
@@ -496,10 +541,12 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 						"--config-map-name=" + podName,
 						"--owner=" + scanInstance.Name,
 						"--namespace=" + scanInstance.Namespace,
+						"--resultserveruri=" + getResultServerURI(scanInstance),
 					},
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &trueVal,
 					},
+					ImagePullPolicy: corev1.PullAlways,
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "report-dir",
@@ -568,9 +615,7 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 				{
 					Name: "report-dir",
 					VolumeSource: corev1.VolumeSource{
-						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: getPVCForNodeScanName(scanInstance, node),
-						},
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
 				},
 				{
@@ -589,6 +634,81 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 							DefaultMode: &mode,
 						},
 					},
+				},
+			},
+		},
+	}
+}
+
+// Serve up arf reports for a compliance scan with a web service protected by openshift auth (oauth-proxy sidecar).
+// Needs corresponding Service (with service-serving cert).
+// Need to aggregate reports into one service ? on subdirs?
+func resultServer(scanInstance *complianceoperatorv1alpha1.ComplianceScan, labels map[string]string, logger logr.Logger) *appsv1.Deployment {
+	logger.Info("Creating scan result server pod")
+
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      getResultServerName(scanInstance),
+			Namespace: scanInstance.Namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &oneReplica,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					// TODO(jaosorior): Should we schedule this in the master nodes only?
+					ServiceAccountName: "compliance-operator",
+					Containers: []corev1.Container{
+						{
+							Name:            "result-server",
+							Image:           GetComponentImage(RESULT_SERVER),
+							ImagePullPolicy: corev1.PullAlways,
+							Args: []string{
+								"--path=/reports/",
+								"--address=0.0.0.0",
+								fmt.Sprintf("--port=%d", ResultServerPort),
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "arfreports",
+									MountPath: "/reports",
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "arfreports",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: getPVCForScanName(scanInstance),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func resultServerService(scanInstance *complianceoperatorv1alpha1.ComplianceScan, labels map[string]string) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      getResultServerName(scanInstance),
+			Namespace: scanInstance.Namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: labels,
+			Ports: []corev1.ServicePort{
+				{
+					Protocol: corev1.Protocol("TCP"),
+					Port:     ResultServerPort,
 				},
 			},
 		},
@@ -617,8 +737,17 @@ func nodePodLabel(nodeName string) string {
 	return OpenSCAPNodePodLabel + nodeName
 }
 
-func getPVCForNodeScanName(instance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node) string {
-	return instance.Name + "-" + node.Name
+func getPVCForScanName(instance *complianceoperatorv1alpha1.ComplianceScan) string {
+	return instance.Name
+}
+
+func getResultServerName(instance *complianceoperatorv1alpha1.ComplianceScan) string {
+	return instance.Name + "-rs"
+}
+
+func getResultServerURI(instance *complianceoperatorv1alpha1.ComplianceScan) string {
+	// TODO(jaosorior): Change to https once we set up the appropriate certs
+	return "http://" + getResultServerName(instance) + fmt.Sprintf(":%d/", ResultServerPort)
 }
 
 // TODO: this probably should not be a method, it doesn't modify reconciler, maybe we
