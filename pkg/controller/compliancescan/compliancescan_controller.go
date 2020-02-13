@@ -504,6 +504,7 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 						{
 							Name:      "report-dir",
 							MountPath: "/reports",
+							ReadOnly:  true,
 						},
 					},
 				},
@@ -526,10 +527,6 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 						{
 							Name:      "content-dir",
 							MountPath: "/content",
-						},
-						{
-							Name:      "arf-store",
-							MountPath: "/arfstore",
 						},
 						{
 							Name:      scanInstance.Labels[OpenSCAPScriptCmLabel],
@@ -571,7 +568,9 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 				{
 					Name: "report-dir",
 					VolumeSource: corev1.VolumeSource{
-						EmptyDir: &corev1.EmptyDirVolumeSource{},
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: getPVCForNodeScanName(scanInstance, node),
+						},
 					},
 				},
 				{
@@ -588,14 +587,6 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 								Name: scanInstance.Labels[OpenSCAPScriptCmLabel],
 							},
 							DefaultMode: &mode,
-						},
-					},
-				},
-				{
-					Name: "arf-store",
-					VolumeSource: corev1.VolumeSource{
-						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: getPVCForNodeScanName(scanInstance, node),
 						},
 					},
 				},
