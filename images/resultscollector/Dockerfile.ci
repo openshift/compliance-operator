@@ -5,7 +5,7 @@ WORKDIR /go/src/github.com/openshift/compliance-operator
 
 ENV GOFLAGS=-mod=vendor
 COPY . .
-RUN make build
+RUN make resultscollector
 
 # Step two: containerize resultscollector
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest

@@ -17,7 +17,7 @@ IMAGE_PATH?=$(IMAGE_REPO)/$(APP_NAME)
 OPENSCAP_IMAGE_PATH=$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME)
 OPENSCAP_DOCKERFILE_PATH=./images/openscap/Dockerfile
 RESULTSCOLLECTOR_IMAGE_PATH=$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME)
-RESULTSCOLLECTOR_DOCKERFILE_PATH=./images/openscap/Dockerfile
+RESULTSCOLLECTOR_DOCKERFILE_PATH=./images/resultscollector/Dockerfile
 
 # Image tag to use. Set this if you want to use a specific tag for building
 # or your e2e tests.
@@ -87,7 +87,7 @@ openscap-image:
 
 .PHONY: resultscollector-image
 resultscollector-image:
-	$(RUNTIME) build -f $(RESULTSCOLLECTOR_DOCKERFILE_PATH) -t $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)
+	$(RUNTIME) build -f $(RESULTSCOLLECTOR_DOCKERFILE_PATH) -t $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG) .
 
 .PHONY: build
 build: manager resultscollector  ## Build the compliance-operator binary
