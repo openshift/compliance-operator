@@ -62,6 +62,16 @@ E2E_SKIP_CONTAINER_PUSH?=false
 # 	make e2e E2E_GO_TEST_FLAGS="-v -run TestE2E/TestScanWithNodeSelectorFiltersCorrectly"
 E2E_GO_TEST_FLAGS?=-v -timeout 120m
 
+# operator-courier arguments for `make publish`.
+# Before running `make publish`, install operator-courier with `pip3 install operator-courier` and create
+# ~/.quay containing your quay.io token.
+COURIER_CMD=operator-courier
+COURIER_PACKAGE_NAME=compliance-operator-bundle
+COURIER_OPERATOR_DIR=deploy/olm-catalog/compliance-operator
+COURIER_QUAY_NAMESPACE=compliance-operator
+COURIER_PACKAGE_VERSION?="0.1.0"
+COURIER_QUAY_TOKEN?= $(shell cat ~/.quay)
+
 .PHONY: all
 all: build ## Test and Build the compliance-operator
 
@@ -256,3 +266,7 @@ gen-mcfg-client: code-generator
 		"machineconfiguration:v1" \
 		--go-header-file=./custom-boilerplate.go.txt
 	cp -r $(GOPATH)/src/github.com/openshift/compliance-operator/pkg/generated pkg/
+
+.PHONY: publish
+publish:
+	$(COURIER_CMD) push "$(COURIER_OPERATOR_DIR)" "$(COURIER_QUAY_NAMESPACE)" "$(COURIER_PACKAGE_NAME)" "$(COURIER_PACKAGE_VERSION)" "basic $(COURIER_QUAY_TOKEN)"
