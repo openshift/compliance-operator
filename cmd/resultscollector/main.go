@@ -144,7 +144,7 @@ func compressResults(contents []byte) ([]byte, error) {
 	// Encode the contents ascii, compress it with gzip, b64encode it so it
 	// can be stored in the configmap.
 	var buffer bytes.Buffer
-	w, err := bzip2.NewWriter(&buffer, &bzip2.WriterConfig{Level:bzip2.BestCompression})
+	w, err := bzip2.NewWriter(&buffer, &bzip2.WriterConfig{Level: bzip2.BestCompression})
 	if err != nil {
 		return nil, err
 	}
