@@ -17,7 +17,7 @@ IMAGE_PATH?=$(IMAGE_REPO)/$(APP_NAME)
 OPENSCAP_IMAGE_PATH=$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME)
 OPENSCAP_DOCKERFILE_PATH=./images/openscap/Dockerfile
 RESULTSCOLLECTOR_IMAGE_PATH=$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME)
-RESULTSCOLLECTOR_DOCKERFILE_PATH=./images/openscap/Dockerfile
+RESULTSCOLLECTOR_DOCKERFILE_PATH=./Dockerfile.results_collector
 
 # Image tag to use. Set this if you want to use a specific tag for building
 # or your e2e tests.
