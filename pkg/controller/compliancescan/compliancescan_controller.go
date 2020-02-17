@@ -3,6 +3,7 @@ package compliancescan
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -41,6 +42,9 @@ const (
 	OpenSCAPScriptEnvLabel    = "cm-env"
 	OpenSCAPNodePodLabel      = "node-scan/"
 	NodeHostnameLabel         = "kubernetes.io/hostname"
+
+	// The default time we should wait before requeuing
+	requeueAfterDefault = 10 * time.Second
 )
 
 // Add creates a new ComplianceScan Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -292,7 +296,13 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *complianceop
 		return reconcile.Result{}, err
 	}
 
-	result, err := gatherResults(r, instance, nodes)
+	result, isReady, err := gatherResults(r, instance, nodes)
+
+	// We only wait if there are no errors.
+	if err == nil && !isReady {
+		log.Info("ConfigMap missing (not ready). Requeuing.")
+		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
+	}
 
 	instance.Status.Result = result
 	instance.Status.Phase = complianceoperatorv1alpha1.PhaseDone
@@ -443,16 +453,21 @@ func getScanResult(r *ReconcileComplianceScan, instance *complianceoperatorv1alp
 	return complianceoperatorv1alpha1.ResultError, fmt.Errorf("Couldn't find '%s' container in '%s' pod status", OpenSCAPScanContainerName, p.Name)
 }
 
-func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan, nodes corev1.NodeList) (complianceoperatorv1alpha1.ComplianceScanStatusResult, error) {
+// gatherResults will iterate the nodes in the scan and get the results
+// for the OpenSCAP check. If the results haven't yet been persisted in
+// the relevant ConfigMap, the a requeue will be requested since the
+// results are not ready.
+func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan, nodes corev1.NodeList) (complianceoperatorv1alpha1.ComplianceScanStatusResult, bool, error) {
 	var err error
 	var lastNonCompliance complianceoperatorv1alpha1.ComplianceScanStatusResult
 	var result complianceoperatorv1alpha1.ComplianceScanStatusResult
 	compliant := true
+	isReady := true
 	for _, node := range nodes.Items {
 		result, err = getScanResult(r, instance, &node)
 		// we output the last result if it was an error
 		if result == complianceoperatorv1alpha1.ResultError {
-			return result, err
+			return result, true, err
 		}
 		// Store the last non-compliance, so we can output that if
 		// there were no errors.
@@ -460,12 +475,26 @@ func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alp
 			lastNonCompliance = result
 			compliant = false
 		}
+
+		targetCM := types.NamespacedName{
+			Name:      getConfigMapForNodeName(instance.Name, node.Name),
+			Namespace: instance.Namespace,
+		}
+
+		foundCM := &corev1.ConfigMap{}
+		err := r.client.Get(context.TODO(), targetCM, foundCM)
+
+		// Could be a transcient error, so we requeue if there's any
+		// error here.
+		if err != nil {
+			isReady = false
+		}
 	}
 
 	if !compliant {
-		return lastNonCompliance, nil
+		return lastNonCompliance, isReady, nil
 	}
-	return result, nil
+	return result, isReady, nil
 }
 
 func getPVCForScan(instance *complianceoperatorv1alpha1.ComplianceScan) *corev1.PersistentVolumeClaim {
@@ -501,6 +530,7 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 	mode := int32(0744)
 
 	podName := createPodForNodeName(scanInstance.Name, node.Name)
+	cmName := getConfigMapForNodeName(scanInstance.Name, node.Name)
 	podLabels := map[string]string{
 		"complianceScan": scanInstance.Name,
 		"targetNode":     node.Name,
@@ -538,7 +568,7 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 					Image: GetComponentImage(LOG_COLLECTOR),
 					Args: []string{
 						"--file=/reports/report.xml",
-						"--config-map-name=" + podName,
+						"--config-map-name=" + cmName,
 						"--owner=" + scanInstance.Name,
 						"--namespace=" + scanInstance.Namespace,
 						"--resultserveruri=" + getResultServerURI(scanInstance),
@@ -718,6 +748,10 @@ func resultServerService(scanInstance *complianceoperatorv1alpha1.ComplianceScan
 // pod names are limited to 63 chars, inclusive. Try to use a friendly name, if that can't be done,
 // just use a hash. Either way, the node would be present in a label of the pod.
 func createPodForNodeName(scanName, nodeName string) string {
+	return dnsLengthName("openscap-pod-", "%s-%s-pod", scanName, nodeName)
+}
+
+func getConfigMapForNodeName(scanName, nodeName string) string {
 	return dnsLengthName("openscap-pod-", "%s-%s-pod", scanName, nodeName)
 }
 
