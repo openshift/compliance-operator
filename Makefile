@@ -258,8 +258,15 @@ endif
 
 .PHONY: push
 push: image
+	# compliance-operator manager
 	$(RUNTIME) tag $(IMAGE_PATH) $(IMAGE_PATH):$(TAG)
 	$(RUNTIME) push $(IMAGE_PATH):$(TAG)
+	# resultscollector
+	$(RUNTIME) tag $(RESULTSCOLLECTOR_IMAGE_PATH) $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)
+	$(RUNTIME) push $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)
+	# resultserver
+	$(RUNTIME) tag $(RESULTSERVER_IMAGE_PATH) $(RESULTSERVER_IMAGE_PATH):$(TAG)
+	$(RUNTIME) push $(RESULTSERVER_IMAGE_PATH):$(TAG)
 
 versionPath=$(shell GO111MODULE=on go list -f {{.Dir}} k8s.io/code-generator/cmd/client-gen)
 codegeneratorRoot=$(versionPath:/cmd/client-gen=)
