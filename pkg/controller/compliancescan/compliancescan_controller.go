@@ -627,7 +627,8 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 					Name:  "log-collector",
 					Image: GetComponentImage(LOG_COLLECTOR),
 					Args: []string{
-						"--file=/reports/report.xml",
+						"--arf-file=/reports/report-arf.xml",
+						"--results-file=/reports/report.xml",
 						"--config-map-name=" + cmName,
 						"--owner=" + scanInstance.Name,
 						"--namespace=" + scanInstance.Namespace,

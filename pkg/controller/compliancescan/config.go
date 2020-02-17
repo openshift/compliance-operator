@@ -31,6 +31,8 @@ const (
 
 var defaultOpenScapScriptContents = `#!/bin/bash
 
+ARF_REPORT=/tmp/report-arf.xml
+
 if [ -z $HOSTROOT ]; then
     echo "hostroot not set"
     exit 1
@@ -55,8 +57,7 @@ cmd=(
     oscap-chroot $HOSTROOT xccdf eval \
     --fetch-remote-resources \
     --profile $PROFILE \
-    --report /tmp/scan-report.xml \
-    --results-arf /tmp/report.xml
+    --results-arf $ARF_REPORT
     )
 
 if [ ! -z $RULE ]; then
@@ -72,7 +73,27 @@ echo "Running oscap-chroot as ${cmd[@]}"
 "${cmd[@]}"
 rv=$?
 echo "The scanner returned $rv"
-test -f /tmp/report.xml && mv /tmp/report.xml $REPORT_DIR
+
+# Split the ARF so that we can only process the results
+SPLIT_DIR=/tmp/split
+# The XCCDF result file has a well-known name report.xml under the
+# split directory
+XCCDF_PATH=$SPLIT_DIR/report.xml
+
+# The rds-split command splits the ARF into the DS part and the
+# XCCDF result. At the moment we need to use the --skip-valid option
+# because at the moment oscap-chroot uses chroot://host as the hostname
+# and that makes the rds-split command puke.
+oscap ds rds-split --skip-valid $ARF_REPORT $SPLIT_DIR
+split_rv=$?
+echo "The rds-split operation returned $split_rv"
+
+# Put both the XCCDF result and the full ARF result into the report
+# directory.
+test -f $XCCDF_PATH && mv $XCCDF_PATH $REPORT_DIR
+test -f $ARF_REPORT && mv $ARF_REPORT $REPORT_DIR
+
+# Return the result of the openscap scan
 exit $rv
 `
 

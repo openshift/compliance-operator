@@ -179,7 +179,7 @@ func readCompressedData(compressed string) (string, error) {
 	return string(b), nil
 }
 
-func parseResultRemediations(scheme *runtime.Scheme, scanName string, namespace string, cm *v1.ConfigMap) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
+func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace, content string, cm *v1.ConfigMap) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
 	var scanResult string
 	var err error
 
@@ -203,7 +203,7 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName string, namespace 
 		}
 	}
 
-	return utils.ParseRemediationsFromArf(scheme, scanName, namespace, scanResult)
+	return utils.ParseRemediationFromContentAndResults(scheme, scanName, namespace, content, scanResult)
 }
 
 // returns true if the lists are the same, false if they differ
@@ -285,6 +285,21 @@ func createRemediations(crClient *complianceCrClient, scan *complianceoperatorv1
 	return nil
 }
 
+func readContent(filename string) (string, error) {
+	// gosec complains that the file is passed through an evironment variable. But
+	// this is not a security issue because none of the files are user-provided
+	cleanFileName := filepath.Clean(filename)
+	// #nosec G304
+	file, err := os.Open(cleanFileName)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	b, err := ioutil.ReadAll(file)
+	return string(b), err
+}
+
 func aggregator(cmd *cobra.Command, args []string) {
 	var scanRemediations []*complianceoperatorv1alpha1.ComplianceRemediation
 
@@ -329,8 +344,14 @@ func aggregator(cmd *cobra.Command, args []string) {
 	}
 
 	if scan.Status.Result == complianceoperatorv1alpha1.ResultError {
-		fmt.Print("Not gathering results from a scan that resulted in an error")
+		fmt.Println("Not gathering results from a scan that resulted in an error")
 		os.Exit(0)
+	}
+
+	content, err := readContent(aggregatorConf.Content)
+	if err != nil {
+		fmt.Printf("Cannot read the content: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Find all the configmaps for a scan
@@ -343,7 +364,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 	// For each configmap, create a list of remediations
 	for _, cm := range configMaps {
 		fmt.Printf("processing CM: %s\n", cm.Name)
-		cmRemediations, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, &cm)
+		cmRemediations, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, content, &cm)
 		if err != nil {
 			fmt.Printf("Cannot parse CM %s into remediations, err: %v\n", cm.Name, err)
 		} else if cmRemediations == nil {
