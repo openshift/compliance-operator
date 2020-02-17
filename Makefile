@@ -7,7 +7,7 @@ RESULTSCOLLECTOR_IMAGE_NAME=$(RESULTSCOLLECTORBIN)
 
 # Container image variables
 # =========================
-IMAGE_REPO?=quay.io/jhrozek
+IMAGE_REPO?=quay.io/compliance-operator
 RUNTIME?=podman
 
 # Image path to use. Set this if you want to use a specific path for building
