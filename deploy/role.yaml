@@ -34,6 +34,10 @@ rules:
   - deployments
   verbs:
   - get         # Otherwise the operator errors out when creating initializing metrics
+  - list        # The resultserver needs to be created and tracked
+  - watch
+  - create
+  - update
 - apiGroups:
   - complianceoperator.compliance.openshift.io
   resources:
@@ -64,7 +68,7 @@ rules:
   - services    # Services is the way we provide metrics for the operator
   - services/finalizers
   verbs:
-  - create      # The operator needs to create a service to expose the metrics
+  - create      # The operator needs to create a service to expose the metrics and resultserver
   - get
   - update
 - apiGroups:

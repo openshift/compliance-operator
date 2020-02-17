@@ -2,8 +2,10 @@
 # ==================
 export APP_NAME=compliance-operator
 RESULTSCOLLECTORBIN=resultscollector
+RESULTSERVERBIN=resultserver
 OPENSCAP_IMAGE_NAME=openscap-ocp
 RESULTSCOLLECTOR_IMAGE_NAME=$(RESULTSCOLLECTORBIN)
+RESULTSERVER_IMAGE_NAME=$(RESULTSERVERBIN)
 
 # Container image variables
 # =========================
@@ -18,6 +20,8 @@ OPENSCAP_IMAGE_PATH=$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME)
 OPENSCAP_DOCKERFILE_PATH=./images/openscap/Dockerfile
 RESULTSCOLLECTOR_IMAGE_PATH=$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME)
 RESULTSCOLLECTOR_DOCKERFILE_PATH=./images/resultscollector/Dockerfile
+RESULTSERVER_IMAGE_PATH=$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME)
+RESULTSERVER_DOCKERFILE_PATH=./images/resultserver/Dockerfile
 
 # Image tag to use. Set this if you want to use a specific tag for building
 # or your e2e tests.
@@ -32,6 +36,7 @@ GOBUILD=$(GO) build
 BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 RESULTSCOLLECTOR_TARGET=$(TARGET_DIR)/bin/$(RESULTSCOLLECTORBIN)
+RESULTSERVER_TARGET=$(TARGET_DIR)/bin/$(RESULTSERVERBIN)
 MAIN_PKG=cmd/manager/main.go
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 # This is currently hardcoded to our most performance sensitive package
@@ -85,7 +90,7 @@ help: ## Show this help screen
 
 
 .PHONY: image
-image: fmt operator-sdk operator-image resultscollector-image openscap-image ## Build the compliance-operator container image
+image: fmt operator-sdk operator-image resultscollector-image resultserver-image openscap-image ## Build the compliance-operator container image
 
 .PHONY: operator-image
 operator-image:
@@ -99,14 +104,21 @@ openscap-image:
 resultscollector-image:
 	$(RUNTIME) build -f $(RESULTSCOLLECTOR_DOCKERFILE_PATH) -t $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG) .
 
+.PHONY: resultserver-image
+resultserver-image:
+	$(RUNTIME) build -f $(RESULTSERVER_DOCKERFILE_PATH) -t $(RESULTSERVER_IMAGE_PATH):$(TAG) .
+
 .PHONY: build
-build: manager resultscollector  ## Build the compliance-operator binary
+build: manager resultscollector resultserver ## Build the compliance-operator binary
 
 manager:
 	$(GO) build -o $(TARGET) github.com/openshift/compliance-operator/cmd/manager
 
 resultscollector:
 	$(GO) build -o $(RESULTSCOLLECTOR_TARGET) github.com/openshift/compliance-operator/cmd/resultscollector
+
+resultserver:
+	$(GO) build -o $(RESULTSERVER_TARGET) github.com/openshift/compliance-operator/cmd/resultserver
 
 .PHONY: operator-sdk
 operator-sdk:
@@ -224,7 +236,8 @@ image-to-cluster: namespace openshift-user image
 		$(RUNTIME) login --tls-verify=false -u $(OPENSHIFT_USER) -p $(shell oc whoami -t) $${IMAGE_REGISTRY_HOST}; \
 		$(RUNTIME) push --tls-verify=false $(IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(APP_NAME):$(TAG); \
 		$(RUNTIME) push --tls-verify=false $(OPENSCAP_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(OPENSCAP_IMAGE_NAME):$(TAG); \
-		$(RUNTIME) push --tls-verify=false $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(RESULTSCOLLECTOR_IMAGE_NAME):$(TAG)
+		$(RUNTIME) push --tls-verify=false $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(RESULTSCOLLECTOR_IMAGE_NAME):$(TAG); \
+		$(RUNTIME) push --tls-verify=false $(RESULTSERVER_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(RESULTSERVER_IMAGE_NAME):$(TAG)
 	@echo "Removing the route from the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
 	$(eval IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(APP_NAME):$(TAG))

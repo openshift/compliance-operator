@@ -34,6 +34,10 @@ spec:
               value: "compliance-operator"
             - name: OPENSCAP_IMAGE
               value: "quay.io/jhrozek/openscap-ocp:remediations_demo"
+            - name: LOG_COLLECTOR_IMAGE
+              value: "quay.io/compliance-operator/resultscollector:latest"
+            - name: RESULT_SERVER_IMAGE
+              value: "quay.io/compliance-operator/resultserver:latest"
       nodeSelector:
         node-role.kubernetes.io/master: ""
       tolerations:
