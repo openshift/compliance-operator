@@ -37,6 +37,8 @@ spec:
               value: "quay.io/compliance-operator/resultscollector:latest"
             - name: RESULT_SERVER_IMAGE
               value: "quay.io/compliance-operator/resultserver:latest"
+            - name: AGGREGATOR_IMAGE
+              value: "quay.io/jhrozek/aggregator:latest"
       nodeSelector:
         node-role.kubernetes.io/master: ""
       tolerations:

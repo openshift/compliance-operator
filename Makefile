@@ -6,6 +6,8 @@ RESULTSERVERBIN=resultserver
 OPENSCAP_IMAGE_NAME=openscap-ocp
 RESULTSCOLLECTOR_IMAGE_NAME=$(RESULTSCOLLECTORBIN)
 RESULTSERVER_IMAGE_NAME=$(RESULTSERVERBIN)
+REMEDIATION_AGGREGATORBIN=remediation-aggregator
+REMEDIATION_AGGREGATOR_IMAGE_NAME=$(REMEDIATION_AGGREGATORBIN)
 
 # Container image variables
 # =========================
@@ -22,6 +24,8 @@ RESULTSCOLLECTOR_IMAGE_PATH=$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME)
 RESULTSCOLLECTOR_DOCKERFILE_PATH=./images/resultscollector/Dockerfile
 RESULTSERVER_IMAGE_PATH=$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME)
 RESULTSERVER_DOCKERFILE_PATH=./images/resultserver/Dockerfile
+REMEDIATION_AGGREGATOR_IMAGE_PATH=$(IMAGE_REPO)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME)
+REMEDIATION_AGGREGATOR_DOCKERFILE_PATH=./images/remediation-aggregator/Dockerfile
 
 # Image tag to use. Set this if you want to use a specific tag for building
 # or your e2e tests.
@@ -37,6 +41,7 @@ BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 RESULTSCOLLECTOR_TARGET=$(TARGET_DIR)/bin/$(RESULTSCOLLECTORBIN)
 RESULTSERVER_TARGET=$(TARGET_DIR)/bin/$(RESULTSERVERBIN)
+AGGREAGATOR_TARGET=$(TARGET_DIR)/bin/$(REMEDIATION_AGGREGATORBIN)
 MAIN_PKG=cmd/manager/main.go
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 # This is currently hardcoded to our most performance sensitive package
@@ -90,7 +95,7 @@ help: ## Show this help screen
 
 
 .PHONY: image
-image: fmt operator-sdk operator-image resultscollector-image resultserver-image openscap-image ## Build the compliance-operator container image
+image: fmt operator-sdk operator-image resultscollector-image remediation-aggregator-image resultserver-image openscap-image ## Build the compliance-operator container image
 
 .PHONY: operator-image
 operator-image:
@@ -108,8 +113,12 @@ resultscollector-image:
 resultserver-image:
 	$(RUNTIME) build -f $(RESULTSERVER_DOCKERFILE_PATH) -t $(RESULTSERVER_IMAGE_PATH):$(TAG) .
 
+.PHONY: remediation-aggregator-image
+remediation-aggregator-image:
+	$(RUNTIME) build -f $(REMEDIATION_AGGREGATOR_DOCKERFILE_PATH) -t $(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG) .
+
 .PHONY: build
-build: manager resultscollector resultserver ## Build the compliance-operator binary
+build: manager resultscollector remediation-aggregator resultserver ## Build the compliance-operator binary
 
 manager:
 	$(GO) build -o $(TARGET) github.com/openshift/compliance-operator/cmd/manager
@@ -119,6 +128,9 @@ resultscollector:
 
 resultserver:
 	$(GO) build -o $(RESULTSERVER_TARGET) github.com/openshift/compliance-operator/cmd/resultserver
+
+remediation-aggregator:
+	$(GO) build -o $(AGGREAGATOR_TARGET) github.com/openshift/compliance-operator/cmd/remediation-aggregator
 
 .PHONY: operator-sdk
 operator-sdk:
@@ -248,7 +260,8 @@ image-to-cluster: namespace openshift-user image
 		$(RUNTIME) push --tls-verify=false $(OPERATOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(APP_NAME):$(TAG); \
 		$(RUNTIME) push --tls-verify=false $(OPENSCAP_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(OPENSCAP_IMAGE_NAME):$(TAG); \
 		$(RUNTIME) push --tls-verify=false $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(RESULTSCOLLECTOR_IMAGE_NAME):$(TAG); \
-		$(RUNTIME) push --tls-verify=false $(RESULTSERVER_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(RESULTSERVER_IMAGE_NAME):$(TAG)
+		$(RUNTIME) push --tls-verify=false $(RESULTSERVER_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(RESULTSERVER_IMAGE_NAME):$(TAG); \
+		$(RUNTIME) push --tls-verify=false $(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):$(TAG)
 	@echo "Removing the route from the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
 	$(eval OPERATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(APP_NAME):$(TAG))
