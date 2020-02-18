@@ -6,11 +6,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"reflect"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/dsnet/compress/bzip2"
 	"github.com/go-logr/logr"
@@ -242,26 +240,20 @@ func (r *ReconcileComplianceSuite) reconcileScanRemediations(suite *complianceop
 	var cMapList v1.ConfigMapList
 	var scanRemediations []*complianceoperatorv1alpha1.ComplianceRemediation
 
-	// Look for configMap with this scan label
-	err := wait.PollImmediate(5*time.Second, 10*time.Minute, func() (bool, error) {
-		listOpts := client.ListOptions{
-			LabelSelector: labels.SelectorFromSet(labels.Set{"compliance-scan": scan.Name}),
-		}
+	listOpts := client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(labels.Set{"compliance-scan": scan.Name}),
+	}
 
-		if err := r.client.List(context.TODO(), &cMapList, &listOpts); err != nil {
-			return false, err
-		}
-
-		if len(cMapList.Items) == 0 {
-			logger.Info("Scan has no results yet", "scan", scan.Name)
-			return false, nil
-		}
-		return true, nil
-	})
-
-	if err != nil {
-		logger.Error(err, "Error waiting for CMs to appear")
+	if err := r.client.List(context.TODO(), &cMapList, &listOpts); err != nil {
+		logger.Error(err, "Error listing CMs")
 		return err
+	}
+
+	if len(cMapList.Items) == 0 {
+		// This is not necessarily an error... It could merely mean that
+		// the nodeSelector in the scan didn't return any nodes.
+		logger.Info("WARNING: Scan has no results", "scan", scan.Name)
+		return nil
 	}
 
 	logger.Info("Scan has results", "scan", scan.Name)
