@@ -191,9 +191,9 @@ test-benchmark: ## Run the benchmark tests -- Note that this can only be ran for
 # avoided with the E2E_SKIP_CONTAINER_PUSH environment variable.
 .PHONY: e2e
 ifeq ($(E2E_SKIP_CONTAINER_PUSH), false)
-e2e: namespace operator-sdk check-if-ci image-to-cluster ## Run the end-to-end tests
+e2e: namespace operator-sdk image-to-cluster ## Run the end-to-end tests
 else
-e2e: namespace operator-sdk check-if-ci
+e2e: namespace operator-sdk
 endif
 	@echo "Running e2e tests"
 	unset GOFLAGS && $(GOPATH)/bin/operator-sdk test local ./tests/e2e --image "$(OPERATOR_IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
@@ -201,34 +201,25 @@ endif
 e2e-local: operator-sdk ## Run the end-to-end tests on a locally running operator (e.g. using make run)
 	unset GOFLAGS && $(GOPATH)/bin/operator-sdk test local ./tests/e2e --up-local --image "$(OPERATOR_IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 
-# This checks if we're in a CI environment by checking the IMAGE_FORMAT
-# environmnet variable. if we are, lets ues the image from CI and use this
-# operator as the component.
+# If IMAGE_FORMAT is not defined, it means that we're not running on CI, so we
+# probably want to push the compliance-operator image to the cluster we're
+# developing on. This target exposes temporarily the image registry, pushes the
+# image, and remove the route in the end.
 #
 # The IMAGE_FORMAT variable comes from CI. It is of the format:
 #     <image path in CI registry>:${component}
 # Here define the `component` variable, so, when we overwrite the
 # OPERATOR_IMAGE_PATH variable, it'll expand to the component we need.
-.PHONY: check-if-ci
-check-if-ci:
-ifdef IMAGE_FORMAT
-	@echo "IMAGE_FORMAT variable detected. We're in a CI enviornment."
-	$(eval component = $(APP_NAME))
-	$(eval OPERATOR_IMAGE_PATH = $(IMAGE_FORMAT))
-else
-	@echo "IMAGE_FORMAT variable missing. We're in local enviornment."
-endif
-
-# If IMAGE_FORMAT is not defined, it means that we're not running on CI, so we
-# probably want to push the compliance-operator image to the cluster we're
-# developing on. This target exposes temporarily the image registry, pushes the
-# image, and remove the route in the end.
 .PHONY: image-to-cluster
 ifdef IMAGE_FORMAT
 image-to-cluster:
+	@echo "IMAGE_FORMAT variable detected. We're in a CI enviornment."
 	@echo "We're in a CI environment, skipping image-to-cluster target."
+	$(eval component = $(APP_NAME))
+	$(eval OPERATOR_IMAGE_PATH = $(IMAGE_FORMAT))
 else
 image-to-cluster: namespace openshift-user image
+	@echo "IMAGE_FORMAT variable missing. We're in local enviornment."
 	@echo "Temporarily exposing the default route to the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
 	@echo "Pushing image $(OPERATOR_IMAGE_PATH):$(TAG) to the image registry"
