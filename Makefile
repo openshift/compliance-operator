@@ -15,7 +15,7 @@ RUNTIME?=podman
 # Image path to use. Set this if you want to use a specific path for building
 # or your e2e tests. This is overwritten if we bulid the image and push it to
 # the cluster or if we're on CI.
-IMAGE_PATH?=$(IMAGE_REPO)/$(APP_NAME)
+OPERATOR_IMAGE_PATH?=$(IMAGE_REPO)/$(APP_NAME)
 OPENSCAP_IMAGE_PATH=$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME)
 OPENSCAP_DOCKERFILE_PATH=./images/openscap/Dockerfile
 RESULTSCOLLECTOR_IMAGE_PATH=$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME)
@@ -94,7 +94,7 @@ image: fmt operator-sdk operator-image resultscollector-image resultserver-image
 
 .PHONY: operator-image
 operator-image:
-	$(GOPATH)/bin/operator-sdk build $(IMAGE_PATH) --image-builder $(RUNTIME)
+	$(GOPATH)/bin/operator-sdk build $(OPERATOR_IMAGE_PATH) --image-builder $(RUNTIME)
 
 .PHONY: openscap-image
 openscap-image:
@@ -191,56 +191,69 @@ test-benchmark: ## Run the benchmark tests -- Note that this can only be ran for
 # avoided with the E2E_SKIP_CONTAINER_PUSH environment variable.
 .PHONY: e2e
 ifeq ($(E2E_SKIP_CONTAINER_PUSH), false)
-e2e: namespace operator-sdk check-if-ci image-to-cluster ## Run the end-to-end tests
+e2e: namespace operator-sdk image-to-cluster ## Run the end-to-end tests
 else
-e2e: namespace operator-sdk check-if-ci
+e2e: namespace operator-sdk
 endif
+	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
+	@echo "Replacing workload references in deploy/operator.yaml"
+	@sed -i 's%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%$(RESULTSCOLLECTOR_IMAGE_PATH)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%$(RESULTSERVER_IMAGE_PATH)%' deploy/operator.yaml
 	@echo "Running e2e tests"
-	unset GOFLAGS && $(GOPATH)/bin/operator-sdk test local ./tests/e2e --image "$(IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
+	unset GOFLAGS && $(GOPATH)/bin/operator-sdk test local ./tests/e2e --image "$(OPERATOR_IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
+	@echo "Restoring image references in deploy/operator.yaml"
+	@sed -i 's%$(RESULTSCOLLECTOR_IMAGE_PATH)%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%' deploy/operator.yaml
+	@sed -i 's%$(RESULTSERVER_IMAGE_PATH)%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%' deploy/operator.yaml
 
 e2e-local: operator-sdk ## Run the end-to-end tests on a locally running operator (e.g. using make run)
-	unset GOFLAGS && $(GOPATH)/bin/operator-sdk test local ./tests/e2e --up-local --image "$(IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
-
-# This checks if we're in a CI environment by checking the IMAGE_FORMAT
-# environmnet variable. if we are, lets ues the image from CI and use this
-# operator as the component.
-#
-# The IMAGE_FORMAT variable comes from CI. It is of the format:
-#     <image path in CI registry>:${component}
-# Here define the `component` variable, so, when we overwrite the
-# IMAGE_PATH variable, it'll expand to the component we need.
-.PHONY: check-if-ci
-check-if-ci:
-ifdef IMAGE_FORMAT
-	@echo "IMAGE_FORMAT variable detected. We're in a CI enviornment."
-	$(eval component = $(APP_NAME))
-	$(eval IMAGE_PATH = $(IMAGE_FORMAT))
-else
-	@echo "IMAGE_FORMAT variable missing. We're in local enviornment."
-endif
+	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
+	@echo "Replacing workload references in deploy/operator.yaml"
+	@sed -i 's%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%$(RESULTSCOLLECTOR_IMAGE_PATH)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%$(RESULTSERVER_IMAGE_PATH)%' deploy/operator.yaml
+	unset GOFLAGS && $(GOPATH)/bin/operator-sdk test local ./tests/e2e --up-local --image "$(OPERATOR_IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
+	@echo "Restoring image references in deploy/operator.yaml"
+	@sed -i 's%$(RESULTSCOLLECTOR_IMAGE_PATH)%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%' deploy/operator.yaml
+	@sed -i 's%$(RESULTSERVER_IMAGE_PATH)%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%' deploy/operator.yaml
 
 # If IMAGE_FORMAT is not defined, it means that we're not running on CI, so we
 # probably want to push the compliance-operator image to the cluster we're
 # developing on. This target exposes temporarily the image registry, pushes the
 # image, and remove the route in the end.
+#
+# The IMAGE_FORMAT variable comes from CI. It is of the format:
+#     <image path in CI registry>:${component}
+# Here define the `component` variable, so, when we overwrite the
+# OPERATOR_IMAGE_PATH variable, it'll expand to the component we need.
+# Note that the `component` names come from the `openshift/release` repo
+# config.
 .PHONY: image-to-cluster
 ifdef IMAGE_FORMAT
 image-to-cluster:
+	@echo "IMAGE_FORMAT variable detected. We're in a CI enviornment."
 	@echo "We're in a CI environment, skipping image-to-cluster target."
+	$(eval component = $(APP_NAME))
+	$(eval OPERATOR_IMAGE_PATH = $(IMAGE_FORMAT))
+	$(eval component = compliance-resultscollector)
+	$(eval RESULTSCOLLECTOR_IMAGE_PATH = $(IMAGE_FORMAT))
+	$(eval component = compliance-resultserver)
+	$(eval RESULTSERVER_IMAGE_PATH = $(IMAGE_FORMAT))
 else
 image-to-cluster: namespace openshift-user image
+	@echo "IMAGE_FORMAT variable missing. We're in local enviornment."
 	@echo "Temporarily exposing the default route to the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
-	@echo "Pushing image $(IMAGE_PATH):$(TAG) to the image registry"
+	@echo "Pushing image $(OPERATOR_IMAGE_PATH):$(TAG) to the image registry"
 	IMAGE_REGISTRY_HOST=$$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}'); \
 		$(RUNTIME) login --tls-verify=false -u $(OPENSHIFT_USER) -p $(shell oc whoami -t) $${IMAGE_REGISTRY_HOST}; \
-		$(RUNTIME) push --tls-verify=false $(IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(APP_NAME):$(TAG); \
+		$(RUNTIME) push --tls-verify=false $(OPERATOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(APP_NAME):$(TAG); \
 		$(RUNTIME) push --tls-verify=false $(OPENSCAP_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(OPENSCAP_IMAGE_NAME):$(TAG); \
 		$(RUNTIME) push --tls-verify=false $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(RESULTSCOLLECTOR_IMAGE_NAME):$(TAG); \
 		$(RUNTIME) push --tls-verify=false $(RESULTSERVER_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(RESULTSERVER_IMAGE_NAME):$(TAG)
 	@echo "Removing the route from the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
-	$(eval IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(APP_NAME):$(TAG))
+	$(eval OPERATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(APP_NAME):$(TAG))
+	$(eval RESULTSCOLLECTOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(RESULTSCOLLECTOR_IMAGE_NAME):$(TAG))
+	$(eval RESULTSERVER_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(RESULTSERVER_IMAGE_NAME):$(TAG))
 endif
 
 .PHONY: namespace
@@ -259,8 +272,8 @@ endif
 .PHONY: push
 push: image
 	# compliance-operator manager
-	$(RUNTIME) tag $(IMAGE_PATH) $(IMAGE_PATH):$(TAG)
-	$(RUNTIME) push $(IMAGE_PATH):$(TAG)
+	$(RUNTIME) tag $(OPERATOR_IMAGE_PATH) $(OPERATOR_IMAGE_PATH):$(TAG)
+	$(RUNTIME) push $(OPERATOR_IMAGE_PATH):$(TAG)
 	# resultscollector
 	$(RUNTIME) tag $(RESULTSCOLLECTOR_IMAGE_PATH) $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)
 	$(RUNTIME) push $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)
