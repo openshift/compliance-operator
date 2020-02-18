@@ -195,11 +195,25 @@ e2e: namespace operator-sdk image-to-cluster ## Run the end-to-end tests
 else
 e2e: namespace operator-sdk
 endif
+	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
+	@echo "Replacing workload references in deploy/operator.yaml"
+	@sed -i 's%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%$(RESULTSCOLLECTOR_IMAGE_PATH)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%$(RESULTSERVER_IMAGE_PATH)%' deploy/operator.yaml
 	@echo "Running e2e tests"
 	unset GOFLAGS && $(GOPATH)/bin/operator-sdk test local ./tests/e2e --image "$(OPERATOR_IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
+	@echo "Restoring image references in deploy/operator.yaml"
+	@sed -i 's%$(RESULTSCOLLECTOR_IMAGE_PATH)%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%' deploy/operator.yaml
+	@sed -i 's%$(RESULTSERVER_IMAGE_PATH)%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%' deploy/operator.yaml
 
 e2e-local: operator-sdk ## Run the end-to-end tests on a locally running operator (e.g. using make run)
+	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
+	@echo "Replacing workload references in deploy/operator.yaml"
+	@sed -i 's%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%$(RESULTSCOLLECTOR_IMAGE_PATH)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%$(RESULTSERVER_IMAGE_PATH)%' deploy/operator.yaml
 	unset GOFLAGS && $(GOPATH)/bin/operator-sdk test local ./tests/e2e --up-local --image "$(OPERATOR_IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
+	@echo "Restoring image references in deploy/operator.yaml"
+	@sed -i 's%$(RESULTSCOLLECTOR_IMAGE_PATH)%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%' deploy/operator.yaml
+	@sed -i 's%$(RESULTSERVER_IMAGE_PATH)%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%' deploy/operator.yaml
 
 # If IMAGE_FORMAT is not defined, it means that we're not running on CI, so we
 # probably want to push the compliance-operator image to the cluster we're
@@ -210,6 +224,8 @@ e2e-local: operator-sdk ## Run the end-to-end tests on a locally running operato
 #     <image path in CI registry>:${component}
 # Here define the `component` variable, so, when we overwrite the
 # OPERATOR_IMAGE_PATH variable, it'll expand to the component we need.
+# Note that the `component` names come from the `openshift/release` repo
+# config.
 .PHONY: image-to-cluster
 ifdef IMAGE_FORMAT
 image-to-cluster:
@@ -217,6 +233,10 @@ image-to-cluster:
 	@echo "We're in a CI environment, skipping image-to-cluster target."
 	$(eval component = $(APP_NAME))
 	$(eval OPERATOR_IMAGE_PATH = $(IMAGE_FORMAT))
+	$(eval component = compliance-resultscollector)
+	$(eval RESULTSCOLLECTOR_IMAGE_PATH = $(IMAGE_FORMAT))
+	$(eval component = compliance-resultserver)
+	$(eval RESULTSERVER_IMAGE_PATH = $(IMAGE_FORMAT))
 else
 image-to-cluster: namespace openshift-user image
 	@echo "IMAGE_FORMAT variable missing. We're in local enviornment."
@@ -232,6 +252,8 @@ image-to-cluster: namespace openshift-user image
 	@echo "Removing the route from the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
 	$(eval OPERATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(APP_NAME):$(TAG))
+	$(eval RESULTSCOLLECTOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(RESULTSCOLLECTOR_IMAGE_NAME):$(TAG))
+	$(eval RESULTSERVER_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(RESULTSERVER_IMAGE_NAME):$(TAG))
 endif
 
 .PHONY: namespace
