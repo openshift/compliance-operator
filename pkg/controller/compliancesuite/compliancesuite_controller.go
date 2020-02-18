@@ -1,18 +1,13 @@
 package compliancesuite
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"reflect"
 	"sort"
 	"strings"
 
-	"github.com/dsnet/compress/bzip2"
 	"github.com/go-logr/logr"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -28,17 +23,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var log = logf.Log.WithName("controller_compliancesuite")
 
 const (
-	configMapRemediationsProcessed = "compliance-remediations/processed"
-	configMapCompressed            = "openscap-scan-result/compressed"
-	nodeRolePrefix                 = "node-role.kubernetes.io/"
+	nodeRolePrefix = "node-role.kubernetes.io/"
 )
 
 // Add creates a new ComplianceSuite Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -214,14 +205,6 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *complianceoperatorv1a
 		return nil
 	}
 
-	if scan.Status.Phase == complianceoperatorv1alpha1.PhaseDone {
-		err := r.reconcileScanRemediations(suite, scan, logger)
-		if err != nil {
-			logger.Error(err, "Error reconciling remediations")
-			return err
-		}
-	}
-
 	modScanStatus := complianceoperatorv1alpha1.ComplianceScanStatusWrapper{
 		ComplianceScanStatus: complianceoperatorv1alpha1.ComplianceScanStatus{
 			Phase: scan.Status.Phase,
@@ -234,175 +217,6 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *complianceoperatorv1a
 	logger.Info("Updating scan status", "scan", modScanStatus.Name, "phase", modScanStatus.Phase)
 
 	return r.client.Status().Update(context.TODO(), suiteCopy)
-}
-
-func (r *ReconcileComplianceSuite) reconcileScanRemediations(suite *complianceoperatorv1alpha1.ComplianceSuite, scan *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
-	var cMapList v1.ConfigMapList
-	var scanRemediations []*complianceoperatorv1alpha1.ComplianceRemediation
-
-	listOpts := client.ListOptions{
-		LabelSelector: labels.SelectorFromSet(labels.Set{"compliance-scan": scan.Name}),
-	}
-
-	if err := r.client.List(context.TODO(), &cMapList, &listOpts); err != nil {
-		logger.Error(err, "Error listing CMs")
-		return err
-	}
-
-	if len(cMapList.Items) == 0 {
-		// This is not necessarily an error... It could merely mean that
-		// the nodeSelector in the scan didn't return any nodes.
-		logger.Info("WARNING: Scan has no results", "scan", scan.Name)
-		return nil
-	}
-
-	logger.Info("Scan has results", "scan", scan.Name)
-
-	for _, cm := range cMapList.Items {
-		resultRemediations, err := parseResultRemediations(r, scan.Name, scan.Namespace, &cm, logger)
-		if err != nil {
-			logger.Error(err, "cannot parse scan result")
-			// If the results are not parseable, we cannot recover from this.
-			return common.WrapNonRetriableCtrlError(err)
-		} else if resultRemediations == nil {
-			logger.Info("Either no remediations found in result or result already processed")
-			// Already processed
-			continue
-		}
-
-		// Annotate the configmap, we want to avoid parsing it next time the reconcile
-		// loop hits
-		err = updateResultsConfigMap(r, &cm)
-		if err != nil {
-			logger.Error(err, "Cannot annotate the CM")
-			return err
-		}
-
-		logger.Info("Parsed out remediations for CM", "remediations", resultRemediations, "scan", scan.Name)
-		// If there are any remediations, make sure all of them for the scan are
-		// exactly the same
-		if scanRemediations == nil {
-			// This is the first loop or only result
-			logger.Info("This is the first remediation list, keeping it")
-			scanRemediations = resultRemediations
-		} else {
-			// All remediation lists in the scan must be equal
-			ok := diffRemediationList(scanRemediations, resultRemediations)
-			if !ok {
-				logger.Info("The remediations differ between machines, this should never happen as the machines in a pool should be identical")
-
-				// update the scan status, so that the reconciler would loop back
-				// and update the Suite status
-				scanCopy := scan.DeepCopy()
-				scanCopy.Status.Phase = complianceoperatorv1alpha1.PhaseDone
-				scanCopy.Status.Result = complianceoperatorv1alpha1.ResultError
-				err = r.client.Status().Update(context.TODO(), scanCopy)
-				if err != nil {
-					return common.WrapNonRetriableCtrlError(err)
-				}
-
-				return common.WrapNonRetriableCtrlError(fmt.Errorf("the list of remediations differs"))
-			}
-		}
-	}
-
-	// At this point either scanRemediations is nil or contains a list
-	// of remediations for this scan
-	// Create the remediations
-	logger.Info("Creating remediation objects", "remediations", scanRemediations)
-	if err := createRemediations(r, suite, scan, scanRemediations, logger); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func parseResultRemediations(r *ReconcileComplianceSuite, scanName string, namespace string, cm *v1.ConfigMap, logger logr.Logger) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
-	var scanResult string
-	var err error
-
-	_, ok := cm.Annotations[configMapRemediationsProcessed]
-	if ok {
-		logger.Info("ConfigMap already processed", "map", cm.Name)
-		return nil, nil
-	}
-
-	scanResult, ok = cm.Data["results"]
-	if !ok {
-		return nil, fmt.Errorf("no results in configmap %s", cm.Name)
-	}
-
-	_, ok = cm.Annotations[configMapCompressed]
-	if ok {
-		logger.Info("Results are compressed\n")
-		scanResult, err = readCompressedData(scanResult)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return utils.ParseRemediationsFromArf(r.scheme, scanName, namespace, scanResult)
-}
-
-func updateResultsConfigMap(r *ReconcileComplianceSuite, cm *v1.ConfigMap) error {
-	cmCopy := cm.DeepCopy()
-
-	if cmCopy.Annotations == nil {
-		cmCopy.Annotations = make(map[string]string)
-	}
-	cmCopy.Annotations[configMapRemediationsProcessed] = ""
-
-	return r.client.Update(context.TODO(), cmCopy)
-}
-
-func createRemediations(r *ReconcileComplianceSuite, suite *complianceoperatorv1alpha1.ComplianceSuite, scan *complianceoperatorv1alpha1.ComplianceScan, remediations []*complianceoperatorv1alpha1.ComplianceRemediation, logger logr.Logger) error {
-	for _, rem := range remediations {
-		logger.Info("Creating remediation", "rem", rem.Name)
-		if err := controllerutil.SetControllerReference(suite, rem, r.scheme); err != nil {
-			log.Error(err, "Failed to set remediation ownership", "rem", rem)
-			return err
-		}
-
-		if rem.Labels == nil {
-			rem.Labels = make(map[string]string)
-		}
-		rem.Labels[complianceoperatorv1alpha1.SuiteLabel] = suite.Name
-		rem.Labels[complianceoperatorv1alpha1.ScanLabel] = scan.Name
-		rem.Labels[mcfgv1.McRoleKey] = getScanRoleLabel(scan.Spec.NodeSelector)
-		if rem.Labels[mcfgv1.McRoleKey] == "" {
-			return fmt.Errorf("scan %s has no role assignment", scan.Name)
-		}
-
-		err := r.client.Create(context.TODO(), rem)
-		if err != nil {
-			log.Error(err, "Failed to create remediation", "rem", rem)
-			return err
-		}
-	}
-
-	return nil
-}
-
-func readCompressedData(compressed string) (string, error) {
-	decoded, err := base64.StdEncoding.DecodeString(compressed)
-	if err != nil {
-		return "", err
-	}
-
-	compressedReader := bytes.NewReader(decoded)
-	bzReader, err := bzip2.NewReader(compressedReader, &bzip2.ReaderConfig{})
-	if err != nil {
-		return "", err
-	}
-	defer bzReader.Close()
-
-	// FIXME: probably unsafe, see https://haisum.github.io/2017/09/11/golang-ioutil-readall/
-	b, err := ioutil.ReadAll(bzReader)
-	if err != nil {
-		return "", err
-	}
-
-	return string(b), nil
 }
 
 func (r *ReconcileComplianceSuite) addScanStatus(suite *complianceoperatorv1alpha1.ComplianceSuite, scan *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
@@ -444,10 +258,15 @@ func launchScanForSuite(r *ReconcileComplianceSuite, suite *complianceoperatorv1
 }
 
 func newScanForSuite(suite *complianceoperatorv1alpha1.ComplianceSuite, scanWrap *complianceoperatorv1alpha1.ComplianceScanSpecWrapper) *complianceoperatorv1alpha1.ComplianceScan {
+	scanLabels := map[string]string{
+		"compliancesuite": suite.Name,
+	}
+
 	return &complianceoperatorv1alpha1.ComplianceScan{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      scanWrap.Name,
 			Namespace: suite.Namespace,
+			Labels:    scanLabels,
 		},
 		Spec: complianceoperatorv1alpha1.ComplianceScanSpec{
 			ContentImage: scanWrap.ContentImage,

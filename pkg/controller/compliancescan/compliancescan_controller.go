@@ -42,7 +42,7 @@ const (
 	OpenSCAPScriptEnvLabel    = "cm-env"
 	OpenSCAPNodePodLabel      = "node-scan/"
 	NodeHostnameLabel         = "kubernetes.io/hostname"
-
+	AggregatorPodAnnotation   = "scan-aggregator"
 	// The default time we should wait before requeuing
 	requeueAfterDefault = 10 * time.Second
 )
@@ -210,7 +210,7 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *complianceoper
 		}
 
 		// ..and launch it..
-		err := r.launchPod(pod, logger)
+		err := launchPod(r.client, pod, logger)
 		if errors.IsAlreadyExists(err) {
 			logger.Info("Pod already exists. This is fine.", "pod", pod)
 		} else if err != nil {
@@ -305,11 +305,37 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *complianceop
 	}
 
 	instance.Status.Result = result
-	instance.Status.Phase = complianceoperatorv1alpha1.PhaseDone
 	if err != nil {
 		instance.Status.ErrorMessage = err.Error()
 	}
 
+	aggregator := newAggregatorPod(instance, logger)
+	if err = controllerutil.SetControllerReference(instance, aggregator, r.scheme); err != nil {
+		log.Error(err, "Failed to set aggregator pod ownership", "aggregator", aggregator)
+		return reconcile.Result{}, err
+	}
+
+	err = launchAggregatorPod(r, instance, aggregator, logger)
+	if err != nil {
+		log.Error(err, "Failed to launch aggregator pod", "aggregator", aggregator)
+		return reconcile.Result{}, err
+	}
+
+	running, err := isAggregatorRunning(r, instance, logger)
+	if err != nil {
+		log.Error(err, "Failed to check if aggregator pod is running", "aggregator", aggregator)
+		return reconcile.Result{}, err
+	}
+
+	if running {
+		log.Info("Remaining in the aggregating phase")
+		instance.Status.Phase = complianceoperatorv1alpha1.PhaseAggregating
+		err = r.client.Status().Update(context.TODO(), instance)
+		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
+	}
+
+	log.Info("Moving on to the Done phase")
+	instance.Status.Phase = complianceoperatorv1alpha1.PhaseDone
 	err = r.client.Status().Update(context.TODO(), instance)
 	return reconcile.Result{}, err
 }
@@ -425,21 +451,25 @@ func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *complianceoper
 	logger.Info("Retrieving a pod for node", "node", node.Name)
 
 	podName := getPodForNodeName(scanInstance, node.Name)
+	return isPodRunning(r, podName, scanInstance.Namespace, logger)
+}
+
+func isPodRunning(r *ReconcileComplianceScan, podName, namespace string, logger logr.Logger) (bool, error) {
 	foundPod := &corev1.Pod{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: scanInstance.Namespace}, foundPod)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: namespace}, foundPod)
 	if err != nil {
 		logger.Error(err, "Cannot retrieve pod", "pod", podName)
 		return false, err
 	} else if foundPod.Status.Phase == corev1.PodFailed || foundPod.Status.Phase == corev1.PodSucceeded {
-		logger.Info("Pod on node has finished", "node", node.Name)
+		logger.Info("Pod has finished")
 		return false, nil
 	} else if aContainerHasFailed(foundPod.Status.ContainerStatuses, logger, foundPod.Name) {
-		logger.Info("Container on the pod on node has failed", "node", node.Name, "pod", podName)
+		logger.Info("Container on the pod has failed", "pod", podName)
 		return false, nil
 	}
 
 	// the pod is still running or being created etc
-	logger.Info("Pod on node still running", "node", node.Name)
+	logger.Info("Pod still running", "pod", podName)
 	return true, nil
 }
 
@@ -812,15 +842,13 @@ func getResultServerURI(instance *complianceoperatorv1alpha1.ComplianceScan) str
 	return "http://" + getResultServerName(instance) + fmt.Sprintf(":%d/", ResultServerPort)
 }
 
-// TODO: this probably should not be a method, it doesn't modify reconciler, maybe we
-// should just pass reconciler as param
-func (r *ReconcileComplianceScan) launchPod(pod *corev1.Pod, logger logr.Logger) error {
+func launchPod(client client.Client, pod *corev1.Pod, logger logr.Logger) error {
 	found := &corev1.Pod{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
+	err := client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
 	// Try to see if the pod already exists and if not
 	// (which we expect) then create a one-shot pod as per spec:
 	if err != nil && errors.IsNotFound(err) {
-		err = r.client.Create(context.TODO(), pod)
+		err = client.Create(context.TODO(), pod)
 		if err != nil {
 			logger.Error(err, "Cannot create pod", "pod", pod)
 			return err
@@ -828,7 +856,7 @@ func (r *ReconcileComplianceScan) launchPod(pod *corev1.Pod, logger logr.Logger)
 		logger.Info("Pod launched", "name", pod.Name)
 		return nil
 	} else if err != nil {
-		logger.Error(err, "Cannot retrieve pod", "pod", pod)
+		logger.Error(err, "Cannot launch pod", "pod", pod)
 		return err
 	}
 
@@ -845,4 +873,102 @@ func getInitContainerImage(scanSpec *complianceoperatorv1alpha1.ComplianceScanSp
 
 	logger.Info("Content image", "image", image)
 	return image
+}
+
+func createAggregatorPodName(scanName string) string {
+	return dnsLengthName("aggregator-pod-", "aggregator-pod-%s", scanName)
+}
+
+func newAggregatorPod(scanInstance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) *corev1.Pod {
+	podName := createAggregatorPodName(scanInstance.Name)
+	logger.Info("Creating an aggregator pod for scan", "pod", podName, "scan", scanInstance.Name)
+
+	podLabels := map[string]string{
+		"complianceScan": scanInstance.Name,
+	}
+
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: scanInstance.Namespace,
+			Labels:    podLabels,
+		},
+		Spec: corev1.PodSpec{
+			ServiceAccountName: "compliance-operator",
+			InitContainers: []corev1.Container{
+				{
+					Name:  "content-container",
+					Image: getInitContainerImage(&scanInstance.Spec, logger),
+					Command: []string{
+						"sh",
+						"-c",
+						"cp /*.xml /content",
+					},
+					ImagePullPolicy: corev1.PullAlways,
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "content-dir",
+							MountPath: "/content",
+						},
+					},
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:  "log-collector",
+					Image: GetComponentImage(AGGREGATOR),
+					Args: []string{
+						"--content=" + absContentPath(scanInstance.Spec.Content),
+						"--scan=" + scanInstance.Name,
+					},
+					SecurityContext: &corev1.SecurityContext{
+						Privileged: &trueVal,
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "content-dir",
+							MountPath: "/content",
+						},
+					},
+				},
+			},
+			RestartPolicy: corev1.RestartPolicyNever,
+			Volumes: []corev1.Volume{
+				{
+					Name: "content-dir",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+			},
+		},
+	}
+}
+
+func launchAggregatorPod(r *ReconcileComplianceScan, scanInstance *complianceoperatorv1alpha1.ComplianceScan, pod *corev1.Pod, logger logr.Logger) error {
+	// Make use of optimistic concurrency and just try creating the pod
+	err := r.client.Create(context.TODO(), pod)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		logger.Error(err, "Cannot launch pod", "pod", pod)
+		return err
+	}
+
+	if errors.IsAlreadyExists(err) {
+		// If the pod was already created, just return
+		return nil
+	}
+
+	if scanInstance.Annotations == nil {
+		scanInstance.Annotations = make(map[string]string)
+	}
+
+	scanInstance.Annotations[AggregatorPodAnnotation] = pod.Name
+	return r.client.Update(context.TODO(), scanInstance)
+}
+
+func isAggregatorRunning(r *ReconcileComplianceScan, scanInstance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (bool, error) {
+	logger.Info("Checking aggregator pod for scan", "scan", scanInstance.Name)
+
+	podName := scanInstance.Annotations[AggregatorPodAnnotation]
+	return isPodRunning(r, podName, scanInstance.Namespace, logger)
 }

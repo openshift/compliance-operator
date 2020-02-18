@@ -2,8 +2,6 @@ package compliancescan
 
 import (
 	"context"
-	"strings"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -124,10 +122,7 @@ func defaultOpenScapScriptCm(name string, scan *complianceoperatorv1alpha1.Compl
 }
 
 func defaultOpenScapEnvCm(name string, scan *complianceoperatorv1alpha1.ComplianceScan) *corev1.ConfigMap {
-	content := scan.Spec.Content
-	if !strings.HasPrefix(scan.Spec.Content, "/") {
-		content = "/content/" + scan.Spec.Content
-	}
+	content := absContentPath(scan.Spec.Content)
 
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
