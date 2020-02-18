@@ -310,15 +310,15 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *complianceop
 		instance.Status.ErrorMessage = err.Error()
 	}
 
-	// TODO(jaosorior): Delete resultServer resources, the persistent volume should
-	// already have all the reports in it.
-
 	err = r.client.Status().Update(context.TODO(), instance)
 	return reconcile.Result{}, err
 }
 
 func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	logger.Info("Phase: Done", "ComplianceScan scan", instance.ObjectMeta.Name)
+	if err := r.deleteResultServer(instance, logger); err != nil {
+		return reconcile.Result{}, err
+	}
 	return reconcile.Result{}, nil
 }
 
@@ -350,6 +350,8 @@ func (r *ReconcileComplianceScan) createResultServer(instance *complianceoperato
 		"complianceScan": instance.Name,
 		"app":            "resultserver",
 	}
+
+	logger.Info("Creating scan result server pod")
 	deployment := resultServer(instance, resultServerLabels, logger)
 	if err = controllerutil.SetControllerReference(instance, deployment, r.scheme); err != nil {
 		log.Error(err, "Failed to set deployment ownership", "deployment", deployment)
@@ -375,6 +377,34 @@ func (r *ReconcileComplianceScan) createResultServer(instance *complianceoperato
 		return err
 	}
 	logger.Info("ResultServer Service launched", "name", service.Name)
+	return nil
+}
+
+func (r *ReconcileComplianceScan) deleteResultServer(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	resultServerLabels := map[string]string{
+		"complianceScan": instance.Name,
+		"app":            "resultserver",
+	}
+
+	logger.Info("Deleting scan result server pod")
+
+	deployment := resultServer(instance, resultServerLabels, logger)
+
+	err := r.client.Delete(context.TODO(), deployment)
+	if err != nil && !errors.IsNotFound(err) {
+		logger.Error(err, "Cannot delete deployment", "deployment", deployment)
+		return err
+	}
+	logger.Info("ResultServer Deployment deleted", "name", deployment.Name)
+	logger.Info("Deleting scan result server service")
+
+	service := resultServerService(instance, resultServerLabels)
+	err = r.client.Delete(context.TODO(), service)
+	if err != nil && !errors.IsNotFound(err) {
+		logger.Error(err, "Cannot delete service", "service", service)
+		return err
+	}
+	logger.Info("ResultServer Service deleted", "name", service.Name)
 	return nil
 }
 
@@ -674,8 +704,6 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 // Needs corresponding Service (with service-serving cert).
 // Need to aggregate reports into one service ? on subdirs?
 func resultServer(scanInstance *complianceoperatorv1alpha1.ComplianceScan, labels map[string]string, logger logr.Logger) *appsv1.Deployment {
-	logger.Info("Creating scan result server pod")
-
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getResultServerName(scanInstance),
