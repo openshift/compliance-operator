@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/subchen/go-xmldom"
@@ -17,22 +18,24 @@ const (
 	machineConfigFixType = "urn:xccdf:fix:script:ignition"
 )
 
-func ParseRemediationsFromArf(scheme *runtime.Scheme, scanName string, namespace string, arf string) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
+func ParseRemediationFromContentAndResults(scheme *runtime.Scheme, scanName string, namespace string, dsReader, resultsReader io.Reader) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
 	remediations := make([]*complianceoperatorv1alpha1.ComplianceRemediation, 0)
 
-	reader := strings.NewReader(arf)
-	dom, err := xmldom.Parse(reader)
+	resultsDom, err := xmldom.Parse(resultsReader)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get the checks that had failed
-	failedRuleResults := filterFailedResults(dom.Root.Query("//TestResult/rule-result"))
+	failedRuleResults := filterFailedResults(resultsDom.Root.Query("//rule-result"))
+
+	dsDom, err := xmldom.Parse(dsReader)
+	if err != nil {
+		return nil, err
+	}
 
 	// Get group that contains remediations
-	relevantDom := dom.Root.Query("/report-requests/report-request/content/data-stream-collection/component/Benchmark")
-
-	// For each failed result, find the remediation
+	remediationsDom := dsDom.Root.QueryOne("//component/Benchmark")
 	for _, frr := range failedRuleResults {
 		// Each result has the rule ID in the idref attribute
 		ruleIDRef := frr.GetAttributeValue("idref")
@@ -40,7 +43,7 @@ func ParseRemediationsFromArf(scheme *runtime.Scheme, scanName string, namespace
 			continue
 		}
 
-		ruleDefinition := relevantDom[0].FindByID(ruleIDRef)
+		ruleDefinition := remediationsDom.FindByID(ruleIDRef)
 		if ruleDefinition == nil {
 			continue
 		}

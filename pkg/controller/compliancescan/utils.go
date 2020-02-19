@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 const DefaultContentContainerImage string = "quay.io/jhrozek/ocp4-openscap-content:latest"
@@ -18,6 +19,7 @@ const (
 	LOG_COLLECTOR = iota
 	OPENSCAP
 	RESULT_SERVER
+	AGGREGATOR
 )
 
 var componentDefaults = []struct {
@@ -27,6 +29,7 @@ var componentDefaults = []struct {
 	{"quay.io/compliance-operator/resultscollector:latest", "LOG_COLLECTOR_IMAGE"},
 	{"quay.io/jhrozek/openscap-ocp:latest", "OPENSCAP_IMAGE"},
 	{"quay.io/compliance-operator/resultserver:latest", "RESULT_SERVER"},
+	{"quay.io/jhrozek/remediation-aggregator", "AGGREGATOR_IMAGE"},
 }
 
 // GetComponentImage returns a full image pull spec for a given component
@@ -57,4 +60,11 @@ func dnsLengthName(hashPrefix string, format string, a ...interface{}) string {
 	hasher := sha1.New()
 	io.WriteString(hasher, friendlyName)
 	return hashPrefix + fmt.Sprintf("%x", hasher.Sum(nil))
+}
+
+func absContentPath(relContentPath string) string {
+	if !strings.HasPrefix(relContentPath, "/") {
+		return "/content/" + relContentPath
+	}
+	return relContentPath
 }

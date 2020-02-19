@@ -1,7 +1,8 @@
 package utils
 
 import (
-	"io/ioutil"
+	"io"
+	"os"
 
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
 	. "github.com/onsi/ginkgo"
@@ -13,35 +14,42 @@ import (
 	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 )
 
-var _ = Describe("ARF parser", func() {
+var _ = Describe("XCCDF parser", func() {
 	var (
-		arf             []byte
+		xccdf           io.Reader
+		ds              io.Reader
 		schema          *runtime.Scheme
 		resultsFilename string
+		dsFilename      string
 		remList         []*complianceoperatorv1alpha1.ComplianceRemediation
 		err             error
 	)
 
-	Describe("Load the ARF", func() {
+	Describe("Load the XCCDF and the DS separately", func() {
 		BeforeEach(func() {
 			mcInstance := &mcfgv1.MachineConfig{}
 			schema = scheme.Scheme
 			schema.AddKnownTypes(mcfgv1.SchemeGroupVersion, mcInstance)
-			resultsFilename = "../../tests/data/results.arf.xml"
+			resultsFilename = "../../tests/data/xccdf-result.xml"
+			dsFilename = "../../tests/data/ds-input.xml"
 		})
 
 		JustBeforeEach(func() {
-			arf, err = ioutil.ReadFile(resultsFilename)
+			xccdf, err = os.Open(resultsFilename)
 			Expect(err).NotTo(HaveOccurred())
-			remList, err = ParseRemediationsFromArf(schema, "testScan", "testNamespace", string(arf))
+
+			ds, err = os.Open(dsFilename)
+			Expect(err).NotTo(HaveOccurred())
+
+			remList, err = ParseRemediationFromContentAndResults(schema, "testScan", "testNamespace", ds, xccdf)
 		})
 
-		Context("Valid ARF with one remediation", func() {
-			It("Should parse the ARF without errors", func() {
+		Context("Valid XCCDF", func() {
+			It("Should parse the XCCDF without errors", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
-			It("Should return exactly one remediation", func() {
-				Expect(remList).To(HaveLen(1))
+			It("Should return exactly five remediations", func() {
+				Expect(remList).To(HaveLen(5))
 			})
 		})
 
@@ -53,7 +61,7 @@ var _ = Describe("ARF parser", func() {
 
 			BeforeEach(func() {
 				rem = remList[0]
-				expName = "testScan-no-empty-passwords"
+				expName = "testScan-no-direct-root-logins"
 			})
 
 			It("Should have the expected name", func() {
@@ -72,40 +80,43 @@ var _ = Describe("ARF parser", func() {
 					mcFiles = rem.Spec.MachineConfigContents.Spec.Config.Storage.Files
 				})
 
-				It("Should define two files", func() {
-					Expect(mcFiles).To(HaveLen(2))
+				It("Should define one file", func() {
+					Expect(mcFiles).To(HaveLen(1))
 				})
-				It("Should define the expected files", func() {
-					Expect(mcFiles[0].Path).To(Equal("/etc/pam.d/password-auth"))
-					Expect(mcFiles[1].Path).To(Equal("/etc/pam.d/system-auth"))
+				It("Should define the expected file", func() {
+					Expect(mcFiles[0].Path).To(Equal("/etc/securetty"))
 				})
 			})
-			// FIXME: maybe define Equal methods on the type and use go-cmp/cmp ?
 		})
 	})
 
-	Describe("Load the 18MB ARF", func() {
+	Describe("Benchmark loading the XCCFD and the DS", func() {
 		BeforeEach(func() {
 			mcInstance := &mcfgv1.MachineConfig{}
 			schema = scheme.Scheme
 			schema.AddKnownTypes(mcfgv1.SchemeGroupVersion, mcInstance)
-			resultsFilename = "../../tests/data/big-results.arf.xml"
+			resultsFilename = "../../tests/data/xccdf-result.xml"
+			dsFilename = "../../tests/data/ds-input.xml"
 		})
 
 		JustBeforeEach(func() {
-			arf, err = ioutil.ReadFile(resultsFilename)
+			xccdf, err = os.Open(resultsFilename)
 			Expect(err).NotTo(HaveOccurred())
+
+			ds, err = os.Open(dsFilename)
+			Expect(err).NotTo(HaveOccurred())
+
 		})
 
-		Context("Valid ARF with remediations", func() {
-			Measure("Should parse the ARF without errors", func(b Benchmarker) {
+		Context("Valid XCCDF and DS with remediations", func() {
+			Measure("Should parse the XCCDF and DS without errors", func(b Benchmarker) {
 				runtime := b.Time("runtime", func() {
-					remList, err = ParseRemediationsFromArf(schema, "testScan", "testNamespace", string(arf))
+					remList, err = ParseRemediationFromContentAndResults(schema, "testScan", "testNamespace", ds, xccdf)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(remList).To(HaveLen(6))
+					Expect(remList).To(HaveLen(5))
 				})
 
-				Ω(runtime.Seconds()).Should(BeNumerically("<", 4.0), "ParseRemediationsFromArf() shouldn't take too long.")
+				Ω(runtime.Seconds()).Should(BeNumerically("<", 3.0), "ParseRemediationsFromArf() shouldn't take too long.")
 			}, 100)
 		})
 	})

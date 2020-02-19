@@ -47,7 +47,8 @@ const (
 )
 
 type scapresultsConfig struct {
-	File            string
+	ArfFile         string
+	XccdfFile       string
 	ScanName        string
 	ConfigMapName   string
 	Namespace       string
@@ -57,7 +58,8 @@ type scapresultsConfig struct {
 }
 
 func defineFlags(cmd *cobra.Command) {
-	cmd.Flags().String("file", "", "The file to watch.")
+	cmd.Flags().String("arf-file", "", "The ARF file to watch.")
+	cmd.Flags().String("results-file", "", "The XCCDF results file to watch.")
 	cmd.Flags().String("owner", "", "The compliance scan that owns the configMap objects.")
 	cmd.Flags().String("config-map-name", "", "The configMap to upload to, typically the podname.")
 	cmd.Flags().String("namespace", "Running pod namespace.", ".")
@@ -68,7 +70,8 @@ func defineFlags(cmd *cobra.Command) {
 
 func parseConfig(cmd *cobra.Command) *scapresultsConfig {
 	var conf scapresultsConfig
-	conf.File = getValidStringArg(cmd, "file")
+	conf.ArfFile = getValidStringArg(cmd, "arf-file")
+	conf.XccdfFile = getValidStringArg(cmd, "results-file")
 	conf.ScanName = getValidStringArg(cmd, "owner")
 	conf.ConfigMapName = getValidStringArg(cmd, "config-map-name")
 	conf.Namespace = getValidStringArg(cmd, "namespace")
@@ -163,6 +166,37 @@ func compressResults(contents []byte) ([]byte, error) {
 	return []byte(base64.StdEncoding.EncodeToString(buffer.Bytes())), nil
 }
 
+type resultFileContents struct {
+	contents   []byte
+	compressed bool
+}
+
+func readResultsFile(filename string, timeout int64, doCompress bool) (*resultFileContents, error) {
+	var err error
+	var rfContents resultFileContents
+
+	handle := waitForResultsFile(filename, timeout)
+	defer handle.Close()
+
+	rfContents.contents, err = ioutil.ReadAll(handle)
+	if err != nil {
+		return nil, err
+	}
+
+	if resultNeedsCompression(rfContents.contents) || doCompress {
+		rfContents.contents, err = compressResults(rfContents.contents)
+		fmt.Printf("%s Needs compression\n", filename)
+		if err != nil {
+			fmt.Println("Error: Compression failed")
+			return nil, err
+		}
+		rfContents.compressed = true
+		fmt.Printf("Compressed results are %d bytes in size\n", len(rfContents.contents))
+	}
+
+	return &rfContents, nil
+}
+
 func getConfigMap(owner *unstructured.Unstructured, configMapName, filename string, contents []byte, compressed bool) *corev1.ConfigMap {
 	annotations := map[string]string{}
 	if compressed {
@@ -220,25 +254,17 @@ func main() {
 				fmt.Println(err)
 				os.Exit(1)
 			}
-			file := waitForResultsFile(scapresultsconf.File, scapresultsconf.Timeout)
-			defer file.Close()
 
-			contents, err := ioutil.ReadAll(file)
+			arfContents, err := readResultsFile(scapresultsconf.ArfFile, scapresultsconf.Timeout, scapresultsconf.Compress)
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(1)
 			}
 
-			compressed := false
-			if resultNeedsCompression(contents) || scapresultsconf.Compress {
-				contents, err = compressResults(contents)
-				fmt.Println("Needs compression.")
-				if err != nil {
-					fmt.Println("Error: Compression failed")
-					os.Exit(1)
-				}
-				compressed = true
-				fmt.Printf("Compressed results are %d bytes in size\n", len(contents))
+			xccdfContents, err := readResultsFile(scapresultsconf.XccdfFile, scapresultsconf.Timeout, scapresultsconf.Compress)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
 			}
 
 			var wg sync.WaitGroup
@@ -247,12 +273,12 @@ func main() {
 				err = backoff.Retry(func() error {
 					url := scapresultsconf.ResultServerURI
 					fmt.Printf("Trying to upload to resultserver: %s\n", url)
-					reader := bytes.NewReader(contents)
+					reader := bytes.NewReader(arfContents.contents)
 					client := &http.Client{}
 					req, _ := http.NewRequest("POST", url, reader)
 					req.Header.Add("Content-Type", "application/xml")
 					req.Header.Add("X-Report-Name", scapresultsconf.ConfigMapName)
-					if compressed {
+					if arfContents.compressed {
 						req.Header.Add("Content-Encoding", "bzip2")
 					}
 					resp, err := client.Do(req)
@@ -277,6 +303,7 @@ func main() {
 				fmt.Println("Uploaded to resultserver")
 				wg.Done()
 			}()
+
 			go func() {
 				err = backoff.Retry(func() error {
 					fmt.Println("Trying to upload ConfigMap")
@@ -284,7 +311,7 @@ func main() {
 					if err != nil {
 						return err
 					}
-					confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results", contents, compressed)
+					confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results", xccdfContents.contents, xccdfContents.compressed)
 					_, err = clientset.CoreV1().ConfigMaps(scapresultsconf.Namespace).Create(confMap)
 					return err
 				}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
