@@ -16,6 +16,7 @@ limitations under the License.
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -329,7 +330,11 @@ func aggregator(cmd *cobra.Command, args []string) {
 	// For each configmap, create a list of remediations
 	for _, cm := range configMaps {
 		fmt.Printf("processing CM: %s\n", cm.Name)
-		cmRemediations, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentFile, &cm)
+
+		contentFile.Seek(0, io.SeekStart)
+		bufContentFile := bufio.NewReader(contentFile)
+
+		cmRemediations, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, bufContentFile, &cm)
 		if err != nil {
 			fmt.Printf("Cannot parse CM %s into remediations, err: %v\n", cm.Name, err)
 		} else if cmRemediations == nil {
