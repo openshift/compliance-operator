@@ -1,7 +1,8 @@
 package utils
 
 import (
-	"io/ioutil"
+	"io"
+	"os"
 
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
 	. "github.com/onsi/ginkgo"
@@ -15,8 +16,8 @@ import (
 
 var _ = Describe("XCCDF parser", func() {
 	var (
-		xccdf           []byte
-		ds              []byte
+		xccdf           io.Reader
+		ds              io.Reader
 		schema          *runtime.Scheme
 		resultsFilename string
 		dsFilename      string
@@ -34,13 +35,13 @@ var _ = Describe("XCCDF parser", func() {
 		})
 
 		JustBeforeEach(func() {
-			xccdf, err = ioutil.ReadFile(resultsFilename)
+			xccdf, err = os.Open(resultsFilename)
 			Expect(err).NotTo(HaveOccurred())
 
-			ds, err = ioutil.ReadFile(dsFilename)
+			ds, err = os.Open(dsFilename)
 			Expect(err).NotTo(HaveOccurred())
 
-			remList, err = ParseRemediationFromContentAndResults(schema, "testScan", "testNamespace", string(ds), string(xccdf))
+			remList, err = ParseRemediationFromContentAndResults(schema, "testScan", "testNamespace", ds, xccdf)
 		})
 
 		Context("Valid XCCDF", func() {
@@ -99,17 +100,18 @@ var _ = Describe("XCCDF parser", func() {
 		})
 
 		JustBeforeEach(func() {
-			xccdf, err = ioutil.ReadFile(resultsFilename)
+			xccdf, err = os.Open(resultsFilename)
 			Expect(err).NotTo(HaveOccurred())
 
-			ds, err = ioutil.ReadFile(dsFilename)
+			ds, err = os.Open(dsFilename)
 			Expect(err).NotTo(HaveOccurred())
+
 		})
 
 		Context("Valid XCCDF and DS with remediations", func() {
 			Measure("Should parse the XCCDF and DS without errors", func(b Benchmarker) {
 				runtime := b.Time("runtime", func() {
-					remList, err = ParseRemediationFromContentAndResults(schema, "testScan", "testNamespace", string(ds), string(xccdf))
+					remList, err = ParseRemediationFromContentAndResults(schema, "testScan", "testNamespace", ds, xccdf)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(remList).To(HaveLen(5))
 				})

@@ -25,15 +25,13 @@ import (
 	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	"github.com/spf13/cobra"
-	"io/ioutil"
+	"io"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -41,7 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sort"
 	"strings"
-	"time"
 )
 
 const (
@@ -131,57 +128,37 @@ func getScanConfigMaps(clientset *kubernetes.Clientset, scan, namespace string) 
 	var err error
 
 	// Look for configMap with this scan label
-	err = wait.PollImmediate(5*time.Second, 10*time.Minute, func() (bool, error) {
-		listOpts := metav1.ListOptions{
-			LabelSelector: fmt.Sprintf("compliance-scan=%s", scan),
-		}
+	listOpts := metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("compliance-scan=%s", scan),
+	}
 
-		cMapList, err = clientset.CoreV1().ConfigMaps(namespace).List(listOpts)
-		if err != nil {
-			return false, err
-		}
-
-		if len(cMapList.Items) == 0 {
-			fmt.Printf("Scan %s has no results yet\n", scan)
-			return false, nil
-		}
-		return true, nil
-	})
-
+	cMapList, err = clientset.CoreV1().ConfigMaps(namespace).List(listOpts)
 	if err != nil {
 		fmt.Printf("Error waiting for CMs of scan %s: %v\n", scan, err)
 		return nil, err
+	}
+
+	if len(cMapList.Items) == 0 {
+		fmt.Printf("Scan %s has no results\n", scan)
+		return make([]v1.ConfigMap, 0), nil
 	}
 
 	fmt.Printf("Scan %s has %d results\n", scan, len(cMapList.Items))
 	return cMapList.Items, nil
 }
 
-func readCompressedData(compressed string) (string, error) {
+func readCompressedData(compressed string) (*bzip2.Reader, error) {
 	decoded, err := base64.StdEncoding.DecodeString(compressed)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	compressedReader := bytes.NewReader(decoded)
-	bzReader, err := bzip2.NewReader(compressedReader, &bzip2.ReaderConfig{})
-	if err != nil {
-		return "", err
-	}
-	defer bzReader.Close()
-
-	// FIXME: probably unsafe, see https://haisum.github.io/2017/09/11/golang-ioutil-readall/
-	b, err := ioutil.ReadAll(bzReader)
-	if err != nil {
-		return "", err
-	}
-
-	return string(b), nil
+	return bzip2.NewReader(compressedReader, &bzip2.ReaderConfig{})
 }
 
-func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace, content string, cm *v1.ConfigMap) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
-	var scanResult string
-	var err error
+func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content io.Reader, cm *v1.ConfigMap) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
+	var scanReader io.Reader
 
 	_, ok := cm.Annotations[configMapRemediationsProcessed]
 	if ok {
@@ -189,7 +166,7 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace, conten
 		return nil, nil
 	}
 
-	scanResult, ok = cm.Data["results"]
+	cmScanResult, ok := cm.Data["results"]
 	if !ok {
 		return nil, fmt.Errorf("no results in configmap %s", cm.Name)
 	}
@@ -197,13 +174,17 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace, conten
 	_, ok = cm.Annotations[configMapCompressed]
 	if ok {
 		fmt.Printf("Results are compressed\n")
-		scanResult, err = readCompressedData(scanResult)
+		scanResult, err := readCompressedData(cmScanResult)
 		if err != nil {
 			return nil, err
 		}
+		defer scanResult.Close()
+		scanReader = scanResult
+	} else {
+		scanReader = strings.NewReader(cmScanResult)
 	}
 
-	return utils.ParseRemediationFromContentAndResults(scheme, scanName, namespace, content, scanResult)
+	return utils.ParseRemediationFromContentAndResults(scheme, scanName, namespace, content, scanReader)
 }
 
 // returns true if the lists are the same, false if they differ
@@ -245,7 +226,7 @@ func diffRemediations(old, new *complianceoperatorv1alpha1.ComplianceRemediation
 	return reflect.DeepEqual(old.Spec.MachineConfigContents.Spec, new.Spec.MachineConfigContents.Spec)
 }
 
-func updateResultsConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) error {
+func annotateParsedConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) error {
 	cmCopy := cm.DeepCopy()
 
 	if cmCopy.Annotations == nil {
@@ -285,19 +266,12 @@ func createRemediations(crClient *complianceCrClient, scan *complianceoperatorv1
 	return nil
 }
 
-func readContent(filename string) (string, error) {
+func readContent(filename string) (*os.File, error) {
 	// gosec complains that the file is passed through an evironment variable. But
 	// this is not a security issue because none of the files are user-provided
 	cleanFileName := filepath.Clean(filename)
 	// #nosec G304
-	file, err := os.Open(cleanFileName)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	b, err := ioutil.ReadAll(file)
-	return string(b), err
+	return os.Open(cleanFileName)
 }
 
 func aggregator(cmd *cobra.Command, args []string) {
@@ -307,18 +281,8 @@ func aggregator(cmd *cobra.Command, args []string) {
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		// fallback to kubeconfig
-		fmt.Println("Running outside cluster")
-		kubeconfig := filepath.Join("~", ".kube", "config")
-		if envvar := os.Getenv("KUBECONFIG"); len(envvar) > 0 {
-			kubeconfig = envvar
-		}
-		fmt.Printf("Using KUBECONFIG %s\n", kubeconfig)
-		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-		if err != nil {
-			fmt.Printf("The kubeconfig cannot be loaded: %v\n", err)
-			os.Exit(1)
-		}
+		fmt.Printf("Can't create incluster config: %v\n", err)
+		os.Exit(1)
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
@@ -348,12 +312,6 @@ func aggregator(cmd *cobra.Command, args []string) {
 		os.Exit(0)
 	}
 
-	content, err := readContent(aggregatorConf.Content)
-	if err != nil {
-		fmt.Printf("Cannot read the content: %v\n", err)
-		os.Exit(1)
-	}
-
 	// Find all the configmaps for a scan
 	configMaps, err := getScanConfigMaps(clientset, aggregatorConf.ScanName, aggregatorConf.Namespace)
 	if err != nil {
@@ -361,10 +319,17 @@ func aggregator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	contentFile, err := readContent(aggregatorConf.Content)
+	if err != nil {
+		fmt.Printf("Cannot read the content: %v\n", err)
+		os.Exit(1)
+	}
+	defer contentFile.Close()
+
 	// For each configmap, create a list of remediations
 	for _, cm := range configMaps {
 		fmt.Printf("processing CM: %s\n", cm.Name)
-		cmRemediations, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, content, &cm)
+		cmRemediations, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentFile, &cm)
 		if err != nil {
 			fmt.Printf("Cannot parse CM %s into remediations, err: %v\n", cm.Name, err)
 		} else if cmRemediations == nil {
@@ -373,9 +338,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 		}
 		fmt.Printf("CM %s contained %d remediations\n", cm.Name, len(cmRemediations))
 
-		// Annotate the configmap, we want to avoid parsing it next time the reconcile
-		// loop hits
-		err = updateResultsConfigMap(clientset, &cm)
+		err = annotateParsedConfigMap(clientset, &cm)
 		if err != nil {
 			fmt.Printf("Cannot annotate the CM: %v\n", err)
 			os.Exit(1)

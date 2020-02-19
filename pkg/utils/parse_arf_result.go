@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/subchen/go-xmldom"
@@ -17,10 +18,9 @@ const (
 	machineConfigFixType = "urn:xccdf:fix:script:ignition"
 )
 
-func ParseRemediationFromContentAndResults(scheme *runtime.Scheme, scanName string, namespace string, content, results string) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
+func ParseRemediationFromContentAndResults(scheme *runtime.Scheme, scanName string, namespace string, dsReader, resultsReader io.Reader) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
 	remediations := make([]*complianceoperatorv1alpha1.ComplianceRemediation, 0)
 
-	resultsReader := strings.NewReader(results)
 	resultsDom, err := xmldom.Parse(resultsReader)
 	if err != nil {
 		return nil, err
@@ -29,7 +29,6 @@ func ParseRemediationFromContentAndResults(scheme *runtime.Scheme, scanName stri
 	// Get the checks that had failed
 	failedRuleResults := filterFailedResults(resultsDom.Root.Query("//rule-result"))
 
-	dsReader := strings.NewReader(content)
 	dsDom, err := xmldom.Parse(dsReader)
 	if err != nil {
 		return nil, err
