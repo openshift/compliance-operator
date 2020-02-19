@@ -24,6 +24,7 @@ import (
 	"net/http/httputil"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	backoff "github.com/cenkalti/backoff/v3"
@@ -240,54 +241,62 @@ func main() {
 				fmt.Printf("Compressed results are %d bytes in size\n", len(contents))
 			}
 
-			err = backoff.Retry(func() error {
-				url := scapresultsconf.ResultServerURI
-				fmt.Printf("Trying to upload to resultserver: %s\n", url)
-				reader := bytes.NewReader(contents)
-				client := &http.Client{}
-				req, _ := http.NewRequest("POST", url, reader)
-				req.Header.Add("Content-Type", "application/xml")
-				req.Header.Add("X-Report-Name", scapresultsconf.ConfigMapName)
-				if compressed {
-					req.Header.Add("Content-Encoding", "bzip2")
-				}
-				resp, err := client.Do(req)
+			var wg sync.WaitGroup
+			wg.Add(2)
+			go func() {
+				err = backoff.Retry(func() error {
+					url := scapresultsconf.ResultServerURI
+					fmt.Printf("Trying to upload to resultserver: %s\n", url)
+					reader := bytes.NewReader(contents)
+					client := &http.Client{}
+					req, _ := http.NewRequest("POST", url, reader)
+					req.Header.Add("Content-Type", "application/xml")
+					req.Header.Add("X-Report-Name", scapresultsconf.ConfigMapName)
+					if compressed {
+						req.Header.Add("Content-Encoding", "bzip2")
+					}
+					resp, err := client.Do(req)
+					if err != nil {
+						fmt.Println(err)
+						return err
+					}
+					defer resp.Body.Close()
+					bytesresp, err := httputil.DumpResponse(resp, true)
+					if err != nil {
+						fmt.Println(err)
+						return err
+					}
+					fmt.Println(string(bytesresp))
+					return nil
+				}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+
 				if err != nil {
 					fmt.Println(err)
-					return err
+					os.Exit(1)
 				}
-				defer resp.Body.Close()
-				bytesresp, err := httputil.DumpResponse(resp, true)
+				fmt.Println("Uploaded to resultserver")
+				wg.Done()
+			}()
+			go func() {
+				err = backoff.Retry(func() error {
+					fmt.Println("Trying to upload ConfigMap")
+					openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, dynclient)
+					if err != nil {
+						return err
+					}
+					confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results", contents, compressed)
+					_, err = clientset.CoreV1().ConfigMaps(scapresultsconf.Namespace).Create(confMap)
+					return err
+				}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+
 				if err != nil {
 					fmt.Println(err)
-					return err
+					os.Exit(1)
 				}
-				fmt.Println(string(bytesresp))
-				return nil
-			}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
-
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-			fmt.Println("Uploaded to resultserver")
-
-			err = backoff.Retry(func() error {
-				fmt.Println("Trying to upload ConfigMap")
-				openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, dynclient)
-				if err != nil {
-					return err
-				}
-				confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results", contents, compressed)
-				_, err = clientset.CoreV1().ConfigMaps(scapresultsconf.Namespace).Create(confMap)
-				return err
-			}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
-
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-			fmt.Println("Uploaded ConfigMap")
+				fmt.Println("Uploaded ConfigMap")
+				wg.Done()
+			}()
+			wg.Wait()
 		},
 	}
 
