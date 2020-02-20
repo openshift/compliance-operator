@@ -71,6 +71,8 @@ directory you can supply `./...` as the input argument.
 - G106: Audit the use of ssh.InsecureIgnoreHostKey
 - G107: Url provided to HTTP request as taint input
 - G108: Profiling endpoint automatically exposed on /debug/pprof
+- G109: Potential Integer overflow made by strconv.Atoi result conversion to int16/32
+- G110: Potential DoS vulnerability via decompression bomb
 - G201: SQL query construction using format string
 - G202: SQL query construction using string concatenation
 - G203: Use of unescaped data in HTML templates
@@ -210,7 +212,7 @@ gosec -tag debug,ignore ./...
 
 ### Output formats
 
-gosec currently supports text, json, yaml, csv, sonarqube and JUnit XML output formats. By default
+gosec currently supports text, json, yaml, csv, sonarqube, JUnit XML and golint output formats. By default
 results will be reported to stdout, but can also be written to an output
 file. The output format is controlled by the '-fmt' flag, and the output file is controlled by the '-out' flag as follows:
 

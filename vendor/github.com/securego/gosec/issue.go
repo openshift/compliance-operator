@@ -53,6 +53,8 @@ var IssueToCWE = map[string]Cwe{
 	"G104": GetCwe("703"),
 	"G106": GetCwe("322"),
 	"G107": GetCwe("88"),
+	"G109": GetCwe("190"),
+	"G110": GetCwe("409"),
 	"G201": GetCwe("89"),
 	"G202": GetCwe("89"),
 	"G203": GetCwe("79"),
@@ -83,6 +85,7 @@ type Issue struct {
 	File       string `json:"file"`       // File name we found it in
 	Code       string `json:"code"`       // Impacted code line
 	Line       string `json:"line"`       // Line number in file
+	Col        string `json:"column"`     // Column number in line
 }
 
 // MetaData is embedded in all gosec rules. The Severity, Confidence and What message
@@ -142,6 +145,8 @@ func NewIssue(ctx *Context, node ast.Node, ruleID, desc string, severity Score, 
 		line = fmt.Sprintf("%d-%d", start, end)
 	}
 
+	col := strconv.Itoa(fobj.Position(node.Pos()).Column)
+
 	// #nosec
 	if file, err := os.Open(fobj.Name()); err == nil {
 		defer file.Close()
@@ -156,6 +161,7 @@ func NewIssue(ctx *Context, node ast.Node, ruleID, desc string, severity Score, 
 	return &Issue{
 		File:       name,
 		Line:       line,
+		Col:        col,
 		RuleID:     ruleID,
 		What:       desc,
 		Confidence: confidence,
