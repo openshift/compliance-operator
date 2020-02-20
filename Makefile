@@ -296,6 +296,9 @@ push: image
 	# resultserver
 	$(RUNTIME) tag $(RESULTSERVER_IMAGE_PATH) $(RESULTSERVER_IMAGE_PATH):$(TAG)
 	$(RUNTIME) push $(RESULTSERVER_IMAGE_PATH):$(TAG)
+	# remediation-aggregator
+	$(RUNTIME) tag $(REMEDIATION_AGGREGATOR_IMAGE_PATH) $(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)
+	$(RUNTIME) push $(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)
 
 versionPath=$(shell GO111MODULE=on go list -f {{.Dir}} k8s.io/code-generator/cmd/client-gen)
 codegeneratorRoot=$(versionPath:/cmd/client-gen=)
