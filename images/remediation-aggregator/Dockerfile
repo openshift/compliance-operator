@@ -13,6 +13,6 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 USER root
 
 # build aggregator
-COPY --from=builder /go/src/github.com/openshift/compliance-operator/build/_output/bin/aggregator /usr/local/bin/aggregator
+COPY --from=builder /go/src/github.com/openshift/compliance-operator/build/_output/bin/remediation-aggregator /usr/local/bin/aggregator
 
 ENTRYPOINT ["/usr/local/bin/aggregator"]
