@@ -251,6 +251,8 @@ image-to-cluster:
 	$(eval RESULTSCOLLECTOR_IMAGE_PATH = $(IMAGE_FORMAT))
 	$(eval component = compliance-resultserver)
 	$(eval RESULTSERVER_IMAGE_PATH = $(IMAGE_FORMAT))
+	$(eval component = compliance-remediation-aggregator)
+	$(eval REMEDIATION_AGGREGATOR_IMAGE_PATH = $(IMAGE_FORMAT))
 else
 image-to-cluster: namespace openshift-user image
 	@echo "IMAGE_FORMAT variable missing. We're in local enviornment."
