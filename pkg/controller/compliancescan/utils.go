@@ -29,7 +29,7 @@ var componentDefaults = []struct {
 	{"quay.io/compliance-operator/resultscollector:latest", "LOG_COLLECTOR_IMAGE"},
 	{"quay.io/jhrozek/openscap-ocp:latest", "OPENSCAP_IMAGE"},
 	{"quay.io/compliance-operator/resultserver:latest", "RESULT_SERVER_IMAGE"},
-	{"quay.io/jhrozek/remediation-aggregator", "AGGREGATOR_IMAGE"},
+	{"quay.io/compliance-operator/remediation-aggregator", "REMEDIATION_AGGREGATOR_IMAGE"},
 }
 
 // GetComponentImage returns a full image pull spec for a given component
