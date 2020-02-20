@@ -38,6 +38,7 @@ rules:
   - watch
   - create
   - update
+  - delete      # The compliance-scan controller deletes the resultserver in the DONE phase
 - apiGroups:
   - complianceoperator.compliance.openshift.io
   resources:
