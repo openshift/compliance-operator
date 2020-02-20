@@ -5,28 +5,25 @@ go 1.13
 require (
 	github.com/ajeddeloh/go-json v0.0.0-20170920214419-6a2fe990e083 // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2
-	github.com/coreos/ignition v0.33.0
+	github.com/coreos/ignition v0.35.0
 	github.com/dsnet/compress v0.0.1
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.1
-	github.com/go-openapi/spec v0.19.2
-	github.com/google/go-cmp v0.3.1 // indirect
-	github.com/onsi/ginkgo v1.10.3
-	github.com/onsi/gomega v1.7.1
-	github.com/operator-framework/operator-sdk v0.13.0
-	github.com/prometheus/procfs v0.0.5 // indirect
-	github.com/securego/gosec v0.0.0-20191119104125-df484bfa9e9f
+	github.com/go-openapi/spec v0.19.4
+	github.com/onsi/ginkgo v1.12.0
+	github.com/onsi/gomega v1.9.0
+	github.com/operator-framework/operator-sdk v0.14.1
+	github.com/securego/gosec v0.0.0-20200203094520-d13bb6d2420c
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
 	github.com/subchen/go-xmldom v1.1.2
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	go.uber.org/zap v1.10.0
-	go4.org v0.0.0-20191010144846-132d2879e1e9 // indirect
-	golang.org/x/crypto v0.0.0-20190927123631-a832865fa7ad // indirect
+	go4.org v0.0.0-20200104003542-c7e774b10ea0 // indirect
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/code-generator v0.17.0
+	k8s.io/code-generator v0.0.0
 	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d
 	sigs.k8s.io/controller-runtime v0.4.0
 )
@@ -55,3 +52,5 @@ replace (
 	k8s.io/metrics => k8s.io/metrics v0.0.0-20191016113814-3b1a734dba6e
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.0.0-20191016112829-06bb3c9d77c9
 )
+
+replace github.com/docker/docker => github.com/moby/moby v0.7.3-0.20190826074503-38ab9da00309 // Required by Helm
