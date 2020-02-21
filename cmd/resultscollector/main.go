@@ -214,7 +214,7 @@ func getConfigMap(owner *unstructured.Unstructured, configMapName, filename stri
 			Name:        configMapName,
 			Annotations: annotations,
 			OwnerReferences: []metav1.OwnerReference{
-				metav1.OwnerReference{
+				{
 					APIVersion: owner.GetAPIVersion(),
 					Kind:       owner.GetKind(),
 					Name:       owner.GetName(),

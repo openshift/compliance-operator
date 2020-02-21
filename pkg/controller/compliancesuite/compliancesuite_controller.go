@@ -295,7 +295,7 @@ func diffRemediationList(oldList, newList []*complianceoperatorv1alpha1.Complian
 	sortMcSlice(oldList)
 	sortMcSlice(newList)
 
-	for i, _ := range oldList {
+	for i := range oldList {
 		ok := diffRemediations(oldList[i], newList[i])
 		if !ok {
 			return false
