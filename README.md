@@ -1,25 +1,27 @@
 # compliance-operator
 
-The compliance-operator is a OpenShift/Kubernetes Operator that runs an
-openscap container in a pod on nodes in the cluster.
+The compliance-operator is a OpenShift Operator that allows an administrator
+to run compliance scans and provide remediations for the issues found. The
+operator leverages OpenSCAP under the hood to perform the scans.
 
-This repo is a POC for host openshift compliance detection and remediation
-and is work-in-progress.
+The operator runs in the `openshift-compliance` namespace, so make sure
+all namespaced resources like the deployment or the custom resources the
+operator consumes are created there.
 
-### Deploying:
+## Deploying the operator
+Before you can actually use the operator, you need to make sure it is
+deployed in the cluster.
+
+### Deploying from source
 First, become kubeadmin, either with `oc login` or by exporting `KUBECONFIG`.
 ```
 $ (clone repo)
 $ oc create -f deploy/ns.yaml
 $ for f in $(ls -1 deploy/crds/*crd.yaml); do oc create -f $f; done
 $ oc create -f deploy/
-$ vim deploy/crds/complianceoperator.compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
-# edit the file to your liking
-# oc project openshift-compliance
-$ oc create -f deploy/crds/complianceoperator.compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
 ```
 
-### Running the operator:
+### Running the operator locally
 If you followed the steps above, the file called `deploy/operator.yaml`
 also creates a deployment that runs the operator. If you want to run
 the operator from the command line instead, delete the deployment and then
@@ -28,88 +30,116 @@ run:
 ```
 make run
 ```
+This is mostly useful for local development.
 
-At this point the operator would pick up the CRD, create a scan for the
-suite, the scan would create a pod for every node in the cluster (this will
-change, see below), execute `openscap-scan` on every node and eventually
-report the results. The scan using one rule takes about a minute.
+## Running a scan
 
-You can watch the node progress with:
+The API resource that you'll be interacting with is called `ComplianceSuite`.
+It is a collection of `ComplianceScan` objects, each of which describes
+a scan. In addition, the `ComplianceSuite` also contains an overview of the
+remediations found and the statuses of the scans. Typically, you'll want
+to map a scan to a `MachinePool`, mostly because the remediations for any
+issues that would be found contain `MachineConfig` objects that must be
+applied to a pool.
+
+To run the scans, copy and edit the example file at
+`deploy/crds/complianceoperator.compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml`
+and create the Kubernetes object:
+```
+# edit the Suite definition to your liking. You can also copy the file and edit the copy.
+$ vim deploy/crds/complianceoperator.compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
+# make sure to switch to the openshift-compliance namespace
+$ oc project openshift-compliance
+$ oc create -f deploy/crds/complianceoperator.compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
+```
+
+At this point the operator reconciles the `ComplianceSuite` custom resource,
+and creates the `ComplianceScan` objects for the suite. The `ComplianceScan`
+then creates scan pods that run on each node in the cluster. The scan
+pods execute `openscap-chroot` on every node and eventually report the
+results. The scan takes several minutes to complete.
+
+You can watch the scan progress with:
+```
+$ oc get compliancesuites/$suite-name -oyaml
+```
+and even the individual pods with:
 ```
 $ oc get pods -w
 ```
 
-When the scan is done, the operator would change the state of the OpenScap
-object to "Done" and all the pods would be "Completed". You can then view
-the results in configmaps, e.g.:
+When the scan is done, the operator changes the state of the ComplianceSuite
+object to "Done" and all the pods are transition to the "Completed"
+state. You can then check the `ComplianceRemediations` that were found with:
 ```
-$ oc get cm
-NAME                                                      DATA   AGE
-example-compliancescan-ip-10-0-133-38.ec2.internal-pod    1      78s
-example-compliancescan-ip-10-0-143-212.ec2.internal-pod   1      80s
-example-compliancescan-ip-10-0-144-96.ec2.internal-pod    1      81s
-example-compliancescan-ip-10-0-153-95.ec2.internal-pod    1      78s
-example-compliancescan-ip-10-0-171-129.ec2.internal-pod   1      81s
-example-compliancescan-ip-10-0-175-130.ec2.internal-pod   1      80s
-```
-
-In case there's multiple scans running, it might be handy to distinguish
-between scan results coming from different scans. You can take advantage
-of the configmaps being labeled with the scan name to do that:
-```
-$ oc get cm --show-labels
-NAME                                                      DATA   AGE     LABELS
-example-compliancescan-ip-10-0-131-249.ec2.internal-pod   1      2m16s   compliance-scan=example-compliancescan
-example-compliancescan-ip-10-0-132-37.ec2.internal-pod    1      2m16s   compliance-scan=example-compliancescan
-example-compliancescan-ip-10-0-144-8.ec2.internal-pod     1      2m10s   compliance-scan=example-compliancescan
-example-compliancescan-ip-10-0-149-53.ec2.internal-pod    1      2m20s   compliance-scan=example-compliancescan
-example-compliancescan-ip-10-0-164-150.ec2.internal-pod   1      2m9s    compliance-scan=example-compliancescan
-example-compliancescan-ip-10-0-174-131.ec2.internal-pod   1      2m16s   compliance-scan=example-compliancescan
+$ oc get complianceremediation
+NAME                                       AGE
+workers-scan-chronyd-client-only           15m
+workers-scan-chronyd-no-chronyc-network    15m
+workers-scan-coredump-disable-backtraces   15m
+workers-scan-coredump-disable-storage      15m
+workers-scan-no-direct-root-logins         15m
+workers-scan-no-empty-passwords            15m
 ```
 
-At the moment, the scans produce XML-based ARF reports, which the operator
-is able to parse. You can fetch the results with `oc extract $cm_name`.
-
-A more convenient way to fetch the results is using
-[a script](https://github.com/jhrozek/scapresults-k8s/blob/master/scapresults/fetchresults.py)
-To use the script, clone the [scapresults-k8s repo](jhrozek/scapresults-k8s),
-then run the `scapresults/fetchresults.py` script:
+To apply a remediation, edit that object and set its `Apply` attribute
+to `true`:
 ```
-$ python3 scapresults/fetchresults.py --owner=example-openscap --namespace=openshift-compliance --dir=/tmp/results
-```
-The parameters you need to supply is the name of the scan CRD through the
-`--owner` CLI flag and the namespace. The output directory is optional and
-defaults to the current working directory.
-
-The pods and the configMaps are not garbage-collected automatically, but are owned by the CRD,
-so removing the CRD removes the dependent artifacts.
-
-#### Scan only a subset of nodes
-It might be handy to run different compliance checks
-on some nodes, but not others. For example, some nodes might run a different
-OS than others or a particular check might make sense for master
-nodes only.
-
-To constrain a scan to a subset of nodes, define a `nodeSelector`
-in the CR. For example, to run a scan on master nodes only, add this:
-```
-nodeSelector:
-    node-role.kubernetes.io/master: ""
+$ oc edit complianceremediation/workers-scan-no-direct-root-logins
 ```
 
-To see the available labels, run `oc get nodes --show-labels` or
-`oc describe node/$nodename`.
+The operator then aggregates all applied remediations and create a
+`MachineConfig` object per scan. This `MachineConfig` object is rendered
+to a `MachinePool` and the `MachineConfigDeamon` running on nodes in that
+pool pushes the configuration to the nodes and reboots the nodes.
 
-### Related repositories
-The pods that the operator consist of two containers. One is the openscap
-container itself at [https://github.com/jhrozek/openscap-ocp](https://github.com/jhrozek/openscap-ocp)
-and the other is a log-collector at [https://github.com/openshift/scapresults](https://github.com/openshift/scapresults)
+You can watch the node status with:
+```
+$ oc get nodes
+```
+
+Once the nodes reboot, you might want to run another Suite to ensure that
+the remediation that you applied previously was no longer found.
+
+## Extracting results
+
+The scans provide two kids of results: the full report in the ARF format
+and just the list of scan results in the XCCDF format. The ARF reports are,
+due to their large size, copied into persistent volumes:
+```
+oc get pv
+NAME                                       CAPACITY  CLAIM
+pvc-5d49c852-03a6-4bcd-838b-c7225307c4bb   1Gi       openshift-compliance/workers-scan
+pvc-ef68c834-bb6e-4644-926a-8b7a4a180999   1Gi       openshift-compliance/masters-scan
+```
+
+To view the results at the moment, you'd have to start a pod manually, mount
+the PV into the pod and e.g. serve the results over HTTP. We're working on
+a better solution in the meantime.
+
+The XCCDF results are much smaller and can be stored in a configmap, from
+which you can extract the results. For easier filtering, the configmaps
+are labeled with the scan name:
+```
+$ oc get cm -l=compliance-scan=masters-scan
+NAME                                            DATA   AGE
+masters-scan-ip-10-0-129-248.ec2.internal-pod   1      25m
+masters-scan-ip-10-0-144-54.ec2.internal-pod    1      24m
+masters-scan-ip-10-0-174-253.ec2.internal-pod   1      25m
+```
+
+To extract the results, use:
+```
+$ oc extract cm/masters-scan-ip-10-0-174-253.ec2.internal-pod
+```
 
 ### Overriding container images
 Should you wish to override any of the two container images in the pod, you can
 do so using environment variables:
     * `OPENSCAP_IMAGE` for the scanner container
     * `LOG_COLLECTOR_IMAGE` for the log collecting container
+    * `RESULT_SERVER_IMAGE` for the container that collects ARF reports and puts them in a PV
+    * `REMEDIATION_AGGREGATOR_IMAGE` for the container that collects XCCDF results and puts them in a ConfigMap
 
 For example, to run the log collector from a different branch:
 ```
