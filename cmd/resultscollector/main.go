@@ -62,7 +62,7 @@ func defineFlags(cmd *cobra.Command) {
 	cmd.Flags().String("results-file", "", "The XCCDF results file to watch.")
 	cmd.Flags().String("owner", "", "The compliance scan that owns the configMap objects.")
 	cmd.Flags().String("config-map-name", "", "The configMap to upload to, typically the podname.")
-	cmd.Flags().String("namespace", "Running pod namespace.", ".")
+	cmd.Flags().String("namespace", "openshift-compliance", "Running pod namespace.")
 	cmd.Flags().Int64("timeout", 3600, "How long to wait for the file.")
 	cmd.Flags().Bool("compress", false, "Always compress the results.")
 	cmd.Flags().String("resultserveruri", "", "The resultserver URI name.")
@@ -214,7 +214,7 @@ func getConfigMap(owner *unstructured.Unstructured, configMapName, filename stri
 			Name:        configMapName,
 			Annotations: annotations,
 			OwnerReferences: []metav1.OwnerReference{
-				metav1.OwnerReference{
+				{
 					APIVersion: owner.GetAPIVersion(),
 					Kind:       owner.GetKind(),
 					Name:       owner.GetName(),

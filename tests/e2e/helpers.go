@@ -494,4 +494,3 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *
 	t.Logf("Machines updated with remediation")
 	return nil
 }
-
