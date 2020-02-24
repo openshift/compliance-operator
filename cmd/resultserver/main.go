@@ -16,8 +16,11 @@ limitations under the License.
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -28,15 +31,21 @@ import (
 
 func defineFlags(cmd *cobra.Command) {
 	cmd.Flags().String("address", "1.1.1.1", "Server address")
-	cmd.Flags().String("port", "8080", "Server port")
+	cmd.Flags().String("port", "8443", "Server port")
 	cmd.Flags().String("path", "/", "Content path")
 	cmd.Flags().String("owner", "", "Object owner")
+	cmd.Flags().String("tls-server-cert", "", "Path to the server cert")
+	cmd.Flags().String("tls-server-key", "", "Path to the server key")
+	cmd.Flags().String("tls-ca", "", "Path to the CA certificate")
 }
 
 type config struct {
 	Address string
 	Port    string
 	Path    string
+	Cert    string
+	Key     string
+	CA      string
 }
 
 func parseConfig(cmd *cobra.Command) *config {
@@ -44,6 +53,9 @@ func parseConfig(cmd *cobra.Command) *config {
 		Address: getValidStringArg(cmd, "address"),
 		Port:    getValidStringArg(cmd, "port"),
 		Path:    getValidStringArg(cmd, "path"),
+		Cert:    getValidStringArg(cmd, "tls-server-cert"),
+		Key:     getValidStringArg(cmd, "tls-server-key"),
+		CA:      getValidStringArg(cmd, "tls-ca"),
 	}
 	return conf
 }
@@ -76,6 +88,25 @@ func main() {
 }
 
 func server(c *config) {
+	caCert, err := ioutil.ReadFile(c.CA)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	// TODO: Configure cipher suites. Perhaps use library-go helper functions.
+	tlsConfig := &tls.Config{
+		ClientCAs:  caCertPool,
+		ClientAuth: tls.RequireAndVerifyClientCert,
+	}
+	tlsConfig.BuildNameToCertificate()
+	server := &http.Server{
+		Addr:      c.Address + ":" + c.Port,
+		TLSConfig: tlsConfig,
+	}
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		filename := r.Header.Get("X-Report-Name")
 		if filename == "" {
@@ -111,5 +142,5 @@ func server(c *config) {
 		log.Printf("Received file %s", filePath)
 	})
 	log.Println("Listening...")
-	log.Fatal(http.ListenAndServe(c.Address+":"+c.Port, nil))
+	log.Fatal(server.ListenAndServeTLS(c.Cert, c.Key))
 }

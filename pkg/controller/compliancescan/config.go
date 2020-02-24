@@ -27,7 +27,7 @@ const (
 	OpenScapReportDirEnvName = "REPORT_DIR"
 	OpenScapRuleEnvName      = "RULE"
 
-	ResultServerPort = int32(8080)
+	ResultServerPort = int32(8443)
 )
 
 var defaultOpenScapScriptContents = `#!/bin/bash

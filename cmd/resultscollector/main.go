@@ -17,6 +17,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -58,6 +60,9 @@ type scapresultsConfig struct {
 	ResultServerURI string
 	Timeout         int64
 	Compress        bool
+	Cert            string
+	Key             string
+	CA              string
 }
 
 func defineFlags(cmd *cobra.Command) {
@@ -71,6 +76,9 @@ func defineFlags(cmd *cobra.Command) {
 	cmd.Flags().Int64("timeout", 3600, "How long to wait for the file.")
 	cmd.Flags().Bool("compress", false, "Always compress the results.")
 	cmd.Flags().String("resultserveruri", "", "The resultserver URI name.")
+	cmd.Flags().String("tls-client-cert", "", "The path to the client and CA PEM cert bundle.")
+	cmd.Flags().String("tls-client-key", "", "The path to the client PEM key.")
+	cmd.Flags().String("tls-ca", "", "The path to the CA certificate.")
 }
 
 func parseConfig(cmd *cobra.Command) *scapresultsConfig {
@@ -82,6 +90,9 @@ func parseConfig(cmd *cobra.Command) *scapresultsConfig {
 	conf.ScanName = getValidStringArg(cmd, "owner")
 	conf.ConfigMapName = getValidStringArg(cmd, "config-map-name")
 	conf.Namespace = getValidStringArg(cmd, "namespace")
+	conf.Cert = getValidStringArg(cmd, "tls-client-cert")
+	conf.Key = getValidStringArg(cmd, "tls-client-key")
+	conf.CA = getValidStringArg(cmd, "tls-ca")
 	conf.Timeout, _ = cmd.Flags().GetInt64("timeout")
 	conf.Compress, _ = cmd.Flags().GetBool("compress")
 	conf.ResultServerURI, _ = cmd.Flags().GetString("resultserveruri")
@@ -244,7 +255,12 @@ func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scap
 		url := scapresultsconf.ResultServerURI
 		fmt.Printf("Trying to upload to resultserver: %s\n", url)
 		reader := bytes.NewReader(arfContents.contents)
-		client := &http.Client{}
+		transport, err := getMutualHttpsTransport(scapresultsconf)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		client := &http.Client{Transport: transport}
 		req, _ := http.NewRequest("POST", url, reader)
 		req.Header.Add("Content-Type", "application/xml")
 		req.Header.Add("X-Report-Name", scapresultsconf.ConfigMapName)
@@ -370,6 +386,27 @@ func getOscapExitCode(scapresultsconf *scapresultsConfig) string {
 	}
 
 	return string(exitcodeContent.contents[0])
+}
+
+func getMutualHttpsTransport(c *scapresultsConfig) (*http.Transport, error) {
+	cert, err := tls.LoadX509KeyPair(c.Cert, c.Key)
+	if err != nil {
+		return nil, err
+	}
+	ca, err := ioutil.ReadFile(c.CA)
+	if err != nil {
+		return nil, err
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(ca)
+
+	// TODO: Configure cipher suites. Perhaps use library-go helper functions.
+	return &http.Transport{
+		TLSClientConfig: &tls.Config{
+			RootCAs:      pool,
+			Certificates: []tls.Certificate{cert},
+		},
+	}, nil
 }
 
 // an exit code of 0 means that the scan returned compliant

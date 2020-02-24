@@ -12,6 +12,7 @@ require (
 	github.com/go-openapi/spec v0.19.4
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
+	github.com/openshift/library-go v0.0.0-20200221125639-952ac5a188d6
 	github.com/operator-framework/operator-sdk v0.14.1
 	github.com/securego/gosec v0.0.0-20200203094520-d13bb6d2420c
 	github.com/spf13/cobra v0.0.5
@@ -20,10 +21,11 @@ require (
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	go.uber.org/zap v1.10.0
 	go4.org v0.0.0-20200104003542-c7e774b10ea0 // indirect
-	k8s.io/api v0.0.0
-	k8s.io/apimachinery v0.0.0
+	k8s.io/api v0.17.2
+	k8s.io/apimachinery v0.17.2
+	k8s.io/apiserver v0.17.1
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/code-generator v0.0.0
+	k8s.io/code-generator v0.17.1
 	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d
 	sigs.k8s.io/controller-runtime v0.4.0
 )
