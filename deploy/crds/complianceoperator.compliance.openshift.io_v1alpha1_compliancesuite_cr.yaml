@@ -8,12 +8,12 @@ spec:
       - name: workers-scan
         profile: xccdf_org.ssgproject.content_profile_coreos-ncp
         content: ssg-ocp4-ds.xml
-        contentImage: quay.io/jhrozek/ocp4-openscap-content:remediation_demo
+        contentImage: quay.io/jhrozek/ocp4-openscap-content:latest
         nodeSelector:
             node-role.kubernetes.io/worker: ""
       - name: masters-scan
         profile: xccdf_org.ssgproject.content_profile_coreos-ncp
         content: ssg-ocp4-ds.xml
-        contentImage: quay.io/jhrozek/ocp4-openscap-content:remediation_demo
+        contentImage: quay.io/jhrozek/ocp4-openscap-content:latest
         nodeSelector:
             node-role.kubernetes.io/master: ""
