@@ -79,7 +79,8 @@ COURIER_CMD=operator-courier
 COURIER_PACKAGE_NAME=compliance-operator-bundle
 COURIER_OPERATOR_DIR=deploy/olm-catalog/compliance-operator
 COURIER_QUAY_NAMESPACE=compliance-operator
-COURIER_PACKAGE_VERSION?="0.1.0"
+COURIER_PACKAGE_VERSION?=0.1.1
+OLD_COURIER_PACKAGE_VERSION?=0.1.0
 COURIER_QUAY_TOKEN?= $(shell cat ~/.quay)
 
 .PHONY: all
@@ -322,5 +323,12 @@ gen-mcfg-client: code-generator
 	cp -r $(GOPATH)/src/github.com/openshift/compliance-operator/pkg/generated pkg/
 
 .PHONY: publish
-publish:
+publish: csv publish-bundle
+
+.PHONY: csv
+csv:
+	$(GOPATH)/bin/operator-sdk olm-catalog gen-csv --csv-version "$(COURIER_PACKAGE_VERSION)" --from-version "$(OLD_COURIER_PACKAGE_VERSION)" --update-crds
+
+.PHONY: publish-bundle
+publish-bundle:
 	$(COURIER_CMD) push "$(COURIER_OPERATOR_DIR)" "$(COURIER_QUAY_NAMESPACE)" "$(COURIER_PACKAGE_NAME)" "$(COURIER_PACKAGE_VERSION)" "basic $(COURIER_QUAY_TOKEN)"
