@@ -31,6 +31,7 @@ import (
 	"github.com/dsnet/compress/bzip2"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -49,6 +50,8 @@ const (
 type scapresultsConfig struct {
 	ArfFile         string
 	XccdfFile       string
+	ExitCodeFile    string
+	CmdOutputFile   string
 	ScanName        string
 	ConfigMapName   string
 	Namespace       string
@@ -60,6 +63,8 @@ type scapresultsConfig struct {
 func defineFlags(cmd *cobra.Command) {
 	cmd.Flags().String("arf-file", "", "The ARF file to watch.")
 	cmd.Flags().String("results-file", "", "The XCCDF results file to watch.")
+	cmd.Flags().String("exit-code-file", "", "A file containing the oscap command's exit code.")
+	cmd.Flags().String("oscap-output-file", "", "A file containing the oscap command's output.")
 	cmd.Flags().String("owner", "", "The compliance scan that owns the configMap objects.")
 	cmd.Flags().String("config-map-name", "", "The configMap to upload to, typically the podname.")
 	cmd.Flags().String("namespace", "openshift-compliance", "Running pod namespace.")
@@ -72,6 +77,8 @@ func parseConfig(cmd *cobra.Command) *scapresultsConfig {
 	var conf scapresultsConfig
 	conf.ArfFile = getValidStringArg(cmd, "arf-file")
 	conf.XccdfFile = getValidStringArg(cmd, "results-file")
+	conf.ExitCodeFile = getValidStringArg(cmd, "exit-code-file")
+	conf.CmdOutputFile = getValidStringArg(cmd, "oscap-output-file")
 	conf.ScanName = getValidStringArg(cmd, "owner")
 	conf.ConfigMapName = getValidStringArg(cmd, "config-map-name")
 	conf.Namespace = getValidStringArg(cmd, "namespace")
@@ -197,7 +204,7 @@ func readResultsFile(filename string, timeout int64, doCompress bool) (*resultFi
 	return &rfContents, nil
 }
 
-func getConfigMap(owner *unstructured.Unstructured, configMapName, filename string, contents []byte, compressed bool) *corev1.ConfigMap {
+func getConfigMap(owner *unstructured.Unstructured, configMapName, filename string, contents []byte, compressed bool, exitcode string) *corev1.ConfigMap {
 	annotations := map[string]string{}
 	if compressed {
 		annotations = map[string]string{
@@ -226,9 +233,179 @@ func getConfigMap(owner *unstructured.Unstructured, configMapName, filename stri
 			},
 		},
 		Data: map[string]string{
-			filename: string(contents),
+			"exit-code": exitcode,
+			filename:    string(contents),
 		},
 	}
+}
+
+func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scapresultsConfig) error {
+	return backoff.Retry(func() error {
+		url := scapresultsconf.ResultServerURI
+		fmt.Printf("Trying to upload to resultserver: %s\n", url)
+		reader := bytes.NewReader(arfContents.contents)
+		client := &http.Client{}
+		req, _ := http.NewRequest("POST", url, reader)
+		req.Header.Add("Content-Type", "application/xml")
+		req.Header.Add("X-Report-Name", scapresultsconf.ConfigMapName)
+		if arfContents.compressed {
+			req.Header.Add("Content-Encoding", "bzip2")
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		defer resp.Body.Close()
+		bytesresp, err := httputil.DumpResponse(resp, true)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		fmt.Println(string(bytesresp))
+		return nil
+	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+}
+
+func uploadResultConfigMap(xccdfContents *resultFileContents, exitcode string,
+	scapresultsconf *scapresultsConfig, clientset *kubernetes.Clientset, dynclient dynamic.Interface) error {
+	return backoff.Retry(func() error {
+		fmt.Println("Trying to upload results ConfigMap")
+		openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, dynclient)
+		if err != nil {
+			return err
+		}
+		confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results", xccdfContents.contents, xccdfContents.compressed, exitcode)
+		_, err = clientset.CoreV1().ConfigMaps(scapresultsconf.Namespace).Create(confMap)
+
+		if errors.IsAlreadyExists(err) {
+			return nil
+		}
+		return err
+	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+}
+
+func uploadErrorConfigMap(errorMsg *resultFileContents, exitcode string,
+	scapresultsconf *scapresultsConfig, clientset *kubernetes.Clientset, dynclient dynamic.Interface) error {
+	return backoff.Retry(func() error {
+		fmt.Println("Trying to upload error ConfigMap")
+		openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, dynclient)
+		if err != nil {
+			return err
+		}
+		confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "error-msg", errorMsg.contents, errorMsg.compressed, exitcode)
+		_, err = clientset.CoreV1().ConfigMaps(scapresultsconf.Namespace).Create(confMap)
+
+		if errors.IsAlreadyExists(err) {
+			return nil
+		}
+		return err
+	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+}
+
+func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConfig,
+	clientset *kubernetes.Clientset, dynclient dynamic.Interface) {
+	arfContents, err := readResultsFile(scapresultsconf.ArfFile, scapresultsconf.Timeout, scapresultsconf.Compress)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	xccdfContents, err := readResultsFile(scapresultsconf.XccdfFile, scapresultsconf.Timeout, scapresultsconf.Compress)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		err = uploadToResultServer(arfContents, scapresultsconf)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		fmt.Println("Uploaded to resultserver")
+		wg.Done()
+	}()
+
+	go func() {
+		err = uploadResultConfigMap(xccdfContents, exitcode, scapresultsconf, clientset, dynclient)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		fmt.Println("Uploaded ConfigMap")
+		wg.Done()
+	}()
+	wg.Wait()
+}
+
+func handleErrorInOscapRun(exitcode string, scapresultsconf *scapresultsConfig,
+	clientset *kubernetes.Clientset, dynclient dynamic.Interface) {
+	errorMsg, err := readResultsFile(scapresultsconf.CmdOutputFile, scapresultsconf.Timeout, false)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	err = uploadErrorConfigMap(errorMsg, exitcode, scapresultsconf, clientset, dynclient)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	fmt.Println("Uploaded ConfigMap")
+}
+
+func getOscapExitCode(scapresultsconf *scapresultsConfig) string {
+	exitcodeContent, err := readResultsFile(scapresultsconf.ExitCodeFile, scapresultsconf.Timeout, false)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	if len(exitcodeContent.contents) < 1 {
+		fmt.Println("exitcode file was empty")
+		os.Exit(1)
+	}
+
+	return string(exitcodeContent.contents[0])
+}
+
+// an exit code of 0 means that the scan returned compliant
+// an exit code of 2 means that the scan returned non-compliant
+// an exit code of 1 means that the scan encountered an error
+func exitCodeIsError(exitcode string) bool {
+	return exitcode != "0" && exitcode != "2"
+}
+
+func resultCollectorMain(cmd *cobra.Command, args []string) {
+	scapresultsconf := parseConfig(cmd)
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	dynclient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	exitcode := getOscapExitCode(scapresultsconf)
+	fmt.Printf("Got exit-code \"%s\" from file.\n", exitcode)
+
+	if exitCodeIsError(exitcode) {
+		handleErrorInOscapRun(exitcode, scapresultsconf, clientset, dynclient)
+		return
+	}
+	handleCompleteSCAPResults(exitcode, scapresultsconf, clientset, dynclient)
 }
 
 func main() {
@@ -236,95 +413,7 @@ func main() {
 		Use:   "resultscollector",
 		Short: "A tool to do an OpenSCAP scan from a pod.",
 		Long:  "A tool to do an OpenSCAP scan from a pod.",
-		Run: func(cmd *cobra.Command, args []string) {
-			scapresultsconf := parseConfig(cmd)
-
-			config, err := rest.InClusterConfig()
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-			clientset, err := kubernetes.NewForConfig(config)
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-			dynclient, err := dynamic.NewForConfig(config)
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-
-			arfContents, err := readResultsFile(scapresultsconf.ArfFile, scapresultsconf.Timeout, scapresultsconf.Compress)
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-
-			xccdfContents, err := readResultsFile(scapresultsconf.XccdfFile, scapresultsconf.Timeout, scapresultsconf.Compress)
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-
-			var wg sync.WaitGroup
-			wg.Add(2)
-			go func() {
-				err = backoff.Retry(func() error {
-					url := scapresultsconf.ResultServerURI
-					fmt.Printf("Trying to upload to resultserver: %s\n", url)
-					reader := bytes.NewReader(arfContents.contents)
-					client := &http.Client{}
-					req, _ := http.NewRequest("POST", url, reader)
-					req.Header.Add("Content-Type", "application/xml")
-					req.Header.Add("X-Report-Name", scapresultsconf.ConfigMapName)
-					if arfContents.compressed {
-						req.Header.Add("Content-Encoding", "bzip2")
-					}
-					resp, err := client.Do(req)
-					if err != nil {
-						fmt.Println(err)
-						return err
-					}
-					defer resp.Body.Close()
-					bytesresp, err := httputil.DumpResponse(resp, true)
-					if err != nil {
-						fmt.Println(err)
-						return err
-					}
-					fmt.Println(string(bytesresp))
-					return nil
-				}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
-
-				if err != nil {
-					fmt.Println(err)
-					os.Exit(1)
-				}
-				fmt.Println("Uploaded to resultserver")
-				wg.Done()
-			}()
-
-			go func() {
-				err = backoff.Retry(func() error {
-					fmt.Println("Trying to upload ConfigMap")
-					openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, dynclient)
-					if err != nil {
-						return err
-					}
-					confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results", xccdfContents.contents, xccdfContents.compressed)
-					_, err = clientset.CoreV1().ConfigMaps(scapresultsconf.Namespace).Create(confMap)
-					return err
-				}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
-
-				if err != nil {
-					fmt.Println(err)
-					os.Exit(1)
-				}
-				fmt.Println("Uploaded ConfigMap")
-				wg.Done()
-			}()
-			wg.Wait()
-		},
+		Run:   resultCollectorMain,
 	}
 
 	defineFlags(rootCmd)
