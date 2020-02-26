@@ -322,6 +322,12 @@ gen-mcfg-client: code-generator
 	cp -r $(GOPATH)/src/github.com/openshift/compliance-operator/pkg/generated pkg/
 
 .PHONY: publish
-publish:
+publish: csv publish-bundle
+
+.PHONY: csv
+csv:
 	$(GOPATH)/bin/operator-sdk olm-catalog gen-csv --csv-version "$(COURIER_PACKAGE_VERSION)" --update-crds
+
+.PHONY: publish-bundle
+publish-bundle:
 	$(COURIER_CMD) push "$(COURIER_OPERATOR_DIR)" "$(COURIER_QUAY_NAMESPACE)" "$(COURIER_PACKAGE_NAME)" "$(COURIER_PACKAGE_VERSION)" "basic $(COURIER_QUAY_TOKEN)"
