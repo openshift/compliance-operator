@@ -66,6 +66,8 @@ OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/dow
 TEST_OPTIONS?=
 # Skip pushing the container to your cluster
 E2E_SKIP_CONTAINER_PUSH?=false
+# Use default images in the e2e test run. Note that this takes precedence over E2E_SKIP_CONTAINER_PUSH
+E2E_USE_DEFAULT_IMAGES?=false
 
 # Pass extra flags to the e2e test run.
 # e.g. to run a specific test in the e2e test suite, do:
@@ -202,11 +204,7 @@ test-benchmark: ## Run the benchmark tests -- Note that this can only be ran for
 # push the operator image to the cluster's registry. This behavior can be
 # avoided with the E2E_SKIP_CONTAINER_PUSH environment variable.
 .PHONY: e2e
-ifeq ($(E2E_SKIP_CONTAINER_PUSH), false)
-e2e: namespace operator-sdk image-to-cluster ## Run the end-to-end tests
-else
-e2e: namespace operator-sdk
-endif
+e2e: namespace operator-sdk image-to-cluster openshift-user ## Run the end-to-end tests
 	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
 	@echo "Replacing workload references in deploy/operator.yaml"
 	@sed -i 's%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%$(RESULTSCOLLECTOR_IMAGE_PATH)%' deploy/operator.yaml
@@ -240,6 +238,13 @@ e2e-local: operator-sdk ## Run the end-to-end tests on a locally running operato
 # OPERATOR_IMAGE_PATH variable, it'll expand to the component we need.
 # Note that the `component` names come from the `openshift/release` repo
 # config.
+#
+# If the E2E_SKIP_CONTAINER_PUSH environment variable is used, the target will
+# assume that you've pushed images beforehand, and will merely set the
+# necessary variables to use them.
+#
+# If the E2E_USE_DEFAULT_IMAGES environment variable is used, this will do
+# nothing, and the default images will be used.
 .PHONY: image-to-cluster
 ifdef IMAGE_FORMAT
 image-to-cluster:
@@ -253,6 +258,16 @@ image-to-cluster:
 	$(eval RESULTSERVER_IMAGE_PATH = $(IMAGE_FORMAT))
 	$(eval component = compliance-remediation-aggregator)
 	$(eval REMEDIATION_AGGREGATOR_IMAGE_PATH = $(IMAGE_FORMAT))
+else ifeq ($(E2E_USE_DEFAULT_IMAGES), true)
+image-to-cluster:
+	@echo "E2E_USE_DEFAULT_IMAGES variable detected. Using default images."
+else ifeq ($(E2E_SKIP_CONTAINER_PUSH), true)
+image-to-cluster:
+	@echo "E2E_SKIP_CONTAINER_PUSH variable detected. Using previously pushed images."
+	$(eval OPERATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(APP_NAME):$(TAG))
+	$(eval RESULTSCOLLECTOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(RESULTSCOLLECTOR_IMAGE_NAME):$(TAG))
+	$(eval RESULTSERVER_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(RESULTSERVER_IMAGE_NAME):$(TAG))
+	$(eval REMEDIATION_AGGREGATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):$(TAG))
 else
 image-to-cluster: namespace openshift-user image
 	@echo "IMAGE_FORMAT variable missing. We're in local enviornment."
