@@ -423,9 +423,8 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mc
 			}
 		}
 
-		// When applying a remediation, check that the MC *is not* in the pool
 		t.Logf("Remediation %s not present in pool %s, returning false", rem.GetMcName(), pool.Name)
-		return true, nil
+		return false, nil
 	}
 
 	err = waitForMachinePoolUpdate(t, mcClient, pool, applyRemediation, predicate)
