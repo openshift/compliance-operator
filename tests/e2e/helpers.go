@@ -303,6 +303,8 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 type MachineConfigActionFunc func() error
 type PoolPredicate func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error)
 
+// waitForMachinePoolUpdate retrieves the original version of a MCP, then performs an
+// action passed in as a parameter and then waits until a MCP passes a predicate
 func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, name string, action MachineConfigActionFunc, predicate PoolPredicate) error {
 	poolPre, err := mcClient.MachineConfigPools().Get(name, metav1.GetOptions{})
 	if err != nil {
@@ -342,10 +344,11 @@ func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.Machineconfigur
 			pool.Status.UpdatedMachineCount, pool.Status.MachineCount,
 			pool.Status.UnavailableMachineCount)
 
-		// Check if the pool has finished updating yet
+		// Check if the pool has finished updating yet. If the pool was paused, we just check that
+		// the generation was increased and wait for machines to reboot separately
 		if (pool.Status.ObservedGeneration != poolPre.Status.ObservedGeneration) &&
-			(pool.Status.UpdatedMachineCount == pool.Status.MachineCount) &&
-			(pool.Status.UnavailableMachineCount == 0) {
+			pool.Spec.Paused == true || ((pool.Status.UpdatedMachineCount == pool.Status.MachineCount) &&
+			(pool.Status.UnavailableMachineCount == 0)) {
 			t.Logf("The pool has updated")
 			return true, nil
 		}
@@ -364,6 +367,8 @@ func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.Machineconfigur
 	return nil
 }
 
+// waitForNodesToBeReady waits until all the nodes in the cluster have
+// reached the expected machineConfig.
 func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
 	err := wait.PollImmediate(10*time.Second, timeout, func() (bool, error) {
 		var nodes corev1.NodeList
@@ -401,7 +406,7 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mc
 	if err != nil {
 		return err
 	}
-	t.Logf("Remediation found")
+	t.Logf("Remediation %s found", name)
 
 	applyRemediation := func() error {
 		rem.Spec.Apply = true
@@ -415,7 +420,14 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mc
 	}
 
 	predicate := func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error) {
-		for _, mc := range pool.Status.Configuration.Source {
+		// When checking if a MC is applied to a pool, we can't check the pool status
+		// when the pool is paused..
+		source := pool.Status.Configuration.Source
+		if pool.Spec.Paused == true {
+			source = pool.Spec.Configuration.Source
+		}
+
+		for _, mc := range source {
 			if mc.Name == rem.GetMcName() {
 				// When applying a remediation, check that the MC *is* in the pool
 				t.Logf("Remediation %s present in pool %s, returning true", mc.Name, pool.Name)
@@ -433,13 +445,24 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mc
 		return err
 	}
 
+	t.Logf("Machines updated with remediation")
+	return nil
+}
+
+func applyRemediationAndWaitForReboot(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, namespace, name, pool string) error {
+	err := applyRemediationAndCheck(t, f, mcClient, namespace, name, pool)
+	if err != nil {
+		t.Errorf("Failed to apply remediation and check for MCP update: %v", err)
+		return err
+	}
+
 	err = waitForNodesToBeReady(t, f)
 	if err != nil {
 		t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
 		return err
 	}
 
-	t.Logf("Machines updated with remediation")
+	t.Logf("Remediation applied to machines and machines rebooted")
 	return nil
 }
 
@@ -489,12 +512,68 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *
 		return err
 	}
 
-	err = waitForNodesToBeReady(t, f)
+	t.Logf("Machines updated with remediation")
+	return nil
+}
+
+func unPauseMachinePoolAndWait(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, poolName string) error {
+	err := unPauseMachinePool(t, mcClient, poolName)
 	if err != nil {
-		t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+		t.Errorf("Could not unpause the MC pool")
 		return err
 	}
 
-	t.Logf("Machines updated with remediation")
+	// When the pool updates, we need to wait for the machines to pick up the new rendered
+	// config
+	err = wait.PollImmediate(10*time.Second, 20*time.Minute, func() (bool, error) {
+		pool, err := mcClient.MachineConfigPools().Get(poolName, metav1.GetOptions{})
+		if err != nil {
+			// even not found is a hard error here
+			t.Errorf("Could not find the pool post update")
+			return false, err
+		}
+
+		t.Logf("Will check for update, updated %d/%d unavailable %d",
+			pool.Status.UpdatedMachineCount, pool.Status.MachineCount,
+			pool.Status.UnavailableMachineCount)
+
+		if pool.Status.UpdatedMachineCount == pool.Status.MachineCount &&
+			pool.Status.UnavailableMachineCount == 0 {
+			t.Logf("The pool has updated")
+			return true, nil
+		}
+
+		t.Logf("The pool has not updated yet. updated %d/%d unavailable %d",
+			pool.Status.UpdatedMachineCount, pool.Status.MachineCount,
+			pool.Status.UnavailableMachineCount)
+		return false, nil
+	})
+
+	return nil
+}
+
+func pauseMachinePool(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, poolName string) error {
+	return modMachinePoolPause(t, mcClient, poolName, true)
+}
+
+func unPauseMachinePool(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, poolName string) error {
+	return modMachinePoolPause(t, mcClient, poolName, false)
+}
+
+func modMachinePoolPause(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, poolName string, pause bool) error {
+	pool, err := mcClient.MachineConfigPools().Get(poolName, metav1.GetOptions{})
+	if err != nil {
+		t.Errorf("Could not find the pool to modify")
+		return err
+	}
+
+	poolCopy := pool.DeepCopy()
+	poolCopy.Spec.Paused = pause
+	_, err = mcClient.MachineConfigPools().Update(poolCopy)
+	if err != nil {
+		t.Errorf("Could not update the pool")
+		return err
+	}
+
 	return nil
 }

@@ -313,7 +313,7 @@ func TestE2E(t *testing.T) {
 
 				// - Get the no-root-logins remediation for workers
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
-				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker")
+				err = applyRemediationAndWaitForReboot(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker")
 
 				// Also get the remediation so that we can delete it later
 				rem := &complianceoperatorv1alpha1.ComplianceRemediation{}
@@ -458,6 +458,12 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
+				// Pause the MC so that we have only one reboot
+				err = pauseMachinePool(t, mcClient, "worker")
+				if err != nil {
+					return err
+				}
+
 				// Apply both remediations
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
 				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker")
@@ -472,6 +478,18 @@ func TestE2E(t *testing.T) {
 					t.Logf("WARNING: Got an error while applying remediation '%s': %v", workersNoEmptyPassRemName, err)
 				}
 				t.Logf("Remediation %s applied", workersNoEmptyPassRemName)
+
+				// unpause the MCP so that the remediation gets applied
+				err = unPauseMachinePoolAndWait(t, mcClient, "worker")
+				if err != nil {
+					return err
+				}
+
+				err = waitForNodesToBeReady(t, f)
+				if err != nil {
+					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					return err
+				}
 
 				// Get the resulting MC
 				mcName := fmt.Sprintf("75-%s-%s", workerScanName, suiteName)
