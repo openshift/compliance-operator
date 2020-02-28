@@ -201,6 +201,11 @@ func scanResultIsExpected(f *framework.Framework, namespace, name string, expect
 	if cs.Status.Result != expectedResult {
 		return fmt.Errorf("The ComplianceScan Result wasn't what we expected. Got '%s', expected '%s'", cs.Status.Result, expectedResult)
 	}
+	if expectedResult == complianceoperatorv1alpha1.ResultError {
+		if cs.Status.ErrorMessage == "" {
+			return fmt.Errorf("The ComplianceScan 'errormsg' wasn't set (it was empty). Even if we expected an error.")
+		}
+	}
 	return nil
 }
 
