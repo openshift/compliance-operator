@@ -2,6 +2,7 @@ package compliancescan
 
 import (
 	"context"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -53,6 +54,11 @@ if [ -z $REPORT_DIR ]; then
     exit 1
 fi
 
+if [ -f "$REPORT_DIR/exit_code" ]; then
+	echo "$REPORT_DIR/exit_code file found. Scan had already been run before."
+	exit 0
+fi
+
 cmd=(
     oscap-chroot $HOSTROOT xccdf eval \
     --fetch-remote-resources \
@@ -70,7 +76,7 @@ cmd+=($CONTENT)
 # move the results file when the command is done so the log collector
 # picks up the whole thing and not a partial file
 echo "Running oscap-chroot as ${cmd[@]}"
-"${cmd[@]}"
+"${cmd[@]}" &> $REPORT_DIR/cmd_output
 rv=$?
 echo "The scanner returned $rv"
 
@@ -92,9 +98,10 @@ echo "The rds-split operation returned $split_rv"
 # directory.
 test -f $XCCDF_PATH && mv $XCCDF_PATH $REPORT_DIR
 test -f $ARF_REPORT && mv $ARF_REPORT $REPORT_DIR
+echo "$rv" > $REPORT_DIR/exit_code
 
-# Return the result of the openscap scan
-exit $rv
+# Return success
+exit 0
 `
 
 func createConfigMaps(r *ReconcileComplianceScan, scriptCmName, envCmName string, scan *complianceoperatorv1alpha1.ComplianceScan) error {

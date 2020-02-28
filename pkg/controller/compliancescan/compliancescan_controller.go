@@ -250,8 +250,6 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *complianceoperat
 		return reconcile.Result{}, err
 	}
 
-	// TODO: test no eligible nodes in the cluster? should just loop through, though..
-
 	// On each eligible node..
 	for _, node := range nodes.Items {
 		running, err := isPodRunningInNode(r, instance, &node, logger)
@@ -463,9 +461,6 @@ func isPodRunning(r *ReconcileComplianceScan, podName, namespace string, logger 
 	} else if foundPod.Status.Phase == corev1.PodFailed || foundPod.Status.Phase == corev1.PodSucceeded {
 		logger.Info("Pod has finished")
 		return false, nil
-	} else if aContainerHasFailed(foundPod.Status.ContainerStatuses, logger, foundPod.Name) {
-		logger.Info("Container on the pod has failed", "pod", podName)
-		return false, nil
 	}
 
 	// the pod is still running or being created etc
@@ -473,44 +468,23 @@ func isPodRunning(r *ReconcileComplianceScan, podName, namespace string, logger 
 	return true, nil
 }
 
-func aContainerHasFailed(statuses []corev1.ContainerStatus, logger logr.Logger, podname string) bool {
-	for _, status := range statuses {
-		if status.State.Terminated != nil {
-			if status.State.Terminated.ExitCode != 0 {
-				logger.Info("container failed in pod",
-					"pod", podname, "container", status.Name,
-					"exit-code", status.State.Terminated.ExitCode)
-				return true
+func getScanResult(r *ReconcileComplianceScan, cm *corev1.ConfigMap) (complianceoperatorv1alpha1.ComplianceScanStatusResult, error) {
+	exitcode, ok := cm.Data["exit-code"]
+	if ok {
+		switch exitcode {
+		case "0":
+			return complianceoperatorv1alpha1.ResultCompliant, nil
+		case "2":
+			return complianceoperatorv1alpha1.ResultNonCompliant, nil
+		default:
+			errorMsg, ok := cm.Data["error-msg"]
+			if ok {
+				return complianceoperatorv1alpha1.ResultError, fmt.Errorf(errorMsg)
 			}
+			return complianceoperatorv1alpha1.ResultError, fmt.Errorf("The ConfigMap '%s' was missing 'error-msg'", cm.Name)
 		}
 	}
-	return false
-}
-
-func getScanResult(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node) (complianceoperatorv1alpha1.ComplianceScanStatusResult, error) {
-	podName := getPodForNodeName(instance, node.Name)
-	p := &corev1.Pod{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: instance.Namespace}, p)
-	if err != nil {
-		return complianceoperatorv1alpha1.ResultError, err
-	}
-	for _, status := range p.Status.ContainerStatuses {
-		if status.Name == OpenSCAPScanContainerName {
-			if status.State.Terminated != nil {
-				switch status.State.Terminated.ExitCode {
-				case 0:
-					return complianceoperatorv1alpha1.ResultCompliant, nil
-				case 2:
-					return complianceoperatorv1alpha1.ResultNonCompliant, nil
-				default:
-					return complianceoperatorv1alpha1.ResultError, fmt.Errorf(status.State.Terminated.Message)
-				}
-			} else {
-				return complianceoperatorv1alpha1.ResultError, fmt.Errorf("The pod '%s' was missing 'terminated' status", p.Name)
-			}
-		}
-	}
-	return complianceoperatorv1alpha1.ResultError, fmt.Errorf("Couldn't find '%s' container in '%s' pod status", OpenSCAPScanContainerName, p.Name)
+	return complianceoperatorv1alpha1.ResultError, fmt.Errorf("The ConfigMap '%s' was missing 'exit-code'", cm.Name)
 }
 
 // gatherResults will iterate the nodes in the scan and get the results
@@ -518,24 +492,11 @@ func getScanResult(r *ReconcileComplianceScan, instance *complianceoperatorv1alp
 // the relevant ConfigMap, the a requeue will be requested since the
 // results are not ready.
 func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan, nodes corev1.NodeList) (complianceoperatorv1alpha1.ComplianceScanStatusResult, bool, error) {
-	var err error
 	var lastNonCompliance complianceoperatorv1alpha1.ComplianceScanStatusResult
 	var result complianceoperatorv1alpha1.ComplianceScanStatusResult
 	compliant := true
 	isReady := true
 	for _, node := range nodes.Items {
-		result, err = getScanResult(r, instance, &node)
-		// we output the last result if it was an error
-		if result == complianceoperatorv1alpha1.ResultError {
-			return result, true, err
-		}
-		// Store the last non-compliance, so we can output that if
-		// there were no errors.
-		if result == complianceoperatorv1alpha1.ResultNonCompliant {
-			lastNonCompliance = result
-			compliant = false
-		}
-
 		targetCM := types.NamespacedName{
 			Name:      getConfigMapForNodeName(instance.Name, node.Name),
 			Namespace: instance.Namespace,
@@ -549,6 +510,19 @@ func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alp
 		if err != nil {
 			isReady = false
 		}
+
+		result, err = getScanResult(r, foundCM)
+		// we output the last result if it was an error
+		if result == complianceoperatorv1alpha1.ResultError {
+			return result, true, err
+		}
+		// Store the last non-compliance, so we can output that if
+		// there were no errors.
+		if result == complianceoperatorv1alpha1.ResultNonCompliant {
+			lastNonCompliance = result
+			compliant = false
+		}
+
 	}
 
 	if !compliant {
@@ -629,6 +603,8 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 					Args: []string{
 						"--arf-file=/reports/report-arf.xml",
 						"--results-file=/reports/report.xml",
+						"--exit-code-file=/reports/exit_code",
+						"--oscap-output-file=/reports/cmd_output",
 						"--config-map-name=" + cmName,
 						"--owner=" + scanInstance.Name,
 						"--namespace=" + scanInstance.Namespace,
@@ -692,7 +668,7 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 			NodeSelector: map[string]string{
 				NodeHostnameLabel: node.Labels[NodeHostnameLabel],
 			},
-			RestartPolicy: corev1.RestartPolicyNever,
+			RestartPolicy: corev1.RestartPolicyOnFailure,
 			Volumes: []corev1.Volume{
 				{
 					Name: "host",
