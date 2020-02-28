@@ -468,7 +468,7 @@ func isPodRunning(r *ReconcileComplianceScan, podName, namespace string, logger 
 	return true, nil
 }
 
-func getScanResult(r *ReconcileComplianceScan, cm *corev1.ConfigMap) (complianceoperatorv1alpha1.ComplianceScanStatusResult, error) {
+func getScanResult(cm *corev1.ConfigMap) (complianceoperatorv1alpha1.ComplianceScanStatusResult, error) {
 	exitcode, ok := cm.Data["exit-code"]
 	if ok {
 		switch exitcode {
@@ -511,7 +511,9 @@ func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alp
 			isReady = false
 		}
 
-		result, err = getScanResult(r, foundCM)
+		// NOTE: err is only set if there is an error in the scan run
+		result, err = getScanResult(foundCM)
+
 		// we output the last result if it was an error
 		if result == complianceoperatorv1alpha1.ResultError {
 			return result, true, err
