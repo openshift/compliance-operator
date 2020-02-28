@@ -21,25 +21,27 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/dsnet/compress/bzip2"
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
-	"github.com/openshift/compliance-operator/pkg/utils"
-	"github.com/spf13/cobra"
 	"io"
+	"os"
+	"path/filepath"
+	"reflect"
+	"sort"
+	"strings"
+
+	"github.com/dsnet/compress/bzip2"
+	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"os"
-	"path/filepath"
-	"reflect"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sort"
-	"strings"
+
+	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
+	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 const (
@@ -158,7 +160,7 @@ func readCompressedData(compressed string) (*bzip2.Reader, error) {
 	return bzip2.NewReader(compressedReader, &bzip2.ReaderConfig{})
 }
 
-func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content io.Reader, cm *v1.ConfigMap) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
+func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
 	var scanReader io.Reader
 
 	_, ok := cm.Annotations[configMapRemediationsProcessed]
@@ -326,15 +328,18 @@ func aggregator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 	defer contentFile.Close()
+	bufContentFile := bufio.NewReader(contentFile)
+	contentDom, err := utils.ParseContent(bufContentFile)
+	if err != nil {
+		fmt.Printf("Cannot parse the content: %v\n", err)
+		os.Exit(1)
+	}
 
 	// For each configmap, create a list of remediations
 	for _, cm := range configMaps {
 		fmt.Printf("processing CM: %s\n", cm.Name)
 
-		contentFile.Seek(0, io.SeekStart)
-		bufContentFile := bufio.NewReader(contentFile)
-
-		cmRemediations, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, bufContentFile, &cm)
+		cmRemediations, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, &cm)
 		if err != nil {
 			fmt.Printf("Cannot parse CM %s into remediations, err: %v\n", cm.Name, err)
 		} else if cmRemediations == nil {

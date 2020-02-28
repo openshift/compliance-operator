@@ -18,7 +18,24 @@ const (
 	machineConfigFixType = "urn:xccdf:fix:script:ignition"
 )
 
-func ParseRemediationFromContentAndResults(scheme *runtime.Scheme, scanName string, namespace string, dsReader, resultsReader io.Reader) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
+// XMLDocument is a wrapper that keeps the interface XML-parser-agnostic
+type XMLDocument struct {
+	*xmldom.Document
+}
+
+// ParseContent parses the DataStream and returns the XML document
+func ParseContent(dsReader io.Reader) (*XMLDocument, error) {
+	dsDom, err := xmldom.Parse(dsReader)
+	if err != nil {
+		return nil, err
+	}
+	return &XMLDocument{dsDom}, nil
+}
+
+// ParseRemediationFromContentAndResults parses the content DS and the results from the scan, and generates
+// the necessary remediations
+func ParseRemediationFromContentAndResults(scheme *runtime.Scheme, scanName string, namespace string,
+	dsDom *XMLDocument, resultsReader io.Reader) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
 	remediations := make([]*complianceoperatorv1alpha1.ComplianceRemediation, 0)
 
 	resultsDom, err := xmldom.Parse(resultsReader)
@@ -28,11 +45,6 @@ func ParseRemediationFromContentAndResults(scheme *runtime.Scheme, scanName stri
 
 	// Get the checks that had failed
 	failedRuleResults := filterFailedResults(resultsDom.Root.Query("//rule-result"))
-
-	dsDom, err := xmldom.Parse(dsReader)
-	if err != nil {
-		return nil, err
-	}
 
 	// Get group that contains remediations
 	remediationsDom := dsDom.Root.QueryOne("//component/Benchmark")
