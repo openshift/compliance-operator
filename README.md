@@ -103,7 +103,7 @@ the remediation that you applied previously was no longer found.
 
 ## Extracting results
 
-The scans provide two kids of results: the full report in the ARF format
+The scans provide two kinds of results: the full report in the ARF format
 and just the list of scan results in the XCCDF format. The ARF reports are,
 due to their large size, copied into persistent volumes:
 ```
