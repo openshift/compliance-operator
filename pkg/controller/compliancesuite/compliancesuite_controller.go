@@ -3,16 +3,14 @@ package compliancesuite
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"sort"
-	"strings"
-
 	"github.com/go-logr/logr"
+	"github.com/openshift/compliance-operator/pkg/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -21,16 +19,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sort"
 
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 )
 
 var log = logf.Log.WithName("controller_compliancesuite")
-
-const (
-	nodeRolePrefix = "node-role.kubernetes.io/"
-)
 
 // Add creates a new ComplianceSuite Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -130,7 +125,7 @@ func (r *ReconcileComplianceSuite) reconcileScans(suite *complianceoperatorv1alp
 		//"node-role.kubernetes.io/XXX". Then the matching Pool would be labeled with
 		//"machineconfiguration.openshift.io/role: XXX".
 		//See also: https://github.com/openshift/machine-config-operator/blob/master/docs/custom-pools.md
-		if getScanRoleLabel(scanWrap.NodeSelector) == "" {
+		if utils.GetFirstNodeRole(scanWrap.NodeSelector) == "" {
 			logger.Info("Not scheduling scan without a role label", "scan", scanWrap.Name)
 			continue
 		}
@@ -157,22 +152,6 @@ func (r *ReconcileComplianceSuite) reconcileScans(suite *complianceoperatorv1alp
 	}
 
 	return nil
-}
-
-func getScanRoleLabel(nodeSelector map[string]string) string {
-	if nodeSelector == nil {
-		return ""
-	}
-
-	// FIXME: should we protect against multiple labels and return
-	// an empty string if there are multiple?
-	for k := range nodeSelector {
-		if strings.HasPrefix(k, nodeRolePrefix) {
-			return strings.TrimPrefix(k, nodeRolePrefix)
-		}
-	}
-
-	return ""
 }
 
 func (r *ReconcileComplianceSuite) reconcileScanStatus(suite *complianceoperatorv1alpha1.ComplianceSuite, scan *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {

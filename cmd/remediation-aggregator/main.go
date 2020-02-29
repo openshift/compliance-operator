@@ -45,7 +45,6 @@ import (
 const (
 	configMapRemediationsProcessed = "compliance-remediations/processed"
 	configMapCompressed            = "openscap-scan-result/compressed"
-	nodeRolePrefix                 = "node-role.kubernetes.io/"
 )
 
 type aggregatorConfig struct {
@@ -106,22 +105,6 @@ func createCrClient(config *rest.Config) (*complianceCrClient, error) {
 		client: client,
 		scheme: scheme,
 	}, nil
-}
-
-func getScanRoleLabel(nodeSelector map[string]string) string {
-	if nodeSelector == nil {
-		return ""
-	}
-
-	// FIXME: should we protect against multiple labels and return
-	// an empty string if there are multiple?
-	for k := range nodeSelector {
-		if strings.HasPrefix(k, nodeRolePrefix) {
-			return strings.TrimPrefix(k, nodeRolePrefix)
-		}
-	}
-
-	return ""
 }
 
 func getScanConfigMaps(clientset *kubernetes.Clientset, scan, namespace string) ([]v1.ConfigMap, error) {
@@ -252,7 +235,7 @@ func createRemediations(crClient *complianceCrClient, scan *complianceoperatorv1
 		}
 		rem.Labels[complianceoperatorv1alpha1.ScanLabel] = scan.Name
 		rem.Labels[complianceoperatorv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
-		rem.Labels[mcfgv1.MachineConfigRoleLabelKey] = getScanRoleLabel(scan.Spec.NodeSelector)
+		rem.Labels[mcfgv1.MachineConfigRoleLabelKey] = utils.GetFirstNodeRole(scan.Spec.NodeSelector)
 		if rem.Labels[mcfgv1.MachineConfigRoleLabelKey] == "" {
 			return fmt.Errorf("scan %s has no role assignment", scan.Name)
 		}
