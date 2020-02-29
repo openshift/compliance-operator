@@ -15,11 +15,29 @@ limitations under the License.
 */
 package utils
 
-import "strings"
+import (
+	"strings"
+)
 
 const (
 	nodeRolePrefix = "node-role.kubernetes.io/"
 )
+
+func GetFirstNodeRoleLabel(nodeSelector map[string]string) string {
+	if nodeSelector == nil {
+		return ""
+	}
+
+	// FIXME: should we protect against multiple labels and return
+	// an empty string if there are multiple?
+	for k := range nodeSelector {
+		if strings.HasPrefix(k, nodeRolePrefix) {
+			return k
+		}
+	}
+
+	return ""
+}
 
 func GetFirstNodeRole(nodeSelector map[string]string) string {
 	if nodeSelector == nil {
@@ -35,4 +53,10 @@ func GetFirstNodeRole(nodeSelector map[string]string) string {
 	}
 
 	return ""
+}
+
+func GetNodeRoleSelector(role string) map[string]string {
+	return map[string]string{
+		nodeRolePrefix + role: "",
+	}
 }
