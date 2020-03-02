@@ -40,8 +40,9 @@ var _ = Describe("XCCDF parser", func() {
 
 			ds, err = os.Open(dsFilename)
 			Expect(err).NotTo(HaveOccurred())
-
-			remList, err = ParseRemediationFromContentAndResults(schema, "testScan", "testNamespace", ds, xccdf)
+			dsDom, err := ParseContent(ds)
+			Expect(err).NotTo(HaveOccurred())
+			remList, err = ParseRemediationFromContentAndResults(schema, "testScan", "testNamespace", dsDom, xccdf)
 		})
 
 		Context("Valid XCCDF", func() {
@@ -111,7 +112,9 @@ var _ = Describe("XCCDF parser", func() {
 		Context("Valid XCCDF and DS with remediations", func() {
 			Measure("Should parse the XCCDF and DS without errors", func(b Benchmarker) {
 				runtime := b.Time("runtime", func() {
-					remList, err = ParseRemediationFromContentAndResults(schema, "testScan", "testNamespace", ds, xccdf)
+					dsDom, err := ParseContent(ds)
+					Expect(err).NotTo(HaveOccurred())
+					remList, err = ParseRemediationFromContentAndResults(schema, "testScan", "testNamespace", dsDom, xccdf)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(remList).To(HaveLen(5))
 				})
