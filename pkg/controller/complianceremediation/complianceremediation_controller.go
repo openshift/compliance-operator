@@ -149,7 +149,7 @@ func (r *ReconcileComplianceRemediation) reconcileMcRemediation(instance *compli
 	}
 
 	logger.Info("Will create or update MC", "name", name)
-	mergedMc := mergeMachineConfigs(mcList, name, instance.Labels[mcfgv1.McRoleKey])
+	mergedMc := mergeMachineConfigs(mcList, name, instance.Labels[mcfgv1.MachineConfigRoleLabelKey])
 
 	// if the mergedMc was nil, then we should remove the resulting MC, probably the last selected
 	// remediation was deselected
@@ -212,7 +212,7 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compliance
 	scanSuiteSelector := make(map[string]string)
 	scanSuiteSelector[complianceoperatorv1alpha1.SuiteLabel] = rem.Labels[complianceoperatorv1alpha1.SuiteLabel]
 	scanSuiteSelector[complianceoperatorv1alpha1.ScanLabel] = rem.Labels[complianceoperatorv1alpha1.ScanLabel]
-	scanSuiteSelector[mcfgv1.McRoleKey] = rem.Labels[mcfgv1.McRoleKey]
+	scanSuiteSelector[mcfgv1.MachineConfigRoleLabelKey] = rem.Labels[mcfgv1.MachineConfigRoleLabelKey]
 
 	listOpts := client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(scanSuiteSelector),
@@ -285,7 +285,7 @@ func mergeMachineConfigs(configs []*mcfgv1.MachineConfig, name string, roleLabel
 	}
 
 	mergedMc.Labels = make(map[string]string)
-	mergedMc.Labels[mcfgv1.McRoleKey] = roleLabel
+	mergedMc.Labels[mcfgv1.MachineConfigRoleLabelKey] = roleLabel
 
 	return mergedMc
 }

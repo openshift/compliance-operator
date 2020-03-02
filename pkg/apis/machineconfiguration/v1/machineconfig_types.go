@@ -24,7 +24,7 @@ type MachineConfigSpec struct {
 }
 
 const (
-	McRoleKey = "machineconfiguration.openshift.io/role"
+	MachineConfigRoleLabelKey = "machineconfiguration.openshift.io/role"
 )
 
 // MachineConfig is the Schema for the machineconfigs API
