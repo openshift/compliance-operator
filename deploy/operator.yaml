@@ -41,6 +41,7 @@ spec:
               value: "quay.io/compliance-operator/remediation-aggregator:latest"
       nodeSelector:
         node-role.kubernetes.io/master: ""
+        kubernetes.io/os: linux
       tolerations:
         - key: "node-role.kubernetes.io/master"
           operator: "Exists"
