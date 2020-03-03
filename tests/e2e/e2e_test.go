@@ -14,14 +14,13 @@ import (
 
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
 	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
-	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
 )
 
 func TestE2E(t *testing.T) {
 	executeTests(t,
 		testExecution{
 			Name: "TestSingleScanSucceeds",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &complianceoperatorv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-single-scan",
@@ -48,7 +47,7 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestScanWithNodeSelectorFiltersCorrectly",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				selectWorkers := map[string]string{
 					"node-role.kubernetes.io/worker": "",
 				}
@@ -85,7 +84,7 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestScanWithInvalidContentFails",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &complianceoperatorv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-scan-w-invalid-content",
@@ -110,7 +109,7 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestScanWithInvalidProfileFails",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &complianceoperatorv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-scan-w-invalid-profile",
@@ -135,7 +134,7 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestMissingPodInRunningState",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &complianceoperatorv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-missing-pod-scan",
@@ -180,7 +179,7 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestSuiteScan",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				suiteName := "test-suite-two-scans"
 
 				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
@@ -267,14 +266,10 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestRemediate",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				// FIXME, maybe have a func that returns a struct with suite name and scan names?
 				suiteName := "test-remediate"
-
 				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
-				selectWorkers := map[string]string{
-					"node-role.kubernetes.io/worker": "",
-				}
 
 				exampleComplianceSuite := &complianceoperatorv1alpha1.ComplianceSuite{
 					ObjectMeta: metav1.ObjectMeta{
@@ -289,7 +284,7 @@ func TestE2E(t *testing.T) {
 									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
-									NodeSelector: selectWorkers,
+									NodeSelector: E2EPoolNodeRoleSelector(),
 								},
 								Name: workerScanName,
 							},
@@ -297,8 +292,11 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				// Should this be part of some utility function?
-				mcClient, err := mcfgClient.NewForConfig(f.KubeConfig)
+				err := mcTctx.createE2EPool()
+				if err != nil {
+					t.Errorf("Cannot create subpool for this test")
+					return err
+				}
 
 				err = f.Client.Create(goctx.TODO(), exampleComplianceSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 				if err != nil {
@@ -313,7 +311,7 @@ func TestE2E(t *testing.T) {
 
 				// - Get the no-root-logins remediation for workers
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
-				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker")
+				err = applyRemediationAndWaitForReboot(t, f, mcTctx.mcClient, namespace, workersNoRootLoginsRemName, testPoolName)
 
 				// Also get the remediation so that we can delete it later
 				rem := &complianceoperatorv1alpha1.ComplianceRemediation{}
@@ -339,7 +337,7 @@ func TestE2E(t *testing.T) {
 									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
-									NodeSelector: selectWorkers,
+									NodeSelector: E2EPoolNodeRoleSelector(),
 								},
 								Name: secondWorkerScanName,
 							},
@@ -374,7 +372,7 @@ func TestE2E(t *testing.T) {
 				// The test should not leave junk around, let's remove the MC and wait for the nodes to stabilize
 				// again
 				t.Logf("Remediation found")
-				err = mcClient.MachineConfigs().Delete(rem.GetMcName(), &metav1.DeleteOptions{})
+				err = mcTctx.mcClient.MachineConfigs().Delete(rem.GetMcName(), &metav1.DeleteOptions{})
 				if err != nil {
 					return err
 				}
@@ -395,7 +393,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				// We need to wait for both the pool to update..
-				err = waitForMachinePoolUpdate(t, mcClient, "worker", dummyAction, poolHasNoMc)
+				err = waitForMachinePoolUpdate(t, mcTctx.mcClient, testPoolName, dummyAction, poolHasNoMc)
 				if err != nil {
 					t.Errorf("Failed to wait for workers to come back up after deleting MC")
 					return err
@@ -414,14 +412,11 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestUnapplyRemediation",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				// FIXME, maybe have a func that returns a struct with suite name and scan names?
 				suiteName := "test-unapply-remediation"
 
 				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
-				selectWorkers := map[string]string{
-					"node-role.kubernetes.io/worker": "",
-				}
 
 				exampleComplianceSuite := &complianceoperatorv1alpha1.ComplianceSuite{
 					ObjectMeta: metav1.ObjectMeta{
@@ -436,7 +431,7 @@ func TestE2E(t *testing.T) {
 									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
-									NodeSelector: selectWorkers,
+									NodeSelector: E2EPoolNodeRoleSelector(),
 								},
 								Name: workerScanName,
 							},
@@ -444,8 +439,11 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				// Should this be part of some utility function?
-				mcClient, err := mcfgClient.NewForConfig(f.KubeConfig)
+				err := mcTctx.createE2EPool()
+				if err != nil {
+					t.Errorf("Cannot create subpool for this test")
+					return err
+				}
 
 				err = f.Client.Create(goctx.TODO(), exampleComplianceSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 				if err != nil {
@@ -458,34 +456,52 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
+				// Pause the MC so that we have only one reboot
+				err = pauseMachinePool(t, mcTctx.mcClient, testPoolName)
+				if err != nil {
+					return err
+				}
+
 				// Apply both remediations
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
-				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker")
+				err = applyRemediationAndCheck(t, f, mcTctx.mcClient, namespace, workersNoRootLoginsRemName, testPoolName)
 				if err != nil {
 					t.Logf("WARNING: Got an error while applying remediation '%s': %v", workersNoRootLoginsRemName, err)
 				}
 				t.Logf("Remediation %s applied", workersNoRootLoginsRemName)
 
 				workersNoEmptyPassRemName := fmt.Sprintf("%s-no-empty-passwords", workerScanName)
-				err = applyRemediationAndCheck(t, f, mcClient, namespace, workersNoEmptyPassRemName, "worker")
+				err = applyRemediationAndCheck(t, f, mcTctx.mcClient, namespace, workersNoEmptyPassRemName, testPoolName)
 				if err != nil {
 					t.Logf("WARNING: Got an error while applying remediation '%s': %v", workersNoEmptyPassRemName, err)
 				}
 				t.Logf("Remediation %s applied", workersNoEmptyPassRemName)
 
+				// unpause the MCP so that the remediation gets applied
+				err = unPauseMachinePoolAndWait(t, mcTctx.mcClient, testPoolName)
+				if err != nil {
+					return err
+				}
+
+				err = waitForNodesToBeReady(t, f)
+				if err != nil {
+					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					return err
+				}
+
 				// Get the resulting MC
 				mcName := fmt.Sprintf("75-%s-%s", workerScanName, suiteName)
-				mcBoth, err := mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
+				mcBoth, err := mcTctx.mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
 				t.Logf("MC %s exists", mcName)
 
 				// Revert one remediation. The MC should stay, but its generation should bump
 				t.Logf("Will revert remediation %s", workersNoEmptyPassRemName)
-				err = unApplyRemediationAndCheck(t, f, mcClient, namespace, workersNoEmptyPassRemName, "worker", false)
+				err = unApplyRemediationAndCheck(t, f, mcTctx.mcClient, namespace, workersNoEmptyPassRemName, testPoolName, false)
 				if err != nil {
 					t.Logf("WARNING: Got an error while unapplying remediation '%s': %v", workersNoEmptyPassRemName, err)
 				}
 				t.Logf("Remediation %s reverted", workersNoEmptyPassRemName)
-				mcOne, err := mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
+				mcOne, err := mcTctx.mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
 
 				if mcOne.Generation == mcBoth.Generation {
 					t.Errorf("Expected that the MC generation changes. Got: %d, Expected: %d", mcOne.Generation, mcBoth.Generation)
@@ -493,11 +509,11 @@ func TestE2E(t *testing.T) {
 
 				// When we unapply the second remediation, the MC should be deleted, too
 				t.Logf("Will revert remediation %s", workersNoRootLoginsRemName)
-				err = unApplyRemediationAndCheck(t, f, mcClient, namespace, workersNoRootLoginsRemName, "worker", true)
+				err = unApplyRemediationAndCheck(t, f, mcTctx.mcClient, namespace, workersNoRootLoginsRemName, testPoolName, true)
 				t.Logf("Remediation %s reverted", workersNoEmptyPassRemName)
 
 				t.Logf("No remediation-based MCs should exist now")
-				_, err = mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
+				_, err = mcTctx.mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
 				if err == nil {
 					t.Errorf("MC %s unexpectedly found", mcName)
 				}
