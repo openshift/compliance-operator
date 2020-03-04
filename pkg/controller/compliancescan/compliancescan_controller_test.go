@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
@@ -55,11 +54,8 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 		}
 
 		caSecret, _ := makeCASecret(compliancescaninstance, common.GetComplianceOperatorNamespace())
-		spew.Dump(caSecret)
 		serverSecret, _ := serverCertSecret(compliancescaninstance, caSecret.Data[corev1.TLSCertKey], caSecret.Data[corev1.TLSPrivateKeyKey], common.GetComplianceOperatorNamespace())
-		spew.Dump(serverSecret)
 		clientSecret, _ := clientCertSecret(compliancescaninstance, caSecret.Data[corev1.TLSCertKey], caSecret.Data[corev1.TLSPrivateKeyKey], common.GetComplianceOperatorNamespace())
-		spew.Dump(clientSecret)
 
 		objs = append(objs, nodeinstance1, nodeinstance2, caSecret, serverSecret, clientSecret)
 		scheme := scheme.Scheme

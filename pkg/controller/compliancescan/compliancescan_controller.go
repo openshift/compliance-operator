@@ -145,94 +145,6 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileComplianceScan) handleRootCASecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
-	exist, err := secretExists(r.client, RootCAPrefix+instance.Name, common.GetComplianceOperatorNamespace())
-	if err != nil {
-		return err
-	}
-	// TODO: Maybe check for expiration and re-create.
-	if exist {
-		return nil
-	}
-
-	logger.Info("creating CA", "instance", instance.Name)
-	secret, err := makeCASecret(instance, common.GetComplianceOperatorNamespace())
-	if err != nil {
-		return err
-	}
-
-	// Create the CA secret.
-	err = r.client.Create(context.TODO(), secret)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return err
-	}
-
-	// TODO: Rather than a controller reference, delete during DONE phase.
-	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *ReconcileComplianceScan) handleResultServerSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
-	exist, err := secretExists(r.client, ServerCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
-	if err != nil {
-		return err
-	}
-	if exist {
-		return nil
-	}
-
-	logger.Info("creating server cert", "instance", instance.Name)
-	secret, err := makeServerCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
-	if err != nil {
-		return err
-	}
-
-	// Create the server cert secret.
-	err = r.client.Create(context.TODO(), secret)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return err
-	}
-
-	// TODO: Rather than a controller reference, delete during DONE phase.
-	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *ReconcileComplianceScan) handleResultClientSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
-	exist, err := secretExists(r.client, ClientCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
-	if err != nil {
-		return err
-	}
-	if exist {
-		return nil
-	}
-
-	logger.Info("creating client cert", "instance", instance.Name)
-	secret, err := makeClientCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
-	if err != nil {
-		return err
-	}
-
-	// Create the client cert secret.
-	err = r.client.Create(context.TODO(), secret)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return err
-	}
-
-	// TODO: Rather than a controller reference, delete during DONE phase.
-	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (r *ReconcileComplianceScan) phasePendingHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	logger.Info("Phase: Pending", "ComplianceScan", instance.ObjectMeta.Name)
 
@@ -427,14 +339,145 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv
 	}
 
 	if err := r.deleteScanPods(instance, nodes, logger); err != nil {
+		log.Error(err, "Cannot delete scan pods")
 		return reconcile.Result{}, err
 	}
 
 	if err := r.deleteResultServer(instance, logger); err != nil {
+		log.Error(err, "Cannot delete result server")
+		return reconcile.Result{}, err
+	}
+
+	if err = r.deleteResultServerSecret(instance, logger); err != nil {
+		log.Error(err, "Cannot delete result server cert secret")
+		return reconcile.Result{}, err
+	}
+
+	if err = r.deleteResultClientSecret(instance, logger); err != nil {
+		log.Error(err, "Cannot delete result client cert secret")
+		return reconcile.Result{}, err
+	}
+
+	if err = r.deleteRootCASecret(instance, logger); err != nil {
+		log.Error(err, "Cannot delete CA secret")
 		return reconcile.Result{}, err
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileComplianceScan) handleRootCASecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	exist, err := secretExists(r.client, RootCAPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+	if exist {
+		return nil
+	}
+
+	logger.Info("creating CA", "instance", instance.Name)
+	secret, err := makeCASecret(instance, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+
+	// Create the CA secret.
+	err = r.client.Create(context.TODO(), secret)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+
+	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ReconcileComplianceScan) handleResultServerSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	exist, err := secretExists(r.client, ServerCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+	if exist {
+		return nil
+	}
+
+	logger.Info("creating server cert", "instance", instance.Name)
+	secret, err := makeServerCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+
+	// Create the server cert secret.
+	err = r.client.Create(context.TODO(), secret)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+
+	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ReconcileComplianceScan) handleResultClientSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	exist, err := secretExists(r.client, ClientCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+	if exist {
+		return nil
+	}
+
+	logger.Info("creating client cert", "instance", instance.Name)
+	secret, err := makeClientCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+
+	// Create the client cert secret.
+	err = r.client.Create(context.TODO(), secret)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+
+	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ReconcileComplianceScan) deleteRootCASecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	logger.Info("deleting CA", "instance", instance.Name)
+	ns := common.GetComplianceOperatorNamespace()
+	secret := certSecret(getCASecretName(instance), ns, []byte{}, []byte{}, []byte{})
+	return r.deleteSecret(secret)
+}
+
+func (r *ReconcileComplianceScan) deleteResultServerSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	logger.Info("deleting server cert", "instance", instance.Name)
+	ns := common.GetComplianceOperatorNamespace()
+	secret := certSecret(getServerCertSecretName(instance), ns, []byte{}, []byte{}, []byte{})
+	return r.deleteSecret(secret)
+}
+
+func (r *ReconcileComplianceScan) deleteResultClientSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	logger.Info("deleting client cert", "instance", instance.Name)
+	ns := common.GetComplianceOperatorNamespace()
+	secret := certSecret(getClientCertSecretName(instance), ns, []byte{}, []byte{}, []byte{})
+	return r.deleteSecret(secret)
+}
+
+func (r *ReconcileComplianceScan) deleteSecret(secret *corev1.Secret) error {
+	// Delete the client cert secret.
+	err := r.client.Delete(context.TODO(), secret)
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+	return nil
 }
 
 func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan) (corev1.NodeList, error) {

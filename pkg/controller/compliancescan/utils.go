@@ -2,9 +2,6 @@ package compliancescan
 
 import (
 	"context"
-
-	"k8s.io/apimachinery/pkg/api/errors"
-
 	// we can suppress the gosec warning about sha1 here because we don't use sha1 for crypto
 	// purposes, but only as a string shortener
 	// #nosec G505
@@ -16,6 +13,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -111,7 +109,7 @@ func serverCertSecret(instance *complianceoperatorv1alpha1.ComplianceScan, ca, c
 		return nil, err
 	}
 
-	return certSecret(ServerCertPrefix+instance.Name, namespace, cert, key, ca), nil
+	return certSecret(getServerCertSecretName(instance), namespace, cert, key, ca), nil
 }
 
 // Issue a client cert using the instance Root CA (it needs to be created prior to calling this function).
@@ -133,7 +131,7 @@ func clientCertSecret(instance *complianceoperatorv1alpha1.ComplianceScan, ca, c
 		return nil, err
 	}
 
-	return certSecret(ClientCertPrefix+instance.Name, namespace, cert, key, ca), nil
+	return certSecret(getClientCertSecretName(instance), namespace, cert, key, ca), nil
 }
 
 func makeCASecret(instance *complianceoperatorv1alpha1.ComplianceScan, namespace string) (*v1.Secret, error) {
@@ -142,7 +140,19 @@ func makeCASecret(instance *complianceoperatorv1alpha1.ComplianceScan, namespace
 		return nil, err
 	}
 
-	return certSecret(RootCAPrefix+instance.Name, namespace, cert, key, []byte{}), nil
+	return certSecret(getCASecretName(instance), namespace, cert, key, []byte{}), nil
+}
+
+func getServerCertSecretName(instance *complianceoperatorv1alpha1.ComplianceScan) string {
+	return ServerCertPrefix + instance.Name
+}
+
+func getClientCertSecretName(instance *complianceoperatorv1alpha1.ComplianceScan) string {
+	return ClientCertPrefix + instance.Name
+}
+
+func getCASecretName(instance *complianceoperatorv1alpha1.ComplianceScan) string {
+	return RootCAPrefix + instance.Name
 }
 
 func certSecret(name, namespace string, cert, key, ca []byte) *corev1.Secret {
