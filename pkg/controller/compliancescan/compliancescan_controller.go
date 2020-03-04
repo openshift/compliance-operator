@@ -381,13 +381,13 @@ func (r *ReconcileComplianceScan) handleRootCASecret(instance *complianceoperato
 		return err
 	}
 
-	// Create the CA secret.
-	err = r.client.Create(context.TODO(), secret)
-	if err != nil && !errors.IsAlreadyExists(err) {
+	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
 		return err
 	}
 
-	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
+	// Create the CA secret.
+	err = r.client.Create(context.TODO(), secret)
+	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 
@@ -409,16 +409,15 @@ func (r *ReconcileComplianceScan) handleResultServerSecret(instance *complianceo
 		return err
 	}
 
+	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
+		return err
+	}
+
 	// Create the server cert secret.
 	err = r.client.Create(context.TODO(), secret)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
-
-	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -437,13 +436,13 @@ func (r *ReconcileComplianceScan) handleResultClientSecret(instance *complianceo
 		return err
 	}
 
-	// Create the client cert secret.
-	err = r.client.Create(context.TODO(), secret)
-	if err != nil && !errors.IsAlreadyExists(err) {
+	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
 		return err
 	}
 
-	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
+	// Create the client cert secret.
+	err = r.client.Create(context.TODO(), secret)
+	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 
