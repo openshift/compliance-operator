@@ -82,6 +82,7 @@ rules:
   - create      # The operator needs to create a service to expose the metrics and resultserver
   - get
   - update
+  - delete
 - apiGroups:
   - monitoring.coreos.com
   resources:
