@@ -28,6 +28,16 @@ rules:
   - patch      # The Suite controller annotates configMaps
   - update     # The Suite controller annotates configMaps
 - apiGroups:
+  - ""
+  resources:
+  - secrets  # Secrets are used to store TLS assets
+  verbs:
+  - create   # The operator must create certificate secrets
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - apps
   resources:
   - replicasets

@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/davecgh/go-spew/spew"
+
+	"github.com/openshift/compliance-operator/pkg/controller/common"
+
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
@@ -33,7 +37,11 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 		objs := []runtime.Object{}
 
 		// test instance
-		compliancescaninstance = &complianceoperatorv1alpha1.ComplianceScan{}
+		compliancescaninstance = &complianceoperatorv1alpha1.ComplianceScan{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test",
+			},
+		}
 		objs = append(objs, compliancescaninstance)
 
 		// Nodes in the deployment
@@ -47,7 +55,15 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				Name: "node-2",
 			},
 		}
-		objs = append(objs, nodeinstance1, nodeinstance2)
+
+		caSecret, _ := makeCASecret(compliancescaninstance, common.GetComplianceOperatorNamespace())
+		spew.Dump(caSecret)
+		serverSecret, _ := serverCertSecret(compliancescaninstance, caSecret.Data[corev1.TLSCertKey], caSecret.Data[corev1.TLSPrivateKeyKey], common.GetComplianceOperatorNamespace())
+		spew.Dump(serverSecret)
+		clientSecret, _ := clientCertSecret(compliancescaninstance, caSecret.Data[corev1.TLSCertKey], caSecret.Data[corev1.TLSPrivateKeyKey], common.GetComplianceOperatorNamespace())
+		spew.Dump(clientSecret)
+
+		objs = append(objs, nodeinstance1, nodeinstance2, caSecret, serverSecret, clientSecret)
 		scheme := scheme.Scheme
 		scheme.AddKnownTypes(complianceoperatorv1alpha1.SchemeGroupVersion, compliancescaninstance)
 

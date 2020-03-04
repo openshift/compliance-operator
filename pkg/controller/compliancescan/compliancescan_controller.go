@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 )
 
 var log = logf.Log.WithName("controller_compliancescan")
@@ -144,6 +145,94 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 	return reconcile.Result{}, nil
 }
 
+func (r *ReconcileComplianceScan) handleRootCASecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	exist, err := secretExists(r.client, RootCAPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+	// TODO: Maybe check for expiration and re-create.
+	if exist {
+		return nil
+	}
+
+	logger.Info("creating CA", "instance", instance.Name)
+	secret, err := makeCASecret(instance, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+
+	// Create the CA secret.
+	err = r.client.Create(context.TODO(), secret)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+
+	// TODO: Rather than a controller reference, delete during DONE phase.
+	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ReconcileComplianceScan) handleResultServerSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	exist, err := secretExists(r.client, ServerCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+	if exist {
+		return nil
+	}
+
+	logger.Info("creating server cert", "instance", instance.Name)
+	secret, err := makeServerCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+
+	// Create the server cert secret.
+	err = r.client.Create(context.TODO(), secret)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+
+	// TODO: Rather than a controller reference, delete during DONE phase.
+	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ReconcileComplianceScan) handleResultClientSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	exist, err := secretExists(r.client, ClientCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+	if exist {
+		return nil
+	}
+
+	logger.Info("creating client cert", "instance", instance.Name)
+	secret, err := makeClientCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+
+	// Create the client cert secret.
+	err = r.client.Create(context.TODO(), secret)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+
+	// TODO: Rather than a controller reference, delete during DONE phase.
+	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *ReconcileComplianceScan) phasePendingHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	logger.Info("Phase: Pending", "ComplianceScan", instance.ObjectMeta.Name)
 
@@ -192,6 +281,21 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *complianceoper
 
 	if nodes, err = getTargetNodes(r, instance); err != nil {
 		log.Error(err, "Cannot get nodes")
+		return reconcile.Result{}, err
+	}
+
+	if err = r.handleRootCASecret(instance, logger); err != nil {
+		log.Error(err, "Cannot create CA secret")
+		return reconcile.Result{}, err
+	}
+
+	if err = r.handleResultServerSecret(instance, logger); err != nil {
+		log.Error(err, "Cannot create result server cert secret")
+		return reconcile.Result{}, err
+	}
+
+	if err = r.handleResultClientSecret(instance, logger); err != nil {
+		log.Error(err, "Cannot create result client cert secret")
 		return reconcile.Result{}, err
 	}
 
@@ -611,6 +715,9 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 						"--owner=" + scanInstance.Name,
 						"--namespace=" + scanInstance.Namespace,
 						"--resultserveruri=" + getResultServerURI(scanInstance),
+						"--tls-client-cert=/etc/pki/tls/tls.crt",
+						"--tls-client-key=/etc/pki/tls/tls.key",
+						"--tls-ca=/etc/pki/tls/ca.crt",
 					},
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &trueVal,
@@ -621,6 +728,10 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 							Name:      "report-dir",
 							MountPath: "/reports",
 							ReadOnly:  true,
+						},
+						{
+							Name:      "tls",
+							MountPath: "/etc/pki/tls",
 						},
 					},
 				},
@@ -704,6 +815,14 @@ func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node
 						},
 					},
 				},
+				{
+					Name: "tls",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: ClientCertPrefix + scanInstance.Name,
+						},
+					},
+				},
 			},
 		},
 	}
@@ -739,11 +858,18 @@ func resultServer(scanInstance *complianceoperatorv1alpha1.ComplianceScan, label
 								"--path=/reports/",
 								"--address=0.0.0.0",
 								fmt.Sprintf("--port=%d", ResultServerPort),
+								"--tls-server-cert=/etc/pki/tls/tls.crt",
+								"--tls-server-key=/etc/pki/tls/tls.key",
+								"--tls-ca=/etc/pki/tls/ca.crt",
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "arfreports",
 									MountPath: "/reports",
+								},
+								{
+									Name:      "tls",
+									MountPath: "/etc/pki/tls",
 								},
 							},
 						},
@@ -754,6 +880,14 @@ func resultServer(scanInstance *complianceoperatorv1alpha1.ComplianceScan, label
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 									ClaimName: getPVCForScanName(scanInstance),
+								},
+							},
+						},
+						{
+							Name: "tls",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: ServerCertPrefix + scanInstance.Name,
 								},
 							},
 						},
@@ -817,8 +951,7 @@ func getResultServerName(instance *complianceoperatorv1alpha1.ComplianceScan) st
 }
 
 func getResultServerURI(instance *complianceoperatorv1alpha1.ComplianceScan) string {
-	// TODO(jaosorior): Change to https once we set up the appropriate certs
-	return "http://" + getResultServerName(instance) + fmt.Sprintf(":%d/", ResultServerPort)
+	return "https://" + getResultServerName(instance) + fmt.Sprintf(":%d/", ResultServerPort)
 }
 
 func launchPod(client client.Client, pod *corev1.Pod, logger logr.Logger) error {
