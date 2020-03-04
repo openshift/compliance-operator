@@ -5,9 +5,6 @@ import (
 	"fmt"
 
 	"github.com/davecgh/go-spew/spew"
-
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
@@ -20,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 )
 
 var _ = Describe("Testing compliancescan controller phases", func() {
@@ -183,10 +181,33 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 	})
 
 	Context("On the DONE phase", func() {
-		It("Should merely return success", func() {
+		BeforeEach(func() {
+			// Create the pods for the test
+			podName1 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name)
+			reconciler.client.Create(context.TODO(), &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: podName1,
+				},
+			})
+
+			podName2 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name)
+			reconciler.client.Create(context.TODO(), &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: podName2,
+				},
+			})
+
+			// Set state to DONE
+			compliancescaninstance.Status.Phase = complianceoperatorv1alpha1.PhaseDone
+			reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+		})
+		It("Should return success & clean up resources", func() {
+			var pods corev1.PodList
 			result, err := reconciler.phaseDoneHandler(compliancescaninstance, logger)
+			reconciler.client.List(context.TODO(), &pods)
 			Expect(result).ToNot(BeNil())
 			Expect(err).To(BeNil())
+			Expect(pods.Items).To(BeEmpty())
 		})
 	})
 })

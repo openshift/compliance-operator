@@ -304,32 +304,7 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *complianceoper
 		return reconcile.Result{}, err
 	}
 
-	// On each eligible node..
-	for _, node := range nodes.Items {
-		// ..schedule a pod..
-		pod := newPodForNode(instance, &node, logger)
-		if err = controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
-			log.Error(err, "Failed to set pod ownership", "pod", pod)
-			return reconcile.Result{}, err
-		}
-
-		// ..and launch it..
-		err := launchPod(r.client, pod, logger)
-		if errors.IsAlreadyExists(err) {
-			logger.Info("Pod already exists. This is fine.", "pod", pod)
-		} else if err != nil {
-			log.Error(err, "Failed to launch a pod", "pod", pod)
-			return reconcile.Result{}, err
-		} else {
-			logger.Info("Launched a pod", "pod", pod)
-			// ..since the pod name can be random, store it in a label
-			setPodForNodeName(instance, node.Name, pod.Name)
-		}
-	}
-
-	// make sure the instance is updated with the node-pod labels
-	err = r.client.Update(context.TODO(), instance)
-	if err != nil {
+	if err = r.createScanPods(instance, nodes, logger); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -443,10 +418,22 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *complianceop
 }
 
 func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+	var nodes corev1.NodeList
+	var err error
 	logger.Info("Phase: Done", "ComplianceScan scan", instance.ObjectMeta.Name)
+	if nodes, err = getTargetNodes(r, instance); err != nil {
+		log.Error(err, "Cannot get nodes")
+		return reconcile.Result{}, err
+	}
+
+	if err := r.deleteScanPods(instance, nodes, logger); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	if err := r.deleteResultServer(instance, logger); err != nil {
 		return reconcile.Result{}, err
 	}
+
 	return reconcile.Result{}, nil
 }
 
@@ -462,6 +449,60 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1al
 	}
 
 	return nodes, nil
+}
+
+func (r *ReconcileComplianceScan) createScanPods(instance *complianceoperatorv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
+	// On each eligible node..
+	for _, node := range nodes.Items {
+		// ..schedule a pod..
+		logger.Info("Creating a pod for node", "node", node.Name)
+		pod := newScanPodForNode(instance, &node, logger)
+		if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
+			log.Error(err, "Failed to set pod ownership", "pod", pod)
+			return err
+		}
+
+		// ..and launch it..
+		err := r.client.Create(context.TODO(), pod)
+		if errors.IsAlreadyExists(err) {
+			logger.Info("Pod already exists. This is fine.", "pod", pod)
+		} else if err != nil {
+			log.Error(err, "Failed to launch a pod", "pod", pod)
+			return err
+		} else {
+			logger.Info("Launched a pod", "pod", pod)
+			// ..since the pod name can be random, store it in a label
+			setPodForNodeName(instance, node.Name, pod.Name)
+		}
+	}
+
+	// make sure the instance is updated with the node-pod labels
+	if err := r.client.Update(context.TODO(), instance); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *ReconcileComplianceScan) deleteScanPods(instance *complianceoperatorv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
+	// On each eligible node..
+	for _, node := range nodes.Items {
+		// ..schedule a pod..
+		logger.Info("Creating a pod for node", "node", node.Name)
+		pod := newScanPodForNode(instance, &node, logger)
+
+		// ..and launch it..
+		err := r.client.Delete(context.TODO(), pod)
+		if errors.IsNotFound(err) {
+			logger.Info("Pod is already gone. This is fine.", "pod", pod)
+		} else if err != nil {
+			log.Error(err, "Failed to delete a pod", "pod", pod)
+			return err
+		} else {
+			logger.Info("deleted pod", "pod", pod)
+		}
+	}
+
+	return nil
 }
 
 // The result-server is a pod that listens for results from other pods and
@@ -664,8 +705,7 @@ func getPVCForScan(instance *complianceoperatorv1alpha1.ComplianceScan) *corev1.
 	}
 }
 
-func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
-	logger.Info("Creating a pod for node", "node", node.Name)
+func newScanPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
 
 	mode := int32(0744)
 
@@ -935,6 +975,8 @@ func setPodForNodeName(scanInstance *complianceoperatorv1alpha1.ComplianceScan, 
 		scanInstance.Labels = make(map[string]string)
 	}
 
+	// TODO(jaosorior): Figure out if we still need this after deleting the pods
+	// This might be more appropraite as an annotation.
 	scanInstance.Labels[nodePodLabel(nodeName)] = podName
 }
 
@@ -952,28 +994,6 @@ func getResultServerName(instance *complianceoperatorv1alpha1.ComplianceScan) st
 
 func getResultServerURI(instance *complianceoperatorv1alpha1.ComplianceScan) string {
 	return "https://" + getResultServerName(instance) + fmt.Sprintf(":%d/", ResultServerPort)
-}
-
-func launchPod(client client.Client, pod *corev1.Pod, logger logr.Logger) error {
-	found := &corev1.Pod{}
-	err := client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
-	// Try to see if the pod already exists and if not
-	// (which we expect) then create a one-shot pod as per spec:
-	if err != nil && errors.IsNotFound(err) {
-		err = client.Create(context.TODO(), pod)
-		if err != nil {
-			logger.Error(err, "Cannot create pod", "pod", pod)
-			return err
-		}
-		logger.Info("Pod launched", "name", pod.Name)
-		return nil
-	} else if err != nil {
-		logger.Error(err, "Cannot launch pod", "pod", pod)
-		return err
-	}
-
-	// The pod already exists, re-enter the reconcile loop
-	return nil
 }
 
 func getInitContainerImage(scanSpec *complianceoperatorv1alpha1.ComplianceScanSpec, logger logr.Logger) string {

@@ -16,6 +16,7 @@ rules:
   - create      # The operator needs to spawn the containers
   - get
   - list
+  - delete
 - apiGroups:
   - ""
   resources:
