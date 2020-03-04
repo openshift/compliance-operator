@@ -28,9 +28,11 @@ import (
 	"sort"
 	"strings"
 
+	backoff "github.com/cenkalti/backoff/v3"
 	"github.com/dsnet/compress/bzip2"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -47,6 +49,7 @@ import (
 const (
 	configMapRemediationsProcessed = "compliance-remediations/processed"
 	configMapCompressed            = "openscap-scan-result/compressed"
+	maxRetries                     = 15
 )
 
 type aggregatorConfig struct {
@@ -220,7 +223,10 @@ func annotateParsedConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) 
 	}
 	cmCopy.Annotations[configMapRemediationsProcessed] = ""
 
-	_, err := clientset.CoreV1().ConfigMaps(cmCopy.Namespace).Update(cmCopy)
+	err := backoff.Retry(func() error {
+		_, err := clientset.CoreV1().ConfigMaps(cmCopy.Namespace).Update(cmCopy)
+		return err
+	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 	return err
 }
 
@@ -242,8 +248,15 @@ func createRemediations(crClient *complianceCrClient, scan *complianceoperatorv1
 			return fmt.Errorf("scan %s has no role assignment", scan.Name)
 		}
 
-		err := crClient.client.Create(context.TODO(), rem)
+		err := backoff.Retry(func() error {
+			err := crClient.client.Create(context.TODO(), rem)
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return err
+			}
+			return nil
+		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 		if err != nil {
+
 			fmt.Printf("Failed to create remediation: %v\n", err)
 			return err
 		}
@@ -331,12 +344,6 @@ func aggregator(cmd *cobra.Command, args []string) {
 		}
 		fmt.Printf("CM %s contained %d remediations\n", cm.Name, len(cmRemediations))
 
-		err = annotateParsedConfigMap(clientset, &cm)
-		if err != nil {
-			fmt.Printf("Cannot annotate the CM: %v\n", err)
-			os.Exit(1)
-		}
-
 		// If there are any remediations, make sure all of them for the scan are
 		// exactly the same
 		if scanRemediations == nil {
@@ -360,6 +367,16 @@ func aggregator(cmd *cobra.Command, args []string) {
 	if err := createRemediations(crclient, scan, scanRemediations); err != nil {
 		fmt.Printf("Could not create remediation objects: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Annotate configMaps, so we don't need to re-parse them
+	fmt.Println("Annotating ConfigMaps")
+	for _, cm := range configMaps {
+		err = annotateParsedConfigMap(clientset, &cm)
+		if err != nil {
+			fmt.Printf("Cannot annotate the CM: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
 

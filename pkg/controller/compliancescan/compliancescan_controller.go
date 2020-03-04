@@ -1044,7 +1044,7 @@ func newAggregatorPod(scanInstance *complianceoperatorv1alpha1.ComplianceScan, l
 					},
 				},
 			},
-			RestartPolicy: corev1.RestartPolicyNever,
+			RestartPolicy: corev1.RestartPolicyOnFailure,
 			Volumes: []corev1.Volume{
 				{
 					Name: "content-dir",
