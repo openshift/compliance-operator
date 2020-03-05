@@ -298,13 +298,14 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *complianceop
 		instance.Status.ErrorMessage = err.Error()
 	}
 
+	logger.Info("Creating an aggregator pod for scan", "scan", instance.Name)
 	aggregator := newAggregatorPod(instance, logger)
 	if err = controllerutil.SetControllerReference(instance, aggregator, r.scheme); err != nil {
 		log.Error(err, "Failed to set aggregator pod ownership", "aggregator", aggregator)
 		return reconcile.Result{}, err
 	}
 
-	err = launchAggregatorPod(r, instance, aggregator, logger)
+	err = r.launchAggregatorPod(instance, aggregator, logger)
 	if err != nil {
 		log.Error(err, "Failed to launch aggregator pod", "aggregator", aggregator)
 		return reconcile.Result{}, err
@@ -345,6 +346,11 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv
 
 	if err := r.deleteResultServer(instance, logger); err != nil {
 		log.Error(err, "Cannot delete result server")
+		return reconcile.Result{}, err
+	}
+
+	if err := r.deleteAggregator(instance, logger); err != nil {
+		log.Error(err, "Cannot delete aggregator")
 		return reconcile.Result{}, err
 	}
 
@@ -1055,7 +1061,6 @@ func createAggregatorPodName(scanName string) string {
 
 func newAggregatorPod(scanInstance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) *corev1.Pod {
 	podName := createAggregatorPodName(scanInstance.Name)
-	logger.Info("Creating an aggregator pod for scan", "pod", podName, "scan", scanInstance.Name)
 
 	podLabels := map[string]string{
 		"complianceScan": scanInstance.Name,
@@ -1119,7 +1124,7 @@ func newAggregatorPod(scanInstance *complianceoperatorv1alpha1.ComplianceScan, l
 	}
 }
 
-func launchAggregatorPod(r *ReconcileComplianceScan, scanInstance *complianceoperatorv1alpha1.ComplianceScan, pod *corev1.Pod, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) launchAggregatorPod(scanInstance *complianceoperatorv1alpha1.ComplianceScan, pod *corev1.Pod, logger logr.Logger) error {
 	// Make use of optimistic concurrency and just try creating the pod
 	err := r.client.Create(context.TODO(), pod)
 	if err != nil && !errors.IsAlreadyExists(err) {
@@ -1138,6 +1143,17 @@ func launchAggregatorPod(r *ReconcileComplianceScan, scanInstance *complianceope
 
 	scanInstance.Annotations[AggregatorPodAnnotation] = pod.Name
 	return r.client.Update(context.TODO(), scanInstance)
+}
+
+func (r *ReconcileComplianceScan) deleteAggregator(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	aggregator := newAggregatorPod(instance, logger)
+	err := r.client.Delete(context.TODO(), aggregator)
+	if err != nil && !errors.IsNotFound(err) {
+		logger.Error(err, "Cannot delete aggregator pod", "pod", aggregator)
+		return err
+	}
+
+	return nil
 }
 
 func isAggregatorRunning(r *ReconcileComplianceScan, scanInstance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (bool, error) {
