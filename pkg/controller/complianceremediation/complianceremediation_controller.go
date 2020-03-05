@@ -224,25 +224,25 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compliance
 	}
 
 	appliedRemediations := make([]*mcfgv1.MachineConfig, 0, len(scanSuiteRemediations.Items))
-	for _, candidate := range scanSuiteRemediations.Items {
-		if candidate.Spec.Type != complianceoperatorv1alpha1.McRemediation {
+	for i := range scanSuiteRemediations.Items {
+		if scanSuiteRemediations.Items[i].Spec.Type != complianceoperatorv1alpha1.McRemediation {
 			// We'll only merge MachineConfigs
 			continue
 		}
-		if candidate.Status.ApplicationState != complianceoperatorv1alpha1.RemediationApplied {
+		if scanSuiteRemediations.Items[i].Status.ApplicationState != complianceoperatorv1alpha1.RemediationApplied {
 			// We'll only merge the one that is being reconciled with those that are already
 			// applied
 			continue
 		}
 
-		if candidate.Name == rem.Name {
+		if scanSuiteRemediations.Items[i].Name == rem.Name {
 			// Won't add the one being reconciled to the list, it might be that we're de-selecting
 			// it, so the one being reconciled is handled separately
 			continue
 		}
 
 		// OK, we've got an applied MC, add it to the list
-		appliedRemediations = append(appliedRemediations, &candidate.Spec.MachineConfigContents)
+		appliedRemediations = append(appliedRemediations, &scanSuiteRemediations.Items[i].Spec.MachineConfigContents)
 	}
 
 	return appliedRemediations, nil
