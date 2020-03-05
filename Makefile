@@ -318,25 +318,6 @@ push: image
 	$(RUNTIME) tag $(REMEDIATION_AGGREGATOR_IMAGE_PATH) $(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)
 	$(RUNTIME) push $(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)
 
-versionPath=$(shell GO111MODULE=on go list -f {{.Dir}} k8s.io/code-generator/cmd/client-gen)
-codegeneratorRoot=$(versionPath:/cmd/client-gen=)
-codegeneratorTarget:=./vendor/k8s.io/code-generator
-
-# go mod doesn't mark scripts as executable, so we need to do that ourselves
-.PHONY: code-generator
-code-generator:
-	@chmod +x $(codegeneratorTarget)/generate-groups.sh
-	@chmod +x $(codegeneratorTarget)/generate-internal-groups.sh
-
-.PHONY: gen-mcfg-client
-gen-mcfg-client: code-generator
-	$(codegeneratorTarget)/generate-groups.sh client \
-		github.com/openshift/compliance-operator/pkg/generated \
-		github.com/openshift/compliance-operator/pkg/apis \
-		"machineconfiguration:v1" \
-		--go-header-file=./custom-boilerplate.go.txt
-	cp -r $(GOPATH)/src/github.com/openshift/compliance-operator/pkg/generated pkg/
-
 .PHONY: publish
 publish: csv publish-bundle
 
