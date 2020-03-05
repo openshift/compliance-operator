@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
 const (

@@ -4,7 +4,6 @@ import (
 	goctx "context"
 	"errors"
 	"fmt"
-	"github.com/openshift/compliance-operator/pkg/utils"
 	"testing"
 	"time"
 
@@ -21,8 +20,9 @@ import (
 
 	"github.com/openshift/compliance-operator/pkg/apis"
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
-	mcfgClient "github.com/openshift/compliance-operator/pkg/generated/clientset/versioned/typed/machineconfiguration/v1"
+	"github.com/openshift/compliance-operator/pkg/utils"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	mcfgClient "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1"
 )
 
 const (

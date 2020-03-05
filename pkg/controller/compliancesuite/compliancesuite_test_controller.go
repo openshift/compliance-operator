@@ -4,9 +4,10 @@ import (
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
-	mcfgv1 "github.com/openshift/compliance-operator/pkg/apis/machineconfiguration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
 var _ = Describe("Testing remediations diff", func() {
@@ -42,7 +43,6 @@ var _ = Describe("Testing remediations diff", func() {
 							},
 						},
 						KernelArguments: nil,
-						FIPS:            false,
 					},
 				},
 			},
