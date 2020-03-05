@@ -145,94 +145,6 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileComplianceScan) handleRootCASecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
-	exist, err := secretExists(r.client, RootCAPrefix+instance.Name, common.GetComplianceOperatorNamespace())
-	if err != nil {
-		return err
-	}
-	// TODO: Maybe check for expiration and re-create.
-	if exist {
-		return nil
-	}
-
-	logger.Info("creating CA", "instance", instance.Name)
-	secret, err := makeCASecret(instance, common.GetComplianceOperatorNamespace())
-	if err != nil {
-		return err
-	}
-
-	// Create the CA secret.
-	err = r.client.Create(context.TODO(), secret)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return err
-	}
-
-	// TODO: Rather than a controller reference, delete during DONE phase.
-	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *ReconcileComplianceScan) handleResultServerSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
-	exist, err := secretExists(r.client, ServerCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
-	if err != nil {
-		return err
-	}
-	if exist {
-		return nil
-	}
-
-	logger.Info("creating server cert", "instance", instance.Name)
-	secret, err := makeServerCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
-	if err != nil {
-		return err
-	}
-
-	// Create the server cert secret.
-	err = r.client.Create(context.TODO(), secret)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return err
-	}
-
-	// TODO: Rather than a controller reference, delete during DONE phase.
-	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *ReconcileComplianceScan) handleResultClientSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
-	exist, err := secretExists(r.client, ClientCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
-	if err != nil {
-		return err
-	}
-	if exist {
-		return nil
-	}
-
-	logger.Info("creating client cert", "instance", instance.Name)
-	secret, err := makeClientCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
-	if err != nil {
-		return err
-	}
-
-	// Create the client cert secret.
-	err = r.client.Create(context.TODO(), secret)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return err
-	}
-
-	// TODO: Rather than a controller reference, delete during DONE phase.
-	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (r *ReconcileComplianceScan) phasePendingHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	logger.Info("Phase: Pending", "ComplianceScan", instance.ObjectMeta.Name)
 
@@ -304,32 +216,7 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *complianceoper
 		return reconcile.Result{}, err
 	}
 
-	// On each eligible node..
-	for _, node := range nodes.Items {
-		// ..schedule a pod..
-		pod := newPodForNode(instance, &node, logger)
-		if err = controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
-			log.Error(err, "Failed to set pod ownership", "pod", pod)
-			return reconcile.Result{}, err
-		}
-
-		// ..and launch it..
-		err := launchPod(r.client, pod, logger)
-		if errors.IsAlreadyExists(err) {
-			logger.Info("Pod already exists. This is fine.", "pod", pod)
-		} else if err != nil {
-			log.Error(err, "Failed to launch a pod", "pod", pod)
-			return reconcile.Result{}, err
-		} else {
-			logger.Info("Launched a pod", "pod", pod)
-			// ..since the pod name can be random, store it in a label
-			setPodForNodeName(instance, node.Name, pod.Name)
-		}
-	}
-
-	// make sure the instance is updated with the node-pod labels
-	err = r.client.Update(context.TODO(), instance)
-	if err != nil {
+	if err = r.createScanPods(instance, nodes, logger); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -411,13 +298,14 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *complianceop
 		instance.Status.ErrorMessage = err.Error()
 	}
 
+	logger.Info("Creating an aggregator pod for scan", "scan", instance.Name)
 	aggregator := newAggregatorPod(instance, logger)
 	if err = controllerutil.SetControllerReference(instance, aggregator, r.scheme); err != nil {
 		log.Error(err, "Failed to set aggregator pod ownership", "aggregator", aggregator)
 		return reconcile.Result{}, err
 	}
 
-	err = launchAggregatorPod(r, instance, aggregator, logger)
+	err = r.launchAggregatorPod(instance, aggregator, logger)
 	if err != nil {
 		log.Error(err, "Failed to launch aggregator pod", "aggregator", aggregator)
 		return reconcile.Result{}, err
@@ -443,11 +331,158 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *complianceop
 }
 
 func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+	var nodes corev1.NodeList
+	var err error
 	logger.Info("Phase: Done", "ComplianceScan scan", instance.ObjectMeta.Name)
-	if err := r.deleteResultServer(instance, logger); err != nil {
+	if nodes, err = getTargetNodes(r, instance); err != nil {
+		log.Error(err, "Cannot get nodes")
 		return reconcile.Result{}, err
 	}
+
+	if err := r.deleteScanPods(instance, nodes, logger); err != nil {
+		log.Error(err, "Cannot delete scan pods")
+		return reconcile.Result{}, err
+	}
+
+	if err := r.deleteResultServer(instance, logger); err != nil {
+		log.Error(err, "Cannot delete result server")
+		return reconcile.Result{}, err
+	}
+
+	if err := r.deleteAggregator(instance, logger); err != nil {
+		log.Error(err, "Cannot delete aggregator")
+		return reconcile.Result{}, err
+	}
+
+	if err = r.deleteResultServerSecret(instance, logger); err != nil {
+		log.Error(err, "Cannot delete result server cert secret")
+		return reconcile.Result{}, err
+	}
+
+	if err = r.deleteResultClientSecret(instance, logger); err != nil {
+		log.Error(err, "Cannot delete result client cert secret")
+		return reconcile.Result{}, err
+	}
+
+	if err = r.deleteRootCASecret(instance, logger); err != nil {
+		log.Error(err, "Cannot delete CA secret")
+		return reconcile.Result{}, err
+	}
+
 	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileComplianceScan) handleRootCASecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	exist, err := secretExists(r.client, RootCAPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+	if exist {
+		return nil
+	}
+
+	logger.Info("creating CA", "instance", instance.Name)
+	secret, err := makeCASecret(instance, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+
+	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
+		return err
+	}
+
+	// Create the CA secret.
+	err = r.client.Create(context.TODO(), secret)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ReconcileComplianceScan) handleResultServerSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	exist, err := secretExists(r.client, ServerCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+	if exist {
+		return nil
+	}
+
+	logger.Info("creating server cert", "instance", instance.Name)
+	secret, err := makeServerCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+
+	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
+		return err
+	}
+
+	// Create the server cert secret.
+	err = r.client.Create(context.TODO(), secret)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
+}
+
+func (r *ReconcileComplianceScan) handleResultClientSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	exist, err := secretExists(r.client, ClientCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+	if exist {
+		return nil
+	}
+
+	logger.Info("creating client cert", "instance", instance.Name)
+	secret, err := makeClientCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
+	if err != nil {
+		return err
+	}
+
+	if err = controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
+		return err
+	}
+
+	// Create the client cert secret.
+	err = r.client.Create(context.TODO(), secret)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ReconcileComplianceScan) deleteRootCASecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	logger.Info("deleting CA", "instance", instance.Name)
+	ns := common.GetComplianceOperatorNamespace()
+	secret := certSecret(getCASecretName(instance), ns, []byte{}, []byte{}, []byte{})
+	return r.deleteSecret(secret)
+}
+
+func (r *ReconcileComplianceScan) deleteResultServerSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	logger.Info("deleting server cert", "instance", instance.Name)
+	ns := common.GetComplianceOperatorNamespace()
+	secret := certSecret(getServerCertSecretName(instance), ns, []byte{}, []byte{}, []byte{})
+	return r.deleteSecret(secret)
+}
+
+func (r *ReconcileComplianceScan) deleteResultClientSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	logger.Info("deleting client cert", "instance", instance.Name)
+	ns := common.GetComplianceOperatorNamespace()
+	secret := certSecret(getClientCertSecretName(instance), ns, []byte{}, []byte{}, []byte{})
+	return r.deleteSecret(secret)
+}
+
+func (r *ReconcileComplianceScan) deleteSecret(secret *corev1.Secret) error {
+	// Delete the client cert secret.
+	err := r.client.Delete(context.TODO(), secret)
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+	return nil
 }
 
 func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan) (corev1.NodeList, error) {
@@ -462,6 +497,60 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1al
 	}
 
 	return nodes, nil
+}
+
+func (r *ReconcileComplianceScan) createScanPods(instance *complianceoperatorv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
+	// On each eligible node..
+	for _, node := range nodes.Items {
+		// ..schedule a pod..
+		logger.Info("Creating a pod for node", "node", node.Name)
+		pod := newScanPodForNode(instance, &node, logger)
+		if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
+			log.Error(err, "Failed to set pod ownership", "pod", pod)
+			return err
+		}
+
+		// ..and launch it..
+		err := r.client.Create(context.TODO(), pod)
+		if errors.IsAlreadyExists(err) {
+			logger.Info("Pod already exists. This is fine.", "pod", pod)
+		} else if err != nil {
+			log.Error(err, "Failed to launch a pod", "pod", pod)
+			return err
+		} else {
+			logger.Info("Launched a pod", "pod", pod)
+			// ..since the pod name can be random, store it in a label
+			setPodForNodeName(instance, node.Name, pod.Name)
+		}
+	}
+
+	// make sure the instance is updated with the node-pod labels
+	if err := r.client.Update(context.TODO(), instance); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *ReconcileComplianceScan) deleteScanPods(instance *complianceoperatorv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
+	// On each eligible node..
+	for _, node := range nodes.Items {
+		// ..schedule a pod..
+		logger.Info("Creating a pod for node", "node", node.Name)
+		pod := newScanPodForNode(instance, &node, logger)
+
+		// ..and launch it..
+		err := r.client.Delete(context.TODO(), pod)
+		if errors.IsNotFound(err) {
+			logger.Info("Pod is already gone. This is fine.", "pod", pod)
+		} else if err != nil {
+			log.Error(err, "Failed to delete a pod", "pod", pod)
+			return err
+		} else {
+			logger.Info("deleted pod", "pod", pod)
+		}
+	}
+
+	return nil
 }
 
 // The result-server is a pod that listens for results from other pods and
@@ -664,8 +753,7 @@ func getPVCForScan(instance *complianceoperatorv1alpha1.ComplianceScan) *corev1.
 	}
 }
 
-func newPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
-	logger.Info("Creating a pod for node", "node", node.Name)
+func newScanPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
 
 	mode := int32(0744)
 
@@ -935,6 +1023,8 @@ func setPodForNodeName(scanInstance *complianceoperatorv1alpha1.ComplianceScan, 
 		scanInstance.Labels = make(map[string]string)
 	}
 
+	// TODO(jaosorior): Figure out if we still need this after deleting the pods
+	// This might be more appropraite as an annotation.
 	scanInstance.Labels[nodePodLabel(nodeName)] = podName
 }
 
@@ -954,28 +1044,6 @@ func getResultServerURI(instance *complianceoperatorv1alpha1.ComplianceScan) str
 	return "https://" + getResultServerName(instance) + fmt.Sprintf(":%d/", ResultServerPort)
 }
 
-func launchPod(client client.Client, pod *corev1.Pod, logger logr.Logger) error {
-	found := &corev1.Pod{}
-	err := client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
-	// Try to see if the pod already exists and if not
-	// (which we expect) then create a one-shot pod as per spec:
-	if err != nil && errors.IsNotFound(err) {
-		err = client.Create(context.TODO(), pod)
-		if err != nil {
-			logger.Error(err, "Cannot create pod", "pod", pod)
-			return err
-		}
-		logger.Info("Pod launched", "name", pod.Name)
-		return nil
-	} else if err != nil {
-		logger.Error(err, "Cannot launch pod", "pod", pod)
-		return err
-	}
-
-	// The pod already exists, re-enter the reconcile loop
-	return nil
-}
-
 func getInitContainerImage(scanSpec *complianceoperatorv1alpha1.ComplianceScanSpec, logger logr.Logger) string {
 	image := DefaultContentContainerImage
 
@@ -993,7 +1061,6 @@ func createAggregatorPodName(scanName string) string {
 
 func newAggregatorPod(scanInstance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) *corev1.Pod {
 	podName := createAggregatorPodName(scanInstance.Name)
-	logger.Info("Creating an aggregator pod for scan", "pod", podName, "scan", scanInstance.Name)
 
 	podLabels := map[string]string{
 		"complianceScan": scanInstance.Name,
@@ -1057,7 +1124,7 @@ func newAggregatorPod(scanInstance *complianceoperatorv1alpha1.ComplianceScan, l
 	}
 }
 
-func launchAggregatorPod(r *ReconcileComplianceScan, scanInstance *complianceoperatorv1alpha1.ComplianceScan, pod *corev1.Pod, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) launchAggregatorPod(scanInstance *complianceoperatorv1alpha1.ComplianceScan, pod *corev1.Pod, logger logr.Logger) error {
 	// Make use of optimistic concurrency and just try creating the pod
 	err := r.client.Create(context.TODO(), pod)
 	if err != nil && !errors.IsAlreadyExists(err) {
@@ -1076,6 +1143,17 @@ func launchAggregatorPod(r *ReconcileComplianceScan, scanInstance *complianceope
 
 	scanInstance.Annotations[AggregatorPodAnnotation] = pod.Name
 	return r.client.Update(context.TODO(), scanInstance)
+}
+
+func (r *ReconcileComplianceScan) deleteAggregator(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+	aggregator := newAggregatorPod(instance, logger)
+	err := r.client.Delete(context.TODO(), aggregator)
+	if err != nil && !errors.IsNotFound(err) {
+		logger.Error(err, "Cannot delete aggregator pod", "pod", aggregator)
+		return err
+	}
+
+	return nil
 }
 
 func isAggregatorRunning(r *ReconcileComplianceScan, scanInstance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (bool, error) {
