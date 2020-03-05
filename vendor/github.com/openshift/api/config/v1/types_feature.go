@@ -8,7 +8,8 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 // Feature holds cluster-wide information about feature gates.  The canonical name is `cluster`
 type FeatureGate struct {
-	metav1.TypeMeta   `json:",inline"`
+	metav1.TypeMeta `json:",inline"`
+	// Standard object's metadata.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// spec holds user settable values for configuration
@@ -34,9 +35,6 @@ var (
 	// Because of its nature, this setting cannot be validated.  If you have any typos or accidentally apply invalid combinations
 	// your cluster may fail in an unrecoverable way.
 	CustomNoUpgrade FeatureSet = "CustomNoUpgrade"
-
-	// TopologyManager enables ToplogyManager support. Upgrades are enabled with this feature.
-	LatencySensitive FeatureSet = "LatencySensitive"
 )
 
 type FeatureGateSpec struct {
@@ -75,9 +73,9 @@ type FeatureGateStatus struct {
 
 type FeatureGateList struct {
 	metav1.TypeMeta `json:",inline"`
+	// Standard object's metadata.
 	metav1.ListMeta `json:"metadata"`
-
-	Items []FeatureGate `json:"items"`
+	Items           []FeatureGate `json:"items"`
 }
 
 type FeatureGateEnabledDisabled struct {
@@ -99,40 +97,22 @@ type FeatureGateEnabledDisabled struct {
 var FeatureSets = map[FeatureSet]*FeatureGateEnabledDisabled{
 	Default: {
 		Enabled: []string{
-			"RotateKubeletServerCertificate", // sig-pod, sjenning
-			"SupportPodPidsLimit",            // sig-pod, sjenning
-			"NodeDisruptionExclusion",        // sig-scheduling, ccoleman
-			"ServiceNodeExclusion",           // sig-scheduling, ccoleman
+			"ExperimentalCriticalPodAnnotation", // sig-pod, sjenning
+			"RotateKubeletServerCertificate",    // sig-pod, sjenning
+			"SupportPodPidsLimit",               // sig-pod, sjenning
 		},
 		Disabled: []string{
-			"LegacyNodeRoleBehavior", // sig-scheduling, ccoleman
+			"LocalStorageCapacityIsolation", // sig-pod, sjenning
 		},
-	},
-	CustomNoUpgrade: {
-		Enabled:  []string{},
-		Disabled: []string{},
 	},
 	TechPreviewNoUpgrade: {
 		Enabled: []string{
-			"RotateKubeletServerCertificate", // sig-pod, sjenning
-			"SupportPodPidsLimit",            // sig-pod, sjenning
-			"NodeDisruptionExclusion",        // sig-scheduling, ccoleman
-			"ServiceNodeExclusion",           // sig-scheduling, ccoleman
+			"ExperimentalCriticalPodAnnotation", // sig-pod, sjenning
+			"RotateKubeletServerCertificate",    // sig-pod, sjenning
+			"SupportPodPidsLimit",               // sig-pod, sjenning
 		},
 		Disabled: []string{
-			"LegacyNodeRoleBehavior", // sig-scheduling, ccoleman
-		},
-	},
-	LatencySensitive: {
-		Enabled: []string{
-			"RotateKubeletServerCertificate", // sig-pod, sjenning
-			"SupportPodPidsLimit",            // sig-pod, sjenning
-			"TopologyManager",                // sig-pod, sjenning
-			"NodeDisruptionExclusion",        // sig-scheduling, ccoleman
-			"ServiceNodeExclusion",           // sig-scheduling, ccoleman
-		},
-		Disabled: []string{
-			"LegacyNodeRoleBehavior", // sig-scheduling, ccoleman
+			"LocalStorageCapacityIsolation", // sig-pod, sjenning
 		},
 	},
 }
