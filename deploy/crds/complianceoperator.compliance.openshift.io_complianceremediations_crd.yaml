@@ -54,7 +54,7 @@ spec:
                 metadata:
                   type: object
                 spec:
-                  description: MachineConfigSpec defines the desired state of MachineConfig
+                  description: MachineConfigSpec is the spec for MachineConfig
                   properties:
                     config:
                       description: Config is a Ignition Config object.
@@ -215,6 +215,29 @@ spec:
                           properties:
                             directories:
                               items:
+                                properties:
+                                  filesystem:
+                                    type: string
+                                  group:
+                                    properties:
+                                      id:
+                                        type: integer
+                                      name:
+                                        type: string
+                                    type: object
+                                  mode:
+                                    type: integer
+                                  overwrite:
+                                    type: boolean
+                                  path:
+                                    type: string
+                                  user:
+                                    properties:
+                                      id:
+                                        type: integer
+                                      name:
+                                        type: string
+                                    type: object
                                 type: object
                               type: array
                             disks:
@@ -245,6 +268,43 @@ spec:
                               type: array
                             files:
                               items:
+                                properties:
+                                  append:
+                                    type: boolean
+                                  contents:
+                                    properties:
+                                      compression:
+                                        type: string
+                                      source:
+                                        type: string
+                                      verification:
+                                        properties:
+                                          hash:
+                                            type: string
+                                        type: object
+                                    type: object
+                                  filesystem:
+                                    type: string
+                                  group:
+                                    properties:
+                                      id:
+                                        type: integer
+                                      name:
+                                        type: string
+                                    type: object
+                                  mode:
+                                    type: integer
+                                  overwrite:
+                                    type: boolean
+                                  path:
+                                    type: string
+                                  user:
+                                    properties:
+                                      id:
+                                        type: integer
+                                      name:
+                                        type: string
+                                    type: object
                                 type: object
                               type: array
                             filesystems:
@@ -284,6 +344,31 @@ spec:
                               type: array
                             links:
                               items:
+                                properties:
+                                  filesystem:
+                                    type: string
+                                  group:
+                                    properties:
+                                      id:
+                                        type: integer
+                                      name:
+                                        type: string
+                                    type: object
+                                  hard:
+                                    type: boolean
+                                  overwrite:
+                                    type: boolean
+                                  path:
+                                    type: string
+                                  target:
+                                    type: string
+                                  user:
+                                    properties:
+                                      id:
+                                        type: integer
+                                      name:
+                                        type: string
+                                    type: object
                                 type: object
                               type: array
                             raid:
@@ -341,21 +426,23 @@ spec:
                     kernelArguments:
                       items:
                         type: string
+                      nullable: true
                       type: array
+                    kernelType:
+                      type: string
                     osImageURL:
-                      description: 'INSERT ADDITIONAL SPEC FIELDS - desired state
-                        of cluster Important: Run "operator-sdk generate k8s" to regenerate
-                        code after modifying this file Add custom validation using
-                        kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-                        OSImageURL specifies the remote location that will be used
-                        to fetch the OS.'
+                      description: OSImageURL specifies the remote location that will
+                        be used to fetch the OS.
                       type: string
                   required:
                   - config
                   - fips
                   - kernelArguments
+                  - kernelType
                   - osImageURL
                   type: object
+              required:
+              - spec
               type: object
             type:
               description: Remediation type specifies the artifact the remediation
