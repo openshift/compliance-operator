@@ -42,6 +42,8 @@ type ComplianceScanSpec struct {
 	Rule         string            `json:"rule,omitempty"`
 	Content      string            `json:"content,omitempty"`
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	// Disables cleaning up resources in the DONE phase, this might be useful for debugging.
+	Debug bool `json:"debug,omitempty"`
 }
 
 // ComplianceScanStatus defines the observed state of ComplianceScan

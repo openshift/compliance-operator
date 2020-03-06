@@ -3,14 +3,15 @@ package compliancesuite
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"sort"
+
 	"github.com/go-logr/logr"
-	"github.com/openshift/compliance-operator/pkg/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -19,8 +20,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"sort"
 
+	"github.com/openshift/compliance-operator/pkg/utils"
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 )
@@ -253,6 +254,7 @@ func newScanForSuite(suite *complianceoperatorv1alpha1.ComplianceSuite, scanWrap
 			Rule:         scanWrap.Rule,
 			Content:      scanWrap.Content,
 			NodeSelector: scanWrap.NodeSelector,
+			Debug:        scanWrap.Debug,
 		},
 	}
 }
