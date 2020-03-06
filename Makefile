@@ -188,9 +188,9 @@ gosec:
 	@$(GO) run github.com/securego/gosec/cmd/gosec -severity medium -confidence medium -quiet ./...
 
 .PHONY: generate
-generate: operator-sdk ## Run operator-sdk's code generation (k8s and openapi)
+generate: operator-sdk ## Run operator-sdk's code generation (k8s and crds)
 	$(GOPATH)/bin/operator-sdk generate k8s
-	$(GOPATH)/bin/operator-sdk generate openapi
+	$(GOPATH)/bin/operator-sdk generate crds
 
 .PHONY: test-unit
 test-unit: fmt ## Run the unit tests
