@@ -9,7 +9,7 @@ spec:
     listKind: ComplianceScanList
     plural: compliancescans
     singular: compliancescan
-  scope: ""
+  scope: Namespaced
   subresources:
     status: {}
   validation:
