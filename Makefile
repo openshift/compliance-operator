@@ -58,7 +58,7 @@ export NAMESPACE?=openshift-compliance
 
 # Operator-sdk variables
 # ======================
-SDK_VERSION?=v0.14.1
+SDK_VERSION?=v0.15.2
 OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-x86_64-linux-gnu
 
 # Test variables
@@ -147,7 +147,7 @@ run: operator-sdk ## Run the compliance-operator locally
 	WATCH_NAMESPACE=$(NAMESPACE) \
 	KUBERNETES_CONFIG=$(KUBECONFIG) \
 	OPERATOR_NAME=compliance-operator \
-	$(GOPATH)/bin/operator-sdk up local --namespace $(NAMESPACE)
+	$(GOPATH)/bin/operator-sdk run --local --namespace $(NAMESPACE)
 
 .PHONY: clean
 clean: clean-modcache clean-cache clean-output ## Clean the golang environment
@@ -323,7 +323,7 @@ publish: csv publish-bundle
 
 .PHONY: csv
 csv:
-	$(GOPATH)/bin/operator-sdk olm-catalog gen-csv --csv-version "$(COURIER_PACKAGE_VERSION)" --from-version "$(OLD_COURIER_PACKAGE_VERSION)" --update-crds
+	$(GOPATH)/bin/operator-sdk generate csv --csv-version "$(COURIER_PACKAGE_VERSION)" --from-version "$(OLD_COURIER_PACKAGE_VERSION)" --update-crds
 
 .PHONY: publish-bundle
 publish-bundle:

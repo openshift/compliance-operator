@@ -131,6 +131,7 @@ func server(c *config) {
 			http.Error(w, "Error creating file", 500)
 			return
 		}
+		// #nosec
 		defer f.Close()
 
 		_, err = io.Copy(f, r.Body)

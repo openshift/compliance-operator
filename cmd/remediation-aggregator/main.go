@@ -323,6 +323,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 		fmt.Printf("Cannot read the content: %v\n", err)
 		os.Exit(1)
 	}
+	// #nosec
 	defer contentFile.Close()
 	bufContentFile := bufio.NewReader(contentFile)
 	contentDom, err := utils.ParseContent(bufContentFile)

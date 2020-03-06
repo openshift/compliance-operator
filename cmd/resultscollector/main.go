@@ -194,6 +194,7 @@ func readResultsFile(filename string, timeout int64, doCompress bool) (*resultFi
 	var rfContents resultFileContents
 
 	handle := waitForResultsFile(filename, timeout)
+	// #nosec
 	defer handle.Close()
 
 	rfContents.contents, err = ioutil.ReadAll(handle)

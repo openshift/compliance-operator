@@ -3,18 +3,18 @@ module github.com/openshift/compliance-operator
 go 1.13
 
 require (
+	github.com/ajeddeloh/go-json v0.0.0-20200220154158-5ae607161559 // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2
 	github.com/coreos/ignition v0.35.0
-	github.com/davecgh/go-spew v1.1.1
 	github.com/dsnet/compress v0.0.1
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.1
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
-	github.com/openshift/library-go v0.0.0-20200221125639-952ac5a188d6
+	github.com/openshift/library-go v0.0.0-20200303185131-81598fff9efa
 	github.com/openshift/machine-config-operator v4.2.0-alpha.0.0.20190917115525-033375cbe820+incompatible
-	github.com/operator-framework/operator-sdk v0.14.1
-	github.com/securego/gosec v0.0.0-20200203094520-d13bb6d2420c
+	github.com/operator-framework/operator-sdk v0.15.2
+	github.com/securego/gosec v0.0.0-20200302134848-c998389da2ac
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
 	github.com/subchen/go-xmldom v1.1.2
@@ -57,3 +57,5 @@ replace (
 )
 
 replace github.com/docker/docker => github.com/moby/moby v0.7.3-0.20190826074503-38ab9da00309 // Required by Helm
+
+replace github.com/openshift/api => github.com/openshift/api v0.0.0-20190924102528-32369d4db2ad // Required until https://github.com/operator-framework/operator-lifecycle-manager/pull/1241 is resolved
