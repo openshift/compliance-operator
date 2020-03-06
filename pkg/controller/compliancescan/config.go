@@ -21,11 +21,12 @@ const (
 	OpenScapEnvConfigMapName = "openscap-env-map"
 
 	// environment variables the default script consumes
-	OpenScapHostRootEnvName  = "HOSTROOT"
-	OpenScapProfileEnvName   = "PROFILE"
-	OpenScapContentEnvName   = "CONTENT"
-	OpenScapReportDirEnvName = "REPORT_DIR"
-	OpenScapRuleEnvName      = "RULE"
+	OpenScapHostRootEnvName   = "HOSTROOT"
+	OpenScapProfileEnvName    = "PROFILE"
+	OpenScapContentEnvName    = "CONTENT"
+	OpenScapReportDirEnvName  = "REPORT_DIR"
+	OpenScapRuleEnvName       = "RULE"
+	OpenScapVerbosityeEnvName = "VERBOSITY"
 
 	ResultServerPort = int32(8443)
 )
@@ -61,10 +62,17 @@ fi
 
 cmd=(
     oscap-chroot $HOSTROOT xccdf eval \
+)
+
+if [ ! -z $VERBOSITY ]; then
+    cmd+=(--verbose $VERBOSITY)
+fi
+
+cmd+=(
     --fetch-remote-resources \
     --profile $PROFILE \
     --results-arf $ARF_REPORT
-    )
+)
 
 if [ ! -z $RULE ]; then
     cmd+=(--rule $RULE)
@@ -76,9 +84,10 @@ cmd+=($CONTENT)
 # move the results file when the command is done so the log collector
 # picks up the whole thing and not a partial file
 echo "Running oscap-chroot as ${cmd[@]}"
-"${cmd[@]}" &> $REPORT_DIR/cmd_output
+"${cmd[@]}" &> $REPORT_DIR/cmd_output 
 rv=$?
 echo "The scanner returned $rv"
+cat $REPORT_DIR/cmd_output 
 
 # Split the ARF so that we can only process the results
 SPLIT_DIR=/tmp/split
@@ -170,6 +179,11 @@ func defaultOpenScapEnvCm(name string, scan *complianceoperatorv1alpha1.Complian
 
 	if scan.Spec.Rule != "" {
 		cm.Data[OpenScapRuleEnvName] = scan.Spec.Rule
+	}
+
+	if scan.Spec.Debug {
+		// info seems like a good compromise in terms of verbosity
+		cm.Data[OpenScapVerbosityeEnvName] = "INFO"
 	}
 
 	return cm
