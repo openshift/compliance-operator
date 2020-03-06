@@ -334,39 +334,41 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv
 	var nodes corev1.NodeList
 	var err error
 	logger.Info("Phase: Done", "ComplianceScan scan", instance.ObjectMeta.Name)
-	if nodes, err = getTargetNodes(r, instance); err != nil {
-		log.Error(err, "Cannot get nodes")
-		return reconcile.Result{}, err
-	}
+	if !instance.Spec.Debug {
+		if nodes, err = getTargetNodes(r, instance); err != nil {
+			log.Error(err, "Cannot get nodes")
+			return reconcile.Result{}, err
+		}
 
-	if err := r.deleteScanPods(instance, nodes, logger); err != nil {
-		log.Error(err, "Cannot delete scan pods")
-		return reconcile.Result{}, err
-	}
+		if err := r.deleteScanPods(instance, nodes, logger); err != nil {
+			log.Error(err, "Cannot delete scan pods")
+			return reconcile.Result{}, err
+		}
 
-	if err := r.deleteResultServer(instance, logger); err != nil {
-		log.Error(err, "Cannot delete result server")
-		return reconcile.Result{}, err
-	}
+		if err := r.deleteResultServer(instance, logger); err != nil {
+			log.Error(err, "Cannot delete result server")
+			return reconcile.Result{}, err
+		}
 
-	if err := r.deleteAggregator(instance, logger); err != nil {
-		log.Error(err, "Cannot delete aggregator")
-		return reconcile.Result{}, err
-	}
+		if err := r.deleteAggregator(instance, logger); err != nil {
+			log.Error(err, "Cannot delete aggregator")
+			return reconcile.Result{}, err
+		}
 
-	if err = r.deleteResultServerSecret(instance, logger); err != nil {
-		log.Error(err, "Cannot delete result server cert secret")
-		return reconcile.Result{}, err
-	}
+		if err = r.deleteResultServerSecret(instance, logger); err != nil {
+			log.Error(err, "Cannot delete result server cert secret")
+			return reconcile.Result{}, err
+		}
 
-	if err = r.deleteResultClientSecret(instance, logger); err != nil {
-		log.Error(err, "Cannot delete result client cert secret")
-		return reconcile.Result{}, err
-	}
+		if err = r.deleteResultClientSecret(instance, logger); err != nil {
+			log.Error(err, "Cannot delete result client cert secret")
+			return reconcile.Result{}, err
+		}
 
-	if err = r.deleteRootCASecret(instance, logger); err != nil {
-		log.Error(err, "Cannot delete CA secret")
-		return reconcile.Result{}, err
+		if err = r.deleteRootCASecret(instance, logger); err != nil {
+			log.Error(err, "Cannot delete CA secret")
+			return reconcile.Result{}, err
+		}
 	}
 
 	return reconcile.Result{}, nil

@@ -43,6 +43,10 @@ spec:
                     type: string
                   contentImage:
                     type: string
+                  debug:
+                    description: Disables cleaning up resources in the DONE phase,
+                      this might be useful for debugging.
+                    type: boolean
                   name:
                     type: string
                   nodeSelector:
