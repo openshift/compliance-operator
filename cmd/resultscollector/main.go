@@ -59,7 +59,6 @@ type scapresultsConfig struct {
 	Namespace       string
 	ResultServerURI string
 	Timeout         int64
-	Compress        bool
 	Cert            string
 	Key             string
 	CA              string
@@ -74,7 +73,6 @@ func defineFlags(cmd *cobra.Command) {
 	cmd.Flags().String("config-map-name", "", "The configMap to upload to, typically the podname.")
 	cmd.Flags().String("namespace", "openshift-compliance", "Running pod namespace.")
 	cmd.Flags().Int64("timeout", 3600, "How long to wait for the file.")
-	cmd.Flags().Bool("compress", false, "Always compress the results.")
 	cmd.Flags().String("resultserveruri", "", "The resultserver URI name.")
 	cmd.Flags().String("tls-client-cert", "", "The path to the client and CA PEM cert bundle.")
 	cmd.Flags().String("tls-client-key", "", "The path to the client PEM key.")
@@ -94,7 +92,6 @@ func parseConfig(cmd *cobra.Command) *scapresultsConfig {
 	conf.Key = getValidStringArg(cmd, "tls-client-key")
 	conf.CA = getValidStringArg(cmd, "tls-ca")
 	conf.Timeout, _ = cmd.Flags().GetInt64("timeout")
-	conf.Compress, _ = cmd.Flags().GetBool("compress")
 	conf.ResultServerURI, _ = cmd.Flags().GetString("resultserveruri")
 	// Set default if needed
 	if conf.ResultServerURI == "" {
@@ -189,7 +186,7 @@ type resultFileContents struct {
 	compressed bool
 }
 
-func readResultsFile(filename string, timeout int64, doCompress bool) (*resultFileContents, error) {
+func readResultsFile(filename string, timeout int64) (*resultFileContents, error) {
 	var err error
 	var rfContents resultFileContents
 
@@ -202,7 +199,7 @@ func readResultsFile(filename string, timeout int64, doCompress bool) (*resultFi
 		return nil, err
 	}
 
-	if resultNeedsCompression(rfContents.contents) || doCompress {
+	if resultNeedsCompression(rfContents.contents) {
 		rfContents.contents, err = compressResults(rfContents.contents)
 		fmt.Printf("%s Needs compression\n", filename)
 		if err != nil {
@@ -322,13 +319,13 @@ func uploadErrorConfigMap(errorMsg *resultFileContents, exitcode string,
 
 func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConfig,
 	clientset *kubernetes.Clientset, dynclient dynamic.Interface) {
-	arfContents, err := readResultsFile(scapresultsconf.ArfFile, scapresultsconf.Timeout, scapresultsconf.Compress)
+	arfContents, err := readResultsFile(scapresultsconf.ArfFile, scapresultsconf.Timeout)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	xccdfContents, err := readResultsFile(scapresultsconf.XccdfFile, scapresultsconf.Timeout, scapresultsconf.Compress)
+	xccdfContents, err := readResultsFile(scapresultsconf.XccdfFile, scapresultsconf.Timeout)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -360,7 +357,7 @@ func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConf
 
 func handleErrorInOscapRun(exitcode string, scapresultsconf *scapresultsConfig,
 	clientset *kubernetes.Clientset, dynclient dynamic.Interface) {
-	errorMsg, err := readResultsFile(scapresultsconf.CmdOutputFile, scapresultsconf.Timeout, false)
+	errorMsg, err := readResultsFile(scapresultsconf.CmdOutputFile, scapresultsconf.Timeout)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -375,7 +372,7 @@ func handleErrorInOscapRun(exitcode string, scapresultsconf *scapresultsConfig,
 }
 
 func getOscapExitCode(scapresultsconf *scapresultsConfig) string {
-	exitcodeContent, err := readResultsFile(scapresultsconf.ExitCodeFile, scapresultsconf.Timeout, false)
+	exitcodeContent, err := readResultsFile(scapresultsconf.ExitCodeFile, scapresultsconf.Timeout)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
