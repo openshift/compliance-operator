@@ -53,7 +53,8 @@ type ComplianceRemediationStatus struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ComplianceRemediation is the Schema for the complianceremediations API
+// ComplianceRemediation represents a remediation that can be applied to the
+// cluster to fix the found issues.
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=complianceremediations,scope=Namespaced
@@ -61,7 +62,9 @@ type ComplianceRemediation struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ComplianceRemediationSpec   `json:"spec,omitempty"`
+	// Contains the definition of what the remediation should be
+	Spec ComplianceRemediationSpec `json:"spec,omitempty"`
+	// Contains information on the remediation (whether it's applied or not)
 	Status ComplianceRemediationStatus `json:"status,omitempty"`
 }
 

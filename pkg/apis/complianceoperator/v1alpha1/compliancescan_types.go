@@ -37,10 +37,24 @@ const (
 // ComplianceScanSpec defines the desired state of ComplianceScan
 // +k8s:openapi-gen=true
 type ComplianceScanSpec struct {
-	ContentImage string            `json:"contentImage,omitempty"`
-	Profile      string            `json:"profile,omitempty"`
-	Rule         string            `json:"rule,omitempty"`
-	Content      string            `json:"content,omitempty"`
+	// Is the image with the content (Data Stream), that will be used to run
+	// OpenSCAP.
+	ContentImage string `json:"contentImage,omitempty"`
+	// Is the profile in the data stream to be used. This is the collection of
+	// rules that will be checked for.
+	Profile string `json:"profile,omitempty"`
+	// A Rule can be specified if the scan should check only for a specific
+	// rule. Note that when leaving this empty, the scan will check for all the
+	// rules for a specific profile.
+	Rule string `json:"rule,omitempty"`
+	// Is the path to the file that contains the content (the data stream).
+	// Note that the path needs to be relative to the `/` (root) directory, as
+	// it is in the ContentImage
+	Content string `json:"content,omitempty"`
+	// By setting this, it's possible to only run the scan on certain nodes in
+	// the cluster. Note that when applying remediations generated from the
+	// scan, this should match the selector of the MachineConfigPool you want
+	// to apply the remediations to.
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 	// Disables cleaning up resources in the DONE phase, this might be useful for debugging.
 	Debug bool `json:"debug,omitempty"`
@@ -49,21 +63,35 @@ type ComplianceScanSpec struct {
 // ComplianceScanStatus defines the observed state of ComplianceScan
 // +k8s:openapi-gen=true
 type ComplianceScanStatus struct {
-	Phase        ComplianceScanStatusPhase  `json:"phase,omitempty"`
-	Result       ComplianceScanStatusResult `json:"result,omitempty"`
-	ErrorMessage string                     `json:"errormsg,omitempty"`
+	// Is the phase where the scan is at. Normally, one must wait for the scan
+	// to reach the phase DONE.
+	Phase ComplianceScanStatusPhase `json:"phase,omitempty"`
+	// Once the scan reaches the phase DONE, this will contain the result of
+	// the scan. Where COMPLIANT means that the scan succeeded; NON-COMPLIANT
+	// means that there were rule violations; and ERROR means that the scan
+	// couldn't complete due to an issue.
+	Result ComplianceScanStatusResult `json:"result,omitempty"`
+	// If there are issues on the scan, this will be filled up with an error
+	// message.
+	ErrorMessage string `json:"errormsg,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ComplianceScan is the Schema for the compliancescans API
+// ComplianceScan represents a scan with a certain configuration that will be
+// applied to objects of a certain entity in the host. These could be nodes
+// that apply to a certain nodeSelector, or the cluster itself.
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
 type ComplianceScan struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ComplianceScanSpec   `json:"spec,omitempty"`
+	// The spec is the configuration for the compliance scan.
+	Spec ComplianceScanSpec `json:"spec,omitempty"`
+	// The status will give valuable information on what's going on with the
+	// scan; and, more importantly, if the scan is successful (compliant) or
+	// not (non-compliant)
 	Status ComplianceScanStatus `json:"status,omitempty"`
 }
 

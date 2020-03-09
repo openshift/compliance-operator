@@ -14,7 +14,9 @@ spec:
     status: {}
   validation:
     openAPIV3Schema:
-      description: ComplianceScan is the Schema for the compliancescans API
+      description: ComplianceScan represents a scan with a certain configuration that
+        will be applied to objects of a certain entity in the host. These could be
+        nodes that apply to a certain nodeSelector, or the cluster itself.
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -29,11 +31,16 @@ spec:
         metadata:
           type: object
         spec:
-          description: ComplianceScanSpec defines the desired state of ComplianceScan
+          description: The spec is the configuration for the compliance scan.
           properties:
             content:
+              description: Is the path to the file that contains the content (the
+                data stream). Note that the path needs to be relative to the `/` (root)
+                directory, as it is in the ContentImage
               type: string
             contentImage:
+              description: Is the image with the content (Data Stream), that will
+                be used to run OpenSCAP.
               type: string
             debug:
               description: Disables cleaning up resources in the DONE phase, this
@@ -42,22 +49,39 @@ spec:
             nodeSelector:
               additionalProperties:
                 type: string
+              description: By setting this, it's possible to only run the scan on
+                certain nodes in the cluster. Note that when applying remediations
+                generated from the scan, this should match the selector of the MachineConfigPool
+                you want to apply the remediations to.
               type: object
             profile:
+              description: Is the profile in the data stream to be used. This is the
+                collection of rules that will be checked for.
               type: string
             rule:
+              description: A Rule can be specified if the scan should check only for
+                a specific rule. Note that when leaving this empty, the scan will
+                check for all the rules for a specific profile.
               type: string
           type: object
         status:
-          description: ComplianceScanStatus defines the observed state of ComplianceScan
+          description: The status will give valuable information on what's going on
+            with the scan; and, more importantly, if the scan is successful (compliant)
+            or not (non-compliant)
           properties:
             errormsg:
+              description: If there are issues on the scan, this will be filled up
+                with an error message.
               type: string
             phase:
-              description: Represents the status of the compliance scan run.
+              description: Is the phase where the scan is at. Normally, one must wait
+                for the scan to reach the phase DONE.
               type: string
             result:
-              description: Represents the result of the compliance scan
+              description: Once the scan reaches the phase DONE, this will contain
+                the result of the scan. Where COMPLIANT means that the scan succeeded;
+                NON-COMPLIANT means that there were rule violations; and ERROR means
+                that the scan couldn't complete due to an issue.
               type: string
           type: object
       type: object
