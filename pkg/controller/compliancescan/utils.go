@@ -2,6 +2,7 @@ package compliancescan
 
 import (
 	"context"
+	"path"
 	// we can suppress the gosec warning about sha1 here because we don't use sha1 for crypto
 	// purposes, but only as a string shortener
 	// #nosec G505
@@ -9,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -84,10 +84,7 @@ func dnsLengthName(hashPrefix string, format string, a ...interface{}) string {
 }
 
 func absContentPath(relContentPath string) string {
-	if !strings.HasPrefix(relContentPath, "/") {
-		return "/content/" + relContentPath
-	}
-	return relContentPath
+	return path.Join("/content/", relContentPath)
 }
 
 // Issue a server cert using the instance Root CA (it needs to be created prior to calling this function).
