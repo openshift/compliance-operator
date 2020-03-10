@@ -122,7 +122,7 @@ remediation-aggregator-image:
 	$(RUNTIME) build -f $(REMEDIATION_AGGREGATOR_DOCKERFILE_PATH) -t $(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG) .
 
 .PHONY: build
-build: manager resultscollector remediation-aggregator resultserver ## Build the compliance-operator binary
+build: fmt manager resultscollector remediation-aggregator resultserver ## Build the compliance-operator binary
 
 manager:
 	$(GO) build -o $(TARGET) github.com/openshift/compliance-operator/cmd/manager
