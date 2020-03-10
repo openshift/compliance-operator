@@ -21,9 +21,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/openshift/compliance-operator/pkg/utils"
 	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var log = logf.Log.WithName("controller_compliancesuite")
