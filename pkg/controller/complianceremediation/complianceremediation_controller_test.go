@@ -38,18 +38,18 @@ func getMockedRemediation(name string, labels map[string]string, applied bool, s
 
 	return &complianceoperatorv1alpha1.ComplianceRemediation{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:   name,
 			Labels: labels,
 		},
-		Spec:complianceoperatorv1alpha1.ComplianceRemediationSpec{
+		Spec: complianceoperatorv1alpha1.ComplianceRemediationSpec{
 			ComplianceRemediationSpecMeta: complianceoperatorv1alpha1.ComplianceRemediationSpecMeta{
-				Type:complianceoperatorv1alpha1.McRemediation,
-				Apply:applied,
+				Type:  complianceoperatorv1alpha1.McRemediation,
+				Apply: applied,
 			},
-			MachineConfigContents:         mcfgv1.MachineConfig{
+			MachineConfigContents: mcfgv1.MachineConfig{
 				TypeMeta:   metav1.TypeMeta{},
 				ObjectMeta: metav1.ObjectMeta{},
-				Spec:       mcfgv1.MachineConfigSpec{
+				Spec: mcfgv1.MachineConfigSpec{
 					Config: igntypes.Config{
 						Ignition: igntypes.Ignition{
 							Version: igntypes.MaxVersion.String(),
@@ -61,7 +61,7 @@ func getMockedRemediation(name string, labels map[string]string, applied bool, s
 				},
 			},
 		},
-		Status:complianceoperatorv1alpha1.ComplianceRemediationStatus{
+		Status: complianceoperatorv1alpha1.ComplianceRemediationStatus{
 			ApplicationState: status,
 		},
 	}
@@ -71,8 +71,8 @@ var _ = Describe("Testing complianceremediation controller", func() {
 
 	var (
 		complianceremediationinstance *complianceoperatorv1alpha1.ComplianceRemediation
-		reconciler             ReconcileComplianceRemediation
-		testRemLabels			map[string]string
+		reconciler                    ReconcileComplianceRemediation
+		testRemLabels                 map[string]string
 	)
 
 	BeforeEach(func() {
@@ -86,7 +86,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 		// test instance
 		complianceremediationinstance = &complianceoperatorv1alpha1.ComplianceRemediation{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "testRem",
+				Name:   "testRem",
 				Labels: testRemLabels,
 			},
 		}
@@ -128,7 +128,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				name := fmt.Sprintf("existingRemediation-%02d", i)
 
 				toDelete := complianceoperatorv1alpha1.ComplianceRemediation{}
-				err := reconciler.client.Get(context.TODO(), types.NamespacedName{Name:name}, &toDelete)
+				err := reconciler.client.Get(context.TODO(), types.NamespacedName{Name: name}, &toDelete)
 				Expect(err).To(BeNil())
 
 				err = reconciler.client.Delete(context.TODO(), &toDelete)
@@ -154,7 +154,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 			Expect(err).To(BeNil())
 
 			machineConfigs, err := getAppliedMcRemediations(&reconciler, complianceremediationinstance)
-			Expect(len(machineConfigs)).To(Equal(numExisting-1))
+			Expect(len(machineConfigs)).To(Equal(numExisting - 1))
 			Expect(err).To(BeNil())
 
 			for _, rem := range existingRemediations {
@@ -168,4 +168,3 @@ var _ = Describe("Testing complianceremediation controller", func() {
 		})
 	})
 })
-
