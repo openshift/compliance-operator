@@ -84,6 +84,7 @@ COURIER_QUAY_NAMESPACE=compliance-operator
 COURIER_PACKAGE_VERSION?=
 OLD_COURIER_PACKAGE_VERSION=$(shell ls -t deploy/olm-catalog/compliance-operator/ | grep -v package.yaml | head -1)
 COURIER_QUAY_TOKEN?= $(shell cat ~/.quay)
+PACKAGE_CHANNEL?=alpha
 
 .PHONY: all
 all: build ## Test and Build the compliance-operator
@@ -329,7 +330,7 @@ endif
 
 .PHONY: csv
 csv: check-package-version
-	$(GOPATH)/bin/operator-sdk generate csv --csv-version "$(COURIER_PACKAGE_VERSION)" --from-version "$(OLD_COURIER_PACKAGE_VERSION)" --update-crds
+	$(GOPATH)/bin/operator-sdk generate csv --csv-channel $(PACKAGE_CHANNEL) --csv-version "$(COURIER_PACKAGE_VERSION)" --from-version "$(OLD_COURIER_PACKAGE_VERSION)" --update-crds
 
 .PHONY: publish-bundle
 publish-bundle: check-package-version
@@ -357,6 +358,7 @@ undo-deploy-tag-image: package-version-to-tag
 .PHONY: git-release
 git-release: package-version-to-tag
 	git add "deploy/olm-catalog/compliance-operator/$(TAG)"
+	git add "deploy/olm-catalog/compliance-operator/compliance-operator.package.yaml"
 	git commit -m "Release v$(TAG)"
 	git tag "v$(TAG)"
 	git push origin "v$(TAG)"
