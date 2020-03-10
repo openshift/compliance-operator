@@ -81,8 +81,8 @@ COURIER_CMD=operator-courier
 COURIER_PACKAGE_NAME=compliance-operator-bundle
 COURIER_OPERATOR_DIR=deploy/olm-catalog/compliance-operator
 COURIER_QUAY_NAMESPACE=compliance-operator
-COURIER_PACKAGE_VERSION?=0.1.1
-OLD_COURIER_PACKAGE_VERSION?=0.1.0
+COURIER_PACKAGE_VERSION?=
+OLD_COURIER_PACKAGE_VERSION=$(shell ls -t deploy/olm-catalog/compliance-operator/ | head -1)
 COURIER_QUAY_TOKEN?= $(shell cat ~/.quay)
 
 .PHONY: all
@@ -321,10 +321,42 @@ push: image
 .PHONY: publish
 publish: csv publish-bundle
 
+.PHONY: check-package-version
+check-package-version:
+ifndef COURIER_PACKAGE_VERSION
+	$(error COURIER_PACKAGE_VERSION must be defined)
+endif
+
 .PHONY: csv
-csv:
+csv: check-package-version
 	$(GOPATH)/bin/operator-sdk generate csv --csv-version "$(COURIER_PACKAGE_VERSION)" --from-version "$(OLD_COURIER_PACKAGE_VERSION)" --update-crds
 
 .PHONY: publish-bundle
-publish-bundle:
+publish-bundle: check-package-version
 	$(COURIER_CMD) push "$(COURIER_OPERATOR_DIR)" "$(COURIER_QUAY_NAMESPACE)" "$(COURIER_PACKAGE_NAME)" "$(COURIER_PACKAGE_VERSION)" "basic $(COURIER_QUAY_TOKEN)"
+
+.PHONY: package-version-to-tag
+package-version-to-tag: check-package-version
+	@echo "Overriding default tag '$(TAG)' with release tag '$(COURIER_PACKAGE_VERSION)'"
+	$(eval TAG = $(COURIER_PACKAGE_VERSION))
+
+.PHONY: release-tag-image
+release-tag-image: package-version-to-tag
+	@echo "Temporarily overriding image tags in deploy/operator.yaml"
+	@sed -i 's%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%$(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%$(RESULTSERVER_IMAGE_PATH):$(TAG)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):latest%$(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)%' deploy/operator.yaml
+
+.PHONY: undo-deploy-tag-image
+undo-deploy-tag-image: package-version-to-tag
+	@echo "Restoring image tags in deploy/operator.yaml"
+	@sed -i 's%$(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%' deploy/operator.yaml
+	@sed -i 's%$(RESULTSERVER_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%' deploy/operator.yaml
+	@sed -i 's%$(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):latest%' deploy/operator.yaml
+
+.PHONY: git-tag
+git-tag: package-version-to-tag
+	git tag "v$(TAG)"
+
+.PHONY: release
+release: release-tag-image push publish undo-deploy-tag-image git-tag ## Do an official release (Requires permissions)
