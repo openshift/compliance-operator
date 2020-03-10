@@ -354,9 +354,12 @@ undo-deploy-tag-image: package-version-to-tag
 	@sed -i 's%$(RESULTSERVER_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):latest%' deploy/operator.yaml
 
-.PHONY: git-tag
-git-tag: package-version-to-tag
+.PHONY: git-release
+git-release: package-version-to-tag
+	git add "deploy/olm-catalog/compliance-operator/$(TAG)"
+	git commit -m "Release v$(TAG)"
 	git tag "v$(TAG)"
+	git push origin "v$(TAG)"
 
 .PHONY: release
-release: release-tag-image push publish undo-deploy-tag-image git-tag ## Do an official release (Requires permissions)
+release: release-tag-image push publish undo-deploy-tag-image git-release ## Do an official release (Requires permissions)
