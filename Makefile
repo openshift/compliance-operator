@@ -82,7 +82,7 @@ COURIER_PACKAGE_NAME=compliance-operator-bundle
 COURIER_OPERATOR_DIR=deploy/olm-catalog/compliance-operator
 COURIER_QUAY_NAMESPACE=compliance-operator
 COURIER_PACKAGE_VERSION?=
-OLD_COURIER_PACKAGE_VERSION=$(shell ls -t deploy/olm-catalog/compliance-operator/ | head -1)
+OLD_COURIER_PACKAGE_VERSION=$(shell ls -t deploy/olm-catalog/compliance-operator/ | grep -v package.yaml | head -1)
 COURIER_QUAY_TOKEN?= $(shell cat ~/.quay)
 
 .PHONY: all
