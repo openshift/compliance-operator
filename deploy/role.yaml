@@ -100,21 +100,14 @@ rules:
   - compliance-operator
   verbs:
   - "update"
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: scc-priv
-  namespace: openshift-compliance
-rules:
-  - apiGroups:
-      - security.openshift.io
-    resourceNames:
-      - privileged
-    resources:
-      - securitycontextconstraints
-    verbs:
-      - use
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - privileged
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
