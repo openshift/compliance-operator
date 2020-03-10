@@ -3,6 +3,7 @@ package compliancescan
 import (
 	"context"
 	"fmt"
+	"path"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -781,7 +782,7 @@ func newScanPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, 
 					Command: []string{
 						"sh",
 						"-c",
-						"cp /*.xml /content",
+						fmt.Sprintf("cp %s /content | /bin/true", path.Join("/", scanInstance.Spec.Content)),
 					},
 					ImagePullPolicy: corev1.PullAlways,
 					VolumeMounts: []corev1.VolumeMount{
@@ -1083,7 +1084,7 @@ func newAggregatorPod(scanInstance *complianceoperatorv1alpha1.ComplianceScan, l
 					Command: []string{
 						"sh",
 						"-c",
-						"cp /*.xml /content",
+						fmt.Sprintf("cp %s /content | /bin/true", path.Join("/", scanInstance.Spec.Content)),
 					},
 					ImagePullPolicy: corev1.PullAlways,
 					VolumeMounts: []corev1.VolumeMount{
