@@ -307,16 +307,12 @@ endif
 .PHONY: push
 push: image
 	# compliance-operator manager
-	$(RUNTIME) tag $(OPERATOR_IMAGE_PATH) $(OPERATOR_IMAGE_PATH):$(TAG)
 	$(RUNTIME) push $(OPERATOR_IMAGE_PATH):$(TAG)
 	# resultscollector
-	$(RUNTIME) tag $(RESULTSCOLLECTOR_IMAGE_PATH) $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)
 	$(RUNTIME) push $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)
 	# resultserver
-	$(RUNTIME) tag $(RESULTSERVER_IMAGE_PATH) $(RESULTSERVER_IMAGE_PATH):$(TAG)
 	$(RUNTIME) push $(RESULTSERVER_IMAGE_PATH):$(TAG)
 	# remediation-aggregator
-	$(RUNTIME) tag $(REMEDIATION_AGGREGATOR_IMAGE_PATH) $(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)
 	$(RUNTIME) push $(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)
 
 .PHONY: publish
@@ -357,11 +353,13 @@ undo-deploy-tag-image: package-version-to-tag
 
 .PHONY: git-release
 git-release: package-version-to-tag
+	git checkout -b "release-v$(TAG)"
 	git add "deploy/olm-catalog/compliance-operator/$(TAG)"
 	git add "deploy/olm-catalog/compliance-operator/compliance-operator.package.yaml"
 	git commit -m "Release v$(TAG)"
 	git tag "v$(TAG)"
 	git push origin "v$(TAG)"
+	git push origin "release-v$(TAG)"
 
 .PHONY: release
 release: release-tag-image push publish undo-deploy-tag-image git-release ## Do an official release (Requires permissions)
