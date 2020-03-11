@@ -353,11 +353,13 @@ undo-deploy-tag-image: package-version-to-tag
 
 .PHONY: git-release
 git-release: package-version-to-tag
+	git checkout -b "release-v$(TAG)"
 	git add "deploy/olm-catalog/compliance-operator/$(TAG)"
 	git add "deploy/olm-catalog/compliance-operator/compliance-operator.package.yaml"
 	git commit -m "Release v$(TAG)"
 	git tag "v$(TAG)"
 	git push origin "v$(TAG)"
+	git push origin "release-v$(TAG)"
 
 .PHONY: release
 release: release-tag-image push publish undo-deploy-tag-image git-release ## Do an official release (Requires permissions)
