@@ -4,7 +4,7 @@ metadata:
   name: compliance-operator
   namespace: openshift-compliance
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       name: compliance-operator
