@@ -41,7 +41,7 @@ BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 RESULTSCOLLECTOR_TARGET=$(TARGET_DIR)/bin/$(RESULTSCOLLECTORBIN)
 RESULTSERVER_TARGET=$(TARGET_DIR)/bin/$(RESULTSERVERBIN)
-AGGREAGATOR_TARGET=$(TARGET_DIR)/bin/$(REMEDIATION_AGGREGATORBIN)
+AGGREGATOR_TARGET=$(TARGET_DIR)/bin/$(REMEDIATION_AGGREGATORBIN)
 MAIN_PKG=cmd/manager/main.go
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 # This is currently hardcoded to our most performance sensitive package
@@ -102,7 +102,7 @@ help: ## Show this help screen
 image: fmt operator-sdk operator-image resultscollector-image remediation-aggregator-image resultserver-image openscap-image ## Build the compliance-operator container image
 
 .PHONY: operator-image
-operator-image:
+operator-image: operator-sdk
 	$(GOPATH)/bin/operator-sdk build $(OPERATOR_IMAGE_PATH) --image-builder $(RUNTIME)
 
 .PHONY: openscap-image
@@ -134,7 +134,7 @@ resultserver:
 	$(GO) build -o $(RESULTSERVER_TARGET) github.com/openshift/compliance-operator/cmd/resultserver
 
 remediation-aggregator:
-	$(GO) build -o $(AGGREAGATOR_TARGET) github.com/openshift/compliance-operator/cmd/remediation-aggregator
+	$(GO) build -o $(AGGREGATOR_TARGET) github.com/openshift/compliance-operator/cmd/remediation-aggregator
 
 .PHONY: operator-sdk
 operator-sdk:
@@ -329,7 +329,7 @@ ifndef COURIER_PACKAGE_VERSION
 endif
 
 .PHONY: csv
-csv: check-package-version
+csv: check-package-version operator-sdk
 	$(GOPATH)/bin/operator-sdk generate csv --csv-channel $(PACKAGE_CHANNEL) --csv-version "$(COURIER_PACKAGE_VERSION)" --from-version "$(OLD_COURIER_PACKAGE_VERSION)" --update-crds
 
 .PHONY: publish-bundle
