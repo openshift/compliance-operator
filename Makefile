@@ -137,11 +137,11 @@ remediation-aggregator:
 	$(GO) build -o $(AGGREGATOR_TARGET) github.com/openshift/compliance-operator/cmd/remediation-aggregator
 
 .PHONY: operator-sdk
-operator-sdk:
-ifeq ("$(wildcard $(GOPATH)/bin/operator-sdk)","")
+operator-sdk: $(GOPATH)/bin/operator-sdk
+
+$(GOPATH)/bin/operator-sdk:
 	wget -nv $(OPERATOR_SDK_URL) -O $(GOPATH)/bin/operator-sdk || (echo "wget returned $$? trying to fetch operator-sdk. please install operator-sdk and try again"; exit 1)
 	chmod +x $(GOPATH)/bin/operator-sdk
-endif
 
 .PHONY: run
 run: operator-sdk ## Run the compliance-operator locally
