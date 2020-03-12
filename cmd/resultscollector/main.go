@@ -43,7 +43,7 @@ import (
 )
 
 const (
-	crdGroup      = "complianceoperator.compliance.openshift.io"
+	crdGroup      = "compliance.openshift.io"
 	crdAPIVersion = "v1alpha1"
 	crdPlurals    = "compliancescans"
 	maxRetries    = 15

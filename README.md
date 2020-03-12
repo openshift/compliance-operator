@@ -43,14 +43,14 @@ issues that would be found contain `MachineConfig` objects that must be
 applied to a pool.
 
 To run the scans, copy and edit the example file at
-`deploy/crds/complianceoperator.compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml`
+`deploy/crds/compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml`
 and create the Kubernetes object:
 ```
 # edit the Suite definition to your liking. You can also copy the file and edit the copy.
-$ vim deploy/crds/complianceoperator.compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
+$ vim deploy/crds/compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
 # make sure to switch to the openshift-compliance namespace
 $ oc project openshift-compliance
-$ oc create -f deploy/crds/complianceoperator.compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
+$ oc create -f deploy/crds/compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
 ```
 
 At this point the operator reconciles the `ComplianceSuite` custom resource,
