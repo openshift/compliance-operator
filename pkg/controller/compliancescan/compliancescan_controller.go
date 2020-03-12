@@ -38,7 +38,6 @@ const (
 	OpenSCAPScanContainerName = "openscap-ocp"
 	OpenSCAPScriptCmLabel     = "cm-script"
 	OpenSCAPScriptEnvLabel    = "cm-env"
-	OpenSCAPNodePodLabel      = "node-scan/"
 	NodeHostnameLabel         = "kubernetes.io/hostname"
 	AggregatorPodAnnotation   = "scan-aggregator"
 	// The default time we should wait before requeuing
@@ -401,7 +400,7 @@ func (r *ReconcileComplianceScan) createPVCForScan(instance *complianceoperatorv
 func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
 	logger.Info("Retrieving a pod for node", "node", node.Name)
 
-	podName := getPodForNodeName(scanInstance, node.Name)
+	podName := getPodForNodeName(scanInstance.Name, node.Name)
 	return isPodRunning(r, podName, scanInstance.Namespace, logger)
 }
 
@@ -496,30 +495,12 @@ func getPVCForScan(instance *complianceoperatorv1alpha1.ComplianceScan) *corev1.
 
 // pod names are limited to 63 chars, inclusive. Try to use a friendly name, if that can't be done,
 // just use a hash. Either way, the node would be present in a label of the pod.
-func createPodForNodeName(scanName, nodeName string) string {
+func getPodForNodeName(scanName, nodeName string) string {
 	return dnsLengthName("openscap-pod-", "%s-%s-pod", scanName, nodeName)
 }
 
 func getConfigMapForNodeName(scanName, nodeName string) string {
 	return dnsLengthName("openscap-pod-", "%s-%s-pod", scanName, nodeName)
-}
-
-func getPodForNodeName(scanInstance *complianceoperatorv1alpha1.ComplianceScan, nodeName string) string {
-	return scanInstance.Labels[nodePodLabel(nodeName)]
-}
-
-func setPodForNodeName(scanInstance *complianceoperatorv1alpha1.ComplianceScan, nodeName, podName string) {
-	if scanInstance.Labels == nil {
-		scanInstance.Labels = make(map[string]string)
-	}
-
-	// TODO(jaosorior): Figure out if we still need this after deleting the pods
-	// This might be more appropraite as an annotation.
-	scanInstance.Labels[nodePodLabel(nodeName)] = podName
-}
-
-func nodePodLabel(nodeName string) string {
-	return OpenSCAPNodePodLabel + nodeName
 }
 
 func getPVCForScanName(instance *complianceoperatorv1alpha1.ComplianceScan) string {
