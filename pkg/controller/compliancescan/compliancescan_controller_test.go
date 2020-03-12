@@ -102,23 +102,20 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 		Context("With two pods in the cluster", func() {
 			BeforeEach(func() {
 				// Create the pods for the test
-				podName1 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name)
+				podName1 := getPodForNodeName(compliancescaninstance.Name, nodeinstance1.Name)
 				reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: podName1,
 					},
 				})
 
-				podName2 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name)
+				podName2 := getPodForNodeName(compliancescaninstance.Name, nodeinstance2.Name)
 				reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: podName2,
 					},
 				})
 
-				// Set the pod-node mappings in labels
-				setPodForNodeName(compliancescaninstance, nodeinstance1.Name, podName1)
-				setPodForNodeName(compliancescaninstance, nodeinstance2.Name, podName2)
 				reconciler.client.Update(context.TODO(), compliancescaninstance)
 
 				// Set state to RUNNING
@@ -137,7 +134,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 		Context("With two pods that succeeded in the cluster", func() {
 			BeforeEach(func() {
 				// Create the pods for the test
-				podName1 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name)
+				podName1 := getPodForNodeName(compliancescaninstance.Name, nodeinstance1.Name)
 				reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: podName1,
@@ -147,7 +144,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 					},
 				})
 
-				podName2 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name)
+				podName2 := getPodForNodeName(compliancescaninstance.Name, nodeinstance2.Name)
 				reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: podName2,
@@ -157,9 +154,6 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 					},
 				})
 
-				// Set the pod-node mappings in labels
-				setPodForNodeName(compliancescaninstance, nodeinstance1.Name, podName1)
-				setPodForNodeName(compliancescaninstance, nodeinstance2.Name, podName2)
 				reconciler.client.Update(context.TODO(), compliancescaninstance)
 
 				// Set state to RUNNING
