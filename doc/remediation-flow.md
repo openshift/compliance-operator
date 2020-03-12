@@ -247,7 +247,7 @@ these two remediations.
 #### Running the suite
 Run the operator first, then create the `ComplianceSuite` CR:
 
-    oc create -f deploy/crds/complianceoperator.compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
+    oc create -f deploy/crds/compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
 
 You'll be able to watch the Suite:
 
