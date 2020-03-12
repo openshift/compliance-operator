@@ -1,4 +1,4 @@
-apiVersion: complianceoperator.compliance.openshift.io/v1alpha1
+apiVersion: compliance.openshift.io/v1alpha1
 kind: ComplianceScan
 metadata:
   name: example-compliancescan

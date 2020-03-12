@@ -57,7 +57,7 @@ worker nodes.
 The following two YAML examples are real CRs retrieved with `oc get -oyaml`,
 just with the metadata trimmed. The structure looks like this:
 ```yaml
-apiVersion: complianceoperator.compliance.openshift.io/v1alpha1
+apiVersion: compliance.openshift.io/v1alpha1
 kind: ComplianceSuite
 metadata:
   name: example-compliancesuite
@@ -98,7 +98,7 @@ status:
 
 The remediation looks like this:
 ```yaml
-apiVersion: complianceoperator.compliance.openshift.io/v1alpha1
+apiVersion: compliance.openshift.io/v1alpha1
 kind: ComplianceRemediation
 metadata:
   labels:
@@ -108,7 +108,7 @@ metadata:
   name: masters-scan-no-direct-root-logins
   namespace: openshift-compliance
   ownerReferences:
-  - apiVersion: complianceoperator.compliance.openshift.io/v1alpha1
+  - apiVersion: compliance.openshift.io/v1alpha1
     blockOwnerDeletion: true
     controller: true
     kind: ComplianceSuite

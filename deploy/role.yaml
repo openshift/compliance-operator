@@ -52,7 +52,7 @@ rules:
   - update
   - delete      # The compliance-scan controller deletes the resultserver in the DONE phase
 - apiGroups:
-  - complianceoperator.compliance.openshift.io
+  - compliance.openshift.io
   resources:
   - compliancescans   # The operator's custom CRD
   verbs:
@@ -62,7 +62,7 @@ rules:
   - get         # The operator must be able to read the CR
   - list        # The operator must be able to read the CR
 - apiGroups:
-  - complianceoperator.compliance.openshift.io
+  - compliance.openshift.io
   resources:
   - '*'
   verbs:
