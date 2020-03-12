@@ -192,6 +192,11 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *complianceoperatorv1a
 		Name: scan.Name,
 	}
 
+	if scan.Status.Phase == complianceoperatorv1alpha1.PhaseDone {
+		modScanStatus.Result = scan.Status.Result
+		modScanStatus.ErrorMessage = scan.Status.ErrorMessage
+	}
+
 	suiteCopy := suite.DeepCopy()
 	suiteCopy.Status.ScanStatuses[idx] = modScanStatus
 	logger.Info("Updating scan status", "scan", modScanStatus.Name, "phase", modScanStatus.Phase)
