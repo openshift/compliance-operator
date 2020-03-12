@@ -57,6 +57,7 @@ func newAggregatorPod(scanInstance *complianceoperatorv1alpha1.ComplianceScan, l
 					Args: []string{
 						"--content=" + absContentPath(scanInstance.Spec.Content),
 						"--scan=" + scanInstance.Name,
+						"--namespace=" + scanInstance.Namespace,
 					},
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &trueVal,
