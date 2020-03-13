@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
@@ -88,7 +88,7 @@ func absContentPath(relContentPath string) string {
 }
 
 // Issue a server cert using the instance Root CA (it needs to be created prior to calling this function).
-func makeServerCertSecret(c client.Client, instance *complianceoperatorv1alpha1.ComplianceScan, namespace string) (*v1.Secret, error) {
+func makeServerCertSecret(c client.Client, instance *compv1alpha1.ComplianceScan, namespace string) (*v1.Secret, error) {
 	// Creating the server cert, first fetch the root CA.
 	caSecret := &corev1.Secret{}
 	err := c.Get(context.TODO(), types.NamespacedName{Name: RootCAPrefix + instance.Name, Namespace: namespace}, caSecret)
@@ -100,7 +100,7 @@ func makeServerCertSecret(c client.Client, instance *complianceoperatorv1alpha1.
 }
 
 // Issue a server cert (signed by caKey) for instance and return in a secret. Separated from makeServerCertSecret() to help with testing.
-func serverCertSecret(instance *complianceoperatorv1alpha1.ComplianceScan, ca, caKey []byte, namespace string) (*v1.Secret, error) {
+func serverCertSecret(instance *compv1alpha1.ComplianceScan, ca, caKey []byte, namespace string) (*v1.Secret, error) {
 	cert, key, err := utils.NewServerCert(ca, caKey, instance.Name+ServerCertInstanceSuffix, CertValidityDays)
 	if err != nil {
 		return nil, err
@@ -110,7 +110,7 @@ func serverCertSecret(instance *complianceoperatorv1alpha1.ComplianceScan, ca, c
 }
 
 // Issue a client cert using the instance Root CA (it needs to be created prior to calling this function).
-func makeClientCertSecret(c client.Client, instance *complianceoperatorv1alpha1.ComplianceScan, namespace string) (*v1.Secret, error) {
+func makeClientCertSecret(c client.Client, instance *compv1alpha1.ComplianceScan, namespace string) (*v1.Secret, error) {
 	// Creating the client cert, first fetch the root CA.
 	caSecret := &corev1.Secret{}
 	err := c.Get(context.TODO(), types.NamespacedName{Name: RootCAPrefix + instance.Name, Namespace: namespace}, caSecret)
@@ -122,7 +122,7 @@ func makeClientCertSecret(c client.Client, instance *complianceoperatorv1alpha1.
 }
 
 // Issue a client cert (signed by caKey) for instance and return in a secret. Separated from makeClientCertSecret() to help with testing.
-func clientCertSecret(instance *complianceoperatorv1alpha1.ComplianceScan, ca, caKey []byte, namespace string) (*v1.Secret, error) {
+func clientCertSecret(instance *compv1alpha1.ComplianceScan, ca, caKey []byte, namespace string) (*v1.Secret, error) {
 	cert, key, err := utils.NewClientCert(ca, caKey, instance.Name+ClientCertInstanceSuffix, CertValidityDays)
 	if err != nil {
 		return nil, err
@@ -131,7 +131,7 @@ func clientCertSecret(instance *complianceoperatorv1alpha1.ComplianceScan, ca, c
 	return certSecret(getClientCertSecretName(instance), namespace, cert, key, ca), nil
 }
 
-func makeCASecret(instance *complianceoperatorv1alpha1.ComplianceScan, namespace string) (*v1.Secret, error) {
+func makeCASecret(instance *compv1alpha1.ComplianceScan, namespace string) (*v1.Secret, error) {
 	cert, key, err := utils.ComplianceOperatorRootCA(RootCAPrefix+instance.Name, CertValidityDays)
 	if err != nil {
 		return nil, err
@@ -140,15 +140,15 @@ func makeCASecret(instance *complianceoperatorv1alpha1.ComplianceScan, namespace
 	return certSecret(getCASecretName(instance), namespace, cert, key, []byte{}), nil
 }
 
-func getServerCertSecretName(instance *complianceoperatorv1alpha1.ComplianceScan) string {
+func getServerCertSecretName(instance *compv1alpha1.ComplianceScan) string {
 	return ServerCertPrefix + instance.Name
 }
 
-func getClientCertSecretName(instance *complianceoperatorv1alpha1.ComplianceScan) string {
+func getClientCertSecretName(instance *compv1alpha1.ComplianceScan) string {
 	return ClientCertPrefix + instance.Name
 }
 
-func getCASecretName(instance *complianceoperatorv1alpha1.ComplianceScan) string {
+func getCASecretName(instance *compv1alpha1.ComplianceScan) string {
 	return RootCAPrefix + instance.Name
 }
 

@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	mcfgClient "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1"
@@ -56,7 +56,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to primary resource ComplianceRemediation
-	err = c.Watch(&source.Kind{Type: &complianceoperatorv1alpha1.ComplianceRemediation{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &compv1alpha1.ComplianceRemediation{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 	reqLogger.Info("Reconciling ComplianceRemediation")
 
 	// Fetch the ComplianceRemediation instance
-	remediationInstance := &complianceoperatorv1alpha1.ComplianceRemediation{}
+	remediationInstance := &compv1alpha1.ComplianceRemediation{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, remediationInstance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -103,7 +103,7 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 
 	// First, we'll reconcile the MC that is the result of applying Remediations
 	switch remediationInstance.Spec.Type {
-	case complianceoperatorv1alpha1.McRemediation:
+	case compv1alpha1.McRemediation:
 		reqLogger.Info("Reconciling a MachineConfig remediation")
 		err = r.reconcileMcRemediation(remediationInstance, reqLogger)
 	default:
@@ -132,7 +132,7 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 // On the other hand, a Remediation can also be de-selected, this would result in either the resulting
 // MC having one less remediation or in the case no remediations are to be applied, the aggregate
 // MC is just deleted because it would otherwise be empty
-func (r *ReconcileComplianceRemediation) reconcileMcRemediation(instance *complianceoperatorv1alpha1.ComplianceRemediation, logger logr.Logger) error {
+func (r *ReconcileComplianceRemediation) reconcileMcRemediation(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
 	// mcList is a combination of remediations already applied and the remediation selected
 	// already converted to a list of MachineConfig API resources
 	mcList, err := getApplicableMcList(r, instance, logger)
@@ -169,12 +169,12 @@ func (r *ReconcileComplianceRemediation) reconcileMcRemediation(instance *compli
 	return nil
 }
 
-func (r *ReconcileComplianceRemediation) reconcileRemediationStatus(instance *complianceoperatorv1alpha1.ComplianceRemediation, logger logr.Logger) error {
+func (r *ReconcileComplianceRemediation) reconcileRemediationStatus(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
 	instanceCopy := instance.DeepCopy()
 	if instance.Spec.Apply {
-		instanceCopy.Status.ApplicationState = complianceoperatorv1alpha1.RemediationApplied
+		instanceCopy.Status.ApplicationState = compv1alpha1.RemediationApplied
 	} else {
-		instanceCopy.Status.ApplicationState = complianceoperatorv1alpha1.RemediationNotSelected
+		instanceCopy.Status.ApplicationState = compv1alpha1.RemediationNotSelected
 	}
 
 	if err := r.client.Status().Update(context.TODO(), instanceCopy); err != nil {
@@ -186,7 +186,7 @@ func (r *ReconcileComplianceRemediation) reconcileRemediationStatus(instance *co
 	return nil
 }
 
-func getApplicableMcList(r *ReconcileComplianceRemediation, instance *complianceoperatorv1alpha1.ComplianceRemediation, logger logr.Logger) ([]*mcfgv1.MachineConfig, error) {
+func getApplicableMcList(r *ReconcileComplianceRemediation, instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) ([]*mcfgv1.MachineConfig, error) {
 	// Retrieve all the remediations that are already applied and merge with the one selected (if selected)
 	appliedRemediations, err := getAppliedMcRemediations(r, instance)
 	if err != nil {
@@ -206,12 +206,12 @@ func getApplicableMcList(r *ReconcileComplianceRemediation, instance *compliance
 	return appliedRemediations, nil
 }
 
-func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *complianceoperatorv1alpha1.ComplianceRemediation) ([]*mcfgv1.MachineConfig, error) {
-	var scanSuiteRemediations complianceoperatorv1alpha1.ComplianceRemediationList
+func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compv1alpha1.ComplianceRemediation) ([]*mcfgv1.MachineConfig, error) {
+	var scanSuiteRemediations compv1alpha1.ComplianceRemediationList
 
 	scanSuiteSelector := make(map[string]string)
-	scanSuiteSelector[complianceoperatorv1alpha1.SuiteLabel] = rem.Labels[complianceoperatorv1alpha1.SuiteLabel]
-	scanSuiteSelector[complianceoperatorv1alpha1.ScanLabel] = rem.Labels[complianceoperatorv1alpha1.ScanLabel]
+	scanSuiteSelector[compv1alpha1.SuiteLabel] = rem.Labels[compv1alpha1.SuiteLabel]
+	scanSuiteSelector[compv1alpha1.ScanLabel] = rem.Labels[compv1alpha1.ScanLabel]
 	scanSuiteSelector[mcfgv1.MachineConfigRoleLabelKey] = rem.Labels[mcfgv1.MachineConfigRoleLabelKey]
 
 	listOpts := client.ListOptions{
@@ -225,11 +225,11 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compliance
 
 	appliedRemediations := make([]*mcfgv1.MachineConfig, 0, len(scanSuiteRemediations.Items))
 	for i := range scanSuiteRemediations.Items {
-		if scanSuiteRemediations.Items[i].Spec.Type != complianceoperatorv1alpha1.McRemediation {
+		if scanSuiteRemediations.Items[i].Spec.Type != compv1alpha1.McRemediation {
 			// We'll only merge MachineConfigs
 			continue
 		}
-		if scanSuiteRemediations.Items[i].Status.ApplicationState != complianceoperatorv1alpha1.RemediationApplied {
+		if scanSuiteRemediations.Items[i].Status.ApplicationState != compv1alpha1.RemediationApplied {
 			// We'll only merge the one that is being reconciled with those that are already
 			// applied
 			continue

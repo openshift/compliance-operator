@@ -21,7 +21,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 var log = logf.Log.WithName("controller_compliancescan")
@@ -62,7 +62,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to primary resource ComplianceScan
-	err = c.Watch(&source.Kind{Type: &complianceoperatorv1alpha1.ComplianceScan{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &compv1alpha1.ComplianceScan{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Watch for changes to secondary resource Pods and requeue the owner ComplianceScan
 	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
-		OwnerType:    &complianceoperatorv1alpha1.ComplianceScan{},
+		OwnerType:    &compv1alpha1.ComplianceScan{},
 	})
 	if err != nil {
 		return err
@@ -101,7 +101,7 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 	reqLogger.Info("Reconciling ComplianceScan")
 
 	// Fetch the ComplianceScan instance
-	instance := &complianceoperatorv1alpha1.ComplianceScan{}
+	instance := &compv1alpha1.ComplianceScan{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -119,19 +119,19 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 
 	// If no phase set, default to pending (the initial phase):
 	if scanToBeUpdated.Status.Phase == "" {
-		scanToBeUpdated.Status.Phase = complianceoperatorv1alpha1.PhasePending
+		scanToBeUpdated.Status.Phase = compv1alpha1.PhasePending
 	}
 
 	switch scanToBeUpdated.Status.Phase {
-	case complianceoperatorv1alpha1.PhasePending:
+	case compv1alpha1.PhasePending:
 		return r.phasePendingHandler(scanToBeUpdated, reqLogger)
-	case complianceoperatorv1alpha1.PhaseLaunching:
+	case compv1alpha1.PhaseLaunching:
 		return r.phaseLaunchingHandler(scanToBeUpdated, reqLogger)
-	case complianceoperatorv1alpha1.PhaseRunning:
+	case compv1alpha1.PhaseRunning:
 		return r.phaseRunningHandler(scanToBeUpdated, reqLogger)
-	case complianceoperatorv1alpha1.PhaseAggregating:
+	case compv1alpha1.PhaseAggregating:
 		return r.phaseAggregatingHandler(scanToBeUpdated, reqLogger)
-	case complianceoperatorv1alpha1.PhaseDone:
+	case compv1alpha1.PhaseDone:
 		return r.phaseDoneHandler(scanToBeUpdated, reqLogger)
 	}
 
@@ -139,7 +139,7 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileComplianceScan) phasePendingHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	logger.Info("Phase: Pending", "ComplianceScan", instance.ObjectMeta.Name)
 
 	err := createConfigMaps(r, scriptCmForScan(instance), envCmForScan(instance), instance)
@@ -149,7 +149,7 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *complianceoperat
 	}
 
 	// Update the scan instance, the next phase is running
-	instance.Status.Phase = complianceoperatorv1alpha1.PhaseLaunching
+	instance.Status.Phase = compv1alpha1.PhaseLaunching
 	err = r.client.Status().Update(context.TODO(), instance)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -161,7 +161,7 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *complianceoperat
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	var nodes corev1.NodeList
 	var err error
 
@@ -197,7 +197,7 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *complianceoper
 	}
 
 	// if we got here, there are no new pods to be created, move to the next phase
-	instance.Status.Phase = complianceoperatorv1alpha1.PhaseRunning
+	instance.Status.Phase = compv1alpha1.PhaseRunning
 	err = r.client.Status().Update(context.TODO(), instance)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -206,7 +206,7 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *complianceoper
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileComplianceScan) phaseRunningHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	var nodes corev1.NodeList
 	var err error
 
@@ -224,7 +224,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *complianceoperat
 			// Let's go back to the previous state and make sure all the nodes are covered.
 			logger.Info("Phase: Running: A pod is missing. Going to state LAUNCHING to make sure we launch it",
 				"compliancescan", instance.ObjectMeta.Name, "node", node.Name)
-			instance.Status.Phase = complianceoperatorv1alpha1.PhaseLaunching
+			instance.Status.Phase = compv1alpha1.PhaseLaunching
 			err = r.client.Status().Update(context.TODO(), instance)
 			if err != nil {
 				return reconcile.Result{}, err
@@ -241,7 +241,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *complianceoperat
 	}
 
 	// if we got here, there are no pods running, move to the Aggregating phase
-	instance.Status.Phase = complianceoperatorv1alpha1.PhaseAggregating
+	instance.Status.Phase = compv1alpha1.PhaseAggregating
 	err = r.client.Status().Update(context.TODO(), instance)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -250,7 +250,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *complianceoperat
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	logger.Info("Phase: Aggregating", "ComplianceScan scan", instance.ObjectMeta.Name)
 
 	var nodes corev1.NodeList
@@ -295,18 +295,18 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *complianceop
 
 	if running {
 		log.Info("Remaining in the aggregating phase")
-		instance.Status.Phase = complianceoperatorv1alpha1.PhaseAggregating
+		instance.Status.Phase = compv1alpha1.PhaseAggregating
 		err = r.client.Status().Update(context.TODO(), instance)
 		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
 	}
 
 	log.Info("Moving on to the Done phase")
-	instance.Status.Phase = complianceoperatorv1alpha1.PhaseDone
+	instance.Status.Phase = compv1alpha1.PhaseDone
 	err = r.client.Status().Update(context.TODO(), instance)
 	return reconcile.Result{}, err
 }
 
-func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	var nodes corev1.NodeList
 	var err error
 	logger.Info("Phase: Done", "ComplianceScan scan", instance.ObjectMeta.Name)
@@ -350,7 +350,7 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *complianceoperatorv
 	return reconcile.Result{}, nil
 }
 
-func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan) (corev1.NodeList, error) {
+func getTargetNodes(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan) (corev1.NodeList, error) {
 	var nodes corev1.NodeList
 
 	listOpts := client.ListOptions{
@@ -364,7 +364,7 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *complianceoperatorv1al
 	return nodes, nil
 }
 
-func (r *ReconcileComplianceScan) createPVCForScan(instance *complianceoperatorv1alpha1.ComplianceScan) error {
+func (r *ReconcileComplianceScan) createPVCForScan(instance *compv1alpha1.ComplianceScan) error {
 	pvc := getPVCForScan(instance)
 	if err := controllerutil.SetControllerReference(instance, pvc, r.scheme); err != nil {
 		log.Error(err, "Failed to set pvc ownership", "pvc", pvc.Name)
@@ -377,7 +377,7 @@ func (r *ReconcileComplianceScan) createPVCForScan(instance *complianceoperatorv
 }
 
 // returns true if the pod is still running, false otherwise
-func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
+func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *compv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
 	logger.Info("Retrieving a pod for node", "node", node.Name)
 
 	podName := getPodForNodeName(scanInstance.Name, node.Name)
@@ -404,9 +404,9 @@ func isPodRunning(r *ReconcileComplianceScan, podName, namespace string, logger 
 // for the OpenSCAP check. If the results haven't yet been persisted in
 // the relevant ConfigMap, the a requeue will be requested since the
 // results are not ready.
-func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alpha1.ComplianceScan, nodes corev1.NodeList) (complianceoperatorv1alpha1.ComplianceScanStatusResult, bool, error) {
-	var lastNonCompliance complianceoperatorv1alpha1.ComplianceScanStatusResult
-	var result complianceoperatorv1alpha1.ComplianceScanStatusResult
+func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList) (compv1alpha1.ComplianceScanStatusResult, bool, error) {
+	var lastNonCompliance compv1alpha1.ComplianceScanStatusResult
+	var result compv1alpha1.ComplianceScanStatusResult
 	compliant := true
 	isReady := true
 	for _, node := range nodes.Items {
@@ -428,12 +428,12 @@ func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alp
 		result, err = getScanResult(foundCM)
 
 		// we output the last result if it was an error
-		if result == complianceoperatorv1alpha1.ResultError {
+		if result == compv1alpha1.ResultError {
 			return result, true, err
 		}
 		// Store the last non-compliance, so we can output that if
 		// there were no errors.
-		if result == complianceoperatorv1alpha1.ResultNonCompliant {
+		if result == compv1alpha1.ResultNonCompliant {
 			lastNonCompliance = result
 			compliant = false
 		}
@@ -446,7 +446,7 @@ func gatherResults(r *ReconcileComplianceScan, instance *complianceoperatorv1alp
 	return result, isReady, nil
 }
 
-func getPVCForScan(instance *complianceoperatorv1alpha1.ComplianceScan) *corev1.PersistentVolumeClaim {
+func getPVCForScan(instance *compv1alpha1.ComplianceScan) *corev1.PersistentVolumeClaim {
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getPVCForScanName(instance),
@@ -483,11 +483,11 @@ func getConfigMapForNodeName(scanName, nodeName string) string {
 	return dnsLengthName("openscap-pod-", "%s-%s-pod", scanName, nodeName)
 }
 
-func getPVCForScanName(instance *complianceoperatorv1alpha1.ComplianceScan) string {
+func getPVCForScanName(instance *compv1alpha1.ComplianceScan) string {
 	return instance.Name
 }
 
-func getInitContainerImage(scanSpec *complianceoperatorv1alpha1.ComplianceScanSpec, logger logr.Logger) string {
+func getInitContainerImage(scanSpec *compv1alpha1.ComplianceScanSpec, logger logr.Logger) string {
 	image := DefaultContentContainerImage
 
 	if scanSpec.ContentImage != "" {

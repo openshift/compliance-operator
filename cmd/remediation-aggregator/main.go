@@ -41,7 +41,7 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
@@ -92,11 +92,11 @@ func createCrClient(config *rest.Config) (*complianceCrClient, error) {
 	v1.AddToScheme(scheme)
 	mcfgv1.AddToScheme(scheme)
 
-	scheme.AddKnownTypes(complianceoperatorv1alpha1.SchemeGroupVersion,
-		&complianceoperatorv1alpha1.ComplianceRemediation{})
-	scheme.AddKnownTypes(complianceoperatorv1alpha1.SchemeGroupVersion,
-		&complianceoperatorv1alpha1.ComplianceScan{})
-	scheme.AddKnownTypes(complianceoperatorv1alpha1.SchemeGroupVersion,
+	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
+		&compv1alpha1.ComplianceRemediation{})
+	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
+		&compv1alpha1.ComplianceScan{})
+	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
 		&metav1.CreateOptions{})
 
 	client, err := runtimeclient.New(config, runtimeclient.Options{
@@ -146,7 +146,7 @@ func readCompressedData(compressed string) (*bzip2.Reader, error) {
 	return bzip2.NewReader(compressedReader, &bzip2.ReaderConfig{})
 }
 
-func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
+func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*compv1alpha1.ComplianceRemediation, error) {
 	var scanReader io.Reader
 
 	_, ok := cm.Annotations[configMapRemediationsProcessed]
@@ -177,7 +177,7 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string,
 }
 
 // returns true if the lists are the same, false if they differ
-func diffRemediationList(oldList, newList []*complianceoperatorv1alpha1.ComplianceRemediation) bool {
+func diffRemediationList(oldList, newList []*compv1alpha1.ComplianceRemediation) bool {
 	if newList == nil {
 		return oldList == nil
 	}
@@ -186,7 +186,7 @@ func diffRemediationList(oldList, newList []*complianceoperatorv1alpha1.Complian
 		return false
 	}
 
-	sortMcSlice := func(mcSlice []*complianceoperatorv1alpha1.ComplianceRemediation) {
+	sortMcSlice := func(mcSlice []*compv1alpha1.ComplianceRemediation) {
 		sort.SliceStable(mcSlice, func(i, j int) bool { return mcSlice[i].Name < mcSlice[j].Name })
 	}
 
@@ -205,7 +205,7 @@ func diffRemediationList(oldList, newList []*complianceoperatorv1alpha1.Complian
 
 // returns true if the remediations are the same, false if they differ
 // for now (?) just diffs the MC specs and the remediation type, not sure if we'll ever want to diff more
-func diffRemediations(old, new *complianceoperatorv1alpha1.ComplianceRemediation) bool {
+func diffRemediations(old, new *compv1alpha1.ComplianceRemediation) bool {
 	if old.Spec.Type != new.Spec.Type {
 		return false
 	}
@@ -230,7 +230,7 @@ func annotateParsedConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) 
 	return err
 }
 
-func createRemediations(crClient *complianceCrClient, scan *complianceoperatorv1alpha1.ComplianceScan, remediations []*complianceoperatorv1alpha1.ComplianceRemediation) error {
+func createRemediations(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, remediations []*compv1alpha1.ComplianceRemediation) error {
 	for _, rem := range remediations {
 		fmt.Printf("Creating remediation %s\n", rem.Name)
 		if err := controllerutil.SetControllerReference(scan, rem, crClient.scheme); err != nil {
@@ -241,8 +241,8 @@ func createRemediations(crClient *complianceCrClient, scan *complianceoperatorv1
 		if rem.Labels == nil {
 			rem.Labels = make(map[string]string)
 		}
-		rem.Labels[complianceoperatorv1alpha1.ScanLabel] = scan.Name
-		rem.Labels[complianceoperatorv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
+		rem.Labels[compv1alpha1.ScanLabel] = scan.Name
+		rem.Labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
 		rem.Labels[mcfgv1.MachineConfigRoleLabelKey] = utils.GetFirstNodeRole(scan.Spec.NodeSelector)
 		if rem.Labels[mcfgv1.MachineConfigRoleLabelKey] == "" {
 			return fmt.Errorf("scan %s has no role assignment", scan.Name)
@@ -274,7 +274,7 @@ func readContent(filename string) (*os.File, error) {
 }
 
 func aggregator(cmd *cobra.Command, args []string) {
-	var scanRemediations []*complianceoperatorv1alpha1.ComplianceRemediation
+	var scanRemediations []*compv1alpha1.ComplianceRemediation
 
 	aggregatorConf := parseConfig(cmd)
 
@@ -296,7 +296,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	var scan = &complianceoperatorv1alpha1.ComplianceScan{}
+	var scan = &compv1alpha1.ComplianceScan{}
 	err = crclient.client.Get(context.TODO(), types.NamespacedName{
 		Namespace: aggregatorConf.Namespace,
 		Name:      aggregatorConf.ScanName,
@@ -306,7 +306,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	if scan.Status.Result == complianceoperatorv1alpha1.ResultError {
+	if scan.Status.Result == compv1alpha1.ResultError {
 		fmt.Println("Not gathering results from a scan that resulted in an error")
 		os.Exit(0)
 	}

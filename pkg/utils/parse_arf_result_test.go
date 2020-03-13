@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
@@ -21,7 +21,7 @@ var _ = Describe("XCCDF parser", func() {
 		schema          *runtime.Scheme
 		resultsFilename string
 		dsFilename      string
-		remList         []*complianceoperatorv1alpha1.ComplianceRemediation
+		remList         []*compv1alpha1.ComplianceRemediation
 		err             error
 	)
 
@@ -56,7 +56,7 @@ var _ = Describe("XCCDF parser", func() {
 
 		Context("First remediation type", func() {
 			var (
-				rem     *complianceoperatorv1alpha1.ComplianceRemediation
+				rem     *compv1alpha1.ComplianceRemediation
 				expName string
 			)
 
@@ -69,7 +69,7 @@ var _ = Describe("XCCDF parser", func() {
 				Expect(rem.Name).To(Equal(expName))
 			})
 			It("Should be a MC", func() {
-				Expect(rem.Spec.Type).To(Equal(complianceoperatorv1alpha1.McRemediation))
+				Expect(rem.Spec.Type).To(Equal(compv1alpha1.McRemediation))
 			})
 
 			Context("MC files", func() {

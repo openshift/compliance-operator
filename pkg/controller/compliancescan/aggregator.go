@@ -10,14 +10,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 func createAggregatorPodName(scanName string) string {
 	return dnsLengthName("aggregator-pod-", "aggregator-pod-%s", scanName)
 }
 
-func newAggregatorPod(scanInstance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) *corev1.Pod {
+func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Logger) *corev1.Pod {
 	podName := createAggregatorPodName(scanInstance.Name)
 
 	podLabels := map[string]string{
@@ -83,7 +83,7 @@ func newAggregatorPod(scanInstance *complianceoperatorv1alpha1.ComplianceScan, l
 	}
 }
 
-func (r *ReconcileComplianceScan) launchAggregatorPod(scanInstance *complianceoperatorv1alpha1.ComplianceScan, pod *corev1.Pod, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) launchAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, pod *corev1.Pod, logger logr.Logger) error {
 	// Make use of optimistic concurrency and just try creating the pod
 	err := r.client.Create(context.TODO(), pod)
 	if err != nil && !errors.IsAlreadyExists(err) {
@@ -104,7 +104,7 @@ func (r *ReconcileComplianceScan) launchAggregatorPod(scanInstance *complianceop
 	return r.client.Update(context.TODO(), scanInstance)
 }
 
-func (r *ReconcileComplianceScan) deleteAggregator(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) deleteAggregator(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	aggregator := newAggregatorPod(instance, logger)
 	err := r.client.Delete(context.TODO(), aggregator)
 	if err != nil && !errors.IsNotFound(err) {
@@ -115,7 +115,7 @@ func (r *ReconcileComplianceScan) deleteAggregator(instance *complianceoperatorv
 	return nil
 }
 
-func isAggregatorRunning(r *ReconcileComplianceScan, scanInstance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (bool, error) {
+func isAggregatorRunning(r *ReconcileComplianceScan, scanInstance *compv1alpha1.ComplianceScan, logger logr.Logger) (bool, error) {
 	logger.Info("Checking aggregator pod for scan", "scan", scanInstance.Name)
 
 	podName := scanInstance.Annotations[AggregatorPodAnnotation]
