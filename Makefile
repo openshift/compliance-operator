@@ -103,7 +103,7 @@ image: fmt operator-sdk operator-image resultscollector-image remediation-aggreg
 
 .PHONY: operator-image
 operator-image: operator-sdk
-	$(GOPATH)/bin/operator-sdk build $(OPERATOR_IMAGE_PATH) --image-builder $(RUNTIME)
+	$(GOPATH)/bin/operator-sdk build $(OPERATOR_IMAGE_PATH):$(TAG) --image-builder $(RUNTIME)
 
 .PHONY: openscap-image
 openscap-image:
