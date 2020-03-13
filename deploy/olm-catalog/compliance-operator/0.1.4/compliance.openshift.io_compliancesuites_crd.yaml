@@ -1,0 +1,144 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: compliancesuites.compliance.openshift.io
+spec:
+  group: compliance.openshift.io
+  names:
+    kind: ComplianceSuite
+    listKind: ComplianceSuiteList
+    plural: compliancesuites
+    singular: compliancesuite
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      description: ComplianceSuite represents a set of scans that will be applied
+        to the cluster. These should help deployers achieve a certain compliance target.
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: Contains the definition of the suite
+          properties:
+            autoApplyRemediations:
+              description: Defines whether or not the remediations should be applied
+                automatically
+              type: boolean
+            scans:
+              description: Contains a list of the scans to execute on the cluster
+              items:
+                description: ComplianceScanSpecWrapper provides a ComplianceScanSpec
+                  and a Name
+                properties:
+                  content:
+                    description: Is the path to the file that contains the content
+                      (the data stream). Note that the path needs to be relative to
+                      the `/` (root) directory, as it is in the ContentImage
+                    type: string
+                  contentImage:
+                    description: Is the image with the content (Data Stream), that
+                      will be used to run OpenSCAP.
+                    type: string
+                  debug:
+                    description: Disables cleaning up resources in the DONE phase,
+                      this might be useful for debugging.
+                    type: boolean
+                  name:
+                    description: Contains a human readable name for the scan. This
+                      is to identify the objects that it creates.
+                    type: string
+                  nodeSelector:
+                    additionalProperties:
+                      type: string
+                    description: By setting this, it's possible to only run the scan
+                      on certain nodes in the cluster. Note that when applying remediations
+                      generated from the scan, this should match the selector of the
+                      MachineConfigPool you want to apply the remediations to.
+                    type: object
+                  profile:
+                    description: Is the profile in the data stream to be used. This
+                      is the collection of rules that will be checked for.
+                    type: string
+                  rule:
+                    description: A Rule can be specified if the scan should check
+                      only for a specific rule. Note that when leaving this empty,
+                      the scan will check for all the rules for a specific profile.
+                    type: string
+                type: object
+              type: array
+          required:
+          - scans
+          type: object
+        status:
+          description: Contains the current state of the suite
+          properties:
+            remediationOverview:
+              items:
+                properties:
+                  apply:
+                    description: Whether the remediation should be picked up and applied
+                      by the operator
+                    type: boolean
+                  remediationName:
+                    description: Contains a human readable name for the remediation.
+                    type: string
+                  scanName:
+                    description: Contains the name of the scan that generated the
+                      remediation
+                    type: string
+                  type:
+                    description: Remediation type specifies the artifact the remediation
+                      is based on. For now, only MachineConfig is supported
+                    type: string
+                required:
+                - apply
+                - remediationName
+                - scanName
+                type: object
+              type: array
+            scanStatuses:
+              items:
+                description: ComplianceScanStatusWrapper provides a ComplianceScanStatus
+                  and a Name
+                properties:
+                  errormsg:
+                    description: If there are issues on the scan, this will be filled
+                      up with an error message.
+                    type: string
+                  name:
+                    description: Contains a human readable name for the scan. This
+                      is to identify the objects that it creates.
+                    type: string
+                  phase:
+                    description: Is the phase where the scan is at. Normally, one
+                      must wait for the scan to reach the phase DONE.
+                    type: string
+                  result:
+                    description: Once the scan reaches the phase DONE, this will contain
+                      the result of the scan. Where COMPLIANT means that the scan
+                      succeeded; NON-COMPLIANT means that there were rule violations;
+                      and ERROR means that the scan couldn't complete due to an issue.
+                    type: string
+                type: object
+              type: array
+          required:
+          - scanStatuses
+          type: object
+      type: object
+  version: v1alpha1
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
