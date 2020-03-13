@@ -34,8 +34,6 @@ func (r *ReconcileComplianceScan) createScanPods(instance *complianceoperatorv1a
 			return err
 		} else {
 			logger.Info("Launched a pod", "pod", pod)
-			// ..since the pod name can be random, store it in a label
-			setPodForNodeName(instance, node.Name, pod.Name)
 		}
 	}
 
@@ -50,7 +48,7 @@ func newScanPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, 
 
 	mode := int32(0744)
 
-	podName := createPodForNodeName(scanInstance.Name, node.Name)
+	podName := getPodForNodeName(scanInstance.Name, node.Name)
 	cmName := getConfigMapForNodeName(scanInstance.Name, node.Name)
 	podLabels := map[string]string{
 		"complianceScan": scanInstance.Name,
@@ -137,7 +135,7 @@ func newScanPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, 
 							MountPath: "/content",
 						},
 						{
-							Name:      scanInstance.Labels[OpenSCAPScriptCmLabel],
+							Name:      scriptCmForScan(scanInstance),
 							MountPath: "/scripts",
 						},
 					},
@@ -145,7 +143,7 @@ func newScanPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, 
 						{
 							ConfigMapRef: &corev1.ConfigMapEnvSource{
 								LocalObjectReference: corev1.LocalObjectReference{
-									Name: scanInstance.Labels[OpenSCAPScriptEnvLabel],
+									Name: envCmForScan(scanInstance),
 								},
 							},
 						},
@@ -186,11 +184,11 @@ func newScanPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, 
 					},
 				},
 				{
-					Name: scanInstance.Labels[OpenSCAPScriptCmLabel],
+					Name: scriptCmForScan(scanInstance),
 					VolumeSource: corev1.VolumeSource{
 						ConfigMap: &corev1.ConfigMapVolumeSource{
 							LocalObjectReference: corev1.LocalObjectReference{
-								Name: scanInstance.Labels[OpenSCAPScriptCmLabel],
+								Name: scriptCmForScan(scanInstance),
 							},
 							DefaultMode: &mode,
 						},
