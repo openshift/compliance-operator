@@ -15,14 +15,14 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 )
 
 var _ = Describe("Testing compliancescan controller phases", func() {
 
 	var (
-		compliancescaninstance *complianceoperatorv1alpha1.ComplianceScan
+		compliancescaninstance *compv1alpha1.ComplianceScan
 		reconciler             ReconcileComplianceScan
 		logger                 logr.Logger
 		nodeinstance1          *corev1.Node
@@ -34,7 +34,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 		objs := []runtime.Object{}
 
 		// test instance
-		compliancescaninstance = &complianceoperatorv1alpha1.ComplianceScan{
+		compliancescaninstance = &compv1alpha1.ComplianceScan{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test",
 			},
@@ -59,7 +59,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 
 		objs = append(objs, nodeinstance1, nodeinstance2, caSecret, serverSecret, clientSecret)
 		scheme := scheme.Scheme
-		scheme.AddKnownTypes(complianceoperatorv1alpha1.SchemeGroupVersion, compliancescaninstance)
+		scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion, compliancescaninstance)
 
 		client := fake.NewFakeClientWithScheme(scheme, objs...)
 		reconciler = ReconcileComplianceScan{client: client, scheme: scheme}
@@ -70,7 +70,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			result, err := reconciler.phasePendingHandler(compliancescaninstance, logger)
 			Expect(result).NotTo(BeNil())
 			Expect(err).To(BeNil())
-			Expect(compliancescaninstance.Status.Phase).To(Equal(complianceoperatorv1alpha1.PhaseLaunching))
+			Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseLaunching))
 		})
 	})
 
@@ -79,7 +79,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			result, err := reconciler.phaseLaunchingHandler(compliancescaninstance, logger)
 			Expect(result).ToNot(BeNil())
 			Expect(err).To(BeNil())
-			Expect(compliancescaninstance.Status.Phase).To(Equal(complianceoperatorv1alpha1.PhaseRunning))
+			Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseRunning))
 
 			// We should have scheduled a pod per node
 			nodes, _ := getTargetNodes(&reconciler, compliancescaninstance)
@@ -95,7 +95,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				result, err := reconciler.phaseRunningHandler(compliancescaninstance, logger)
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
-				Expect(compliancescaninstance.Status.Phase).To(Equal(complianceoperatorv1alpha1.PhaseLaunching))
+				Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseLaunching))
 			})
 		})
 
@@ -119,7 +119,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				reconciler.client.Update(context.TODO(), compliancescaninstance)
 
 				// Set state to RUNNING
-				compliancescaninstance.Status.Phase = complianceoperatorv1alpha1.PhaseRunning
+				compliancescaninstance.Status.Phase = compv1alpha1.PhaseRunning
 				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
 			})
 
@@ -127,7 +127,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				result, err := reconciler.phaseRunningHandler(compliancescaninstance, logger)
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
-				Expect(compliancescaninstance.Status.Phase).To(Equal(complianceoperatorv1alpha1.PhaseRunning))
+				Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseRunning))
 			})
 		})
 
@@ -157,7 +157,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				reconciler.client.Update(context.TODO(), compliancescaninstance)
 
 				// Set state to RUNNING
-				compliancescaninstance.Status.Phase = complianceoperatorv1alpha1.PhaseRunning
+				compliancescaninstance.Status.Phase = compv1alpha1.PhaseRunning
 				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
 			})
 
@@ -165,7 +165,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				result, err := reconciler.phaseRunningHandler(compliancescaninstance, logger)
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
-				Expect(compliancescaninstance.Status.Phase).To(Equal(complianceoperatorv1alpha1.PhaseAggregating))
+				Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseAggregating))
 			})
 		})
 	})
@@ -188,7 +188,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			})
 
 			// Set state to DONE
-			compliancescaninstance.Status.Phase = complianceoperatorv1alpha1.PhaseDone
+			compliancescaninstance.Status.Phase = compv1alpha1.PhaseDone
 			reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
 		})
 		It("Should return success & clean up resources", func() {

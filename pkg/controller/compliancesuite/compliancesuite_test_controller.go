@@ -6,26 +6,26 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
 var _ = Describe("Testing remediations diff", func() {
 	var (
-		remService  *complianceoperatorv1alpha1.ComplianceRemediation
-		remService2 *complianceoperatorv1alpha1.ComplianceRemediation
-		oldList     []*complianceoperatorv1alpha1.ComplianceRemediation
-		newList     []*complianceoperatorv1alpha1.ComplianceRemediation
+		remService  *compv1alpha1.ComplianceRemediation
+		remService2 *compv1alpha1.ComplianceRemediation
+		oldList     []*compv1alpha1.ComplianceRemediation
+		newList     []*compv1alpha1.ComplianceRemediation
 	)
 
 	BeforeEach(func() {
-		remService = &complianceoperatorv1alpha1.ComplianceRemediation{
+		remService = &compv1alpha1.ComplianceRemediation{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "remService",
 			},
-			Spec: complianceoperatorv1alpha1.ComplianceRemediationSpec{
-				ComplianceRemediationSpecMeta: complianceoperatorv1alpha1.ComplianceRemediationSpecMeta{
-					Type:  complianceoperatorv1alpha1.McRemediation,
+			Spec: compv1alpha1.ComplianceRemediationSpec{
+				ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
+					Type:  compv1alpha1.McRemediation,
 					Apply: false,
 				},
 				MachineConfigContents: mcfgv1.MachineConfig{

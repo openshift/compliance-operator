@@ -8,11 +8,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 )
 
-func (r *ReconcileComplianceScan) handleRootCASecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) handleRootCASecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	exist, err := secretExists(r.client, RootCAPrefix+instance.Name, common.GetComplianceOperatorNamespace())
 	if err != nil {
 		return err
@@ -40,7 +40,7 @@ func (r *ReconcileComplianceScan) handleRootCASecret(instance *complianceoperato
 	return nil
 }
 
-func (r *ReconcileComplianceScan) handleResultServerSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) handleResultServerSecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	exist, err := secretExists(r.client, ServerCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
 	if err != nil {
 		return err
@@ -67,7 +67,7 @@ func (r *ReconcileComplianceScan) handleResultServerSecret(instance *complianceo
 	return nil
 }
 
-func (r *ReconcileComplianceScan) handleResultClientSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) handleResultClientSecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	exist, err := secretExists(r.client, ClientCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
 	if err != nil {
 		return err
@@ -95,21 +95,21 @@ func (r *ReconcileComplianceScan) handleResultClientSecret(instance *complianceo
 	return nil
 }
 
-func (r *ReconcileComplianceScan) deleteRootCASecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) deleteRootCASecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	logger.Info("deleting CA", "instance", instance.Name)
 	ns := common.GetComplianceOperatorNamespace()
 	secret := certSecret(getCASecretName(instance), ns, []byte{}, []byte{}, []byte{})
 	return r.deleteSecret(secret)
 }
 
-func (r *ReconcileComplianceScan) deleteResultServerSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) deleteResultServerSecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	logger.Info("deleting server cert", "instance", instance.Name)
 	ns := common.GetComplianceOperatorNamespace()
 	secret := certSecret(getServerCertSecretName(instance), ns, []byte{}, []byte{}, []byte{})
 	return r.deleteSecret(secret)
 }
 
-func (r *ReconcileComplianceScan) deleteResultClientSecret(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) deleteResultClientSecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	logger.Info("deleting client cert", "instance", instance.Name)
 	ns := common.GetComplianceOperatorNamespace()
 	secret := certSecret(getClientCertSecretName(instance), ns, []byte{}, []byte{}, []byte{})

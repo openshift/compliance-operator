@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/compliance-operator/pkg/apis"
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	mcfgClient "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1"
@@ -156,9 +156,9 @@ func cleanupTestEnv(t *testing.T, ctx *framework.TestCtx) {
 //
 // NOTE: Whenever we add new types to the operator, we need to register them here for the e2e tests.
 func setupTestRequirements(t *testing.T) *framework.TestCtx {
-	objects := [3]runtime.Object{&complianceoperatorv1alpha1.ComplianceScanList{},
-		&complianceoperatorv1alpha1.ComplianceRemediationList{},
-		&complianceoperatorv1alpha1.ComplianceSuiteList{}}
+	objects := [3]runtime.Object{&compv1alpha1.ComplianceScanList{},
+		&compv1alpha1.ComplianceRemediationList{},
+		&compv1alpha1.ComplianceSuiteList{}}
 	for _, obj := range objects {
 		err := framework.AddToFrameworkScheme(apis.AddToScheme, obj)
 		if err != nil {
@@ -191,8 +191,8 @@ func setupComplianceOperatorCluster(t *testing.T, ctx *framework.TestCtx) {
 
 // waitForScanStatus will poll until the compliancescan that we're lookingfor reaches a certain status, or until
 // a timeout is reached.
-func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus complianceoperatorv1alpha1.ComplianceScanStatusPhase) error {
-	exampleComplianceScan := &complianceoperatorv1alpha1.ComplianceScan{}
+func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus compv1alpha1.ComplianceScanStatusPhase) error {
+	exampleComplianceScan := &compv1alpha1.ComplianceScan{}
 	var lastErr error
 	// retry and ignore errors until timeout
 	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
@@ -226,8 +226,8 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 
 // waitForScanStatus will poll until the compliancescan that we're lookingfor reaches a certain status, or until
 // a timeout is reached.
-func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus complianceoperatorv1alpha1.ComplianceScanStatusPhase) error {
-	suite := &complianceoperatorv1alpha1.ComplianceSuite{}
+func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus compv1alpha1.ComplianceScanStatusPhase) error {
+	suite := &compv1alpha1.ComplianceSuite{}
 	var lastErr error
 	// retry and ignore errors until timeout
 	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
@@ -279,8 +279,8 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 	return nil
 }
 
-func scanResultIsExpected(f *framework.Framework, namespace, name string, expectedResult complianceoperatorv1alpha1.ComplianceScanStatusResult) error {
-	cs := &complianceoperatorv1alpha1.ComplianceScan{}
+func scanResultIsExpected(f *framework.Framework, namespace, name string, expectedResult compv1alpha1.ComplianceScanStatusResult) error {
+	cs := &compv1alpha1.ComplianceScan{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, cs)
 	if err != nil {
 		return err
@@ -288,7 +288,7 @@ func scanResultIsExpected(f *framework.Framework, namespace, name string, expect
 	if cs.Status.Result != expectedResult {
 		return fmt.Errorf("The ComplianceScan Result wasn't what we expected. Got '%s', expected '%s'", cs.Status.Result, expectedResult)
 	}
-	if expectedResult == complianceoperatorv1alpha1.ResultError {
+	if expectedResult == compv1alpha1.ResultError {
 		if cs.Status.ErrorMessage == "" {
 			return fmt.Errorf("The ComplianceScan 'errormsg' wasn't set (it was empty). Even if we expected an error.")
 		}
@@ -322,7 +322,7 @@ func getPodsForScan(f *framework.Framework, scanName string) ([]corev1.Pod, erro
 }
 
 // getConfigMapsFromScan lists the configmaps from the specified openscap scan instance
-func getConfigMapsFromScan(f *framework.Framework, scaninstance *complianceoperatorv1alpha1.ComplianceScan) []corev1.ConfigMap {
+func getConfigMapsFromScan(f *framework.Framework, scaninstance *compv1alpha1.ComplianceScan) []corev1.ConfigMap {
 	var configmaps corev1.ConfigMapList
 	labelselector := map[string]string{
 		"compliance-scan": scaninstance.Name,
@@ -334,12 +334,12 @@ func getConfigMapsFromScan(f *framework.Framework, scaninstance *complianceopera
 	return configmaps.Items
 }
 
-func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string) []complianceoperatorv1alpha1.ComplianceRemediation {
-	var scanSuiteRemediations complianceoperatorv1alpha1.ComplianceRemediationList
+func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string) []compv1alpha1.ComplianceRemediation {
+	var scanSuiteRemediations compv1alpha1.ComplianceRemediationList
 
 	scanSuiteSelector := make(map[string]string)
-	scanSuiteSelector[complianceoperatorv1alpha1.SuiteLabel] = suiteName
-	scanSuiteSelector[complianceoperatorv1alpha1.ScanLabel] = scanName
+	scanSuiteSelector[compv1alpha1.SuiteLabel] = suiteName
+	scanSuiteSelector[compv1alpha1.ScanLabel] = scanName
 
 	listOpts := client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(scanSuiteSelector),
@@ -351,7 +351,7 @@ func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string)
 
 func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scanName, roleLabel string, remNameList []string) error {
 	var scanSuiteMapNames = make(map[string]bool)
-	var scanSuiteRemediations []complianceoperatorv1alpha1.ComplianceRemediation
+	var scanSuiteRemediations []compv1alpha1.ComplianceRemediation
 
 	// FIXME: This is a temporary hack. At the moment, the ARF parser is too slow
 	// and it might take a bit for the remediations to appear. It would be cleaner
@@ -528,7 +528,7 @@ func waitForNodesToHaveARenderedPool(t *testing.T, f *framework.Framework, mcCli
 }
 
 func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, namespace, name, pool string) error {
-	rem := &complianceoperatorv1alpha1.ComplianceRemediation{}
+	rem := &compv1alpha1.ComplianceRemediation{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
 	if err != nil {
 		return err
@@ -594,7 +594,7 @@ func applyRemediationAndWaitForReboot(t *testing.T, f *framework.Framework, mcCl
 }
 
 func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, namespace, name, pool string, lastRemediation bool) error {
-	rem := &complianceoperatorv1alpha1.ComplianceRemediation{}
+	rem := &compv1alpha1.ComplianceRemediation{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
 	if err != nil {
 		return err

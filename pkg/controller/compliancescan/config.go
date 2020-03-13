@@ -8,7 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 const (
@@ -113,7 +113,7 @@ echo "$rv" > $REPORT_DIR/exit_code
 exit 0
 `
 
-func createConfigMaps(r *ReconcileComplianceScan, scriptCmName, envCmName string, scan *complianceoperatorv1alpha1.ComplianceScan) error {
+func createConfigMaps(r *ReconcileComplianceScan, scriptCmName, envCmName string, scan *compv1alpha1.ComplianceScan) error {
 	cm := &corev1.ConfigMap{}
 
 	if err := r.client.Get(context.TODO(), types.NamespacedName{
@@ -143,7 +143,7 @@ func createConfigMaps(r *ReconcileComplianceScan, scriptCmName, envCmName string
 	return nil
 }
 
-func defaultOpenScapScriptCm(name string, scan *complianceoperatorv1alpha1.ComplianceScan) *corev1.ConfigMap {
+func defaultOpenScapScriptCm(name string, scan *compv1alpha1.ComplianceScan) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -158,7 +158,7 @@ func defaultOpenScapScriptCm(name string, scan *complianceoperatorv1alpha1.Compl
 	}
 }
 
-func defaultOpenScapEnvCm(name string, scan *complianceoperatorv1alpha1.ComplianceScan) *corev1.ConfigMap {
+func defaultOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev1.ConfigMap {
 	content := absContentPath(scan.Spec.Content)
 
 	cm := &corev1.ConfigMap{
@@ -189,15 +189,15 @@ func defaultOpenScapEnvCm(name string, scan *complianceoperatorv1alpha1.Complian
 	return cm
 }
 
-func scriptCmForScan(scan *complianceoperatorv1alpha1.ComplianceScan) string {
+func scriptCmForScan(scan *compv1alpha1.ComplianceScan) string {
 	return dnsLengthName("scap-entrypoint-", "%s-%s", scan.Name, OpenScapScriptConfigMapName)
 }
 
-func envCmForScan(scan *complianceoperatorv1alpha1.ComplianceScan) string {
+func envCmForScan(scan *compv1alpha1.ComplianceScan) string {
 	return dnsLengthName("scap-env-", "%s-%s", scan.Name, OpenScapEnvConfigMapName)
 }
 
-func asOwner(scan *complianceoperatorv1alpha1.ComplianceScan) metav1.OwnerReference {
+func asOwner(scan *compv1alpha1.ComplianceScan) metav1.OwnerReference {
 	bTrue := true
 
 	return metav1.OwnerReference{

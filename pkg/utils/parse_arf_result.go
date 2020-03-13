@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
@@ -35,8 +35,8 @@ func ParseContent(dsReader io.Reader) (*XMLDocument, error) {
 // ParseRemediationFromContentAndResults parses the content DS and the results from the scan, and generates
 // the necessary remediations
 func ParseRemediationFromContentAndResults(scheme *runtime.Scheme, scanName string, namespace string,
-	dsDom *XMLDocument, resultsReader io.Reader) ([]*complianceoperatorv1alpha1.ComplianceRemediation, error) {
-	remediations := make([]*complianceoperatorv1alpha1.ComplianceRemediation, 0)
+	dsDom *XMLDocument, resultsReader io.Reader) ([]*compv1alpha1.ComplianceRemediation, error) {
+	remediations := make([]*compv1alpha1.ComplianceRemediation, 0)
 
 	resultsDom, err := xmldom.Parse(resultsReader)
 	if err != nil {
@@ -96,7 +96,7 @@ func filterFailedResults(results []*xmldom.Node) []*xmldom.Node {
 	return failed
 }
 
-func remediationFromFixElement(scheme *runtime.Scheme, fix *xmldom.Node, scanName, namespace string) *complianceoperatorv1alpha1.ComplianceRemediation {
+func remediationFromFixElement(scheme *runtime.Scheme, fix *xmldom.Node, scanName, namespace string) *compv1alpha1.ComplianceRemediation {
 	fixId := fix.GetAttributeValue("id")
 	if fixId == "" {
 		return nil
@@ -107,26 +107,26 @@ func remediationFromFixElement(scheme *runtime.Scheme, fix *xmldom.Node, scanNam
 	return remediationFromString(scheme, remName, namespace, fix.Text)
 }
 
-func remediationFromString(scheme *runtime.Scheme, name string, namespace string, mcContent string) *complianceoperatorv1alpha1.ComplianceRemediation {
+func remediationFromString(scheme *runtime.Scheme, name string, namespace string, mcContent string) *compv1alpha1.ComplianceRemediation {
 	mcObject, err := rawObjectToMachineConfig(scheme, []byte(mcContent))
 	if err != nil {
 		return nil
 	}
 
-	return &complianceoperatorv1alpha1.ComplianceRemediation{
+	return &compv1alpha1.ComplianceRemediation{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: complianceoperatorv1alpha1.ComplianceRemediationSpec{
-			ComplianceRemediationSpecMeta: complianceoperatorv1alpha1.ComplianceRemediationSpecMeta{
-				Type:  complianceoperatorv1alpha1.McRemediation,
+		Spec: compv1alpha1.ComplianceRemediationSpec{
+			ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
+				Type:  compv1alpha1.McRemediation,
 				Apply: false,
 			},
 			MachineConfigContents: *mcObject,
 		},
-		Status: complianceoperatorv1alpha1.ComplianceRemediationStatus{
-			ApplicationState: complianceoperatorv1alpha1.RemediationNotSelected,
+		Status: compv1alpha1.ComplianceRemediationStatus{
+			ApplicationState: compv1alpha1.RemediationNotSelected,
 		},
 	}
 }

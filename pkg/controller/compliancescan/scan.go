@@ -11,10 +11,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
-func (r *ReconcileComplianceScan) createScanPods(instance *complianceoperatorv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) createScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
 	// On each eligible node..
 	for _, node := range nodes.Items {
 		// ..schedule a pod..
@@ -44,7 +44,7 @@ func (r *ReconcileComplianceScan) createScanPods(instance *complianceoperatorv1a
 	return nil
 }
 
-func newScanPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
+func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
 
 	mode := int32(0744)
 
@@ -207,7 +207,7 @@ func newScanPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, 
 	}
 }
 
-func (r *ReconcileComplianceScan) deleteScanPods(instance *complianceoperatorv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) deleteScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
 	// On each eligible node..
 	for _, node := range nodes.Items {
 		// ..schedule a pod..
@@ -229,21 +229,21 @@ func (r *ReconcileComplianceScan) deleteScanPods(instance *complianceoperatorv1a
 	return nil
 }
 
-func getScanResult(cm *corev1.ConfigMap) (complianceoperatorv1alpha1.ComplianceScanStatusResult, error) {
+func getScanResult(cm *corev1.ConfigMap) (compv1alpha1.ComplianceScanStatusResult, error) {
 	exitcode, ok := cm.Data["exit-code"]
 	if ok {
 		switch exitcode {
 		case "0":
-			return complianceoperatorv1alpha1.ResultCompliant, nil
+			return compv1alpha1.ResultCompliant, nil
 		case "2":
-			return complianceoperatorv1alpha1.ResultNonCompliant, nil
+			return compv1alpha1.ResultNonCompliant, nil
 		default:
 			errorMsg, ok := cm.Data["error-msg"]
 			if ok {
-				return complianceoperatorv1alpha1.ResultError, fmt.Errorf(errorMsg)
+				return compv1alpha1.ResultError, fmt.Errorf(errorMsg)
 			}
-			return complianceoperatorv1alpha1.ResultError, fmt.Errorf("The ConfigMap '%s' was missing 'error-msg'", cm.Name)
+			return compv1alpha1.ResultError, fmt.Errorf("The ConfigMap '%s' was missing 'error-msg'", cm.Name)
 		}
 	}
-	return complianceoperatorv1alpha1.ResultError, fmt.Errorf("The ConfigMap '%s' was missing 'exit-code'", cm.Name)
+	return compv1alpha1.ResultError, fmt.Errorf("The ConfigMap '%s' was missing 'exit-code'", cm.Name)
 }

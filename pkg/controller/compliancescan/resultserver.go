@@ -11,13 +11,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	complianceoperatorv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/complianceoperator/v1alpha1"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 // The result-server is a pod that listens for results from other pods and
 // stores them in a PVC.
 // It's comprised of the PVC for the scan, the pod and a service that fronts it
-func (r *ReconcileComplianceScan) createResultServer(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	err := r.createPVCForScan(instance)
 	if err != nil {
 		logger.Error(err, "Cannot create the PersistentVolumeClaims")
@@ -58,7 +58,7 @@ func (r *ReconcileComplianceScan) createResultServer(instance *complianceoperato
 	return nil
 }
 
-func (r *ReconcileComplianceScan) deleteResultServer(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) deleteResultServer(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	resultServerLabels := map[string]string{
 		"complianceScan": instance.Name,
 		"app":            "resultserver",
@@ -89,7 +89,7 @@ func (r *ReconcileComplianceScan) deleteResultServer(instance *complianceoperato
 // Serve up arf reports for a compliance scan with a web service protected by openshift auth (oauth-proxy sidecar).
 // Needs corresponding Service (with service-serving cert).
 // Need to aggregate reports into one service ? on subdirs?
-func resultServer(scanInstance *complianceoperatorv1alpha1.ComplianceScan, labels map[string]string, logger logr.Logger) *appsv1.Deployment {
+func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]string, logger logr.Logger) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getResultServerName(scanInstance),
@@ -156,7 +156,7 @@ func resultServer(scanInstance *complianceoperatorv1alpha1.ComplianceScan, label
 	}
 }
 
-func resultServerService(scanInstance *complianceoperatorv1alpha1.ComplianceScan, labels map[string]string) *corev1.Service {
+func resultServerService(scanInstance *compv1alpha1.ComplianceScan, labels map[string]string) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getResultServerName(scanInstance),
@@ -174,10 +174,10 @@ func resultServerService(scanInstance *complianceoperatorv1alpha1.ComplianceScan
 	}
 }
 
-func getResultServerName(instance *complianceoperatorv1alpha1.ComplianceScan) string {
+func getResultServerName(instance *compv1alpha1.ComplianceScan) string {
 	return instance.Name + "-rs"
 }
 
-func getResultServerURI(instance *complianceoperatorv1alpha1.ComplianceScan) string {
+func getResultServerURI(instance *compv1alpha1.ComplianceScan) string {
 	return "https://" + getResultServerName(instance) + fmt.Sprintf(":%d/", ResultServerPort)
 }
