@@ -36,8 +36,6 @@ var (
 const (
 	// OpenSCAPScanContainerName defines the name of the contianer that will run OpenSCAP
 	OpenSCAPScanContainerName = "openscap-ocp"
-	OpenSCAPScriptCmLabel     = "cm-script"
-	OpenSCAPScriptEnvLabel    = "cm-env"
 	NodeHostnameLabel         = "kubernetes.io/hostname"
 	AggregatorPodAnnotation   = "scan-aggregator"
 	// The default time we should wait before requeuing
@@ -144,27 +142,9 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 func (r *ReconcileComplianceScan) phasePendingHandler(instance *complianceoperatorv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	logger.Info("Phase: Pending", "ComplianceScan", instance.ObjectMeta.Name)
 
-	if instance.Labels == nil {
-		instance.Labels = make(map[string]string)
-	}
-
-	if instance.Labels[OpenSCAPScriptCmLabel] == "" {
-		instance.Labels[OpenSCAPScriptCmLabel] = scriptCmForScan(instance)
-	}
-
-	if instance.Labels[OpenSCAPScriptEnvLabel] == "" {
-		instance.Labels[OpenSCAPScriptEnvLabel] = envCmForScan(instance)
-	}
-
-	err := createConfigMaps(r, instance.Labels[OpenSCAPScriptCmLabel], instance.Labels[OpenSCAPScriptEnvLabel], instance)
+	err := createConfigMaps(r, scriptCmForScan(instance), envCmForScan(instance), instance)
 	if err != nil {
 		logger.Error(err, "Cannot create the configmaps")
-		return reconcile.Result{}, err
-	}
-
-	// Update the labels that hold the name of the configMaps
-	err = r.client.Update(context.TODO(), instance)
-	if err != nil {
 		return reconcile.Result{}, err
 	}
 

@@ -135,7 +135,7 @@ func newScanPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, 
 							MountPath: "/content",
 						},
 						{
-							Name:      scanInstance.Labels[OpenSCAPScriptCmLabel],
+							Name:      scriptCmForScan(scanInstance),
 							MountPath: "/scripts",
 						},
 					},
@@ -143,7 +143,7 @@ func newScanPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, 
 						{
 							ConfigMapRef: &corev1.ConfigMapEnvSource{
 								LocalObjectReference: corev1.LocalObjectReference{
-									Name: scanInstance.Labels[OpenSCAPScriptEnvLabel],
+									Name: envCmForScan(scanInstance),
 								},
 							},
 						},
@@ -184,11 +184,11 @@ func newScanPodForNode(scanInstance *complianceoperatorv1alpha1.ComplianceScan, 
 					},
 				},
 				{
-					Name: scanInstance.Labels[OpenSCAPScriptCmLabel],
+					Name: scriptCmForScan(scanInstance),
 					VolumeSource: corev1.VolumeSource{
 						ConfigMap: &corev1.ConfigMapVolumeSource{
 							LocalObjectReference: corev1.LocalObjectReference{
-								Name: scanInstance.Labels[OpenSCAPScriptCmLabel],
+								Name: scriptCmForScan(scanInstance),
 							},
 							DefaultMode: &mode,
 						},
