@@ -195,7 +195,11 @@ generate: operator-sdk ## Run operator-sdk's code generation (k8s and crds)
 
 .PHONY: test-unit
 test-unit: fmt ## Run the unit tests
+ifndef JUNITFILE
 	@$(GO) test $(TEST_OPTIONS) $(PKGS)
+else
+	@$(GO) test $(TEST_OPTIONS) -json $(PKGS) --ginkgo.noColor | gotest2junit -v > $(JUNITFILE)
+endif
 
 .PHONY: test-benchmark
 test-benchmark: ## Run the benchmark tests -- Note that this can only be ran for one package. You can set $BENCHMARK_PKG for this. cpu.prof and mem.prof will be generated
