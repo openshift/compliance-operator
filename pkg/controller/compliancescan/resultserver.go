@@ -130,6 +130,7 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 								{
 									Name:      "tls",
 									MountPath: "/etc/pki/tls",
+									ReadOnly:  true,
 								},
 							},
 						},

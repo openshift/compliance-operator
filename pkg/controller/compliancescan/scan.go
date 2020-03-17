@@ -113,6 +113,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 						{
 							Name:      "tls",
 							MountPath: "/etc/pki/tls",
+							ReadOnly:  true,
 						},
 					},
 				},
@@ -127,6 +128,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 						{
 							Name:      "host",
 							MountPath: "/host",
+							ReadOnly:  true,
 						},
 						{
 							Name:      "report-dir",
@@ -135,10 +137,12 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 						{
 							Name:      "content-dir",
 							MountPath: "/content",
+							ReadOnly:  true,
 						},
 						{
 							Name:      scriptCmForScan(scanInstance),
 							MountPath: "/scripts",
+							ReadOnly:  true,
 						},
 					},
 					EnvFrom: []corev1.EnvFromSource{
