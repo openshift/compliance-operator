@@ -14,6 +14,8 @@ import (
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
+const resultserverSA = "default"
+
 // The result-server is a pod that listens for results from other pods and
 // stores them in a PVC.
 // It's comprised of the PVC for the scan, the pod and a service that fronts it
@@ -106,7 +108,7 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 				},
 				Spec: corev1.PodSpec{
 					// TODO(jaosorior): Should we schedule this in the master nodes only?
-					ServiceAccountName: "compliance-operator",
+					ServiceAccountName: resultserverSA,
 					Containers: []corev1.Container{
 						{
 							Name:            "result-server",
