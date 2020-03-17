@@ -14,6 +14,8 @@ import (
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
+const resultscollectorSA = "resultscollector"
+
 func (r *ReconcileComplianceScan) createScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
 	// On each eligible node..
 	for _, node := range nodes.Items {
@@ -62,7 +64,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 			Labels:    podLabels,
 		},
 		Spec: corev1.PodSpec{
-			ServiceAccountName: "compliance-operator",
+			ServiceAccountName: resultscollectorSA,
 			InitContainers: []corev1.Container{
 				{
 					Name:  "content-container",
