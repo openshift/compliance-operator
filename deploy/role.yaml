@@ -158,3 +158,43 @@ rules:
   - securitycontextconstraints
   verbs:
   - use
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: remediation-aggregator
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - update
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - compliancescans
+  verbs:
+  - get
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - compliancescans/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - complianceremediations
+  verbs:
+  - create
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - privileged
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
