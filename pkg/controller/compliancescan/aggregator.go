@@ -66,6 +66,7 @@ func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Log
 						{
 							Name:      "content-dir",
 							MountPath: "/content",
+							ReadOnly:  true,
 						},
 					},
 				},
