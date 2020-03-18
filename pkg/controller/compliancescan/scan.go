@@ -62,6 +62,9 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 			Name:      podName,
 			Namespace: scanInstance.Namespace,
 			Labels:    podLabels,
+			Annotations: map[string]string{
+				"openshift.io/scc": "node-exporter",
+			},
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: resultscollectorSA,
@@ -99,9 +102,6 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 						"--tls-client-cert=/etc/pki/tls/tls.crt",
 						"--tls-client-key=/etc/pki/tls/tls.key",
 						"--tls-ca=/etc/pki/tls/ca.crt",
-					},
-					SecurityContext: &corev1.SecurityContext{
-						Privileged: &trueVal,
 					},
 					ImagePullPolicy: corev1.PullAlways,
 					VolumeMounts: []corev1.VolumeMount{
