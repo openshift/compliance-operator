@@ -13,6 +13,8 @@ import (
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
+const aggregatorSA = "remediation-aggregator"
+
 func createAggregatorPodName(scanName string) string {
 	return dnsLengthName("aggregator-pod-", "aggregator-pod-%s", scanName)
 }
@@ -31,7 +33,7 @@ func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Log
 			Labels:    podLabels,
 		},
 		Spec: corev1.PodSpec{
-			ServiceAccountName: "compliance-operator",
+			ServiceAccountName: aggregatorSA,
 			InitContainers: []corev1.Container{
 				{
 					Name:  "content-container",

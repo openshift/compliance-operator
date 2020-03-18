@@ -34,3 +34,15 @@ roleRef:
   kind: Role
   name: resultscollector
   apiGroup: rbac.authorization.k8s.io
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: remediation-aggregator
+subjects:
+- kind: ServiceAccount
+  name: remediation-aggregator
+roleRef:
+  kind: Role
+  name: remediation-aggregator
+  apiGroup: rbac.authorization.k8s.io
