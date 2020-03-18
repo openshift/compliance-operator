@@ -61,9 +61,6 @@ func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Log
 						"--scan=" + scanInstance.Name,
 						"--namespace=" + scanInstance.Namespace,
 					},
-					SecurityContext: &corev1.SecurityContext{
-						Privileged: &trueVal,
-					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "content-dir",

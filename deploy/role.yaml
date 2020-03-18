@@ -98,14 +98,6 @@ rules:
   - compliance-operator
   verbs:
   - "update"
-- apiGroups:
-  - security.openshift.io
-  resourceNames:
-  - privileged
-  resources:
-  - securitycontextconstraints
-  verbs:
-  - use
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -152,7 +144,7 @@ rules:
 - apiGroups:
   - security.openshift.io
   resourceNames:
-  - privileged
+  - node-exporter
   resources:
   - securitycontextconstraints
   verbs:
@@ -189,11 +181,3 @@ rules:
   - complianceremediations
   verbs:
   - create
-- apiGroups:
-  - security.openshift.io
-  resourceNames:
-  - privileged
-  resources:
-  - securitycontextconstraints
-  verbs:
-  - use
