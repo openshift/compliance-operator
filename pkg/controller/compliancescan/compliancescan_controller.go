@@ -24,7 +24,7 @@ import (
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
-var log = logf.Log.WithName("controller_compliancescan")
+var log = logf.Log.WithName("scanctrl")
 
 var oneReplica int32 = 1
 

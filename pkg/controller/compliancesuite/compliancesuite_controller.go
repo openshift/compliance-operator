@@ -26,7 +26,7 @@ import (
 	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
-var log = logf.Log.WithName("controller_compliancesuite")
+var log = logf.Log.WithName("suitectrl")
 
 // Add creates a new ComplianceSuite Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
