@@ -25,7 +25,7 @@ import (
 	mcfgClient "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1"
 )
 
-var log = logf.Log.WithName("controller_complianceremediation")
+var log = logf.Log.WithName("remediationctrl")
 
 // Add creates a new ComplianceRemediation Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
