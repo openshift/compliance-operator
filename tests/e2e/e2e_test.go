@@ -265,7 +265,7 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestRemediate",
+			Name: "TestAutoRemediate",
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				// FIXME, maybe have a func that returns a struct with suite name and scan names?
 				suiteName := "test-remediate"
@@ -277,12 +277,13 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceSuiteSpec{
-						AutoApplyRemediations: false,
+						AutoApplyRemediations: true,
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: E2EPoolNodeRoleSelector(),
 								},
@@ -309,14 +310,12 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				// - Get the no-root-logins remediation for workers
+				// We need to check that the remediation is auto-applied and save
+				// the object so we can delete it later
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
-				err = applyRemediationAndWaitForReboot(t, f, mcTctx.mcClient, namespace, workersNoRootLoginsRemName, testPoolName)
-
-				// Also get the remediation so that we can delete it later
-				rem := &compv1alpha1.ComplianceRemediation{}
-				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: workersNoRootLoginsRemName, Namespace: namespace}, rem)
+				err = waitForRemediationToBeAutoApplied(t, f, mcTctx.mcClient, workersNoRootLoginsRemName, namespace, testPoolName)
 				if err != nil {
+					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
 				}
 
@@ -336,6 +335,7 @@ func TestE2E(t *testing.T) {
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: E2EPoolNodeRoleSelector(),
 								},
@@ -359,11 +359,11 @@ func TestE2E(t *testing.T) {
 				t.Logf("Second scan finished")
 
 				// Now the remediation should not be created
-				workersNoRootLoginsRemName = fmt.Sprintf("%s-no-direct-root-logins", secondWorkerScanName)
+				workersNoRootLoginsRemName2 := fmt.Sprintf("%s-no-direct-root-logins", secondWorkerScanName)
 				remCheck := &compv1alpha1.ComplianceRemediation{}
-				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: workersNoRootLoginsRemName, Namespace: namespace}, remCheck)
+				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: workersNoRootLoginsRemName2, Namespace: namespace}, remCheck)
 				if err == nil {
-					return fmt.Errorf("remediation %s found unexpectedly", workersNoRootLoginsRemName)
+					return fmt.Errorf("remediation %s found unexpectedly", workersNoRootLoginsRemName2)
 				} else if !errors.IsNotFound(err) {
 					t.Errorf("Unexpected error %v", err)
 					return err
@@ -371,7 +371,13 @@ func TestE2E(t *testing.T) {
 
 				// The test should not leave junk around, let's remove the MC and wait for the nodes to stabilize
 				// again
-				t.Logf("Remediation found")
+				t.Logf("Removing applied remediation")
+				// Fetch remediation here so it can be deleted
+				rem := &compv1alpha1.ComplianceRemediation{}
+				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: workersNoRootLoginsRemName, Namespace: namespace}, rem)
+				if err != nil {
+					return err
+				}
 				err = mcTctx.mcClient.MachineConfigs().Delete(rem.GetMcName(), &metav1.DeleteOptions{})
 				if err != nil {
 					return err

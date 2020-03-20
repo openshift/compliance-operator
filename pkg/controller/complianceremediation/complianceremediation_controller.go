@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -21,6 +22,7 @@ import (
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	mcfgClient "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1"
 )
@@ -198,6 +200,24 @@ func getApplicableMcList(r *ReconcileComplianceRemediation, instance *compv1alph
 
 	// If the one being reconciled is supposed to be applied as well, add it to the list
 	if instance.Spec.Apply == true {
+		scan := &compv1alpha1.ComplianceScan{}
+		scanKey := types.NamespacedName{Name: instance.Labels[compv1alpha1.ScanLabel], Namespace: instance.Namespace}
+		if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
+			return appliedRemediations, err
+		}
+		mcfgpools := &mcfgv1.MachineConfigPoolList{}
+		err = r.client.List(context.TODO(), mcfgpools)
+		if err != nil {
+			return appliedRemediations, err
+		}
+		// The scans contain a nodeSelector that ultimately must match a machineConfigPool. The only way we can
+		// ensure it does is by checking if it matches any MachineConfigPool's labels.
+		// See also: https://github.com/openshift/machine-config-operator/blob/master/docs/custom-pools.md
+		if !utils.AnyMcfgPoolLabelMatches(scan.Spec.NodeSelector, mcfgpools) {
+			logger.Info("Not applying remediation that doesn't have a matching MachineconfigPool", "scan", scan.Name)
+			// TODO(jaosorior): Add status about remediation not being applicable
+			return appliedRemediations, nil
+		}
 		appliedRemediations = append(appliedRemediations, &instance.Spec.MachineConfigContents)
 	}
 

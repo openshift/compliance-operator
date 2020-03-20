@@ -643,6 +643,72 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *
 	return nil
 }
 
+func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, remName, remNamespace, pool string) error {
+	rem := &compv1alpha1.ComplianceRemediation{}
+	var lastErr error
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: remName, Namespace: remNamespace}, rem)
+		if apierrors.IsNotFound(lastErr) {
+			t.Logf("Waiting for availability of %s remediation\n", remName)
+			return false, nil
+		}
+		if lastErr != nil {
+			t.Logf("Retrying. Got error: %v\n", lastErr)
+			return false, nil
+		}
+		t.Logf("Found remediation: %s\n", remName)
+		return true, nil
+	})
+	// Error in function call
+	if lastErr != nil {
+		return lastErr
+	}
+	// Timeout
+	if timeouterr != nil {
+		return timeouterr
+	}
+
+	preNoop := func() error {
+		return nil
+	}
+
+	predicate := func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error) {
+		// When checking if a MC is applied to a pool, we can't check the pool status
+		// when the pool is paused..
+		source := pool.Status.Configuration.Source
+		if pool.Spec.Paused == true {
+			source = pool.Spec.Configuration.Source
+		}
+
+		for _, mc := range source {
+			if mc.Name == rem.GetMcName() {
+				// When applying a remediation, check that the MC *is* in the pool
+				t.Logf("Remediation %s present in pool %s, returning true", mc.Name, pool.Name)
+				return true, nil
+			}
+		}
+
+		t.Logf("Remediation %s not present in pool %s, returning false", rem.GetMcName(), pool.Name)
+		return false, nil
+	}
+
+	err := waitForMachinePoolUpdate(t, mcClient, pool, preNoop, predicate)
+	if err != nil {
+		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
+		return err
+	}
+
+	t.Logf("Machines updated with remediation")
+	err = waitForNodesToBeReady(t, f)
+	if err != nil {
+		t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+		return err
+	}
+
+	t.Logf("Remediation applied to machines and machines rebooted")
+	return nil
+}
+
 func unPauseMachinePoolAndWait(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, poolName string) error {
 	err := unPauseMachinePool(t, mcClient, poolName)
 	if err != nil {

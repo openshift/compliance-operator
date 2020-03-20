@@ -27,6 +27,7 @@ import (
 
 	"github.com/openshift/compliance-operator/pkg/apis"
 	"github.com/openshift/compliance-operator/pkg/controller"
+	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
@@ -101,8 +102,13 @@ func main() {
 
 	log.Info("Registering Components.")
 
+	mgrscheme := mgr.GetScheme()
 	// Setup Scheme for all resources
-	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
+	if err := apis.AddToScheme(mgrscheme); err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+	if err := mcfgapi.Install(mgrscheme); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}

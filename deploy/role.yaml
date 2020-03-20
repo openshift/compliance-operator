@@ -115,6 +115,7 @@ rules:
   - machineconfiguration.openshift.io
   resources:
   - machineconfigs  # The compliance remediation controller operates on MachineConfigs
+  - machineconfigpools
   verbs:
   - list
   - get
