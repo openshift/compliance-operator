@@ -3,7 +3,9 @@ package compliancesuite
 import (
 	"context"
 	"fmt"
+
 	"github.com/go-logr/logr"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -105,11 +107,12 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 	}
 	reqLogger.Info("Retrieved suite", "suite", suite)
 
-	if err := r.reconcileScans(suite, reqLogger); err != nil {
+	suiteCopy := suite.DeepCopy()
+	if err := r.reconcileScans(suiteCopy, reqLogger); err != nil {
 		return common.ReturnWithRetriableError(reqLogger, err)
 	}
 
-	if err := r.reconcileRemediations(request.NamespacedName, reqLogger); err != nil {
+	if err := r.reconcileRemediations(suiteCopy, reqLogger); err != nil {
 		return common.ReturnWithRetriableError(reqLogger, err)
 	}
 
@@ -118,16 +121,6 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 
 func (r *ReconcileComplianceSuite) reconcileScans(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) error {
 	for _, scanWrap := range suite.Spec.Scans {
-		// The scans contain a nodeSelector that ultimately must match a machineConfigPool. The only way we can
-		// ensure it does is by checking if the nodeSelector contains a label with the key
-		//"node-role.kubernetes.io/XXX". Then the matching Pool would be labeled with
-		//"machineconfiguration.openshift.io/role: XXX".
-		//See also: https://github.com/openshift/machine-config-operator/blob/master/docs/custom-pools.md
-		if utils.GetFirstNodeRole(scanWrap.NodeSelector) == "" {
-			logger.Info("Not scheduling scan without a role label", "scan", scanWrap.Name)
-			continue
-		}
-
 		scan := &compv1alpha1.ComplianceScan{}
 		err := r.client.Get(context.TODO(), types.NamespacedName{Name: scanWrap.Name, Namespace: suite.Namespace}, scan)
 		if err != nil && errors.IsNotFound(err) {
@@ -175,6 +168,7 @@ func (r *ReconcileComplianceSuite) reconcileScanStatus(suite *compv1alpha1.Compl
 	return nil
 }
 
+// updates the status of a scan in the compliance suite. Note that the suite that this takes is already a copy, so it's safe to modify
 func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.ComplianceSuite, idx int, scanStatusWrap *compv1alpha1.ComplianceScanStatusWrapper, scan *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	// if yes, update it, if the status differs
 	if scanStatusWrap.Phase == scan.Status.Phase {
@@ -194,11 +188,12 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 		modScanStatus.ErrorMessage = scan.Status.ErrorMessage
 	}
 
-	suiteCopy := suite.DeepCopy()
-	suiteCopy.Status.ScanStatuses[idx] = modScanStatus
+	// Replace the copy so we use fresh metadata
+	suite = suite.DeepCopy()
+	suite.Status.ScanStatuses[idx] = modScanStatus
 	logger.Info("Updating scan status", "scan", modScanStatus.Name, "phase", modScanStatus.Phase)
 
-	return r.client.Status().Update(context.TODO(), suiteCopy)
+	return r.client.Status().Update(context.TODO(), suite)
 }
 
 func (r *ReconcileComplianceSuite) addScanStatus(suite *compv1alpha1.ComplianceSuite, scan *compv1alpha1.ComplianceScan, logger logr.Logger) error {
@@ -210,10 +205,11 @@ func (r *ReconcileComplianceSuite) addScanStatus(suite *compv1alpha1.ComplianceS
 		Name: scan.Name,
 	}
 
-	suiteCopy := suite.DeepCopy()
-	suiteCopy.Status.ScanStatuses = append(suite.Status.ScanStatuses, newScanStatus)
+	// Replace the copy so we use fresh metadata
+	suite = suite.DeepCopy()
+	suite.Status.ScanStatuses = append(suite.Status.ScanStatuses, newScanStatus)
 	logger.Info("Adding scan status", "scan", newScanStatus.Name, "phase", newScanStatus.Phase)
-	return r.client.Status().Update(context.TODO(), suiteCopy)
+	return r.client.Status().Update(context.TODO(), suite)
 }
 
 func launchScanForSuite(r *ReconcileComplianceSuite, suite *compv1alpha1.ComplianceSuite, scanWrap *compv1alpha1.ComplianceScanSpecWrapper, logger logr.Logger) error {
@@ -261,21 +257,22 @@ func newScanForSuite(suite *compv1alpha1.ComplianceSuite, scanWrap *compv1alpha1
 	}
 }
 
-func (r *ReconcileComplianceSuite) reconcileRemediations(namespacedName types.NamespacedName, logger logr.Logger) error {
-	// Get the suite again, it might have been changed earlier during the scan status change
-	suite := &compv1alpha1.ComplianceSuite{}
-	err := r.client.Get(context.TODO(), namespacedName, suite)
-	if err != nil {
-		return err
-	}
-
+// Reconcile the remediation statuses in the suite. Note that the suite that this takes is already
+// a copy, so it's safe to modify.
+func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) error {
 	// Get all the remediations
 	var remList compv1alpha1.ComplianceRemediationList
+	mcfgpools := &mcfgv1.MachineConfigPoolList{}
+	affectedMcfgPools := map[string]*mcfgv1.MachineConfigPool{}
 	listOpts := client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(labels.Set{"complianceoperator.openshift.io/suite": suite.Name}),
 	}
 
 	if err := r.client.List(context.TODO(), &remList, &listOpts); err != nil {
+		return err
+	}
+
+	if err := r.client.List(context.TODO(), mcfgpools); err != nil {
 		return err
 	}
 
@@ -285,16 +282,81 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(namespacedName types.Na
 		remOverview[idx].ScanName = rem.Labels[compv1alpha1.ScanLabel]
 		remOverview[idx].RemediationName = rem.Name
 		remOverview[idx].Type = rem.Spec.Type
-		remOverview[idx].Apply = rem.Spec.Apply
+		if suite.Spec.AutoApplyRemediations {
+			switch rem.Spec.Type {
+			case compv1alpha1.McRemediation:
+				if err := r.applyMcfgRemediationAndPausePool(rem, mcfgpools, affectedMcfgPools); err != nil {
+					return err
+				}
+			default:
+				logger.Info("Found remediation without applicable type. Not doing anything.", "name", rem.Name)
+			}
+			remOverview[idx].Apply = true
+		} else {
+			remOverview[idx].Apply = rem.Spec.Apply
+		}
 	}
 
-	// Update the suite status
-	suiteCopy := suite.DeepCopy()
+	// Replace the copy so we use fresh metadata
+	suite = suite.DeepCopy()
 	// Make sure we don't try to use the value as-is if it's nil
-	if suiteCopy.Status.ScanStatuses == nil {
-		suiteCopy.Status.ScanStatuses = []compv1alpha1.ComplianceScanStatusWrapper{}
+	if suite.Status.ScanStatuses == nil {
+		suite.Status.ScanStatuses = []compv1alpha1.ComplianceScanStatusWrapper{}
 	}
-	suiteCopy.Status.RemediationOverview = remOverview
+	suite.Status.RemediationOverview = remOverview
 	logger.Info("Remediations", "remOverview", remOverview)
-	return r.client.Status().Update(context.TODO(), suiteCopy)
+
+	if err := r.client.Status().Update(context.TODO(), suite); err != nil {
+		return err
+	}
+
+	for _, pool := range affectedMcfgPools {
+		poolCopy := pool.DeepCopy()
+		poolCopy.Spec.Paused = false
+		if err := r.client.Update(context.TODO(), poolCopy); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// This gets the remediation to be applied. Note that before being able to do that, the machineConfigPool is
+// paused in order to reduce restarts of nodes.
+func (r *ReconcileComplianceSuite) applyMcfgRemediationAndPausePool(rem compv1alpha1.ComplianceRemediation,
+	mcfgpools *mcfgv1.MachineConfigPoolList, affectedPools map[string]*mcfgv1.MachineConfigPool) error {
+	remCopy := rem.DeepCopy()
+	scan := &compv1alpha1.ComplianceScan{}
+	scanKey := types.NamespacedName{Name: rem.Labels[compv1alpha1.ScanLabel], Namespace: rem.Namespace}
+	if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
+		return err
+	}
+	pool, found := r.getAffectedMcfgPool(scan, mcfgpools)
+
+	// Only apply remediations once the scan is done. This hopefully ensures
+	// that we already have all the relevant remediations in place.
+	if found && scan.Status.Phase == compv1alpha1.PhaseDone {
+		// Only update pool once
+		if _, ok := affectedPools[pool.Name]; !ok {
+			poolCopy := pool.DeepCopy()
+			affectedPools[poolCopy.Name] = poolCopy
+			poolCopy.Spec.Paused = true
+			if err := r.client.Update(context.TODO(), poolCopy); err != nil {
+				return err
+			}
+		}
+		remCopy.Spec.Apply = true
+		if err := r.client.Update(context.TODO(), remCopy); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ReconcileComplianceSuite) getAffectedMcfgPool(scan *compv1alpha1.ComplianceScan, mcfgpools *mcfgv1.MachineConfigPoolList) (mcfgv1.MachineConfigPool, bool) {
+	for _, pool := range mcfgpools.Items {
+		if utils.McfgPoolLabelMatches(scan.Spec.NodeSelector, &pool) {
+			return pool, true
+		}
+	}
+	return mcfgv1.MachineConfigPool{}, false
 }

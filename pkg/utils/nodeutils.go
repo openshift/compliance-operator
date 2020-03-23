@@ -16,7 +16,10 @@ limitations under the License.
 package utils
 
 import (
+	"reflect"
 	"strings"
+
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
 const (
@@ -53,6 +56,26 @@ func GetFirstNodeRole(nodeSelector map[string]string) string {
 	}
 
 	return ""
+}
+
+// AnyMcfgPoolLabelMatches verifies if the given nodeSelector matches the nodeSelector
+// in any of the given MachineConfigPools
+func AnyMcfgPoolLabelMatches(nodeSelector map[string]string, poolList *mcfgv1.MachineConfigPoolList) bool {
+	for _, pool := range poolList.Items {
+		if McfgPoolLabelMatches(nodeSelector, &pool) {
+			return true
+		}
+	}
+	return false
+}
+
+// McfgPoolLabelMatches verifies if the given nodeSelector matches the given MachineConfigPool's nodeSelector
+func McfgPoolLabelMatches(nodeSelector map[string]string, pool *mcfgv1.MachineConfigPool) bool {
+	if nodeSelector == nil {
+		return false
+	}
+	// TODO(jaosorior): Make this work with MatchExpression
+	return reflect.DeepEqual(nodeSelector, pool.Spec.NodeSelector.MatchLabels)
 }
 
 func GetNodeRoleSelector(role string) map[string]string {
