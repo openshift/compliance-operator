@@ -3,9 +3,6 @@ package compliancesuite
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"sort"
-
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -262,45 +259,6 @@ func newScanForSuite(suite *compv1alpha1.ComplianceSuite, scanWrap *compv1alpha1
 			Debug:        scanWrap.Debug,
 		},
 	}
-}
-
-// returns true if the lists are the same, false if they differ
-func diffRemediationList(oldList, newList []*compv1alpha1.ComplianceRemediation) bool {
-	if newList == nil {
-		return oldList == nil
-	}
-
-	if len(newList) != len(oldList) {
-		return false
-	}
-
-	sortMcSlice := func(mcSlice []*compv1alpha1.ComplianceRemediation) {
-		sort.SliceStable(mcSlice, func(i, j int) bool { return mcSlice[i].Name < mcSlice[j].Name })
-	}
-
-	sortMcSlice(oldList)
-	sortMcSlice(newList)
-
-	for i := range oldList {
-		ok := diffRemediations(oldList[i], newList[i])
-		if !ok {
-			return false
-		}
-	}
-
-	return true
-}
-
-// returns true if the remediations are the same, false if they differ
-// for now (?) just diffs the MC specs and the remediation type, not sure if we'll ever want to diff more
-func diffRemediations(old, new *compv1alpha1.ComplianceRemediation) bool {
-	if old.Spec.Type != new.Spec.Type {
-		return false
-	}
-
-	// should we be more picky and just compare what can be set with the remediations? e.g. OSImageURL can't
-	// be set with a remediation..
-	return reflect.DeepEqual(old.Spec.MachineConfigContents.Spec, new.Spec.MachineConfigContents.Spec)
 }
 
 func (r *ReconcileComplianceSuite) reconcileRemediations(namespacedName types.NamespacedName, logger logr.Logger) error {

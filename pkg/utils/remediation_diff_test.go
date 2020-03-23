@@ -1,13 +1,13 @@
-package compliancesuite
+package utils
 
 import (
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Testing remediations diff", func() {
@@ -56,7 +56,7 @@ var _ = Describe("Testing remediations diff", func() {
 
 	Context("Same remediations", func() {
 		It("passes when the remediations are the same", func() {
-			ok := diffRemediationList(oldList, newList)
+			ok := DiffRemediationList(oldList, newList)
 			Expect(ok).To(BeTrue())
 		})
 	})
@@ -67,7 +67,7 @@ var _ = Describe("Testing remediations diff", func() {
 		})
 
 		It("fail when the remediations are different", func() {
-			ok := diffRemediationList(oldList, newList)
+			ok := DiffRemediationList(oldList, newList)
 			Expect(ok).To(BeFalse())
 		})
 	})
@@ -78,22 +78,22 @@ var _ = Describe("Testing remediations diff", func() {
 		})
 
 		It("fail when the remediations are different", func() {
-			ok := diffRemediationList(oldList, newList)
+			ok := DiffRemediationList(oldList, newList)
 			Expect(ok).To(BeFalse())
 		})
 	})
 
 	Context("One or both remediation lists are nil", func() {
 		It("fails when one of the lists is nil", func() {
-			ok := diffRemediationList(oldList, nil)
+			ok := DiffRemediationList(oldList, nil)
 			Expect(ok).To(BeFalse())
 
-			ok = diffRemediationList(nil, newList)
+			ok = DiffRemediationList(nil, newList)
 			Expect(ok).To(BeFalse())
 		})
 
 		It("passes when both lists are nil", func() {
-			ok := diffRemediationList(nil, nil)
+			ok := DiffRemediationList(nil, nil)
 			Expect(ok).To(BeTrue())
 		})
 	})
