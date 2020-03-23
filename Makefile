@@ -298,7 +298,7 @@ endif
 .PHONY: namespace
 namespace:
 	@echo "Creating '$(NAMESPACE)' namespace/project"
-	@oc create -f deploy/ns.yaml || true
+	@oc apply -f deploy/ns.yaml
 
 .PHONY: openshift-user
 openshift-user:
