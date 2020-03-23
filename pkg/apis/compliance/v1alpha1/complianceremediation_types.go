@@ -34,6 +34,12 @@ type ComplianceRemediationSpecMeta struct {
 	Type RemediationType `json:"type,omitempty"`
 	// Whether the remediation should be picked up and applied by the operator
 	Apply bool `json:"apply"`
+	// A unique identifier of the remediation
+	ID string `json:"id,omitempty"`
+	// A single-sentence title that sums up the remediation
+	Title string `json:"title,omitempty"`
+	// Rationale describes why should the remediation be applied
+	Rationale string `json:"rationale,omitempty"`
 }
 
 // ComplianceRemediationSpec defines the desired state of ComplianceRemediation

@@ -72,6 +72,21 @@ var _ = Describe("XCCDF parser", func() {
 				Expect(rem.Spec.Type).To(Equal(compv1alpha1.McRemediation))
 			})
 
+			Context("MC metadata", func() {
+				It("Should have an ID", func() {
+					Expect(rem.Spec.ID).ToNot(BeEmpty())
+					Expect(rem.Spec.ID).To(Equal("xccdf_org.ssgproject.content_rule_no_direct_root_logins"))
+				})
+				It("Should have a title", func() {
+					Expect(rem.Spec.Title).ToNot(BeEmpty())
+					Expect(rem.Spec.Title).To(Equal("Direct root Logins Not Allowed"))
+				})
+				It("Should have a rationale", func() {
+					Expect(rem.Spec.Rationale).ToNot(BeEmpty())
+					Expect(rem.Spec.Rationale).To(HavePrefix("Disabling direct root logins ensures"))
+				})
+			})
+
 			Context("MC files", func() {
 				var (
 					mcFiles []igntypes.File

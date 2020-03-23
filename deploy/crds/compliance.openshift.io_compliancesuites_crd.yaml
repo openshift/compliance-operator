@@ -104,12 +104,22 @@ spec:
                     description: Whether the remediation should be picked up and applied
                       by the operator
                     type: boolean
+                  id:
+                    description: A unique identifier of the remediation
+                    type: string
+                  rationale:
+                    description: Rationale describes why should the remediation be
+                      applied
+                    type: string
                   remediationName:
                     description: Contains a human readable name for the remediation.
                     type: string
                   scanName:
                     description: Contains the name of the scan that generated the
                       remediation
+                    type: string
+                  title:
+                    description: A single-sentence title that sums up the remediation
                     type: string
                   type:
                     description: Remediation type specifies the artifact the remediation

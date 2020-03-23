@@ -55,25 +55,36 @@ func ParseRemediationFromContentAndResults(scheme *runtime.Scheme, scanName stri
 			continue
 		}
 
+		// Find the rule definition in the DS
 		ruleDefinition := remediationsDom.FindByID(ruleIDRef)
 		if ruleDefinition == nil {
 			continue
 		}
 
-		for _, fix := range ruleDefinition.FindByName("fix") {
-			if !isMachineConfigFix(fix) {
-				continue
-			}
-
-			newRemediation := remediationFromFixElement(scheme, fix, scanName, namespace)
-			if newRemediation == nil {
-				continue
-			}
-			remediations = append(remediations, newRemediation)
+		// Check if the rule has a MC remediation, if not, skip the rule
+		mcFix := getMcFixElement(ruleDefinition)
+		if mcFix == nil {
+			continue
 		}
+
+		newRemediation := newRemediationWithMcFix(scheme, ruleDefinition, mcFix, scanName, namespace)
+		if newRemediation == nil {
+			continue
+		}
+		remediations = append(remediations, newRemediation)
 	}
 
 	return remediations, nil
+}
+
+func getMcFixElement(ruleDefinition *xmldom.Node) *xmldom.Node {
+	for _, fix := range ruleDefinition.FindByName("fix") {
+		if isMachineConfigFix(fix) {
+			return fix
+		}
+	}
+
+	return nil
 }
 
 func isMachineConfigFix(fix *xmldom.Node) bool {
@@ -96,7 +107,25 @@ func filterFailedResults(results []*xmldom.Node) []*xmldom.Node {
 	return failed
 }
 
-func remediationFromFixElement(scheme *runtime.Scheme, fix *xmldom.Node, scanName, namespace string) *compv1alpha1.ComplianceRemediation {
+func newRemediationWithMcFix(scheme *runtime.Scheme, ruleDefinition, fix *xmldom.Node, scanName, namespace string) *compv1alpha1.ComplianceRemediation {
+	mcObject, err := rawObjectToMachineConfig(scheme, []byte(fix.Text))
+	if err != nil {
+		return nil
+	}
+
+	return &compv1alpha1.ComplianceRemediation{
+		ObjectMeta: *remediationObjectMeta(fix, scanName, namespace),
+		Spec: compv1alpha1.ComplianceRemediationSpec{
+			ComplianceRemediationSpecMeta: *remediationSpecMeta(ruleDefinition),
+			MachineConfigContents:         *mcObject,
+		},
+		Status: compv1alpha1.ComplianceRemediationStatus{
+			ApplicationState: compv1alpha1.RemediationNotApplied,
+		},
+	}
+}
+
+func remediationObjectMeta(fix *xmldom.Node, scanName, namespace string) *v1.ObjectMeta {
 	fixId := fix.GetAttributeValue("id")
 	if fixId == "" {
 		return nil
@@ -104,31 +133,29 @@ func remediationFromFixElement(scheme *runtime.Scheme, fix *xmldom.Node, scanNam
 
 	dnsFriendlyFixId := strings.ReplaceAll(fixId, "_", "-")
 	remName := fmt.Sprintf("%s-%s", scanName, dnsFriendlyFixId)
-	return remediationFromString(scheme, remName, namespace, fix.Text)
+	return &v1.ObjectMeta{
+		Name:      remName,
+		Namespace: namespace,
+	}
 }
 
-func remediationFromString(scheme *runtime.Scheme, name string, namespace string, mcContent string) *compv1alpha1.ComplianceRemediation {
-	mcObject, err := rawObjectToMachineConfig(scheme, []byte(mcContent))
-	if err != nil {
-		return nil
+func remediationSpecMeta(ruleDefinition *xmldom.Node) *compv1alpha1.ComplianceRemediationSpecMeta {
+	return &compv1alpha1.ComplianceRemediationSpecMeta{
+		Type:      compv1alpha1.McRemediation,
+		Apply:     false,
+		ID:        ruleDefinition.GetAttributeValue("id"),
+		Title:     getSafeText(ruleDefinition, "title"),
+		Rationale: getSafeText(ruleDefinition, "rationale"),
+	}
+}
+
+func getSafeText(nptr *xmldom.Node, elem string) string {
+	elemNode := nptr.FindOneByName(elem)
+	if elemNode == nil {
+		return ""
 	}
 
-	return &compv1alpha1.ComplianceRemediation{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: compv1alpha1.ComplianceRemediationSpec{
-			ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
-				Type:  compv1alpha1.McRemediation,
-				Apply: false,
-			},
-			MachineConfigContents: *mcObject,
-		},
-		Status: compv1alpha1.ComplianceRemediationStatus{
-			ApplicationState: compv1alpha1.RemediationNotApplied,
-		},
-	}
+	return elemNode.Text
 }
 
 func rawObjectToMachineConfig(scheme *runtime.Scheme, in []byte) (*mcfgv1.MachineConfig, error) {

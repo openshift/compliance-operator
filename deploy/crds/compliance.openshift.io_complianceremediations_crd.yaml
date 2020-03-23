@@ -40,6 +40,9 @@ spec:
               description: Whether the remediation should be picked up and applied
                 by the operator
               type: boolean
+            id:
+              description: A unique identifier of the remediation
+              type: string
             machineConfigContents:
               description: The actual remediation payload
               properties:
@@ -448,6 +451,12 @@ spec:
               required:
               - spec
               type: object
+            rationale:
+              description: Rationale describes why should the remediation be applied
+              type: string
+            title:
+              description: A single-sentence title that sums up the remediation
+              type: string
             type:
               description: Remediation type specifies the artifact the remediation
                 is based on. For now, only MachineConfig is supported

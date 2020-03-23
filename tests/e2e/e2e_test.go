@@ -261,6 +261,42 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
+
+				// Check that one of the remediations has the expected attributes
+				remCheck := &compv1alpha1.ComplianceRemediation{}
+				expRemSpec := &compv1alpha1.ComplianceRemediationSpecMeta{
+					ID:        "xccdf_org.ssgproject.content_rule_no_empty_passwords",
+					Title:     "Prevent Login to Accounts With Empty Password",
+					Rationale: `If an account has an empty password, anyone could log in and
+run commands with the privileges of that account. Accounts with
+empty passwords should never be used in operational environments.`,
+				}
+
+				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: workerRemediations[0], Namespace: namespace}, remCheck)
+				if err != nil {
+					t.Errorf("Unexpected error %v", err)
+					return err
+				}
+
+				if expRemSpec.ID != remCheck.Spec.ID {
+					err := fmt.Errorf("unexpected remediation ID, expected '%s' got '%s'", expRemSpec.ID, remCheck.Spec.ID)
+					t.Error(err)
+					return err
+				}
+
+				if expRemSpec.Title != remCheck.Spec.Title {
+					err := fmt.Errorf("unexpected remediation title, expected '%s' got '%s'", expRemSpec.Title, remCheck.Spec.Title)
+					t.Error(err)
+					return err
+				}
+
+				if expRemSpec.Rationale != remCheck.Spec.Rationale {
+					err := fmt.Errorf("unexpected remediation rationale, expected '%s' got '%s'", expRemSpec.Rationale, remCheck.Spec.Rationale)
+					t.Error(err)
+					return err
+				}
+
+				t.Log(remCheck.Spec.ID, remCheck.Spec.Title, remCheck.Spec.Rationale)
 				return nil
 			},
 		},
