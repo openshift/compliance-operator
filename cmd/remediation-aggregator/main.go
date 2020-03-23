@@ -24,8 +24,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"reflect"
-	"sort"
 	"strings"
 
 	backoff "github.com/cenkalti/backoff/v3"
@@ -176,45 +174,6 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string,
 	return utils.ParseRemediationFromContentAndResults(scheme, scanName, namespace, content, scanReader)
 }
 
-// returns true if the lists are the same, false if they differ
-func diffRemediationList(oldList, newList []*compv1alpha1.ComplianceRemediation) bool {
-	if newList == nil {
-		return oldList == nil
-	}
-
-	if len(newList) != len(oldList) {
-		return false
-	}
-
-	sortMcSlice := func(mcSlice []*compv1alpha1.ComplianceRemediation) {
-		sort.SliceStable(mcSlice, func(i, j int) bool { return mcSlice[i].Name < mcSlice[j].Name })
-	}
-
-	sortMcSlice(oldList)
-	sortMcSlice(newList)
-
-	for i := range oldList {
-		ok := diffRemediations(oldList[i], newList[i])
-		if !ok {
-			return false
-		}
-	}
-
-	return true
-}
-
-// returns true if the remediations are the same, false if they differ
-// for now (?) just diffs the MC specs and the remediation type, not sure if we'll ever want to diff more
-func diffRemediations(old, new *compv1alpha1.ComplianceRemediation) bool {
-	if old.Spec.Type != new.Spec.Type {
-		return false
-	}
-
-	// should we be more picky and just compare what can be set with the remediations? e.g. OSImageURL can't
-	// be set with a remediation..
-	return reflect.DeepEqual(old.Spec.MachineConfigContents.Spec, new.Spec.MachineConfigContents.Spec)
-}
-
 func annotateParsedConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) error {
 	cmCopy := cm.DeepCopy()
 
@@ -353,7 +312,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 			scanRemediations = cmRemediations
 		} else {
 			// All remediation lists in the scan must be equal
-			ok := diffRemediationList(scanRemediations, cmRemediations)
+			ok := utils.DiffRemediationList(scanRemediations, cmRemediations)
 			if !ok {
 				fmt.Println("The remediations differ between machines, this should never happen as the machines in a pool should be identical")
 				os.Exit(1)
