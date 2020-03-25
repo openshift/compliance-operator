@@ -285,7 +285,7 @@ func TestE2E(t *testing.T) {
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 									Content:      "ssg-ocp4-ds.xml",
-									NodeSelector: E2EPoolNodeRoleSelector(),
+									NodeSelector: getPoolNodeRoleSelector(),
 								},
 								Name: workerScanName,
 							},
@@ -313,7 +313,7 @@ func TestE2E(t *testing.T) {
 				// We need to check that the remediation is auto-applied and save
 				// the object so we can delete it later
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
-				err = waitForRemediationToBeAutoApplied(t, f, mcTctx.mcClient, workersNoRootLoginsRemName, namespace, testPoolName)
+				err = waitForRemediationToBeAutoApplied(t, f, workersNoRootLoginsRemName, namespace, testPoolName)
 				if err != nil {
 					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
@@ -337,7 +337,7 @@ func TestE2E(t *testing.T) {
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 									Content:      "ssg-ocp4-ds.xml",
-									NodeSelector: E2EPoolNodeRoleSelector(),
+									NodeSelector: getPoolNodeRoleSelector(),
 								},
 								Name: secondWorkerScanName,
 							},
@@ -378,7 +378,9 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = mcTctx.mcClient.MachineConfigs().Delete(rem.GetMcName(), &metav1.DeleteOptions{})
+				mcfgToBeDeleted := rem.Spec.MachineConfigContents.DeepCopy()
+				mcfgToBeDeleted.SetName(rem.GetMcName())
+				err = f.Client.Delete(goctx.TODO(), mcfgToBeDeleted)
 				if err != nil {
 					return err
 				}
@@ -399,7 +401,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				// We need to wait for both the pool to update..
-				err = waitForMachinePoolUpdate(t, mcTctx.mcClient, testPoolName, dummyAction, poolHasNoMc)
+				err = waitForMachinePoolUpdate(t, f, testPoolName, dummyAction, poolHasNoMc)
 				if err != nil {
 					t.Errorf("Failed to wait for workers to come back up after deleting MC")
 					return err
@@ -437,7 +439,7 @@ func TestE2E(t *testing.T) {
 									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
-									NodeSelector: E2EPoolNodeRoleSelector(),
+									NodeSelector: getPoolNodeRoleSelector(),
 								},
 								Name: workerScanName,
 							},
@@ -463,28 +465,28 @@ func TestE2E(t *testing.T) {
 				}
 
 				// Pause the MC so that we have only one reboot
-				err = pauseMachinePool(t, mcTctx.mcClient, testPoolName)
+				err = pauseMachinePool(t, f, testPoolName)
 				if err != nil {
 					return err
 				}
 
 				// Apply both remediations
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
-				err = applyRemediationAndCheck(t, f, mcTctx.mcClient, namespace, workersNoRootLoginsRemName, testPoolName)
+				err = applyRemediationAndCheck(t, f, namespace, workersNoRootLoginsRemName, testPoolName)
 				if err != nil {
 					t.Logf("WARNING: Got an error while applying remediation '%s': %v", workersNoRootLoginsRemName, err)
 				}
 				t.Logf("Remediation %s applied", workersNoRootLoginsRemName)
 
 				workersNoEmptyPassRemName := fmt.Sprintf("%s-no-empty-passwords", workerScanName)
-				err = applyRemediationAndCheck(t, f, mcTctx.mcClient, namespace, workersNoEmptyPassRemName, testPoolName)
+				err = applyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName)
 				if err != nil {
 					t.Logf("WARNING: Got an error while applying remediation '%s': %v", workersNoEmptyPassRemName, err)
 				}
 				t.Logf("Remediation %s applied", workersNoEmptyPassRemName)
 
 				// unpause the MCP so that the remediation gets applied
-				err = unPauseMachinePoolAndWait(t, mcTctx.mcClient, testPoolName)
+				err = unPauseMachinePoolAndWait(t, f, testPoolName)
 				if err != nil {
 					return err
 				}
@@ -496,18 +498,20 @@ func TestE2E(t *testing.T) {
 				}
 
 				// Get the resulting MC
-				mcName := fmt.Sprintf("75-%s-%s", workerScanName, suiteName)
-				mcBoth, err := mcTctx.mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
-				t.Logf("MC %s exists", mcName)
+				mcName := types.NamespacedName{Name: fmt.Sprintf("75-%s-%s", workerScanName, suiteName)}
+				mcBoth := &mcfgv1.MachineConfig{}
+				err = f.Client.Get(goctx.TODO(), mcName, mcBoth)
+				t.Logf("MC %s exists", mcName.Name)
 
 				// Revert one remediation. The MC should stay, but its generation should bump
 				t.Logf("Will revert remediation %s", workersNoEmptyPassRemName)
-				err = unApplyRemediationAndCheck(t, f, mcTctx.mcClient, namespace, workersNoEmptyPassRemName, testPoolName, false)
+				err = unApplyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName, false)
 				if err != nil {
 					t.Logf("WARNING: Got an error while unapplying remediation '%s': %v", workersNoEmptyPassRemName, err)
 				}
 				t.Logf("Remediation %s reverted", workersNoEmptyPassRemName)
-				mcOne, err := mcTctx.mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
+				mcOne := &mcfgv1.MachineConfig{}
+				err = f.Client.Get(goctx.TODO(), mcName, mcOne)
 
 				if mcOne.Generation == mcBoth.Generation {
 					t.Errorf("Expected that the MC generation changes. Got: %d, Expected: %d", mcOne.Generation, mcBoth.Generation)
@@ -515,11 +519,12 @@ func TestE2E(t *testing.T) {
 
 				// When we unapply the second remediation, the MC should be deleted, too
 				t.Logf("Will revert remediation %s", workersNoRootLoginsRemName)
-				err = unApplyRemediationAndCheck(t, f, mcTctx.mcClient, namespace, workersNoRootLoginsRemName, testPoolName, true)
+				err = unApplyRemediationAndCheck(t, f, namespace, workersNoRootLoginsRemName, testPoolName, true)
 				t.Logf("Remediation %s reverted", workersNoEmptyPassRemName)
 
 				t.Logf("No remediation-based MCs should exist now")
-				_, err = mcTctx.mcClient.MachineConfigs().Get(mcName, metav1.GetOptions{})
+				mcShouldntExist := &mcfgv1.MachineConfig{}
+				err = f.Client.Get(goctx.TODO(), mcName, mcShouldntExist)
 				if err == nil {
 					t.Errorf("MC %s unexpectedly found", mcName)
 				}

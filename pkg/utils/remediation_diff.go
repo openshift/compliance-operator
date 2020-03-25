@@ -44,4 +44,3 @@ func diffRemediations(old, new *compv1alpha1.ComplianceRemediation) bool {
 	// be set with a remediation..
 	return reflect.DeepEqual(old.Spec.MachineConfigContents.Spec, new.Spec.MachineConfigContents.Spec)
 }
-

@@ -24,7 +24,6 @@ import (
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	mcfgClient "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1"
 )
 
 var log = logf.Log.WithName("remediationctrl")
@@ -39,14 +38,8 @@ func Add(mgr manager.Manager) error {
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	// FIXME: Should we rather move the initialization into a method that does lazy-init on first use
 	// from the reconcile loop?
-	mcClient, err := mcfgClient.NewForConfig(mgr.GetConfig())
-	if err != nil {
-		return &ReconcileComplianceRemediation{}
-	}
-
 	return &ReconcileComplianceRemediation{client: mgr.GetClient(),
-		mcClient: mcClient,
-		scheme:   mgr.GetScheme()}
+		scheme: mgr.GetScheme()}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -73,9 +66,8 @@ var _ reconcile.Reconciler = &ReconcileComplianceRemediation{}
 type ReconcileComplianceRemediation struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client   client.Client
-	mcClient *mcfgClient.MachineconfigurationV1Client
-	scheme   *runtime.Scheme
+	client client.Client
+	scheme *runtime.Scheme
 }
 
 // Reconcile reads that state of the cluster for a ComplianceRemediation object and makes changes based on the state read
@@ -311,7 +303,8 @@ func mergeMachineConfigs(configs []*mcfgv1.MachineConfig, name string, roleLabel
 }
 
 func createOrUpdateMachineConfig(r *ReconcileComplianceRemediation, merged *mcfgv1.MachineConfig, logger logr.Logger) error {
-	mc, err := r.mcClient.MachineConfigs().Get(merged.Name, metav1.GetOptions{})
+	mc := &mcfgv1.MachineConfig{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: merged.Name}, mc)
 	if err != nil && errors.IsNotFound(err) {
 		return createMachineConfig(r, merged, logger)
 	} else if err != nil {
@@ -324,7 +317,12 @@ func createOrUpdateMachineConfig(r *ReconcileComplianceRemediation, merged *mcfg
 }
 
 func deleteMachineConfig(r *ReconcileComplianceRemediation, name string, logger logr.Logger) error {
-	err := r.mcClient.MachineConfigs().Delete(name, &metav1.DeleteOptions{})
+	mc := &mcfgv1.MachineConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+	err := r.client.Delete(context.TODO(), mc)
 	if err != nil && errors.IsNotFound(err) {
 		logger.Info("MC to be deleted was already deleted")
 		return nil
@@ -337,7 +335,7 @@ func deleteMachineConfig(r *ReconcileComplianceRemediation, name string, logger 
 }
 
 func createMachineConfig(r *ReconcileComplianceRemediation, merged *mcfgv1.MachineConfig, logger logr.Logger) error {
-	_, err := r.mcClient.MachineConfigs().Create(merged)
+	err := r.client.Create(context.TODO(), merged)
 	if err != nil {
 		logger.Error(err, "Cannot create MC", "mc name", merged.Name)
 		// Create error should be retried
@@ -351,7 +349,7 @@ func updateMachineConfig(r *ReconcileComplianceRemediation, current *mcfgv1.Mach
 	mcCopy := current.DeepCopy()
 	mcCopy.Spec = merged.Spec
 
-	_, err := r.mcClient.MachineConfigs().Update(mcCopy)
+	err := r.client.Update(context.TODO(), mcCopy)
 	if err != nil {
 		logger.Error(err, "Cannot update MC", "mc name", merged.Name)
 		// Update should be retried
