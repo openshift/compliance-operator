@@ -7,7 +7,6 @@ import (
 	"github.com/go-logr/logr"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -176,17 +175,7 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 		return nil
 	}
 
-	modScanStatus := compv1alpha1.ComplianceScanStatusWrapper{
-		ComplianceScanStatus: compv1alpha1.ComplianceScanStatus{
-			Phase: scan.Status.Phase,
-		},
-		Name: scan.Name,
-	}
-
-	if scan.Status.Phase == compv1alpha1.PhaseDone {
-		modScanStatus.Result = scan.Status.Result
-		modScanStatus.ErrorMessage = scan.Status.ErrorMessage
-	}
+	modScanStatus := compv1alpha1.ScanStatusWrapperFromScan(scan)
 
 	// Replace the copy so we use fresh metadata
 	suite = suite.DeepCopy()
@@ -198,12 +187,7 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 
 func (r *ReconcileComplianceSuite) addScanStatus(suite *compv1alpha1.ComplianceSuite, scan *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	// if not, create the scan status with the name and the current state
-	newScanStatus := compv1alpha1.ComplianceScanStatusWrapper{
-		ComplianceScanStatus: compv1alpha1.ComplianceScanStatus{
-			Phase: scan.Status.Phase,
-		},
-		Name: scan.Name,
-	}
+	newScanStatus := compv1alpha1.ScanStatusWrapperFromScan(scan)
 
 	// Replace the copy so we use fresh metadata
 	suite = suite.DeepCopy()
@@ -236,25 +220,12 @@ func launchScanForSuite(r *ReconcileComplianceSuite, suite *compv1alpha1.Complia
 }
 
 func newScanForSuite(suite *compv1alpha1.ComplianceSuite, scanWrap *compv1alpha1.ComplianceScanSpecWrapper) *compv1alpha1.ComplianceScan {
-	scanLabels := map[string]string{
+	scan := compv1alpha1.ComplianceScanFromWrapper(scanWrap)
+	scan.SetLabels(map[string]string{
 		"compliancesuite": suite.Name,
-	}
-
-	return &compv1alpha1.ComplianceScan{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      scanWrap.Name,
-			Namespace: suite.Namespace,
-			Labels:    scanLabels,
-		},
-		Spec: compv1alpha1.ComplianceScanSpec{
-			ContentImage: scanWrap.ContentImage,
-			Profile:      scanWrap.Profile,
-			Rule:         scanWrap.Rule,
-			Content:      scanWrap.Content,
-			NodeSelector: scanWrap.NodeSelector,
-			Debug:        scanWrap.Debug,
-		},
-	}
+	})
+	scan.SetNamespace(suite.Namespace)
+	return scan
 }
 
 // Reconcile the remediation statuses in the suite. Note that the suite that this takes is already
@@ -279,9 +250,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 	// Construct the list of the statuses
 	remOverview := make([]compv1alpha1.ComplianceRemediationNameStatus, len(remList.Items))
 	for idx, rem := range remList.Items {
-		remOverview[idx].ScanName = rem.Labels[compv1alpha1.ScanLabel]
-		remOverview[idx].RemediationName = rem.Name
-		remOverview[idx].Type = rem.Spec.Type
+		remOverview[idx] = compv1alpha1.RemediationNameStatusFromRemediation(&rem)
 		if suite.Spec.AutoApplyRemediations {
 			switch rem.Spec.Type {
 			case compv1alpha1.McRemediation:
@@ -292,8 +261,6 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 				logger.Info("Found remediation without applicable type. Not doing anything.", "name", rem.Name)
 			}
 			remOverview[idx].Apply = true
-		} else {
-			remOverview[idx].Apply = rem.Spec.Apply
 		}
 	}
 

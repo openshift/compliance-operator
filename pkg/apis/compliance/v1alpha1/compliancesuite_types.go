@@ -82,3 +82,36 @@ type ComplianceSuiteList struct {
 func init() {
 	SchemeBuilder.Register(&ComplianceSuite{}, &ComplianceSuiteList{})
 }
+
+// ScanStatusWrapperFromScan returns a ComplianceScanStatusWrapper object
+// (used by the ComplianceSuite object) in order to display the status of
+// a scan
+func ScanStatusWrapperFromScan(s *ComplianceScan) ComplianceScanStatusWrapper {
+	return ComplianceScanStatusWrapper{
+		Name:                 s.Name,
+		ComplianceScanStatus: s.Status,
+	}
+}
+
+// RemediationNameStatusFromRemediation returns a ComplianceRemediationNameStatus
+// object (used by the ComplianceSuite object) in order to display a
+// remediation
+func RemediationNameStatusFromRemediation(r *ComplianceRemediation) ComplianceRemediationNameStatus {
+	return ComplianceRemediationNameStatus{
+		RemediationName:               r.Name,
+		ScanName:                      r.Labels[ScanLabel],
+		ComplianceRemediationSpecMeta: r.Spec.ComplianceRemediationSpecMeta,
+	}
+}
+
+// ComplianceScanFromWrapper returns a ComplianceScan from the wrapper that's given
+// to a ComplianceSuite. This will return all the values that are derivable from the
+// wrapper in order to build a scan. Anything missing must be added separately.
+func ComplianceScanFromWrapper(sw *ComplianceScanSpecWrapper) *ComplianceScan {
+	return &ComplianceScan{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: sw.Name,
+		},
+		Spec: sw.ComplianceScanSpec,
+	}
+}
