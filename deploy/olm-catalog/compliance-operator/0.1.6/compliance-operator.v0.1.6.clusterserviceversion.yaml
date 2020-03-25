@@ -1,0 +1,387 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "compliance.openshift.io/v1alpha1",
+          "kind": "ComplianceRemediation",
+          "metadata": {
+            "labels": {
+              "complianceoperator.openshift.io/scan": "example-scan",
+              "complianceoperator.openshift.io/suite": "example-suite",
+              "machineconfiguration.openshift.io/role": "worker"
+            },
+            "name": "example-remediation-worker-no-direct-root-login",
+            "namespace": "openshift-compliance"
+          },
+          "spec": {
+            "apply": false,
+            "machineConfigContents": {
+              "apiVersion": "machineconfiguration.openshift.io/v1",
+              "kind": "MachineConfig",
+              "spec": {
+                "config": {
+                  "ignition": {
+                    "version": "2.2.0"
+                  },
+                  "storage": {
+                    "files": [
+                      {
+                        "contents": {
+                          "source": "data:,"
+                        },
+                        "filesystem": "root",
+                        "mode": 384,
+                        "path": "/etc/securetty"
+                      }
+                    ]
+                  }
+                },
+                "fips": false,
+                "kernelArguments": [
+                  ""
+                ],
+                "osImageURL": ""
+              }
+            },
+            "type": "MachineConfig"
+          }
+        },
+        {
+          "apiVersion": "compliance.openshift.io/v1alpha1",
+          "kind": "ComplianceScan",
+          "metadata": {
+            "name": "example-compliancescan"
+          },
+          "spec": {
+            "content": "ssg-ocp4-ds.xml",
+            "profile": "xccdf_org.ssgproject.content_profile_coreos-ncp"
+          }
+        },
+        {
+          "apiVersion": "compliance.openshift.io/v1alpha1",
+          "kind": "ComplianceSuite",
+          "metadata": {
+            "name": "example-compliancesuite"
+          },
+          "spec": {
+            "autoApplyRemediations": true,
+            "scans": [
+              {
+                "content": "ssg-ocp4-ds.xml",
+                "contentImage": "quay.io/jhrozek/ocp4-openscap-content:latest",
+                "name": "workers-scan",
+                "nodeSelector": {
+                  "node-role.kubernetes.io/worker": ""
+                },
+                "profile": "xccdf_org.ssgproject.content_profile_coreos-ncp"
+              },
+              {
+                "content": "ssg-ocp4-ds.xml",
+                "contentImage": "quay.io/jhrozek/ocp4-openscap-content:latest",
+                "name": "masters-scan",
+                "nodeSelector": {
+                  "node-role.kubernetes.io/master": ""
+                },
+                "profile": "xccdf_org.ssgproject.content_profile_coreos-ncp"
+              }
+            ]
+          }
+        }
+      ]
+    capabilities: Basic Install
+    categories: OpenShift Optional, Security
+    certified: "false"
+    containerImage: quay.io/compliance-operator/compliance-operator:latest
+    createdAt: "2020-01-28T08:00:00Z"
+    description: |
+      An operator which runs OpenSCAP and allows you to check your cluster for
+      security vulnerabilities and to keep your it compliant with the
+      security benchmark you need.
+    repository: https://github.com/openshift/compliance-operator
+    support: OpenShift Security & Compliance
+  name: compliance-operator.v0.1.6
+  namespace: openshift-compliance
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: ComplianceRemediation represents a remediation that can be applied
+        to the cluster to fix the found issues.
+      kind: ComplianceRemediation
+      name: complianceremediations.compliance.openshift.io
+      version: v1alpha1
+    - description: ComplianceScan represents a scan with a certain configuration that
+        will be applied to objects of a certain entity in the host. These could be
+        nodes that apply to a certain nodeSelector, or the cluster itself.
+      kind: ComplianceScan
+      name: compliancescans.compliance.openshift.io
+      version: v1alpha1
+    - description: ComplianceSuite represents a set of scans that will be applied
+        to the cluster. These should help deployers achieve a certain compliance target.
+      kind: ComplianceSuite
+      name: compliancesuites.compliance.openshift.io
+      version: v1alpha1
+  description: |
+    An operator which runs OpenSCAP and allows you to check your cluster for
+    security vulnerabilities and to keep your it compliant with the
+    security benchmark you need.
+  displayName: Compliance Operator
+  install:
+    spec:
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - nodes
+          verbs:
+          - list
+          - watch
+        - apiGroups:
+          - machineconfiguration.openshift.io
+          resources:
+          - machineconfigs
+          - machineconfigpools
+          verbs:
+          - list
+          - get
+          - patch
+          - create
+          - watch
+          - update
+          - delete
+        serviceAccountName: compliance-operator
+      deployments:
+      - name: compliance-operator
+        spec:
+          replicas: 3
+          selector:
+            matchLabels:
+              name: compliance-operator
+          strategy: {}
+          template:
+            metadata:
+              labels:
+                name: compliance-operator
+            spec:
+              containers:
+              - command:
+                - compliance-operator
+                env:
+                - name: WATCH_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.annotations['olm.targetNamespaces']
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                - name: OPERATOR_NAME
+                  value: compliance-operator
+                - name: OPENSCAP_IMAGE
+                  value: quay.io/jhrozek/openscap-ocp:latest
+                - name: LOG_COLLECTOR_IMAGE
+                  value: quay.io/compliance-operator/resultscollector:0.1.6
+                - name: RESULT_SERVER_IMAGE
+                  value: quay.io/compliance-operator/resultserver:0.1.6
+                - name: REMEDIATION_AGGREGATOR_IMAGE
+                  value: quay.io/compliance-operator/remediation-aggregator:0.1.6
+                image: quay.io/compliance-operator/compliance-operator
+                imagePullPolicy: Always
+                name: compliance-operator
+                resources: {}
+              nodeSelector:
+                node-role.kubernetes.io/master: ""
+              serviceAccountName: compliance-operator
+              tolerations:
+              - effect: NoSchedule
+                key: node-role.kubernetes.io/master
+                operator: Exists
+              - effect: NoExecute
+                key: node.kubernetes.io/unreachable
+                operator: Exists
+                tolerationSeconds: 120
+              - effect: NoExecute
+                key: node.kubernetes.io/not-ready
+                operator: Exists
+                tolerationSeconds: 120
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          - persistentvolumeclaims
+          - persistentvolumes
+          verbs:
+          - watch
+          - create
+          - get
+          - list
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - create
+          - get
+          - list
+          - watch
+          - patch
+          - update
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - create
+          - get
+          - list
+          - update
+          - watch
+          - delete
+        - apiGroups:
+          - apps
+          resources:
+          - replicasets
+          - deployments
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - delete
+        - apiGroups:
+          - compliance.openshift.io
+          resources:
+          - compliancescans
+          verbs:
+          - create
+          - watch
+          - patch
+          - get
+          - list
+        - apiGroups:
+          - compliance.openshift.io
+          resources:
+          - '*'
+          verbs:
+          - '*'
+        - apiGroups:
+          - apps
+          resourceNames:
+          - compliance-operator
+          resources:
+          - deployments/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - ""
+          resources:
+          - services
+          - services/finalizers
+          verbs:
+          - create
+          - get
+          - update
+          - delete
+        - apiGroups:
+          - monitoring.coreos.com
+          resources:
+          - servicemonitors
+          verbs:
+          - get
+          - create
+        - apiGroups:
+          - apps
+          resourceNames:
+          - compliance-operator
+          resources:
+          - deployments/finalizers
+          verbs:
+          - update
+        serviceAccountName: compliance-operator
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - update
+        - apiGroups:
+          - compliance.openshift.io
+          resources:
+          - compliancescans
+          verbs:
+          - get
+        - apiGroups:
+          - compliance.openshift.io
+          resources:
+          - compliancescans/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - compliance.openshift.io
+          resources:
+          - complianceremediations
+          verbs:
+          - create
+        serviceAccountName: remediation-aggregator
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - create
+        - apiGroups:
+          - compliance.openshift.io
+          resources:
+          - compliancescans
+          verbs:
+          - get
+        - apiGroups:
+          - security.openshift.io
+          resourceNames:
+          - node-exporter
+          resources:
+          - securitycontextconstraints
+          verbs:
+          - use
+        serviceAccountName: resultscollector
+    strategy: deployment
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - security
+  - compliance
+  - openscap
+  - audit
+  links:
+  - name: compliance-operator
+    url: https://github.com/openshift/compliance-operator
+  - name: ComplianceAsCode content
+    url: https://github.com/ComplianceAsCode/content
+  - name: OpenSCAP
+    url: https://www.open-scap.org/
+  maintainers:
+  - name: Red Hat Inc.
+  maturity: alpha
+  provider:
+    name: Red Hat, Inc
+  replaces: compliance-operator.v0.1.5
+  version: 0.1.6
