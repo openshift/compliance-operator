@@ -21,8 +21,8 @@ import (
 	"github.com/openshift/compliance-operator/pkg/apis"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/utils"
+	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	mcfgClient "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1"
 )
 
 const (
@@ -36,20 +36,13 @@ type testExecution struct {
 }
 
 type mcTestCtx struct {
-	mcClient *mcfgClient.MachineconfigurationV1Client
-
 	f     *framework.Framework
 	t     *testing.T
 	pools []*mcfgv1.MachineConfigPool
 }
 
-func NewMcTestCtx(f *framework.Framework, t *testing.T) (*mcTestCtx, error) {
-	mcClient, err := mcfgClient.NewForConfig(f.KubeConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	return &mcTestCtx{mcClient: mcClient, f: f, t: t}, nil
+func newMcTestCtx(f *framework.Framework, t *testing.T) (*mcTestCtx, error) {
+	return &mcTestCtx{f: f, t: t}, nil
 }
 
 func (c *mcTestCtx) cleanupTrackedPools() {
@@ -69,19 +62,19 @@ func (c *mcTestCtx) cleanupTrackedPools() {
 		// with "e2e,worker" and becomes labeled with "worker" switches from "rendered-e2e-*"
 		// to "rendered-worker-*". If we didn't wait, the node might have tried to use the
 		// e2e pool that would be gone when we remove it with the next call
-		err = waitForNodesToHaveARenderedPool(c.t, c.f, c.mcClient, poolNodes, workerPoolName)
+		err = waitForNodesToHaveARenderedPool(c.t, c.f, poolNodes, workerPoolName)
 		if err != nil {
 			c.t.Errorf("Error waiting for nodes to reach the worker pool again: %v\n", err)
 		}
 
-		err = waitForPoolCondition(c.t, c.mcClient, mcfgv1.MachineConfigPoolUpdated, p.Name)
+		err = waitForPoolCondition(c.t, c.f, mcfgv1.MachineConfigPoolUpdated, p.Name)
 		if err != nil {
 			c.t.Errorf("Error waiting for reboot after nodes were unlabeled: %v\n", err)
 		}
 
 		// Then delete the pool itself
 		c.t.Logf("Removing pool %s\n", p.Name)
-		err = c.mcClient.MachineConfigPools().Delete(p.Name, &metav1.DeleteOptions{})
+		err = c.f.Client.Delete(goctx.TODO(), p)
 		if err != nil {
 			c.t.Errorf("Could not remove pool %s: %v\n", p.Name, err)
 		}
@@ -99,7 +92,7 @@ func (c *mcTestCtx) trackPool(pool *mcfgv1.MachineConfigPool) {
 }
 
 func (c *mcTestCtx) createE2EPool() error {
-	pool, err := createReadyMachineConfigPoolSubset(c.t, c.f, c.mcClient, workerPoolName, testPoolName)
+	pool, err := createReadyMachineConfigPoolSubset(c.t, c.f, workerPoolName, testPoolName)
 	if apierrors.IsAlreadyExists(err) {
 		return nil
 	} else if err != nil {
@@ -124,7 +117,7 @@ func executeTests(t *testing.T, tests ...testExecution) {
 		t.Fatalf("could not get namespace: %v", err)
 	}
 
-	mcTctx, err := NewMcTestCtx(f, t)
+	mcTctx, err := newMcTestCtx(f, t)
 	if err != nil {
 		t.Fatalf("could not create the MC test context: %v", err)
 	}
@@ -156,11 +149,24 @@ func cleanupTestEnv(t *testing.T, ctx *framework.TestCtx) {
 //
 // NOTE: Whenever we add new types to the operator, we need to register them here for the e2e tests.
 func setupTestRequirements(t *testing.T) *framework.TestCtx {
-	objects := [3]runtime.Object{&compv1alpha1.ComplianceScanList{},
+	// compliance-operator objects
+	coObjs := [3]runtime.Object{&compv1alpha1.ComplianceScanList{},
 		&compv1alpha1.ComplianceRemediationList{},
-		&compv1alpha1.ComplianceSuiteList{}}
-	for _, obj := range objects {
+		&compv1alpha1.ComplianceSuiteList{},
+	}
+	for _, obj := range coObjs {
 		err := framework.AddToFrameworkScheme(apis.AddToScheme, obj)
+		if err != nil {
+			t.Fatalf("TEST SETUP: failed to add custom resource scheme to framework: %v", err)
+		}
+	}
+	// MCO objects
+	mcoObjs := [2]runtime.Object{
+		&mcfgv1.MachineConfigPoolList{},
+		&mcfgv1.MachineConfigList{},
+	}
+	for _, obj := range mcoObjs {
+		err := framework.AddToFrameworkScheme(mcfgapi.Install, obj)
 		if err != nil {
 			t.Fatalf("TEST SETUP: failed to add custom resource scheme to framework: %v", err)
 		}
@@ -290,7 +296,7 @@ func scanResultIsExpected(f *framework.Framework, namespace, name string, expect
 	}
 	if expectedResult == compv1alpha1.ResultError {
 		if cs.Status.ErrorMessage == "" {
-			return fmt.Errorf("The ComplianceScan 'errormsg' wasn't set (it was empty). Even if we expected an error.")
+			return fmt.Errorf("The ComplianceScan 'errormsg' wasn't set (it was empty). Even if we expected an error")
 		}
 	}
 	return nil
@@ -387,13 +393,14 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 	return nil
 }
 
-type MachineConfigActionFunc func() error
-type PoolPredicate func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error)
+type machineConfigActionFunc func() error
+type poolPredicate func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error)
 
 // waitForMachinePoolUpdate retrieves the original version of a MCP, then performs an
 // action passed in as a parameter and then waits until a MCP passes a predicate
-func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, name string, action MachineConfigActionFunc, predicate PoolPredicate) error {
-	poolPre, err := mcClient.MachineConfigPools().Get(name, metav1.GetOptions{})
+func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string, action machineConfigActionFunc, predicate poolPredicate) error {
+	poolPre := &mcfgv1.MachineConfigPool{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name}, poolPre)
 	if err != nil {
 		t.Errorf("Could not find the pool pre update")
 		return err
@@ -408,7 +415,8 @@ func waitForMachinePoolUpdate(t *testing.T, mcClient *mcfgClient.Machineconfigur
 
 	// Should we make this configurable? Maybe 5 minutes is not enough time for slower clusters?
 	err = wait.PollImmediate(10*time.Second, 20*time.Minute, func() (bool, error) {
-		pool, err := mcClient.MachineConfigPools().Get(name, metav1.GetOptions{})
+		pool := &mcfgv1.MachineConfigPool{}
+		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name}, pool)
 		if err != nil {
 			// even not found is a hard error here
 			t.Errorf("Could not find the pool post update")
@@ -492,8 +500,9 @@ func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
 // from a pool, in that case we need to wait until MCO makes the node use the other available pool. Only then it
 // is safe to remove the pool the node was labeled with, otherwise the node might still on next reboot use the
 // pool that was removed and this would mean the node transitions into Degraded state
-func waitForNodesToHaveARenderedPool(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, nodes []corev1.Node, poolName string) error {
-	pool, err := mcClient.MachineConfigPools().Get(poolName, metav1.GetOptions{})
+func waitForNodesToHaveARenderedPool(t *testing.T, f *framework.Framework, nodes []corev1.Node, poolName string) error {
+	pool := &mcfgv1.MachineConfigPool{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
 	if err != nil {
 		t.Errorf("Could not find pool %s\n", poolName)
 		return err
@@ -527,7 +536,7 @@ func waitForNodesToHaveARenderedPool(t *testing.T, f *framework.Framework, mcCli
 	})
 }
 
-func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, namespace, name, pool string) error {
+func applyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, name, pool string) error {
 	rem := &compv1alpha1.ComplianceRemediation{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
 	if err != nil {
@@ -566,7 +575,7 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mc
 		return false, nil
 	}
 
-	err = waitForMachinePoolUpdate(t, mcClient, pool, applyRemediation, predicate)
+	err = waitForMachinePoolUpdate(t, f, pool, applyRemediation, predicate)
 	if err != nil {
 		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
 		return err
@@ -576,24 +585,7 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mc
 	return nil
 }
 
-func applyRemediationAndWaitForReboot(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, namespace, name, pool string) error {
-	err := applyRemediationAndCheck(t, f, mcClient, namespace, name, pool)
-	if err != nil {
-		t.Errorf("Failed to apply remediation and check for MCP update: %v", err)
-		return err
-	}
-
-	err = waitForNodesToBeReady(t, f)
-	if err != nil {
-		t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
-		return err
-	}
-
-	t.Logf("Remediation applied to machines and machines rebooted")
-	return nil
-}
-
-func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, namespace, name, pool string, lastRemediation bool) error {
+func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, name, pool string, lastRemediation bool) error {
 	rem := &compv1alpha1.ComplianceRemediation{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
 	if err != nil {
@@ -633,7 +625,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *
 		return true, nil
 	}
 
-	err = waitForMachinePoolUpdate(t, mcClient, pool, applyRemediation, predicate)
+	err = waitForMachinePoolUpdate(t, f, pool, applyRemediation, predicate)
 	if err != nil {
 		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
 		return err
@@ -643,7 +635,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, mcClient *
 	return nil
 }
 
-func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, remName, remNamespace, pool string) error {
+func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, remName, remNamespace, pool string) error {
 	rem := &compv1alpha1.ComplianceRemediation{}
 	var lastErr error
 	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
@@ -692,7 +684,7 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, mcC
 		return false, nil
 	}
 
-	err := waitForMachinePoolUpdate(t, mcClient, pool, preNoop, predicate)
+	err := waitForMachinePoolUpdate(t, f, pool, preNoop, predicate)
 	if err != nil {
 		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
 		return err
@@ -709,8 +701,8 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, mcC
 	return nil
 }
 
-func unPauseMachinePoolAndWait(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, poolName string) error {
-	err := unPauseMachinePool(t, mcClient, poolName)
+func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName string) error {
+	err := unPauseMachinePool(t, f, poolName)
 	if err != nil {
 		t.Errorf("Could not unpause the MC pool")
 		return err
@@ -719,7 +711,8 @@ func unPauseMachinePoolAndWait(t *testing.T, mcClient *mcfgClient.Machineconfigu
 	// When the pool updates, we need to wait for the machines to pick up the new rendered
 	// config
 	err = wait.PollImmediate(10*time.Second, 20*time.Minute, func() (bool, error) {
-		pool, err := mcClient.MachineConfigPools().Get(poolName, metav1.GetOptions{})
+		pool := &mcfgv1.MachineConfigPool{}
+		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
 		if err != nil {
 			// even not found is a hard error here
 			t.Errorf("Could not find the pool post update")
@@ -745,16 +738,17 @@ func unPauseMachinePoolAndWait(t *testing.T, mcClient *mcfgClient.Machineconfigu
 	return err
 }
 
-func pauseMachinePool(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, poolName string) error {
-	return modMachinePoolPause(t, mcClient, poolName, true)
+func pauseMachinePool(t *testing.T, f *framework.Framework, poolName string) error {
+	return modMachinePoolPause(t, f, poolName, true)
 }
 
-func unPauseMachinePool(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, poolName string) error {
-	return modMachinePoolPause(t, mcClient, poolName, false)
+func unPauseMachinePool(t *testing.T, f *framework.Framework, poolName string) error {
+	return modMachinePoolPause(t, f, poolName, false)
 }
 
-func modMachinePoolPause(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, poolName string, pause bool) error {
-	pool, err := mcClient.MachineConfigPools().Get(poolName, metav1.GetOptions{})
+func modMachinePoolPause(t *testing.T, f *framework.Framework, poolName string, pause bool) error {
+	pool := &mcfgv1.MachineConfigPool{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
 	if err != nil {
 		t.Errorf("Could not find the pool to modify")
 		return err
@@ -762,7 +756,7 @@ func modMachinePoolPause(t *testing.T, mcClient *mcfgClient.Machineconfiguration
 
 	poolCopy := pool.DeepCopy()
 	poolCopy.Spec.Paused = pause
-	_, err = mcClient.MachineConfigPools().Update(poolCopy)
+	err = f.Client.Update(goctx.TODO(), poolCopy)
 	if err != nil {
 		t.Errorf("Could not update the pool")
 		return err
@@ -771,13 +765,13 @@ func modMachinePoolPause(t *testing.T, mcClient *mcfgClient.Machineconfiguration
 	return nil
 }
 
-func createReadyMachineConfigPoolSubset(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
-	pool, err := createMachineConfigPoolSubset(t, f, mcClient, oldPoolName, newPoolName)
+func createReadyMachineConfigPoolSubset(t *testing.T, f *framework.Framework, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
+	pool, err := createMachineConfigPoolSubset(t, f, oldPoolName, newPoolName)
 	if err != nil {
 		return nil, err
 	}
 
-	err = waitForPoolCondition(t, mcClient, mcfgv1.MachineConfigPoolUpdated, newPoolName)
+	err = waitForPoolCondition(t, f, mcfgv1.MachineConfigPoolUpdated, newPoolName)
 	if err != nil {
 		return nil, err
 	}
@@ -786,9 +780,10 @@ func createReadyMachineConfigPoolSubset(t *testing.T, f *framework.Framework, mc
 
 // picks a random machine from an existing pool and creates a subset of the pool with
 // one machine
-func createMachineConfigPoolSubset(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
+func createMachineConfigPoolSubset(t *testing.T, f *framework.Framework, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
 	// retrieve the old pool
-	oldPool, err := mcClient.MachineConfigPools().Get(oldPoolName, metav1.GetOptions{})
+	oldPool := &mcfgv1.MachineConfigPool{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: oldPoolName}, oldPool)
 	if err != nil {
 		t.Errorf("Could not find the pool to modify")
 		return nil, err
@@ -801,11 +796,11 @@ func createMachineConfigPoolSubset(t *testing.T, f *framework.Framework, mcClien
 	}
 
 	// just pick one of them and create the new pool out of that one-item node slice
-	return createMachineConfigPool(t, f, mcClient, oldPoolName, newPoolName, poolNodes[:1])
+	return createMachineConfigPool(t, f, oldPoolName, newPoolName, poolNodes[:1])
 }
 
 // creates a new pool named newPoolName from a list of nodes
-func createMachineConfigPool(t *testing.T, f *framework.Framework, mcClient *mcfgClient.MachineconfigurationV1Client, oldPoolName, newPoolName string, nodes []corev1.Node) (*mcfgv1.MachineConfigPool, error) {
+func createMachineConfigPool(t *testing.T, f *framework.Framework, oldPoolName, newPoolName string, nodes []corev1.Node) (*mcfgv1.MachineConfigPool, error) {
 	newPoolNodeLabel := fmt.Sprintf("node-role.kubernetes.io/%s", newPoolName)
 
 	err := labelNodes(t, f, newPoolNodeLabel, nodes)
@@ -813,7 +808,7 @@ func createMachineConfigPool(t *testing.T, f *framework.Framework, mcClient *mcf
 		return nil, err
 	}
 
-	return createMCPObject(mcClient, newPoolNodeLabel, oldPoolName, newPoolName)
+	return createMCPObject(f, newPoolNodeLabel, oldPoolName, newPoolName)
 }
 
 func labelNodes(t *testing.T, f *framework.Framework, newPoolNodeLabel string, nodes []corev1.Node) error {
@@ -848,11 +843,11 @@ func unLabelNodes(t *testing.T, f *framework.Framework, rmPoolNodeLabel string, 
 	return nil
 }
 
-func createMCPObject(mcClient *mcfgClient.MachineconfigurationV1Client, newPoolNodeLabel, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
+func createMCPObject(f *framework.Framework, newPoolNodeLabel, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
 	nodeSelectorMatchLabel := make(map[string]string)
 	nodeSelectorMatchLabel[newPoolNodeLabel] = ""
 
-	newPool := mcfgv1.MachineConfigPool{
+	newPool := &mcfgv1.MachineConfigPool{
 		ObjectMeta: metav1.ObjectMeta{Name: newPoolName},
 		Spec: mcfgv1.MachineConfigPoolSpec{
 			NodeSelector: &metav1.LabelSelector{
@@ -870,12 +865,16 @@ func createMCPObject(mcClient *mcfgClient.MachineconfigurationV1Client, newPoolN
 		},
 	}
 
-	return mcClient.MachineConfigPools().Create(&newPool)
+	// We create but don't clean up, we'll call a function for this since we need to
+	// re-label hosts first.
+	err := f.Client.Create(goctx.TODO(), newPool, nil)
+	return newPool, err
 }
 
-func waitForPoolCondition(t *testing.T, mcClient *mcfgClient.MachineconfigurationV1Client, conditionType mcfgv1.MachineConfigPoolConditionType, newPoolName string) error {
+func waitForPoolCondition(t *testing.T, f *framework.Framework, conditionType mcfgv1.MachineConfigPoolConditionType, newPoolName string) error {
 	return wait.PollImmediate(10*time.Second, 20*time.Minute, func() (bool, error) {
-		pool, err := mcClient.MachineConfigPools().Get(newPoolName, metav1.GetOptions{})
+		pool := mcfgv1.MachineConfigPool{}
+		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: newPoolName}, &pool)
 		if err != nil {
 			t.Errorf("Could not find the pool post update")
 			return false, err
@@ -905,6 +904,6 @@ func IsMachineConfigPoolConditionPresentAndEqual(conditions []mcfgv1.MachineConf
 	return false
 }
 
-func E2EPoolNodeRoleSelector() map[string]string {
+func getPoolNodeRoleSelector() map[string]string {
 	return utils.GetNodeRoleSelector(testPoolName)
 }
