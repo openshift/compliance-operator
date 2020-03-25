@@ -3,16 +3,16 @@ kind: ComplianceSuite
 metadata:
   name: example-compliancesuite
 spec:
-  autoApplyRemediations: true
+  autoApplyRemediations: false
   scans:
       - name: workers-scan
-        profile: xccdf_org.ssgproject.content_profile_coreos-ncp
+        profile: xccdf_org.ssgproject.content_profile_moderate
         content: ssg-ocp4-ds.xml
         contentImage: quay.io/jhrozek/ocp4-openscap-content:latest
         nodeSelector:
             node-role.kubernetes.io/worker: ""
       - name: masters-scan
-        profile: xccdf_org.ssgproject.content_profile_coreos-ncp
+        profile: xccdf_org.ssgproject.content_profile_moderate
         content: ssg-ocp4-ds.xml
         contentImage: quay.io/jhrozek/ocp4-openscap-content:latest
         nodeSelector:
