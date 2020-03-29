@@ -112,6 +112,8 @@ type ComplianceScanStatus struct {
 // that apply to a certain nodeSelector, or the cluster itself.
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Result",type="string",JSONPath=`.status.result`
 type ComplianceScan struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

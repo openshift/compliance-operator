@@ -3,6 +3,13 @@ kind: CustomResourceDefinition
 metadata:
   name: compliancesuites.compliance.openshift.io
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.aggregatedPhase
+    name: Phase
+    type: string
+  - JSONPath: .status.aggregatedResult
+    name: Result
+    type: string
   group: compliance.openshift.io
   names:
     kind: ComplianceSuite

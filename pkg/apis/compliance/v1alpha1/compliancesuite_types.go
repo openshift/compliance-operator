@@ -62,6 +62,8 @@ type ComplianceSuiteStatus struct {
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=compliancesuites,scope=Namespaced
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=`.status.aggregatedPhase`
+// +kubebuilder:printcolumn:name="Result",type="string",JSONPath=`.status.aggregatedResult`
 type ComplianceSuite struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
