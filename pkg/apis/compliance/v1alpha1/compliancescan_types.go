@@ -27,6 +27,8 @@ type ComplianceScanStatusResult string
 
 const (
 	// ResultCompliant represents the compliance scan having succeeded
+	ResultNotAvailable ComplianceScanStatusResult = "NOT-AVAILABLE"
+	// ResultCompliant represents the compliance scan having succeeded
 	ResultCompliant ComplianceScanStatusResult = "COMPLIANT"
 	// ResultError represents a compliance scan pod having failed to run the scan or encountered an error
 	ResultError ComplianceScanStatusResult = "ERROR"
