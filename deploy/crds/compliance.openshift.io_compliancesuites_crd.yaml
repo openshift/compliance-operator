@@ -84,6 +84,12 @@ spec:
         status:
           description: Contains the current state of the suite
           properties:
+            aggregatedPhase:
+              description: Represents the status of the compliance scan run.
+              type: string
+            aggregatedResult:
+              description: Represents the result of the compliance scan
+              type: string
             remediationOverview:
               items:
                 properties:

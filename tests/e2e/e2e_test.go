@@ -228,7 +228,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				// Ensure that all the scans in the suite have finished and are marked as Done
-				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone)
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultNonCompliant)
 				if err != nil {
 					return err
 				}
@@ -305,7 +305,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				// Ensure that all the scans in the suite have finished and are marked as Done
-				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone)
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultNonCompliant)
 				if err != nil {
 					return err
 				}
@@ -352,7 +352,7 @@ func TestE2E(t *testing.T) {
 				t.Logf("Second scan launched")
 
 				// Ensure that all the scans in the suite have finished and are marked as Done
-				err = waitForSuiteScansStatus(t, f, namespace, secondSuiteName, compv1alpha1.PhaseDone)
+				err = waitForSuiteScansStatus(t, f, namespace, secondSuiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
 				if err != nil {
 					return err
 				}
@@ -459,7 +459,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				// Ensure that all the scans in the suite have finished and are marked as Done
-				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone)
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultNonCompliant)
 				if err != nil {
 					return err
 				}

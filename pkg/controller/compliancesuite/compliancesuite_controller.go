@@ -164,6 +164,7 @@ func (r *ReconcileComplianceSuite) reconcileScanStatus(suite *compv1alpha1.Compl
 		logger.Error(err, "Could not add scan status")
 		return err
 	}
+
 	return nil
 }
 
@@ -180,6 +181,8 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 	// Replace the copy so we use fresh metadata
 	suite = suite.DeepCopy()
 	suite.Status.ScanStatuses[idx] = modScanStatus
+	suite.Status.AggregatedPhase = suite.LowestCommonState()
+	suite.Status.AggregatedResult = suite.LowestCommonResult()
 	logger.Info("Updating scan status", "scan", modScanStatus.Name, "phase", modScanStatus.Phase)
 
 	return r.client.Status().Update(context.TODO(), suite)
@@ -193,6 +196,8 @@ func (r *ReconcileComplianceSuite) addScanStatus(suite *compv1alpha1.ComplianceS
 	suite = suite.DeepCopy()
 	suite.Status.ScanStatuses = append(suite.Status.ScanStatuses, newScanStatus)
 	logger.Info("Adding scan status", "scan", newScanStatus.Name, "phase", newScanStatus.Phase)
+	suite.Status.AggregatedPhase = suite.LowestCommonState()
+	suite.Status.AggregatedResult = suite.LowestCommonResult()
 	return r.client.Status().Update(context.TODO(), suite)
 }
 

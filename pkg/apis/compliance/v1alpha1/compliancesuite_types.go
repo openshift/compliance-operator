@@ -51,6 +51,8 @@ type ComplianceSuiteStatus struct {
 	// +listType=atomic
 	// +optional
 	RemediationOverview []ComplianceRemediationNameStatus `json:"remediationOverview,omitempty"`
+	AggregatedPhase     ComplianceScanStatusPhase         `json:"aggregatedPhase,omitempty"`
+	AggregatedResult    ComplianceScanStatusResult        `json:"aggregatedResult,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -114,4 +116,24 @@ func ComplianceScanFromWrapper(sw *ComplianceScanSpecWrapper) *ComplianceScan {
 		},
 		Spec: sw.ComplianceScanSpec,
 	}
+}
+
+func (s *ComplianceSuite) LowestCommonState() ComplianceScanStatusPhase {
+	lowestCommonState := PhaseDone
+
+	for _, scanStatusWrap := range s.Status.ScanStatuses {
+		lowestCommonState = stateCompare(lowestCommonState, scanStatusWrap.Phase)
+	}
+
+	return lowestCommonState
+}
+
+func (s *ComplianceSuite) LowestCommonResult() ComplianceScanStatusResult {
+	lowestCommonResult := ResultCompliant
+
+	for _, scanStatusWrap := range s.Status.ScanStatuses {
+		lowestCommonResult = resultCompare(lowestCommonResult, scanStatusWrap.Result)
+	}
+
+	return lowestCommonResult
 }
