@@ -71,6 +71,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			Expect(result).NotTo(BeNil())
 			Expect(err).To(BeNil())
 			Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseLaunching))
+			Expect(compliancescaninstance.Status.Result).To(Equal(compv1alpha1.ResultNotAvailable))
 		})
 	})
 

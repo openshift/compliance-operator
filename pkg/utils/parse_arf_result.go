@@ -126,7 +126,7 @@ func remediationFromString(scheme *runtime.Scheme, name string, namespace string
 			MachineConfigContents: *mcObject,
 		},
 		Status: compv1alpha1.ComplianceRemediationStatus{
-			ApplicationState: compv1alpha1.RemediationNotSelected,
+			ApplicationState: compv1alpha1.RemediationNotApplied,
 		},
 	}
 }

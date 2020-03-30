@@ -3,6 +3,10 @@ kind: CustomResourceDefinition
 metadata:
   name: complianceremediations.compliance.openshift.io
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.applicationState
+    name: State
+    type: string
   group: compliance.openshift.io
   names:
     kind: ComplianceRemediation

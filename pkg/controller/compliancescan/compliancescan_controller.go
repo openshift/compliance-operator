@@ -150,6 +150,7 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 
 	// Update the scan instance, the next phase is running
 	instance.Status.Phase = compv1alpha1.PhaseLaunching
+	instance.Status.Result = compv1alpha1.ResultNotAvailable
 	err = r.client.Status().Update(context.TODO(), instance)
 	if err != nil {
 		return reconcile.Result{}, err

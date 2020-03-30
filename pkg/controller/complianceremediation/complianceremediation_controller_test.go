@@ -149,7 +149,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 
 		It("should skip those that are not applied", func() {
 			notApplied := existingRemediations[1]
-			notApplied.Status.ApplicationState = compv1alpha1.RemediationNotSelected
+			notApplied.Status.ApplicationState = compv1alpha1.RemediationNotApplied
 			err := reconciler.client.Update(context.TODO(), notApplied)
 			Expect(err).To(BeNil())
 

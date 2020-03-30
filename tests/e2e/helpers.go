@@ -232,7 +232,7 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 
 // waitForScanStatus will poll until the compliancescan that we're lookingfor reaches a certain status, or until
 // a timeout is reached.
-func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus compv1alpha1.ComplianceScanStatusPhase) error {
+func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus compv1alpha1.ComplianceScanStatusPhase, targetComplianceStatus compv1alpha1.ComplianceScanStatusResult) error {
 	suite := &compv1alpha1.ComplianceSuite{}
 	var lastErr error
 	// retry and ignore errors until timeout
@@ -247,16 +247,29 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 			return false, nil
 		}
 
+		if suite.Status.AggregatedPhase != targetStatus {
+			t.Logf("Waiting until suite %s is done", suite.Name)
+			return false, nil
+		}
+
+		// The suite is now done, make sure the compliance status is expected
+		if suite.Status.AggregatedResult != targetComplianceStatus {
+			return false, fmt.Errorf("expecting %s got %s", targetComplianceStatus, suite.Status.AggregatedResult)
+		}
+
+
+		// Now as a sanity check make sure that the scan statuses match the aggregated
+		// suite status
+
 		// Got the suite. There should be at least one scan or else we're still initialising
 		if len(suite.Status.ScanStatuses) < 1 {
-			return false, nil
+			return false, errors.New("not enough scan statuses")
 		}
 
 		//Examine the scan status both in the suite status and the scan
 		for _, scanStatus := range suite.Status.ScanStatuses {
 			if scanStatus.Phase != targetStatus {
-				t.Logf("Waiting until scan %s is done", scanStatus.Name)
-				return false, nil
+				return false, fmt.Errorf("suite in status %s but scan wrapper %s in status %s", targetStatus, scanStatus.Name, scanStatus.Phase)
 			}
 
 			lastErr = waitForScanStatus(t, f, namespace, scanStatus.Name, targetStatus)
@@ -264,7 +277,7 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 				// If the status was present in the suite, then /any/ error
 				// should fail the test as the scans should be read /from/
 				// the scan itself
-				return true, nil
+				return true, fmt.Errorf("suite in status %s but scan object %s in status %s", targetStatus, scanStatus.Name, scanStatus.Phase)
 			}
 		}
 
