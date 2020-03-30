@@ -140,7 +140,7 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 }
 
 func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
-	logger.Info("Phase: Pending", "ComplianceScan", instance.ObjectMeta.Name)
+	logger.Info("Phase: Pending")
 
 	err := createConfigMaps(r, scriptCmForScan(instance), envCmForScan(instance), instance)
 	if err != nil {
@@ -153,6 +153,7 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 	instance.Status.Result = compv1alpha1.ResultNotAvailable
 	err = r.client.Status().Update(context.TODO(), instance)
 	if err != nil {
+		logger.Error(err, "Cannot update the status")
 		return reconcile.Result{}, err
 	}
 
@@ -166,7 +167,7 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *compv1alpha1.C
 	var nodes corev1.NodeList
 	var err error
 
-	logger.Info("Phase: Launching", "ComplianceScan", instance.ObjectMeta.Name)
+	logger.Info("Phase: Launching")
 
 	if nodes, err = getTargetNodes(r, instance); err != nil {
 		log.Error(err, "Cannot get nodes")
@@ -211,7 +212,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 	var nodes corev1.NodeList
 	var err error
 
-	logger.Info("Phase: Running", "ComplianceScan scan", instance.ObjectMeta.Name)
+	logger.Info("Phase: Running")
 
 	if nodes, err = getTargetNodes(r, instance); err != nil {
 		log.Error(err, "Cannot get nodes")
@@ -223,8 +224,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 		running, err := isPodRunningInNode(r, instance, &node, logger)
 		if errors.IsNotFound(err) {
 			// Let's go back to the previous state and make sure all the nodes are covered.
-			logger.Info("Phase: Running: A pod is missing. Going to state LAUNCHING to make sure we launch it",
-				"compliancescan", instance.ObjectMeta.Name, "node", node.Name)
+			logger.Info("Phase: Running: A pod is missing. Going to state LAUNCHING to make sure we launch it", "Node.Name", node.Name)
 			instance.Status.Phase = compv1alpha1.PhaseLaunching
 			err = r.client.Status().Update(context.TODO(), instance)
 			if err != nil {
@@ -252,7 +252,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 }
 
 func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
-	logger.Info("Phase: Aggregating", "ComplianceScan scan", instance.ObjectMeta.Name)
+	logger.Info("Phase: Aggregating")
 
 	var nodes corev1.NodeList
 	var err error
@@ -275,7 +275,7 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1
 		instance.Status.ErrorMessage = err.Error()
 	}
 
-	logger.Info("Creating an aggregator pod for scan", "scan", instance.Name)
+	logger.Info("Creating an aggregator pod for scan")
 	aggregator := newAggregatorPod(instance, logger)
 	if err = controllerutil.SetControllerReference(instance, aggregator, r.scheme); err != nil {
 		log.Error(err, "Failed to set aggregator pod ownership", "aggregator", aggregator)
@@ -310,7 +310,7 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1
 func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	var nodes corev1.NodeList
 	var err error
-	logger.Info("Phase: Done", "ComplianceScan scan", instance.ObjectMeta.Name)
+	logger.Info("Phase: Done")
 	if !instance.Spec.Debug {
 		if nodes, err = getTargetNodes(r, instance); err != nil {
 			log.Error(err, "Cannot get nodes")
@@ -379,8 +379,6 @@ func (r *ReconcileComplianceScan) createPVCForScan(instance *compv1alpha1.Compli
 
 // returns true if the pod is still running, false otherwise
 func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *compv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
-	logger.Info("Retrieving a pod for node", "node", node.Name)
-
 	podName := getPodForNodeName(scanInstance.Name, node.Name)
 	return isPodRunning(r, podName, scanInstance.Namespace, logger)
 }
@@ -389,7 +387,7 @@ func isPodRunning(r *ReconcileComplianceScan, podName, namespace string, logger 
 	foundPod := &corev1.Pod{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: namespace}, foundPod)
 	if err != nil {
-		logger.Error(err, "Cannot retrieve pod", "pod", podName)
+		logger.Error(err, "Cannot retrieve pod", "Pod.Name", podName)
 		return false, err
 	} else if foundPod.Status.Phase == corev1.PodFailed || foundPod.Status.Phase == corev1.PodSucceeded {
 		logger.Info("Pod has finished")
@@ -397,7 +395,7 @@ func isPodRunning(r *ReconcileComplianceScan, podName, namespace string, logger 
 	}
 
 	// the pod is still running or being created etc
-	logger.Info("Pod still running", "pod", podName)
+	logger.Info("Pod still running", "Pod.Name", podName)
 	return true, nil
 }
 

@@ -20,34 +20,34 @@ func (r *ReconcileComplianceScan) createScanPods(instance *compv1alpha1.Complian
 	// On each eligible node..
 	for _, node := range nodes.Items {
 		// ..schedule a pod..
-		logger.Info("Creating a pod for node", "node", node.Name)
+		logger.Info("Creating a pod for node", "Pod.Name", node.Name)
 		pod := newScanPodForNode(instance, &node, logger)
 		if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
-			log.Error(err, "Failed to set pod ownership", "pod", pod)
+			log.Error(err, "Failed to set pod ownership", "Pod.Name", pod)
 			return err
 		}
 
 		// ..and launch it..
 		err := r.client.Create(context.TODO(), pod)
 		if errors.IsAlreadyExists(err) {
-			logger.Info("Pod already exists. This is fine.", "pod", pod)
+			logger.Info("Pod already exists. This is fine.", "Pod.Name", pod)
 		} else if err != nil {
-			log.Error(err, "Failed to launch a pod", "pod", pod)
+			log.Error(err, "Failed to launch a pod", "Pod.Name", pod)
 			return err
 		} else {
-			logger.Info("Launched a pod", "pod", pod)
+			logger.Info("Launched a pod", "Pod.Name", pod)
 		}
 	}
 
 	// make sure the instance is updated with the node-pod labels
 	if err := r.client.Update(context.TODO(), instance); err != nil {
+		log.Error(err, "Failed to update a scan")
 		return err
 	}
 	return nil
 }
 
 func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
-
 	mode := int32(0744)
 
 	podName := getPodForNodeName(scanInstance.Name, node.Name)
@@ -217,18 +217,18 @@ func (r *ReconcileComplianceScan) deleteScanPods(instance *compv1alpha1.Complian
 	// On each eligible node..
 	for _, node := range nodes.Items {
 		// ..schedule a pod..
-		logger.Info("Creating a pod for node", "node", node.Name)
+		logger.Info("Creating a pod for node", "Node.Name", node.Name)
 		pod := newScanPodForNode(instance, &node, logger)
 
 		// ..and launch it..
 		err := r.client.Delete(context.TODO(), pod)
 		if errors.IsNotFound(err) {
-			logger.Info("Pod is already gone. This is fine.", "pod", pod)
+			logger.Info("Pod is already gone. This is fine.", "Pod.Name", pod)
 		} else if err != nil {
-			log.Error(err, "Failed to delete a pod", "pod", pod)
+			log.Error(err, "Failed to delete a pod", "Pod.Name", pod)
 			return err
 		} else {
-			logger.Info("deleted pod", "pod", pod)
+			logger.Info("deleted pod", "Pod.Name", pod)
 		}
 	}
 

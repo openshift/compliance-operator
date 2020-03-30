@@ -43,7 +43,7 @@ func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.Comp
 		logger.Error(err, "Cannot create deployment", "deployment", deployment)
 		return err
 	}
-	logger.Info("ResultServer Deployment launched", "name", deployment.Name)
+	logger.Info("ResultServer Deployment launched", "Deployment.Name", deployment.Name)
 
 	service := resultServerService(instance, resultServerLabels)
 	if err = controllerutil.SetControllerReference(instance, service, r.scheme); err != nil {
@@ -56,7 +56,7 @@ func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.Comp
 		logger.Error(err, "Cannot create service", "service", service)
 		return err
 	}
-	logger.Info("ResultServer Service launched", "name", service.Name)
+	logger.Info("ResultServer Service launched", "Service.Name", service.Name)
 	return nil
 }
 
@@ -75,7 +75,7 @@ func (r *ReconcileComplianceScan) deleteResultServer(instance *compv1alpha1.Comp
 		logger.Error(err, "Cannot delete deployment", "deployment", deployment)
 		return err
 	}
-	logger.Info("ResultServer Deployment deleted", "name", deployment.Name)
+	logger.Info("ResultServer Deployment deleted", "Deployment.Name", deployment.Name)
 	logger.Info("Deleting scan result server service")
 
 	service := resultServerService(instance, resultServerLabels)
@@ -84,7 +84,7 @@ func (r *ReconcileComplianceScan) deleteResultServer(instance *compv1alpha1.Comp
 		logger.Error(err, "Cannot delete service", "service", service)
 		return err
 	}
-	logger.Info("ResultServer Service deleted", "name", service.Name)
+	logger.Info("ResultServer Service deleted", "Service.Name", service.Name)
 	return nil
 }
 

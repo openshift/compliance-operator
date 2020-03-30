@@ -36,8 +36,6 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	// FIXME: Should we rather move the initialization into a method that does lazy-init on first use
-	// from the reconcile loop?
 	return &ReconcileComplianceRemediation{client: mgr.GetClient(),
 		scheme: mgr.GetScheme()}
 }
@@ -92,6 +90,7 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
+		reqLogger.Error(err, "Cannot retrieve remediation")
 		return reconcile.Result{}, err
 	}
 
@@ -142,18 +141,19 @@ func (r *ReconcileComplianceRemediation) reconcileMcRemediation(instance *compv1
 			fmt.Errorf("could not construct MC name, check if it has the correct labels"))
 	}
 
-	logger.Info("Will create or update MC", "name", name)
+	logger.Info("Will create or update MC", "MachineConfig.Name", name)
 	mergedMc := mergeMachineConfigs(mcList, name, instance.Labels[mcfgv1.MachineConfigRoleLabelKey])
 
 	// if the mergedMc was nil, then we should remove the resulting MC, probably the last selected
 	// remediation was deselected
 	if mergedMc == nil {
-		logger.Info("The merged MC was nil, will delete the old MC", "oldMc", name)
+		logger.Info("The merged MC was nil, will delete the old MC", "MachineConfig.Name", name)
 		return deleteMachineConfig(r, name, logger)
 	}
 
 	// Actually touch the MC, this hands over control to the MCO
-	logger.Info("Merged MC", "mc", mergedMc)
+	// TODO: Only log this with a very high log level
+	// logger.Info("Merged MC", "mc", mergedMc)
 	if err := createOrUpdateMachineConfig(r, mergedMc, logger); err != nil {
 		logger.Error(err, "Failed to create or modify the MC")
 		// The err itself is already retriable (or not)
@@ -167,8 +167,10 @@ func (r *ReconcileComplianceRemediation) reconcileRemediationStatus(instance *co
 	instanceCopy := instance.DeepCopy()
 	if instance.Spec.Apply {
 		instanceCopy.Status.ApplicationState = compv1alpha1.RemediationApplied
+		logger.Info("Remediation will now be applied")
 	} else {
 		instanceCopy.Status.ApplicationState = compv1alpha1.RemediationNotApplied
+		logger.Info("Remediation will now be unapplied")
 	}
 
 	if err := r.client.Status().Update(context.TODO(), instanceCopy); err != nil {
@@ -189,31 +191,33 @@ func getApplicableMcList(r *ReconcileComplianceRemediation, instance *compv1alph
 		return nil, err
 	}
 	logger.Info("Found applied remediations", "num", len(appliedRemediations))
+	// TODO: Print the names of the applied remediations with a very high log level
 
 	// If the one being reconciled is supposed to be applied as well, add it to the list
 	if instance.Spec.Apply == true {
 		scan := &compv1alpha1.ComplianceScan{}
 		scanKey := types.NamespacedName{Name: instance.Labels[compv1alpha1.ScanLabel], Namespace: instance.Namespace}
 		if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
+			logger.Error(err, "Cannot get the scan for the remediation", "ComplianceScan.Name", scan.Name)
 			return appliedRemediations, err
 		}
+
 		mcfgpools := &mcfgv1.MachineConfigPoolList{}
 		err = r.client.List(context.TODO(), mcfgpools)
 		if err != nil {
+			logger.Error(err, "Cannot list the pools for the remediation")
 			return appliedRemediations, err
 		}
 		// The scans contain a nodeSelector that ultimately must match a machineConfigPool. The only way we can
 		// ensure it does is by checking if it matches any MachineConfigPool's labels.
 		// See also: https://github.com/openshift/machine-config-operator/blob/master/docs/custom-pools.md
 		if !utils.AnyMcfgPoolLabelMatches(scan.Spec.NodeSelector, mcfgpools) {
-			logger.Info("Not applying remediation that doesn't have a matching MachineconfigPool", "scan", scan.Name)
+			logger.Info("Not applying remediation that doesn't have a matching MachineconfigPool", "ComplianceScan.Name", scan.Name)
 			// TODO(jaosorior): Add status about remediation not being applicable
 			return appliedRemediations, nil
 		}
 		appliedRemediations = append(appliedRemediations, &instance.Spec.MachineConfigContents)
 	}
-
-	logger.Info("Adding content", "contents", appliedRemediations)
 
 	return appliedRemediations, nil
 }
@@ -239,17 +243,20 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compv1alph
 	for i := range scanSuiteRemediations.Items {
 		if scanSuiteRemediations.Items[i].Spec.Type != compv1alpha1.McRemediation {
 			// We'll only merge MachineConfigs
+			// TODO: Add a log line with a very high log level
 			continue
 		}
 		if scanSuiteRemediations.Items[i].Status.ApplicationState != compv1alpha1.RemediationApplied {
 			// We'll only merge the one that is being reconciled with those that are already
 			// applied
+			// TODO: Add a log line with a very high log level
 			continue
 		}
 
 		if scanSuiteRemediations.Items[i].Name == rem.Name {
 			// Won't add the one being reconciled to the list, it might be that we're de-selecting
 			// it, so the one being reconciled is handled separately
+			// TODO: Add a log line with a very high log level
 			continue
 		}
 
@@ -308,7 +315,7 @@ func createOrUpdateMachineConfig(r *ReconcileComplianceRemediation, merged *mcfg
 	if err != nil && errors.IsNotFound(err) {
 		return createMachineConfig(r, merged, logger)
 	} else if err != nil {
-		logger.Error(err, "Cannot retrieve MC", "MC", merged.Name)
+		logger.Error(err, "Cannot retrieve MC", "MachineConfig.Name", merged.Name)
 		// Get error should be retried
 		return err
 	}
@@ -337,11 +344,11 @@ func deleteMachineConfig(r *ReconcileComplianceRemediation, name string, logger 
 func createMachineConfig(r *ReconcileComplianceRemediation, merged *mcfgv1.MachineConfig, logger logr.Logger) error {
 	err := r.client.Create(context.TODO(), merged)
 	if err != nil {
-		logger.Error(err, "Cannot create MC", "mc name", merged.Name)
+		logger.Error(err, "Cannot create MC", "MachineConfig.Name", merged.Name)
 		// Create error should be retried
 		return err
 	}
-	logger.Info("MC created", "mc name", merged.Name)
+	logger.Info("MC created", "MachineConfig.Name", merged.Name)
 	return nil
 }
 
@@ -351,10 +358,10 @@ func updateMachineConfig(r *ReconcileComplianceRemediation, current *mcfgv1.Mach
 
 	err := r.client.Update(context.TODO(), mcCopy)
 	if err != nil {
-		logger.Error(err, "Cannot update MC", "mc name", merged.Name)
+		logger.Error(err, "Cannot update MC", "MachineConfig.Name", merged.Name)
 		// Update should be retried
 		return err
 	}
-	logger.Info("MC updated", "mc name", merged.Name)
+	logger.Info("MC updated", "MachineConfig.Name", merged.Name)
 	return nil
 }
