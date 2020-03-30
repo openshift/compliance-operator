@@ -20,6 +20,8 @@ const (
 
 	// a configMap with env vars for the script
 	OpenScapEnvConfigMapName = "openscap-env-map"
+	// A configMap same as above but minus hostroot
+	OpenScapPlatformEnvConfigMapName = "openscap-env-map-platform"
 
 	// environment variables the default script consumes
 	OpenScapHostRootEnvName     = "HOSTROOT"
@@ -34,16 +36,16 @@ const (
 
 	// Tailoring constants
 	OpenScapTailoringDir = "/tailoring"
+
+	PlatformScanName                  = "api-checks"
+	PlatformScanResourceCollectorName = "api-resource-collector"
+	// This coincides with the default ocp_data_root var in CaC.
+	PlatformScanDataRoot = "/tmp"
 )
 
 var defaultOpenScapScriptContents = `#!/bin/bash
 
 ARF_REPORT=/tmp/report-arf.xml
-
-if [ -z $HOSTROOT ]; then
-    echo "hostroot not set"
-    exit 1
-fi
 
 if [ -z $PROFILE ]; then
     echo "profile not set"
@@ -56,7 +58,7 @@ if [ -z $CONTENT ]; then
 fi
 
 if [ -z $REPORT_DIR ]; then
-    echo "report_dit not set"
+    echo "report_dir not set"
     exit 1
 fi
 
@@ -65,9 +67,16 @@ if [ -f "$REPORT_DIR/exit_code" ]; then
 	exit 0
 fi
 
-cmd=(
-    oscap-chroot $HOSTROOT xccdf eval \
-)
+if [ -z $HOSTROOT ]; then
+	echo "HOSTROOT not set, using normal oscap"
+	cmd=(
+		oscap xccdf eval \
+	)
+else
+	cmd=(
+		oscap-chroot $HOSTROOT xccdf eval \
+	)
+fi
 
 if [ ! -z $VERBOSITY ]; then
     cmd+=(--verbose $VERBOSITY)
@@ -122,7 +131,7 @@ echo "$rv" > $REPORT_DIR/exit_code
 exit 0
 `
 
-func createConfigMaps(r *ReconcileComplianceScan, scriptCmName, envCmName string, scan *compv1alpha1.ComplianceScan) error {
+func createConfigMaps(r *ReconcileComplianceScan, scriptCmName, envCmName, platformEnvCmName string, scan *compv1alpha1.ComplianceScan) error {
 	cm := &corev1.ConfigMap{}
 
 	if err := r.client.Get(context.TODO(), types.NamespacedName{
@@ -149,10 +158,37 @@ func createConfigMaps(r *ReconcileComplianceScan, scriptCmName, envCmName string
 		}
 	}
 
+	if err := r.client.Get(context.TODO(), types.NamespacedName{
+		Name:      platformEnvCmName,
+		Namespace: scan.Namespace,
+	}, cm); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+		if err := r.client.Create(context.TODO(), platformOpenScapEnvCm(platformEnvCmName, scan)); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func defaultOpenScapScriptCm(name string, scan *compv1alpha1.ComplianceScan) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: scan.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				asOwner(scan),
+			},
+		},
+		Data: map[string]string{
+			OpenScapScriptConfigMapName: defaultOpenScapScriptContents,
+		},
+	}
+}
+
+func platformOpenScapScriptCm(name string, scan *compv1alpha1.ComplianceScan) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -202,12 +238,47 @@ func defaultOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev
 	return cm
 }
 
+// Same as above but without hostroot.
+func platformOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev1.ConfigMap {
+	content := absContentPath(scan.Spec.Content)
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: scan.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				asOwner(scan),
+			},
+		},
+		Data: map[string]string{
+			OpenScapProfileEnvName:   scan.Spec.Profile,
+			OpenScapContentEnvName:   content,
+			OpenScapReportDirEnvName: "/reports",
+		},
+	}
+
+	if scan.Spec.Rule != "" {
+		cm.Data[OpenScapRuleEnvName] = scan.Spec.Rule
+	}
+
+	if scan.Spec.Debug {
+		// info seems like a good compromise in terms of verbosity
+		cm.Data[OpenScapVerbosityeEnvName] = "INFO"
+	}
+
+	return cm
+}
+
 func scriptCmForScan(scan *compv1alpha1.ComplianceScan) string {
 	return utils.DNSLengthName("scap-entrypoint-", "%s-%s", scan.Name, OpenScapScriptConfigMapName)
 }
 
 func envCmForScan(scan *compv1alpha1.ComplianceScan) string {
 	return utils.DNSLengthName("scap-env-", "%s-%s", scan.Name, OpenScapEnvConfigMapName)
+}
+
+func envCmForPlatformScan(scan *compv1alpha1.ComplianceScan) string {
+	return utils.DNSLengthName("scap-env-", "%s-%s", scan.Name, OpenScapPlatformEnvConfigMapName)
 }
 
 func asOwner(scan *compv1alpha1.ComplianceScan) metav1.OwnerReference {

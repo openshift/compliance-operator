@@ -22,6 +22,15 @@ const (
 )
 
 func (r *ReconcileComplianceScan) createScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
+	switch t := instance.Spec.ScanType; t {
+	case compv1alpha1.ScanTypePlatform:
+		return r.createPlatformScanPod(instance, logger)
+	default: // ScanTypeNode
+		return r.createNodeScanPods(instance, nodes, logger)
+	}
+}
+
+func (r *ReconcileComplianceScan) createNodeScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
 	// On each eligible node..
 	for _, node := range nodes.Items {
 		// ..schedule a pod..
@@ -48,6 +57,27 @@ func (r *ReconcileComplianceScan) createScanPods(instance *compv1alpha1.Complian
 		} else {
 			logger.Info("Launched a pod", "Pod.Name", pod)
 		}
+	}
+
+	return nil
+}
+
+func (r *ReconcileComplianceScan) createPlatformScanPod(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
+	logger.Info("Creating a Platform scan pod")
+	pod := newPlatformScanPod(instance, logger)
+	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
+		log.Error(err, "Failed to set pod ownership", "pod", pod)
+		return err
+	}
+
+	err := r.client.Create(context.TODO(), pod)
+	if errors.IsAlreadyExists(err) {
+		logger.Info("Pod already exists. This is fine.", "pod", pod)
+	} else if err != nil {
+		log.Error(err, "Failed to launch a pod", "pod", pod)
+		return err
+	} else {
+		logger.Info("Launched a pod", "pod", pod)
 	}
 
 	return nil
@@ -219,14 +249,192 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 	}
 }
 
+func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Logger) *corev1.Pod {
+	mode := int32(0744)
+	podName := getPodForNodeName(scanInstance.Name, PlatformScanName)
+	cmName := getConfigMapForNodeName(scanInstance.Name, PlatformScanName)
+	podLabels := map[string]string{
+		"complianceScan": scanInstance.Name,
+	}
+	collectorArgs := []string{
+		"--content=/content/" + scanInstance.Spec.Content,
+		"--resultdir=" + PlatformScanDataRoot,
+		"--profile=" + scanInstance.Spec.Profile,
+	}
+
+	if scanInstance.Spec.Debug {
+		collectorArgs = append(collectorArgs, "--debug")
+	}
+
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: scanInstance.Namespace,
+			Labels:    podLabels,
+		},
+		Spec: corev1.PodSpec{
+			ServiceAccountName: resultscollectorSA,
+			InitContainers: []corev1.Container{
+				{
+					Name:  "content-container",
+					Image: getInitContainerImage(&scanInstance.Spec, logger),
+					Command: []string{
+						"sh",
+						"-c",
+						fmt.Sprintf("cp %s /content | /bin/true", path.Join("/", scanInstance.Spec.Content)),
+					},
+					ImagePullPolicy: corev1.PullAlways,
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "content-dir",
+							MountPath: "/content",
+						},
+					},
+				},
+				{
+					Name:            PlatformScanResourceCollectorName,
+					Image:           GetComponentImage(API_RESOURCE_COLLECTOR),
+					Args:            collectorArgs,
+					ImagePullPolicy: corev1.PullAlways,
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "content-dir",
+							MountPath: "/content",
+						},
+						{
+							Name:      "fetch-results",
+							MountPath: PlatformScanDataRoot,
+						},
+					},
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:  "log-collector",
+					Image: GetComponentImage(LOG_COLLECTOR),
+					Args: []string{
+						"--arf-file=/reports/report-arf.xml",
+						"--results-file=/reports/report.xml",
+						"--exit-code-file=/reports/exit_code",
+						"--oscap-output-file=/reports/cmd_output",
+						"--config-map-name=" + cmName,
+						"--owner=" + scanInstance.Name,
+						"--namespace=" + scanInstance.Namespace,
+						"--resultserveruri=" + getResultServerURI(scanInstance),
+						"--tls-client-cert=/etc/pki/tls/tls.crt",
+						"--tls-client-key=/etc/pki/tls/tls.key",
+						"--tls-ca=/etc/pki/tls/ca.crt",
+					},
+					ImagePullPolicy: corev1.PullAlways,
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "report-dir",
+							MountPath: "/reports",
+							ReadOnly:  true,
+						},
+						{
+							Name:      "tls",
+							MountPath: "/etc/pki/tls",
+							ReadOnly:  true,
+						},
+					},
+				},
+				{
+					Name:    OpenSCAPScanContainerName,
+					Image:   GetComponentImage(OPENSCAP),
+					Command: []string{OpenScapScriptPath},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "report-dir",
+							MountPath: "/reports",
+						},
+						{
+							Name:      "content-dir",
+							MountPath: "/content",
+							ReadOnly:  true,
+						},
+						{
+							Name:      "fetch-results",
+							MountPath: PlatformScanDataRoot,
+						},
+						{
+							Name:      scriptCmForScan(scanInstance),
+							MountPath: "/scripts",
+							ReadOnly:  true,
+						},
+					},
+					EnvFrom: []corev1.EnvFromSource{
+						{
+							ConfigMapRef: &corev1.ConfigMapEnvSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: envCmForPlatformScan(scanInstance),
+								},
+							},
+						},
+					},
+				},
+			},
+			NodeSelector: map[string]string{
+				"node-role.kubernetes.io/master": "",
+			},
+			Tolerations: []corev1.Toleration{
+				{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: "Exists",
+					Effect:   "NoSchedule",
+				},
+			},
+			RestartPolicy: corev1.RestartPolicyOnFailure,
+			Volumes: []corev1.Volume{
+				{
+					Name: "report-dir",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "content-dir",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "fetch-results",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: scriptCmForScan(scanInstance),
+					VolumeSource: corev1.VolumeSource{
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: scriptCmForScan(scanInstance),
+							},
+							DefaultMode: &mode,
+						},
+					},
+				},
+				{
+					Name: "tls",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: ClientCertPrefix + scanInstance.Name,
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func (r *ReconcileComplianceScan) deleteScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
 	// On each eligible node..
 	for _, node := range nodes.Items {
-		// ..schedule a pod..
-		logger.Info("Creating a pod for node", "Node.Name", node.Name)
+		logger.Info("Deleting a pod on node", "node", node.Name)
 		pod := newScanPodForNode(instance, &node, logger)
 
-		// ..and launch it..
+		// Delete it.
 		err := r.client.Delete(context.TODO(), pod)
 		if errors.IsNotFound(err) {
 			logger.Info("Pod is already gone. This is fine.", "Pod.Name", pod)
@@ -290,6 +498,23 @@ func (r *ReconcileComplianceScan) validateTailoringConfigMap(name, ns string) er
 		}
 		return err
 	}
+	return nil
+}
+
+func (r *ReconcileComplianceScan) deletePlatformScanPod(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
+	logger.Info("Deleting the platform scan pod for instance", "instance", instance.Name)
+	pod := newPlatformScanPod(instance, logger)
+
+	err := r.client.Delete(context.TODO(), pod)
+	if errors.IsNotFound(err) {
+		logger.Info("Pod is already gone. This is fine.", "pod", pod)
+	} else if err != nil {
+		log.Error(err, "Failed to delete a pod", "pod", pod)
+		return err
+	} else {
+		logger.Info("deleted pod", "pod", pod)
+	}
+
 	return nil
 }
 

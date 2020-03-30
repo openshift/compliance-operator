@@ -825,5 +825,92 @@ func TestE2E(t *testing.T) {
 				return nil
 			},
 		},
+		testExecution{
+			Name: "TestPlatformAndNodeSuiteScan",
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
+				suiteName := "test-suite-two-scans-with-platform"
+
+				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
+				selectWorkers := map[string]string{
+					"node-role.kubernetes.io/worker": "",
+				}
+
+				platformScanName := fmt.Sprintf("%s-platform-scan", suiteName)
+
+				exampleComplianceSuite := &compv1alpha1.ComplianceSuite{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceSuiteSpec{
+						AutoApplyRemediations: false,
+						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
+							{
+								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
+									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+									Content:      "ssg-ocp4-ds.xml",
+									NodeSelector: selectWorkers,
+								},
+								Name: workerScanName,
+							},
+							{
+								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+									ScanType:     compv1alpha1.ScanTypePlatform,
+									ContentImage: "quay.io/mrogers950/ocp4-openscap-content:platform",
+									Profile:      "xccdf_org.ssgproject.content_profile_platform-moderate",
+									Content:      "ssg-ocp4-ds.xml",
+								},
+								Name: platformScanName,
+							},
+						},
+					},
+				}
+
+				err := f.Client.Create(goctx.TODO(), exampleComplianceSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				if err != nil {
+					return err
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultNonCompliant)
+				if err != nil {
+					return err
+				}
+
+				// At this point, both scans should be non-compliant given our current content
+				err = scanResultIsExpected(f, namespace, workerScanName, compv1alpha1.ResultNonCompliant)
+				if err != nil {
+					return err
+				}
+
+				// The profile should find one check for an htpasswd IDP, so we should be compliant.
+				err = scanResultIsExpected(f, namespace, platformScanName, compv1alpha1.ResultCompliant)
+				if err != nil {
+					return err
+				}
+
+				// Each scan should produce two remediations
+				workerRemediations := []string{
+					fmt.Sprintf("%s-no-empty-passwords", workerScanName),
+					fmt.Sprintf("%s-no-direct-root-logins", workerScanName),
+				}
+				err = assertHasRemediations(t, f, suiteName, workerScanName, "worker", workerRemediations)
+				if err != nil {
+					return err
+				}
+
+				// TODO: Add check for future API remediation
+				//platformRemediations := []string{
+				//	fmt.Sprintf("%s-no-empty-passwords", platformScanName),
+				//	fmt.Sprintf("%s-no-direct-root-logins", platformScanName),
+				//}
+				//err = assertHasRemediations(t, f, suiteName, platformScanName, "master", platformRemediations)
+				//if err != nil {
+				//	return err
+				//}
+				return nil
+			},
+		},
 	)
 }

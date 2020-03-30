@@ -7,6 +7,7 @@ require (
 	github.com/cenkalti/backoff/v3 v3.2.2
 	github.com/coreos/ignition v0.35.0
 	github.com/dsnet/compress v0.0.1
+	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.1
 	github.com/onsi/ginkgo v1.12.0

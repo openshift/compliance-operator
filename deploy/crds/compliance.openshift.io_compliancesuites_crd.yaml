@@ -94,6 +94,9 @@ spec:
                     required:
                     - name
                     type: object
+                  scanType:
+                    description: The type of Compliance scan.
+                    type: string
                 type: object
               type: array
           required:

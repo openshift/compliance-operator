@@ -31,13 +31,16 @@ spec:
             - name: OPERATOR_NAME
               value: "compliance-operator"
             - name: OPENSCAP_IMAGE
-              value: "quay.io/jhrozek/openscap-ocp:latest"
+              # Trying hardcoding this temporarily until its propagated to CI
+              value: "quay.io/mrogers950/openscap-ocp:latest"
             - name: LOG_COLLECTOR_IMAGE
               value: "quay.io/compliance-operator/resultscollector:latest"
             - name: RESULT_SERVER_IMAGE
               value: "quay.io/compliance-operator/resultserver:latest"
             - name: REMEDIATION_AGGREGATOR_IMAGE
               value: "quay.io/compliance-operator/remediation-aggregator:latest"
+            - name: API_RESOURCE_COLLECTOR_IMAGE
+              value: "quay.io/compliance-operator/api-resource-collector:latest"
       nodeSelector:
         node-role.kubernetes.io/master: ""
       tolerations:
