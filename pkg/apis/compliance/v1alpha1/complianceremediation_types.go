@@ -11,8 +11,8 @@ import (
 type RemediationApplicationState string
 
 const (
-	RemediationNotSelected RemediationApplicationState = "NotSelected"
-	RemediationApplied     RemediationApplicationState = "Applied"
+	RemediationNotApplied RemediationApplicationState = "NotApplied"
+	RemediationApplied    RemediationApplicationState = "Applied"
 )
 
 type RemediationType string

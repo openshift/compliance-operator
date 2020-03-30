@@ -168,7 +168,7 @@ func (r *ReconcileComplianceRemediation) reconcileRemediationStatus(instance *co
 	if instance.Spec.Apply {
 		instanceCopy.Status.ApplicationState = compv1alpha1.RemediationApplied
 	} else {
-		instanceCopy.Status.ApplicationState = compv1alpha1.RemediationNotSelected
+		instanceCopy.Status.ApplicationState = compv1alpha1.RemediationNotApplied
 	}
 
 	if err := r.client.Status().Update(context.TODO(), instanceCopy); err != nil {
