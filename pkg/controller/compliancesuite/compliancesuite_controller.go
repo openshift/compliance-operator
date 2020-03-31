@@ -102,9 +102,9 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
+		reqLogger.Error(err, "Cannot get the suite")
 		return reconcile.Result{}, err
 	}
-	reqLogger.Info("Retrieved suite", "suite", suite)
 
 	suiteCopy := suite.DeepCopy()
 	if err := r.reconcileScans(suiteCopy, reqLogger); err != nil {
@@ -124,14 +124,15 @@ func (r *ReconcileComplianceSuite) reconcileScans(suite *compv1alpha1.Compliance
 		err := r.client.Get(context.TODO(), types.NamespacedName{Name: scanWrap.Name, Namespace: suite.Namespace}, scan)
 		if err != nil && errors.IsNotFound(err) {
 			// If the scan was not found, launch it
-			logger.Info("Scan not found, launching..", "scan", scanWrap.Name)
+			logger.Info("Scan not found, launching..", "ComplianceScan.Name", scanWrap.Name)
 			if err = launchScanForSuite(r, suite, &scanWrap, logger); err != nil {
 				return err
 			}
-			logger.Info("Scan created", "scan", scanWrap.Name)
+			logger.Info("Scan created", "ComplianceScan.Name", scanWrap.Name)
 			// No point in reconciling status yet
 			continue
 		} else if err != nil {
+			logger.Error(err, "Cannot get the scan for a suite", "ComplianceScan.Name", scanWrap.Name)
 			return err
 		}
 
@@ -148,7 +149,6 @@ func (r *ReconcileComplianceSuite) reconcileScanStatus(suite *compv1alpha1.Compl
 	// See if we already have a ScanStatusWrapper for this name
 	for idx, scanStatusWrap := range suite.Status.ScanStatuses {
 		if scan.Name == scanStatusWrap.Name {
-			logger.Info("About to update scan status", "scan", scan.Name)
 			err := r.updateScanStatus(suite, idx, &scanStatusWrap, scan, logger)
 			if err != nil {
 				logger.Error(err, "Could not update scan status")
@@ -158,7 +158,6 @@ func (r *ReconcileComplianceSuite) reconcileScanStatus(suite *compv1alpha1.Compl
 		}
 	}
 
-	logger.Info("About to add scan status", "scan", scan.Name)
 	err := r.addScanStatus(suite, scan, logger)
 	if err != nil {
 		logger.Error(err, "Could not add scan status")
@@ -172,7 +171,7 @@ func (r *ReconcileComplianceSuite) reconcileScanStatus(suite *compv1alpha1.Compl
 func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.ComplianceSuite, idx int, scanStatusWrap *compv1alpha1.ComplianceScanStatusWrapper, scan *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	// if yes, update it, if the status differs
 	if scanStatusWrap.Phase == scan.Status.Phase {
-		logger.Info("Not updating scan, the phase is the same", "scan", scanStatusWrap.Name, "phase", scanStatusWrap.Phase)
+		logger.Info("Not updating scan, the phase is the same", "ComplianceScan.Name", scanStatusWrap.Name, "ComplianceScan.Phase", scanStatusWrap.Phase)
 		return nil
 	}
 
@@ -183,7 +182,7 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 	suite.Status.ScanStatuses[idx] = modScanStatus
 	suite.Status.AggregatedPhase = suite.LowestCommonState()
 	suite.Status.AggregatedResult = suite.LowestCommonResult()
-	logger.Info("Updating scan status", "scan", modScanStatus.Name, "phase", modScanStatus.Phase)
+	logger.Info("Updating scan status", "ComplianceScan.Name", scanStatusWrap.Name, "ComplianceScan.Phase", scanStatusWrap.Phase)
 
 	return r.client.Status().Update(context.TODO(), suite)
 }
@@ -195,7 +194,7 @@ func (r *ReconcileComplianceSuite) addScanStatus(suite *compv1alpha1.ComplianceS
 	// Replace the copy so we use fresh metadata
 	suite = suite.DeepCopy()
 	suite.Status.ScanStatuses = append(suite.Status.ScanStatuses, newScanStatus)
-	logger.Info("Adding scan status", "scan", newScanStatus.Name, "phase", newScanStatus.Phase)
+	logger.Info("Adding scan status", "ComplianceScan.Name", newScanStatus.Name, "ComplianceScan.Phase", newScanStatus.Phase)
 	suite.Status.AggregatedPhase = suite.LowestCommonState()
 	suite.Status.AggregatedResult = suite.LowestCommonResult()
 	return r.client.Status().Update(context.TODO(), suite)
@@ -208,16 +207,16 @@ func launchScanForSuite(r *ReconcileComplianceSuite, suite *compv1alpha1.Complia
 	}
 
 	if err := controllerutil.SetControllerReference(suite, scan, r.scheme); err != nil {
-		log.Error(err, "Failed to set scan ownership", "scan", scan)
+		log.Error(err, "Failed to set scan ownership", "ComplianceScan.Name", scan.Name)
 		return err
 	}
 
-	logger.Info("About to launch scan", "scan", scan)
 	err := r.client.Create(context.TODO(), scan)
 	if errors.IsAlreadyExists(err) {
 		// Was there a race that created the scan in the meantime?
 		return nil
 	} else if err != nil {
+		log.Error(err, "Failed to launch scan", "ComplianceScan.Name", scan.Name)
 		return err
 	}
 
@@ -245,10 +244,12 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 	}
 
 	if err := r.client.List(context.TODO(), &remList, &listOpts); err != nil {
+		log.Error(err, "Failed to list remediations")
 		return err
 	}
 
 	if err := r.client.List(context.TODO(), mcfgpools); err != nil {
+		log.Error(err, "Failed to list pools")
 		return err
 	}
 
@@ -259,11 +260,11 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 		if suite.Spec.AutoApplyRemediations {
 			switch rem.Spec.Type {
 			case compv1alpha1.McRemediation:
-				if err := r.applyMcfgRemediationAndPausePool(rem, mcfgpools, affectedMcfgPools); err != nil {
+				if err := r.applyMcfgRemediationAndPausePool(rem, mcfgpools, affectedMcfgPools, logger); err != nil {
 					return err
 				}
 			default:
-				logger.Info("Found remediation without applicable type. Not doing anything.", "name", rem.Name)
+				logger.Info("Found remediation without applicable type. Not doing anything.", "ComplianceRemediation.Name", rem.Name)
 			}
 			remOverview[idx].Apply = true
 		}
@@ -276,16 +277,20 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 		suite.Status.ScanStatuses = []compv1alpha1.ComplianceScanStatusWrapper{}
 	}
 	suite.Status.RemediationOverview = remOverview
-	logger.Info("Remediations", "remOverview", remOverview)
+	// TODO: Only print with a very high log level
+	//logger.Info("Remediations", "remOverview", remOverview)
 
 	if err := r.client.Status().Update(context.TODO(), suite); err != nil {
+		logger.Error(err, "Could not update suite status with remediations ", "ComplianceSuite.Name", suite.Name)
 		return err
 	}
 
 	for _, pool := range affectedMcfgPools {
+		logger.Info("Unpausing pool", "MachineConfigPool.Name", pool.Name)
 		poolCopy := pool.DeepCopy()
 		poolCopy.Spec.Paused = false
 		if err := r.client.Update(context.TODO(), poolCopy); err != nil {
+			logger.Error(err, "Could not unpause pool", "MachineConfigPool.Name", pool.Name)
 			return err
 		}
 	}
@@ -295,7 +300,9 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 // This gets the remediation to be applied. Note that before being able to do that, the machineConfigPool is
 // paused in order to reduce restarts of nodes.
 func (r *ReconcileComplianceSuite) applyMcfgRemediationAndPausePool(rem compv1alpha1.ComplianceRemediation,
-	mcfgpools *mcfgv1.MachineConfigPoolList, affectedPools map[string]*mcfgv1.MachineConfigPool) error {
+	mcfgpools *mcfgv1.MachineConfigPoolList, affectedPools map[string]*mcfgv1.MachineConfigPool,
+	logger logr.Logger) error {
+
 	remCopy := rem.DeepCopy()
 	scan := &compv1alpha1.ComplianceScan{}
 	scanKey := types.NamespacedName{Name: rem.Labels[compv1alpha1.ScanLabel], Namespace: rem.Namespace}
@@ -309,10 +316,12 @@ func (r *ReconcileComplianceSuite) applyMcfgRemediationAndPausePool(rem compv1al
 	if found && scan.Status.Phase == compv1alpha1.PhaseDone {
 		// Only update pool once
 		if _, ok := affectedPools[pool.Name]; !ok {
+			logger.Info("Pausing pool", "MachineConfigPool.Name", pool.Name)
 			poolCopy := pool.DeepCopy()
 			affectedPools[poolCopy.Name] = poolCopy
 			poolCopy.Spec.Paused = true
 			if err := r.client.Update(context.TODO(), poolCopy); err != nil {
+				logger.Error(err, "Could not pause pool", "MachineConfigPool.Name", pool.Name)
 				return err
 			}
 		}
