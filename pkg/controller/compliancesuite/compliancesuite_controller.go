@@ -60,15 +60,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// Watch for changes to secondary resource ComplianceRemediation and requeue the owner ComplianceSuite
-	err = c.Watch(&source.Kind{Type: &compv1alpha1.ComplianceRemediation{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &compv1alpha1.ComplianceSuite{},
-	})
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
