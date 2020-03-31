@@ -257,7 +257,6 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 			return false, fmt.Errorf("expecting %s got %s", targetComplianceStatus, suite.Status.AggregatedResult)
 		}
 
-
 		// Now as a sanity check make sure that the scan statuses match the aggregated
 		// suite status
 
@@ -411,16 +410,20 @@ type poolPredicate func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, err
 
 // waitForMachinePoolUpdate retrieves the original version of a MCP, then performs an
 // action passed in as a parameter and then waits until a MCP passes a predicate
-func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string, action machineConfigActionFunc, predicate poolPredicate) error {
-	poolPre := &mcfgv1.MachineConfigPool{}
-	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name}, poolPre)
-	if err != nil {
-		t.Errorf("Could not find the pool pre update")
-		return err
+// If a pool is already given (poolPre), that will be used to check the previous state of the pool.
+func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string, action machineConfigActionFunc, predicate poolPredicate, poolPre *mcfgv1.MachineConfigPool) error {
+	if poolPre == nil {
+		// initialize empty pool if it wasn't already given
+		poolPre = &mcfgv1.MachineConfigPool{}
+		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name}, poolPre)
+		if err != nil {
+			t.Errorf("Could not find the pool pre update")
+			return err
+		}
 	}
 	t.Logf("Pre-update, MC Pool %s has generation %d", poolPre.Name, poolPre.Status.ObservedGeneration)
 
-	err = action()
+	err := action()
 	if err != nil {
 		t.Errorf("Action failed %v", err)
 		return err
@@ -588,7 +591,7 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, n
 		return false, nil
 	}
 
-	err = waitForMachinePoolUpdate(t, f, pool, applyRemediation, predicate)
+	err = waitForMachinePoolUpdate(t, f, pool, applyRemediation, predicate, nil)
 	if err != nil {
 		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
 		return err
@@ -638,7 +641,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 		return true, nil
 	}
 
-	err = waitForMachinePoolUpdate(t, f, pool, applyRemediation, predicate)
+	err = waitForMachinePoolUpdate(t, f, pool, applyRemediation, predicate, nil)
 	if err != nil {
 		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
 		return err
@@ -648,7 +651,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 	return nil
 }
 
-func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, remName, remNamespace, pool string) error {
+func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, remName, remNamespace string, pool *mcfgv1.MachineConfigPool) error {
 	rem := &compv1alpha1.ComplianceRemediation{}
 	var lastErr error
 	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
@@ -697,7 +700,7 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 		return false, nil
 	}
 
-	err := waitForMachinePoolUpdate(t, f, pool, preNoop, predicate)
+	err := waitForMachinePoolUpdate(t, f, pool.Name, preNoop, predicate, pool)
 	if err != nil {
 		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
 		return err
