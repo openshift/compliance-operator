@@ -3,6 +3,7 @@ package compliancesuite
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
@@ -224,9 +225,14 @@ func newScanForSuite(suite *compv1alpha1.ComplianceSuite, scanWrap *compv1alpha1
 	return scan
 }
 
-// Reconcile the remediation statuses in the suite. Note that the suite that this takes is already
+// Reconcile the remediation application in the suite. Note that the suite that this takes is already
 // a copy, so it's safe to modify.
 func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) (reconcile.Result, error) {
+	// We don't need to do anything else unless we gotta enabled auto-apply
+	if !suite.Spec.AutoApplyRemediations {
+		return reconcile.Result{}, nil
+	}
+
 	// Get all the remediations
 	var remList compv1alpha1.ComplianceRemediationList
 	mcfgpools := &mcfgv1.MachineConfigPoolList{}
@@ -246,9 +252,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 	}
 
 	// Construct the list of the statuses
-	remOverview := make([]compv1alpha1.ComplianceRemediationNameStatus, len(remList.Items))
-	for idx, rem := range remList.Items {
-		remOverview[idx] = compv1alpha1.RemediationNameStatusFromRemediation(&rem)
+	for _, rem := range remList.Items {
 		if suite.Spec.AutoApplyRemediations {
 			switch rem.Spec.Type {
 			case compv1alpha1.McRemediation:
@@ -280,28 +284,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 			default:
 				logger.Info("Found remediation without applicable type. Not doing anything.", "ComplianceRemediation.Name", rem.Name)
 			}
-			remOverview[idx].Apply = true
 		}
-	}
-
-	// Replace the copy so we use fresh metadata
-	suite = suite.DeepCopy()
-	// Make sure we don't try to use the value as-is if it's nil
-	if suite.Status.ScanStatuses == nil {
-		suite.Status.ScanStatuses = []compv1alpha1.ComplianceScanStatusWrapper{}
-	}
-	suite.Status.RemediationOverview = remOverview
-	// TODO: Only print with a very high log level
-	//logger.Info("Remediations", "remOverview", remOverview)
-
-	if err := r.client.Status().Update(context.TODO(), suite); err != nil {
-		logger.Error(err, "Could not update suite status with remediations ", "ComplianceSuite.Name", suite.Name)
-		return reconcile.Result{}, err
-	}
-
-	// We don't need to do anything else unless we gotta enabled auto-apply
-	if !suite.Spec.AutoApplyRemediations {
-		return reconcile.Result{}, nil
 	}
 
 	// We only post-process when everything is done. This avoids unnecessary
@@ -321,7 +304,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 	for _, rem := range remList.Items {
 		if rem.Status.ApplicationState != compv1alpha1.RemediationApplied {
 			logger.Info("Remediation not applied yet. Skipping post-processing", "ComplianceRemediation.Name", rem.Name)
-			return reconcile.Result{}, nil
+			return reconcile.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 		}
 	}
 

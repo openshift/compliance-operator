@@ -24,15 +24,6 @@ type ComplianceScanStatusWrapper struct {
 	Name string `json:"name,omitempty"`
 }
 
-// +k8s:openapi-gen=true
-type ComplianceRemediationNameStatus struct {
-	ComplianceRemediationSpecMeta `json:",inline"`
-	// Contains a human readable name for the remediation.
-	RemediationName string `json:"remediationName"`
-	// Contains the name of the scan that generated the remediation
-	ScanName string `json:"scanName"`
-}
-
 // ComplianceSuiteSpec defines the desired state of ComplianceSuite
 // +k8s:openapi-gen=true
 type ComplianceSuiteSpec struct {
@@ -47,12 +38,9 @@ type ComplianceSuiteSpec struct {
 // +k8s:openapi-gen=true
 type ComplianceSuiteStatus struct {
 	// +listType=atomic
-	ScanStatuses []ComplianceScanStatusWrapper `json:"scanStatuses"`
-	// +listType=atomic
-	// +optional
-	RemediationOverview []ComplianceRemediationNameStatus `json:"remediationOverview,omitempty"`
-	AggregatedPhase     ComplianceScanStatusPhase         `json:"aggregatedPhase,omitempty"`
-	AggregatedResult    ComplianceScanStatusResult        `json:"aggregatedResult,omitempty"`
+	ScanStatuses     []ComplianceScanStatusWrapper `json:"scanStatuses"`
+	AggregatedPhase  ComplianceScanStatusPhase     `json:"aggregatedPhase,omitempty"`
+	AggregatedResult ComplianceScanStatusResult    `json:"aggregatedResult,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -94,17 +82,6 @@ func ScanStatusWrapperFromScan(s *ComplianceScan) ComplianceScanStatusWrapper {
 	return ComplianceScanStatusWrapper{
 		Name:                 s.Name,
 		ComplianceScanStatus: s.Status,
-	}
-}
-
-// RemediationNameStatusFromRemediation returns a ComplianceRemediationNameStatus
-// object (used by the ComplianceSuite object) in order to display a
-// remediation
-func RemediationNameStatusFromRemediation(r *ComplianceRemediation) ComplianceRemediationNameStatus {
-	return ComplianceRemediationNameStatus{
-		RemediationName:               r.Name,
-		ScanName:                      r.Labels[ScanLabel],
-		ComplianceRemediationSpecMeta: r.Spec.ComplianceRemediationSpecMeta,
 	}
 }
 
