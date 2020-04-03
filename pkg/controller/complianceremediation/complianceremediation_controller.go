@@ -289,6 +289,10 @@ func mergeMachineConfigs(configs []*mcfgv1.MachineConfig, name string, roleLabel
 		}
 		outIgn = ign.Append(outIgn, configs[idx].Spec.Config)
 	}
+	// NOTE(jaosorior): If no version was set (for some reason) lets just add a default
+	if outIgn.Ignition.Version == "" {
+		outIgn.Ignition.Version = "2.2.0"
+	}
 	kargs := []string{}
 	for _, cfg := range configs {
 		kargs = append(kargs, cfg.Spec.KernelArguments...)

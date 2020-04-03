@@ -304,6 +304,14 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
+				// Get the MachineConfigPool before a scan or remediation has been applied
+				// This way, we can check that it changed without race-conditions
+				poolBeforeRemediation := &mcfgv1.MachineConfigPool{}
+				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: testPoolName}, poolBeforeRemediation)
+				if err != nil {
+					return err
+				}
+
 				// Ensure that all the scans in the suite have finished and are marked as Done
 				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultNonCompliant)
 				if err != nil {
@@ -313,7 +321,7 @@ func TestE2E(t *testing.T) {
 				// We need to check that the remediation is auto-applied and save
 				// the object so we can delete it later
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
-				err = waitForRemediationToBeAutoApplied(t, f, workersNoRootLoginsRemName, namespace, testPoolName)
+				err = waitForRemediationToBeAutoApplied(t, f, workersNoRootLoginsRemName, namespace, poolBeforeRemediation)
 				if err != nil {
 					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
@@ -401,7 +409,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				// We need to wait for both the pool to update..
-				err = waitForMachinePoolUpdate(t, f, testPoolName, dummyAction, poolHasNoMc)
+				err = waitForMachinePoolUpdate(t, f, testPoolName, dummyAction, poolHasNoMc, nil)
 				if err != nil {
 					t.Errorf("Failed to wait for workers to come back up after deleting MC")
 					return err

@@ -97,30 +97,6 @@ spec:
             aggregatedResult:
               description: Represents the result of the compliance scan
               type: string
-            remediationOverview:
-              items:
-                properties:
-                  apply:
-                    description: Whether the remediation should be picked up and applied
-                      by the operator
-                    type: boolean
-                  remediationName:
-                    description: Contains a human readable name for the remediation.
-                    type: string
-                  scanName:
-                    description: Contains the name of the scan that generated the
-                      remediation
-                    type: string
-                  type:
-                    description: Remediation type specifies the artifact the remediation
-                      is based on. For now, only MachineConfig is supported
-                    type: string
-                required:
-                - apply
-                - remediationName
-                - scanName
-                type: object
-              type: array
             scanStatuses:
               items:
                 description: ComplianceScanStatusWrapper provides a ComplianceScanStatus
