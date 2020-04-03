@@ -15,7 +15,7 @@ spec:
       serviceAccountName: compliance-operator
       containers:
         - name: compliance-operator
-          image: quay.io/compliance-operator/compliance-operator
+          image: "quay.io/compliance-operator/compliance-operator:latest"
           command:
           - compliance-operator
           imagePullPolicy: Always

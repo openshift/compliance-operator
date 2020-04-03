@@ -346,6 +346,7 @@ package-version-to-tag: check-package-version
 .PHONY: release-tag-image
 release-tag-image: package-version-to-tag
 	@echo "Temporarily overriding image tags in deploy/operator.yaml"
+	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH):$(TAG)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%$(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%$(RESULTSERVER_IMAGE_PATH):$(TAG)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):latest%$(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)%' deploy/operator.yaml
@@ -353,6 +354,7 @@ release-tag-image: package-version-to-tag
 .PHONY: undo-deploy-tag-image
 undo-deploy-tag-image: package-version-to-tag
 	@echo "Restoring image tags in deploy/operator.yaml"
+	@sed -i 's%$(OPERATOR_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(RESULTSERVER_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):latest%' deploy/operator.yaml
