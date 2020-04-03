@@ -352,6 +352,36 @@ func getConfigMapsFromScan(f *framework.Framework, scaninstance *compv1alpha1.Co
 	return configmaps.Items
 }
 
+func assertHasCheck(f *framework.Framework, suiteName, scanName string, check compv1alpha1.ComplianceCheck) error {
+	var getCheck compv1alpha1.ComplianceCheck
+
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: check.Name}, &getCheck)
+	if err != nil {
+		return err
+	}
+
+	if getCheck.Spec.Result != check.Spec.Result {
+		return fmt.Errorf("expected result %s got result %s", check.Spec.Result, getCheck.Spec.Result)
+	}
+
+	if getCheck.Spec.ID != check.Spec.ID {
+		return fmt.Errorf("expected ID %s got ID %s", check.Spec.ID, getCheck.Spec.ID)
+	}
+
+	if getCheck.Labels == nil {
+		return fmt.Errorf("compliancecheck has no labels")
+	}
+
+	if getCheck.Labels[compv1alpha1.SuiteLabel] != suiteName {
+		return fmt.Errorf("Did not find expected suite name label %s, found %s", suiteName, getCheck.Labels[compv1alpha1.SuiteLabel])
+	}
+
+	if getCheck.Labels[compv1alpha1.ScanLabel] != scanName {
+		return fmt.Errorf("Did not find expected suite name label %s, found %s", suiteName, getCheck.Labels[compv1alpha1.SuiteLabel])
+	}
+	return nil
+}
+
 func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string) []compv1alpha1.ComplianceRemediation {
 	var scanSuiteRemediations compv1alpha1.ComplianceRemediationList
 

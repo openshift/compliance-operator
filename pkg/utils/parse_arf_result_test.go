@@ -15,6 +15,11 @@ import (
 )
 
 var _ = Describe("XCCDF parser", func() {
+	const (
+		totalRemediations = 5
+		totalChecks       = 464
+	)
+
 	var (
 		xccdf           io.Reader
 		ds              io.Reader
@@ -22,6 +27,7 @@ var _ = Describe("XCCDF parser", func() {
 		resultsFilename string
 		dsFilename      string
 		remList         []*compv1alpha1.ComplianceRemediation
+		checkList       []*compv1alpha1.ComplianceCheck
 		err             error
 	)
 
@@ -42,7 +48,7 @@ var _ = Describe("XCCDF parser", func() {
 			Expect(err).NotTo(HaveOccurred())
 			dsDom, err := ParseContent(ds)
 			Expect(err).NotTo(HaveOccurred())
-			remList, err = ParseRemediationFromContentAndResults(schema, "testScan", "testNamespace", dsDom, xccdf)
+			checkList, remList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
 		})
 
 		Context("Valid XCCDF", func() {
@@ -50,7 +56,10 @@ var _ = Describe("XCCDF parser", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 			It("Should return exactly five remediations", func() {
-				Expect(remList).To(HaveLen(5))
+				Expect(remList).To(HaveLen(totalRemediations))
+			})
+			It("Should return exactly 464 checks", func() {
+				Expect(checkList).To(HaveLen(totalChecks))
 			})
 		})
 
@@ -114,9 +123,10 @@ var _ = Describe("XCCDF parser", func() {
 				runtime := b.Time("runtime", func() {
 					dsDom, err := ParseContent(ds)
 					Expect(err).NotTo(HaveOccurred())
-					remList, err = ParseRemediationFromContentAndResults(schema, "testScan", "testNamespace", dsDom, xccdf)
+					checkList, remList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(remList).To(HaveLen(5))
+					Expect(remList).To(HaveLen(totalRemediations))
+					Expect(checkList).To(HaveLen(totalChecks))
 				})
 
 				Ω(runtime.Seconds()).Should(BeNumerically("<", 3.0), "ParseRemediationsFromArf() shouldn't take too long.")

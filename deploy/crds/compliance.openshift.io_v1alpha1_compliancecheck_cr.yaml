@@ -1,0 +1,7 @@
+apiVersion: compliance.openshift.io/v1alpha1
+kind: ComplianceCheck
+metadata:
+  name: example-compliancecheck
+spec:
+  # Add fields here
+  size: 3

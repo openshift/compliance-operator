@@ -95,6 +95,8 @@ func createCrClient(config *rest.Config) (*complianceCrClient, error) {
 	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
 		&compv1alpha1.ComplianceScan{})
 	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
+		&compv1alpha1.ComplianceCheck{})
+	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
 		&metav1.CreateOptions{})
 
 	client, err := runtimeclient.New(config, runtimeclient.Options{
@@ -144,18 +146,18 @@ func readCompressedData(compressed string) (*bzip2.Reader, error) {
 	return bzip2.NewReader(compressedReader, &bzip2.ReaderConfig{})
 }
 
-func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*compv1alpha1.ComplianceRemediation, error) {
+func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*compv1alpha1.ComplianceCheck, []*compv1alpha1.ComplianceRemediation, error) {
 	var scanReader io.Reader
 
 	_, ok := cm.Annotations[configMapRemediationsProcessed]
 	if ok {
 		fmt.Printf("ConfigMap %s already processed\n", cm.Name)
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	cmScanResult, ok := cm.Data["results"]
 	if !ok {
-		return nil, fmt.Errorf("no results in configmap %s", cm.Name)
+		return nil, nil, fmt.Errorf("no results in configmap %s", cm.Name)
 	}
 
 	_, ok = cm.Annotations[configMapCompressed]
@@ -163,7 +165,7 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string,
 		fmt.Printf("Results are compressed\n")
 		scanResult, err := readCompressedData(cmScanResult)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		defer scanResult.Close()
 		scanReader = scanResult
@@ -171,7 +173,7 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string,
 		scanReader = strings.NewReader(cmScanResult)
 	}
 
-	return utils.ParseRemediationFromContentAndResults(scheme, scanName, namespace, content, scanReader)
+	return utils.ParseResultsFromContentAndXccdf(scheme, scanName, namespace, content, scanReader)
 }
 
 func annotateParsedConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) error {
@@ -224,6 +226,90 @@ func createRemediations(crClient *complianceCrClient, scan *compv1alpha1.Complia
 	return nil
 }
 
+type compResultIface interface {
+	metav1.Object
+	runtime.Object
+}
+
+func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, labels map[string]string, results []*compResultIface) error {
+	for _, rem := range results {
+		if err := controllerutil.SetControllerReference(scan, *rem, crClient.scheme); err != nil {
+			fmt.Printf("Failed to set remediation ownership %v", err)
+			return err
+		}
+
+		name := (*rem).GetName()
+		kind := (*rem).GetObjectKind()
+		fmt.Printf("Creating %s:%s", kind.GroupVersionKind().Kind, name)
+
+		(*rem).SetLabels(labels)
+		err := backoff.Retry(func() error {
+			err := crClient.client.Create(context.TODO(), *rem)
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return err
+			}
+			return nil
+		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+		if err != nil {
+
+			fmt.Printf("Failed to create a result: %v\n", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+/*
+func createChecks(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, checks []*compv1alpha1.ComplianceCheck) error {
+	fmt.Printf("Will create %d checks\n", len(checks))
+
+	labels := make(map[string]string)
+	labels[compv1alpha1.ScanLabel] = scan.Name
+	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
+
+	if err := createResults(crClient, scan, labels, checks)
+
+		fmt.Println("All checks created")
+	return nil
+}
+*/
+
+func createChecks(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, checks []*compv1alpha1.ComplianceCheck) error {
+	fmt.Printf("Will create %d checks\n", len(checks))
+
+	labels := make(map[string]string)
+	labels[compv1alpha1.ScanLabel] = scan.Name
+	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
+
+	for _, ch := range checks {
+		fmt.Printf("Creating check %s\n", ch.Name)
+		if err := controllerutil.SetControllerReference(scan, ch, crClient.scheme); err != nil {
+			fmt.Printf("Failed to set check ownership %v", err)
+			return err
+		}
+
+
+		err := backoff.Retry(func() error {
+			err := crClient.client.Create(context.TODO(), ch)
+			if err != nil && !errors.IsAlreadyExists(err) {
+				fmt.Printf("Failed to create check: %v\n", err)
+				return err
+			}
+			fmt.Printf("Check created")
+			return nil
+		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+		if err != nil {
+
+			fmt.Printf("Failed to create check: %v\n", err)
+			return err
+		}
+	}
+
+	fmt.Println("All checks created")
+	return nil
+}
+
 func readContent(filename string) (*os.File, error) {
 	// gosec complains that the file is passed through an evironment variable. But
 	// this is not a security issue because none of the files are user-provided
@@ -234,6 +320,7 @@ func readContent(filename string) (*os.File, error) {
 
 func aggregator(cmd *cobra.Command, args []string) {
 	var scanRemediations []*compv1alpha1.ComplianceRemediation
+	var scanChecks []*compv1alpha1.ComplianceCheck
 
 	aggregatorConf := parseConfig(cmd)
 
@@ -295,7 +382,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 	for _, cm := range configMaps {
 		fmt.Printf("processing CM: %s\n", cm.Name)
 
-		cmRemediations, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, &cm)
+		cmChecks, cmRemediations, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, &cm)
 		if err != nil {
 			fmt.Printf("Cannot parse CM %s into remediations, err: %v\n", cm.Name, err)
 		} else if cmRemediations == nil {
@@ -303,6 +390,9 @@ func aggregator(cmd *cobra.Command, args []string) {
 			continue
 		}
 		fmt.Printf("CM %s contained %d remediations\n", cm.Name, len(cmRemediations))
+
+		//TODO: also diff checks
+		scanChecks = cmChecks
 
 		// If there are any remediations, make sure all of them for the scan are
 		// exactly the same
@@ -327,6 +417,12 @@ func aggregator(cmd *cobra.Command, args []string) {
 	if err := createRemediations(crclient, scan, scanRemediations); err != nil {
 		fmt.Printf("Could not create remediation objects: %v\n", err)
 		os.Exit(1)
+	}
+
+	fmt.Println("Creating check objects")
+	if err := createChecks(crclient, scan, scanChecks); err != nil {
+		fmt.Printf("Could not create remediation objects: %v\n", err)
+		os.Exit(2)
 	}
 
 	// Annotate configMaps, so we don't need to re-parse them

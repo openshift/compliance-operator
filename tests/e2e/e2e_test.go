@@ -261,6 +261,22 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
+
+				checkWifiInBios := compv1alpha1.ComplianceCheck{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: fmt.Sprintf("%s-wireless-disable-in-bios", workerScanName),
+					},
+					Spec:       compv1alpha1.ComplianceCheckSpec{
+						ID:          "xccdf_org.ssgproject.content_rule_wireless_disable_in_bios",
+						Result:      compv1alpha1.CheckResultInfo,
+					},
+				}
+
+				err = assertHasCheck(f, suiteName, workerScanName, checkWifiInBios)
+				if err != nil {
+					return err
+				}
+
 				return nil
 			},
 		},
