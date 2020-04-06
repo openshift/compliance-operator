@@ -3,9 +3,7 @@ package complianceremediation
 import (
 	"context"
 	"fmt"
-	"sort"
 
-	ign "github.com/coreos/ignition/config/v2_2"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -275,38 +273,18 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compv1alph
 //
 // taken from MachineConfigOperator
 func mergeMachineConfigs(configs []*mcfgv1.MachineConfig, name string, roleLabel string) *mcfgv1.MachineConfig {
-	if len(configs) == 0 {
+	mergedMc := mcfgv1.MergeMachineConfigs(configs, "")
+
+	if mergedMc == nil {
 		return nil
 	}
-	sort.Slice(configs, func(i, j int) bool { return configs[i].Name < configs[j].Name })
 
-	var fips bool
-	outIgn := configs[0].Spec.Config
-	for idx := 1; idx < len(configs); idx++ {
-		// if any of the config has FIPS enabled, it'll be set
-		if configs[idx].Spec.FIPS {
-			fips = true
-		}
-		outIgn = ign.Append(outIgn, configs[idx].Spec.Config)
-	}
 	// NOTE(jaosorior): If no version was set (for some reason) lets just add a default
-	if outIgn.Ignition.Version == "" {
-		outIgn.Ignition.Version = "2.2.0"
-	}
-	kargs := []string{}
-	for _, cfg := range configs {
-		kargs = append(kargs, cfg.Spec.KernelArguments...)
-	}
-	mergedMc := &mcfgv1.MachineConfig{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Spec: mcfgv1.MachineConfigSpec{
-			OSImageURL:      "",
-			KernelArguments: kargs,
-			Config:          outIgn,
-			FIPS:            fips,
-		},
+	if mergedMc.Spec.Config.Ignition.Version == "" {
+		mergedMc.Spec.Config.Ignition.Version = "2.2.0"
 	}
 
+	mergedMc.SetName(name)
 	mergedMc.Labels = make(map[string]string)
 	mergedMc.Labels[mcfgv1.MachineConfigRoleLabelKey] = roleLabel
 
