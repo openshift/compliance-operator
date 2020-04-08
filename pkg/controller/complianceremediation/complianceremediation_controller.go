@@ -26,6 +26,10 @@ import (
 
 var log = logf.Log.WithName("remediationctrl")
 
+const (
+	remediationNameAnnotationKey = "remediation.compliance.openshift.io/"
+)
+
 // Add creates a new ComplianceRemediation Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
@@ -152,7 +156,7 @@ func (r *ReconcileComplianceRemediation) reconcileMcRemediation(instance *compv1
 	// Actually touch the MC, this hands over control to the MCO
 	// TODO: Only log this with a very high log level
 	// logger.Info("Merged MC", "mc", mergedMc)
-	if err := createOrUpdateMachineConfig(r, mergedMc, logger); err != nil {
+	if err := createOrUpdateMachineConfig(r, mergedMc, instance, logger); err != nil {
 		logger.Error(err, "Failed to create or modify the MC")
 		// The err itself is already retriable (or not)
 		return err
@@ -291,18 +295,25 @@ func mergeMachineConfigs(configs []*mcfgv1.MachineConfig, name string, roleLabel
 	return mergedMc
 }
 
-func createOrUpdateMachineConfig(r *ReconcileComplianceRemediation, merged *mcfgv1.MachineConfig, logger logr.Logger) error {
+func createOrUpdateMachineConfig(r *ReconcileComplianceRemediation, merged *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
 	mc := &mcfgv1.MachineConfig{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: merged.Name}, mc)
 	if err != nil && errors.IsNotFound(err) {
-		return createMachineConfig(r, merged, logger)
+		return createMachineConfig(r, merged, rem, logger)
 	} else if err != nil {
 		logger.Error(err, "Cannot retrieve MC", "MachineConfig.Name", merged.Name)
 		// Get error should be retried
 		return err
 	}
 
-	return updateMachineConfig(r, mc, merged, logger)
+	if rem.Spec.Apply && mcHasRemediation(mc, rem) {
+		// If we have already applied this there's nothing to do
+		return nil
+	} else if !rem.Spec.Apply && !mcHasRemediation(mc, rem) {
+		// If we have already un-applied this there's nothing to do
+		return nil
+	}
+	return updateMachineConfig(r, mc, merged, rem, logger)
 }
 
 func deleteMachineConfig(r *ReconcileComplianceRemediation, name string, logger logr.Logger) error {
@@ -323,7 +334,10 @@ func deleteMachineConfig(r *ReconcileComplianceRemediation, name string, logger 
 	return nil
 }
 
-func createMachineConfig(r *ReconcileComplianceRemediation, merged *mcfgv1.MachineConfig, logger logr.Logger) error {
+func createMachineConfig(r *ReconcileComplianceRemediation, merged *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
+	if rem.Spec.Apply {
+		ensureRemediationAnnotationIsSet(merged, rem)
+	}
 	err := r.client.Create(context.TODO(), merged)
 	if err != nil {
 		logger.Error(err, "Cannot create MC", "MachineConfig.Name", merged.Name)
@@ -334,8 +348,13 @@ func createMachineConfig(r *ReconcileComplianceRemediation, merged *mcfgv1.Machi
 	return nil
 }
 
-func updateMachineConfig(r *ReconcileComplianceRemediation, current *mcfgv1.MachineConfig, merged *mcfgv1.MachineConfig, logger logr.Logger) error {
+func updateMachineConfig(r *ReconcileComplianceRemediation, current *mcfgv1.MachineConfig, merged *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
 	mcCopy := current.DeepCopy()
+	if rem.Spec.Apply {
+		ensureRemediationAnnotationIsSet(mcCopy, rem)
+	} else {
+		ensureRemediationAnnotationIsNotSet(mcCopy, rem)
+	}
 	mcCopy.Spec = merged.Spec
 
 	err := r.client.Update(context.TODO(), mcCopy)
@@ -346,4 +365,33 @@ func updateMachineConfig(r *ReconcileComplianceRemediation, current *mcfgv1.Mach
 	}
 	logger.Info("MC updated", "MachineConfig.Name", merged.Name)
 	return nil
+}
+
+func getRemediationAnnotationKey(remName string) string {
+	return remediationNameAnnotationKey + remName
+}
+
+func ensureRemediationAnnotationIsSet(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) {
+	if mc.Annotations == nil {
+		mc.Annotations = make(map[string]string)
+	}
+	mc.Annotations[getRemediationAnnotationKey(rem.Name)] = ""
+}
+
+func ensureRemediationAnnotationIsNotSet(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) {
+	if mc.Annotations == nil {
+		// No need to do anything
+		return
+	}
+	if _, ok := mc.Annotations[getRemediationAnnotationKey(rem.Name)]; ok {
+		delete(mc.Annotations, getRemediationAnnotationKey(rem.Name))
+	}
+}
+
+func mcHasRemediation(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) bool {
+	if mc.Annotations == nil {
+		return false
+	}
+	_, ok := mc.Annotations[getRemediationAnnotationKey(rem.Name)]
+	return ok
 }
