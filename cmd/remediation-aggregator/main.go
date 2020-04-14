@@ -224,6 +224,11 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 
 func createRemediations(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, remediations []*compv1alpha1.ComplianceRemediation) error {
 	fmt.Printf("Will create %d remediations\n", len(remediations))
+	if len(remediations) == 0 {
+		fmt.Println("No remediations created")
+		return nil
+	}
+
 	labels := make(map[string]string)
 	labels[compv1alpha1.ScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
