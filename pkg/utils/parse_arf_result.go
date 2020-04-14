@@ -25,6 +25,11 @@ type XMLDocument struct {
 	*xmldom.Document
 }
 
+type ParseResult struct {
+	Check       *compv1alpha1.ComplianceCheck
+	Remediation *compv1alpha1.ComplianceRemediation
+}
+
 type ruleHashTable map[string]*xmldom.Node
 
 func newRuleHashTable(dsDom *XMLDocument) ruleHashTable {
@@ -52,19 +57,17 @@ func ParseContent(dsReader io.Reader) (*XMLDocument, error) {
 }
 
 func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, namespace string,
-	dsDom *XMLDocument, resultsReader io.Reader) ([]*compv1alpha1.ComplianceCheck, []*compv1alpha1.ComplianceRemediation, error) {
-	remediations := make([]*compv1alpha1.ComplianceRemediation, 0)
+	dsDom *XMLDocument, resultsReader io.Reader) ([]*ParseResult, error) {
 
 	resultsDom, err := xmldom.Parse(resultsReader)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	ruleTable := newRuleHashTable(dsDom)
 
 	results := resultsDom.Root.Query("//rule-result")
-	// FIXME: len(results) ?
-	checks := make([]*compv1alpha1.ComplianceCheck, 0)
+	parsedResults := make([]*ParseResult, 0)
 	for i := range results {
 		result := results[i]
 		ruleIDRef := result.GetAttributeValue("idref")
@@ -81,19 +84,21 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 		if err != nil {
 			continue
 		}
+
 		if resCheck != nil {
-			checks = append(checks, resCheck)
+			pr := &ParseResult{
+				Check: resCheck,
+			}
 
 			if resCheck.Spec.Result == compv1alpha1.CheckResultFail || resCheck.Spec.Result == compv1alpha1.CheckResultInfo {
-				newRemediation := newComplianceRemediation(scheme, scanName, namespace, resultRule)
-				if newRemediation != nil {
-					remediations = append(remediations, newRemediation)
-				}
+				pr.Remediation = newComplianceRemediation(scheme, scanName, namespace, resultRule)
 			}
+
+			parsedResults = append(parsedResults, pr)
 		}
 	}
 
-	return checks, remediations, nil
+	return parsedResults, nil
 }
 
 // Returns a new complianceCheck if the check data is usable

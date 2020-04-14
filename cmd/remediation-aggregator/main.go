@@ -146,18 +146,18 @@ func readCompressedData(compressed string) (*bzip2.Reader, error) {
 	return bzip2.NewReader(compressedReader, &bzip2.ReaderConfig{})
 }
 
-func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*compv1alpha1.ComplianceCheck, []*compv1alpha1.ComplianceRemediation, error) {
+func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*utils.ParseResult, error) {
 	var scanReader io.Reader
 
 	_, ok := cm.Annotations[configMapRemediationsProcessed]
 	if ok {
 		fmt.Printf("ConfigMap %s already processed\n", cm.Name)
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	cmScanResult, ok := cm.Data["results"]
 	if !ok {
-		return nil, nil, fmt.Errorf("no results in configmap %s", cm.Name)
+		return nil, fmt.Errorf("no results in configmap %s", cm.Name)
 	}
 
 	_, ok = cm.Annotations[configMapCompressed]
@@ -165,7 +165,7 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string,
 		fmt.Printf("Results are compressed\n")
 		scanResult, err := readCompressedData(cmScanResult)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		defer scanResult.Close()
 		scanReader = scanResult
@@ -196,21 +196,23 @@ type compResultIface interface {
 	runtime.Object
 }
 
-func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, labels map[string]string, res compResultIface) error {
+func createOneResult(crClient *complianceCrClient, owner metav1.Object, labels map[string]string, res compResultIface) error {
 	kind := res.GetObjectKind()
 
-	if err := controllerutil.SetControllerReference(scan, res, crClient.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(owner, res, crClient.scheme); err != nil {
 		fmt.Printf("Failed to set '%s' ownership %v", kind.GroupVersionKind().Kind, err)
 		return err
 	}
 
-	name := res.GetName()
-	fmt.Printf("Creating %s:%s", kind.GroupVersionKind().Kind, name)
-
 	res.SetLabels(labels)
+
+	name := res.GetName()
+	fmt.Printf("Creating %s:%s\n", kind.GroupVersionKind().Kind, name)
+
 	err := backoff.Retry(func() error {
 		err := crClient.client.Create(context.TODO(), res)
 		if err != nil && !errors.IsAlreadyExists(err) {
+			fmt.Printf("Retrying with a backoff because of an error: %v", err)
 			return err
 		}
 		return nil
@@ -222,45 +224,66 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 	return nil
 }
 
-func createRemediations(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, remediations []*compv1alpha1.ComplianceRemediation) error {
-	fmt.Printf("Will create %d remediations\n", len(remediations))
-	if len(remediations) == 0 {
-		fmt.Println("No remediations created")
-		return nil
-	}
-
+func getRemediationLabels(scan *compv1alpha1.ComplianceScan) map[string]string {
 	labels := make(map[string]string)
 	labels[compv1alpha1.ScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
 	labels[mcfgv1.MachineConfigRoleLabelKey] = utils.GetFirstNodeRole(scan.Spec.NodeSelector)
 	if labels[mcfgv1.MachineConfigRoleLabelKey] == "" {
-		return fmt.Errorf("scan %s has no role assignment", scan.Name)
+		fmt.Printf("scan %s has no role assignment", scan.Name)
+		return nil
 	}
 
-	for _, rem := range remediations {
-		if err := createResults(crClient, scan, labels, rem); err != nil {
-			return err
-		}
-	}
-
-	fmt.Println("All remediations created")
-	return nil
+	return labels
 }
 
-func createChecks(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, checks []*compv1alpha1.ComplianceCheck) error {
-	fmt.Printf("Will create %d checks\n", len(checks))
-
+func getCheckLabels(scan *compv1alpha1.ComplianceScan) map[string]string {
 	labels := make(map[string]string)
 	labels[compv1alpha1.ScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
 
-	for _, check := range checks {
-		if err := createResults(crClient, scan, labels, check); err != nil {
-			return err
-		}
+	return labels
+}
+
+func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, parsedResults []*utils.ParseResult) error {
+	fmt.Printf("Will create %d result objects\n", len(parsedResults))
+	if len(parsedResults) == 0 {
+		fmt.Println("Nothing to create")
+		return nil
 	}
 
-	fmt.Println("All checks created")
+	for _, pr := range parsedResults {
+		if pr == nil || pr.Check == nil {
+			fmt.Println("nil result or result.check, this shouldn't happen")
+			continue
+		}
+
+		checkLabels := getCheckLabels(scan)
+		if checkLabels == nil {
+			return fmt.Errorf("cannot create check labels")
+		}
+
+		// check is owned by the scan
+		if err := createOneResult(crClient, scan, checkLabels, pr.Check); err != nil {
+			return fmt.Errorf("cannot create check %s: %v", pr.Check.Name, err)
+		}
+
+		if pr.Remediation == nil {
+			continue
+		}
+
+		remLabels := getRemediationLabels(scan)
+		if remLabels == nil {
+			return fmt.Errorf("cannot create remediation labels")
+		}
+
+		// remediation is owned by the check
+		if err := createOneResult(crClient, pr.Check, remLabels, pr.Remediation); err != nil {
+			return fmt.Errorf("cannot create remediation %s: %v", pr.Check.Name, err)
+		}
+
+	}
+
 	return nil
 }
 
@@ -273,8 +296,7 @@ func readContent(filename string) (*os.File, error) {
 }
 
 func aggregator(cmd *cobra.Command, args []string) {
-	var scanRemediations []*compv1alpha1.ComplianceRemediation
-	var scanChecks []*compv1alpha1.ComplianceCheck
+	var scanParsedResults []*utils.ParseResult
 
 	aggregatorConf := parseConfig(cmd)
 
@@ -336,27 +358,24 @@ func aggregator(cmd *cobra.Command, args []string) {
 	for _, cm := range configMaps {
 		fmt.Printf("processing CM: %s\n", cm.Name)
 
-		cmChecks, cmRemediations, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, &cm)
+		cmParsedResults, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, &cm)
 		if err != nil {
 			fmt.Printf("Cannot parse CM %s into remediations, err: %v\n", cm.Name, err)
-		} else if cmRemediations == nil {
-			fmt.Println("Either no remediations found in result or result already processed")
+		} else if cmParsedResults == nil {
+			fmt.Println("Either no parsed results found in result or result already processed")
 			continue
 		}
-		fmt.Printf("CM %s contained %d remediations\n", cm.Name, len(cmRemediations))
+		fmt.Printf("CM %s contained %d parsed results\n", cm.Name, len(cmParsedResults))
 
-		//TODO: also diff checks
-		scanChecks = cmChecks
-
-		// If there are any remediations, make sure all of them for the scan are
+		// If there are any results, make sure all of them for the scan are
 		// exactly the same
-		if scanRemediations == nil {
+		if scanParsedResults == nil {
 			// This is the first loop or only result
 			fmt.Println("This is the first remediation list, keeping it")
-			scanRemediations = cmRemediations
+			scanParsedResults = cmParsedResults
 		} else {
 			// All remediation lists in the scan must be equal
-			ok := utils.DiffRemediationList(scanRemediations, cmRemediations)
+			ok := utils.DiffRemediationList(scanParsedResults, cmParsedResults)
 			if !ok {
 				fmt.Println("The remediations differ between machines, this should never happen as the machines in a pool should be identical")
 				os.Exit(1)
@@ -367,16 +386,10 @@ func aggregator(cmd *cobra.Command, args []string) {
 	// At this point either scanRemediations is nil or contains a list
 	// of remediations for this scan
 	// Create the remediations
-	fmt.Println("Creating remediation objects")
-	if err := createRemediations(crclient, scan, scanRemediations); err != nil {
+	fmt.Println("Creating result objects")
+	if err := createResults(crclient, scan, scanParsedResults); err != nil {
 		fmt.Printf("Could not create remediation objects: %v\n", err)
 		os.Exit(1)
-	}
-
-	fmt.Println("Creating check objects")
-	if err := createChecks(crclient, scan, scanChecks); err != nil {
-		fmt.Printf("Could not create check objects: %v\n", err)
-		os.Exit(2)
 	}
 
 	// Annotate configMaps, so we don't need to re-parse them

@@ -10,12 +10,16 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Testing remediations diff", func() {
+var _ = Describe("Testing parse results diff", func() {
 	var (
-		remService  *compv1alpha1.ComplianceRemediation
-		remService2 *compv1alpha1.ComplianceRemediation
-		oldList     []*compv1alpha1.ComplianceRemediation
-		newList     []*compv1alpha1.ComplianceRemediation
+		remService    *compv1alpha1.ComplianceRemediation
+		remService2   *compv1alpha1.ComplianceRemediation
+		checkService  *compv1alpha1.ComplianceCheck
+		checkService2 *compv1alpha1.ComplianceCheck
+		pRes          *ParseResult
+		pRes2         *ParseResult
+		oldList       []*ParseResult
+		newList       []*ParseResult
 	)
 
 	BeforeEach(func() {
@@ -50,40 +54,73 @@ var _ = Describe("Testing remediations diff", func() {
 
 		remService2 = remService.DeepCopy()
 
-		oldList = append(newList, remService)
-		newList = append(newList, remService2)
+		checkService = &compv1alpha1.ComplianceCheck{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "checkService",
+			},
+			Spec: compv1alpha1.ComplianceCheckSpec{
+				ID:          "this_is_some_id",
+				Result:      "PASS",
+				Description: "This is a dummy check",
+			},
+		}
+		checkService2 = checkService.DeepCopy()
+
+		pRes = &ParseResult{
+			Check:       checkService,
+			Remediation: remService,
+		}
+
+		pRes2 = &ParseResult{
+			Check:       checkService2,
+			Remediation: remService2,
+		}
+
+		oldList = append(oldList, pRes)
+		newList = append(newList, pRes2)
 	})
 
-	Context("Same remediations", func() {
-		It("passes when the remediations are the same", func() {
+	Context("Same parse results", func() {
+		It("passes when the parse results are the same", func() {
 			ok := DiffRemediationList(oldList, newList)
 			Expect(ok).To(BeTrue())
 		})
 	})
 
-	Context("Different remediations", func() {
+	Context("Different remediation parse results", func() {
 		BeforeEach(func() {
 			remService2.Spec.MachineConfigContents.Spec.Config.Systemd.Units[0].Enable = false
 		})
 
-		It("fail when the remediations are different", func() {
+		It("fail when the parse results are different", func() {
 			ok := DiffRemediationList(oldList, newList)
 			Expect(ok).To(BeFalse())
 		})
 	})
 
-	Context("Different remediation list lengths", func() {
+	Context("Different check parse results", func() {
 		BeforeEach(func() {
-			newList = append(newList, remService)
+			checkService2.Name = "foo"
 		})
 
-		It("fail when the remediations are different", func() {
+		It("fail when the parse results are different", func() {
 			ok := DiffRemediationList(oldList, newList)
 			Expect(ok).To(BeFalse())
 		})
 	})
 
-	Context("One or both remediation lists are nil", func() {
+	Context("Different parse results list lengths", func() {
+		BeforeEach(func() {
+			newList = append(newList, pRes)
+		})
+
+		It("fail when the parse results are different", func() {
+			ok := DiffRemediationList(oldList, newList)
+			Expect(ok).To(BeFalse())
+		})
+	})
+
+	Context("One or both parse results lists are nil", func() {
 		It("fails when one of the lists is nil", func() {
 			ok := DiffRemediationList(oldList, nil)
 			Expect(ok).To(BeFalse())
@@ -95,6 +132,28 @@ var _ = Describe("Testing remediations diff", func() {
 		It("passes when both lists are nil", func() {
 			ok := DiffRemediationList(nil, nil)
 			Expect(ok).To(BeTrue())
+		})
+	})
+
+	Context("One list contains remediations, the other does not", func() {
+		BeforeEach(func() {
+			newList[0].Remediation = nil
+		})
+
+		It("fails when one of the remediation lists is nil", func() {
+			ok := DiffRemediationList(oldList, newList)
+			Expect(ok).To(BeFalse())
+		})
+	})
+
+	Context("One list contains checks, the other does not", func() {
+		BeforeEach(func() {
+			newList[0].Check = nil
+		})
+
+		It("fails when one of the remediation checks is nil", func() {
+			ok := DiffRemediationList(oldList, newList)
+			Expect(ok).To(BeFalse())
 		})
 	})
 })

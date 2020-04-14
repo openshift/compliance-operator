@@ -24,11 +24,11 @@ const (
 // ComplianceCheckSpec defines the desired state of ComplianceCheck
 type ComplianceCheckSpec struct {
 	// A unique identifier of a check
-	ID          string                `json:"id"`
+	ID string `json:"id"`
 	// The result of a check
-	Result      ComplianceCheckResult `json:"result"`
+	Result ComplianceCheckResult `json:"result"`
 	// A human-readable check description, what and why it does
-	Description string                `json:"description,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

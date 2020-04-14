@@ -17,7 +17,7 @@ spec:
   subresources: {}
   validation:
     openAPIV3Schema:
-      description: ComplianceCheck is the Schema for the compliancechecks API
+      description: ComplianceCheck represent a result of a single compliance "test"
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -35,10 +35,13 @@ spec:
           description: ComplianceCheckSpec defines the desired state of ComplianceCheck
           properties:
             description:
+              description: A human-readable check description, what and why it does
               type: string
             id:
+              description: A unique identifier of a check
               type: string
             result:
+              description: The result of a check
               type: string
           required:
           - id

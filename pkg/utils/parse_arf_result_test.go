@@ -14,10 +14,34 @@ import (
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
+func countResultItems(resultList []*ParseResult) (int, int) {
+	if resultList == nil {
+		return 0, 0
+	}
+
+	var nChecks, nRems int
+
+	for _, res := range resultList {
+		if res == nil {
+			continue
+		}
+
+		if res.Remediation != nil {
+			nRems++
+		}
+
+		if res.Check != nil {
+			nChecks++
+		}
+	}
+
+	return nChecks, nRems
+}
+
 var _ = Describe("XCCDF parser", func() {
 	const (
 		totalRemediations = 5
-		totalChecks       = 464
+		totalChecks       = 235
 	)
 
 	var (
@@ -26,8 +50,9 @@ var _ = Describe("XCCDF parser", func() {
 		schema          *runtime.Scheme
 		resultsFilename string
 		dsFilename      string
-		remList         []*compv1alpha1.ComplianceRemediation
-		checkList       []*compv1alpha1.ComplianceCheck
+		resultList      []*ParseResult
+		nChecks         int
+		nRems           int
 		err             error
 	)
 
@@ -48,7 +73,8 @@ var _ = Describe("XCCDF parser", func() {
 			Expect(err).NotTo(HaveOccurred())
 			dsDom, err := ParseContent(ds)
 			Expect(err).NotTo(HaveOccurred())
-			checkList, remList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+			nChecks, nRems = countResultItems(resultList)
 		})
 
 		Context("Valid XCCDF", func() {
@@ -56,10 +82,10 @@ var _ = Describe("XCCDF parser", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 			It("Should return exactly five remediations", func() {
-				Expect(remList).To(HaveLen(totalRemediations))
+				Expect(nRems).To(Equal(totalRemediations))
 			})
 			It("Should return exactly 464 checks", func() {
-				Expect(checkList).To(HaveLen(totalChecks))
+				Expect(nChecks).To(Equal(totalChecks))
 			})
 		})
 
@@ -70,7 +96,13 @@ var _ = Describe("XCCDF parser", func() {
 			)
 
 			BeforeEach(func() {
-				rem = remList[0]
+				for i := range resultList {
+					if resultList[i].Remediation != nil {
+						rem = resultList[i].Remediation
+						break
+					}
+				}
+				Expect(rem).ToNot(BeNil())
 				expName = "testScan-no-direct-root-logins"
 			})
 
@@ -123,10 +155,10 @@ var _ = Describe("XCCDF parser", func() {
 				runtime := b.Time("runtime", func() {
 					dsDom, err := ParseContent(ds)
 					Expect(err).NotTo(HaveOccurred())
-					checkList, remList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+					resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(remList).To(HaveLen(totalRemediations))
-					Expect(checkList).To(HaveLen(totalChecks))
+					Expect(nRems).To(Equal(totalRemediations))
+					Expect(nChecks).To(Equal(totalChecks))
 				})
 
 				Ω(runtime.Seconds()).Should(BeNumerically("<", 3.0), "ParseRemediationsFromArf() shouldn't take too long.")
