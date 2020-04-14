@@ -14,8 +14,7 @@ spec:
     plural: compliancechecks
     singular: compliancecheck
   scope: Namespaced
-  subresources:
-    status: {}
+  subresources: {}
   validation:
     openAPIV3Schema:
       description: ComplianceCheck is the Schema for the compliancechecks API
