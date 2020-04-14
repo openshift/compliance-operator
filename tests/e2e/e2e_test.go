@@ -264,11 +264,12 @@ func TestE2E(t *testing.T) {
 
 				checkWifiInBios := compv1alpha1.ComplianceCheck{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: fmt.Sprintf("%s-wireless-disable-in-bios", workerScanName),
+						Name:      fmt.Sprintf("%s-wireless-disable-in-bios", workerScanName),
+						Namespace: namespace,
 					},
-					Spec:       compv1alpha1.ComplianceCheckSpec{
-						ID:          "xccdf_org.ssgproject.content_rule_wireless_disable_in_bios",
-						Result:      compv1alpha1.CheckResultInfo,
+					Spec: compv1alpha1.ComplianceCheckSpec{
+						ID:     "xccdf_org.ssgproject.content_rule_wireless_disable_in_bios",
+						Result: compv1alpha1.CheckResultInfo,
 					},
 				}
 

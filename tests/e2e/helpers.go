@@ -355,7 +355,7 @@ func getConfigMapsFromScan(f *framework.Framework, scaninstance *compv1alpha1.Co
 func assertHasCheck(f *framework.Framework, suiteName, scanName string, check compv1alpha1.ComplianceCheck) error {
 	var getCheck compv1alpha1.ComplianceCheck
 
-	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: check.Name}, &getCheck)
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: check.Name, Namespace: check.Namespace}, &getCheck)
 	if err != nil {
 		return err
 	}
