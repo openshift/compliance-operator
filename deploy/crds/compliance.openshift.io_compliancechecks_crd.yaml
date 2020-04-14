@@ -4,7 +4,7 @@ metadata:
   name: compliancechecks.compliance.openshift.io
 spec:
   additionalPrinterColumns:
-  - JSONPath: .spec.Result
+  - JSONPath: .spec.result
     name: Result
     type: string
   group: compliance.openshift.io
