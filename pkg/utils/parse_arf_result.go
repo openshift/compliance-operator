@@ -81,12 +81,14 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 		if err != nil {
 			continue
 		}
-		checks = append(checks, resCheck)
+		if resCheck != nil {
+			checks = append(checks, resCheck)
 
-		if resCheck.Spec.Result == compv1alpha1.CheckResultFail || resCheck.Spec.Result == compv1alpha1.CheckResultInfo {
-			newRemediation := newComplianceRemediation(scheme, scanName, namespace, resultRule)
-			if newRemediation != nil {
-				remediations = append(remediations, newRemediation)
+			if resCheck.Spec.Result == compv1alpha1.CheckResultFail || resCheck.Spec.Result == compv1alpha1.CheckResultInfo {
+				newRemediation := newComplianceRemediation(scheme, scanName, namespace, resultRule)
+				if newRemediation != nil {
+					remediations = append(remediations, newRemediation)
+				}
 			}
 		}
 	}
@@ -94,11 +96,15 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 	return checks, remediations, nil
 }
 
+// Returns a new complianceCheck if the check data is usable
 func newComplianceCheck(result *xmldom.Node, rule *xmldom.Node, ruleIdRef, scanName, namespace string) (*compv1alpha1.ComplianceCheck, error) {
 	name := nameFromId(scanName, ruleIdRef)
 	mappedResult, err := mapComplianceCheckResult(result)
 	if err != nil {
 		return nil, err
+	}
+	if mappedResult == compv1alpha1.CheckResultNoResult {
+		return nil, nil
 	}
 
 	return &compv1alpha1.ComplianceCheck{
@@ -154,13 +160,16 @@ func mapComplianceCheckResult(result *xmldom.Node) (compv1alpha1.ComplianceCheck
 		// on the environment (e.g. disable USB support completely from the kernel cmdline)
 	case "notchecked", "informational":
 		return compv1alpha1.CheckResultInfo, nil
-		// We map both notapplicable and notselected to Skipped. Notapplicable means the rule was selected
+		// We map notapplicable to Skipped. Notapplicable means the rule was selected
 		// but does not apply to the current configuration (e.g. arch-specific),
-	case "notapplicable", "notselected":
+	case "notapplicable":
 		return compv1alpha1.CheckResultSkipped, nil
+	case "notselected":
+		// We map notselected to nothing, as the test wasn't included in the benchmark
+		return compv1alpha1.CheckResultNoResult, nil
 	}
 
-	return "", fmt.Errorf("couldn't match %s to a known state", resultEl.Text)
+	return compv1alpha1.CheckResultNoResult, fmt.Errorf("couldn't match %s to a known state", resultEl.Text)
 }
 
 func newComplianceRemediation(scheme *runtime.Scheme, scanName, namespace string, rule *xmldom.Node) *compv1alpha1.ComplianceRemediation {

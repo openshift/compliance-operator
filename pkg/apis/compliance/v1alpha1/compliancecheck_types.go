@@ -17,6 +17,8 @@ const (
 	CheckResultError ComplianceCheckResult = "ERROR"
 	// The check didn't run because it is not applicable or not selected
 	CheckResultSkipped ComplianceCheckResult = "SKIP"
+	// The check didn't yield a usable result
+	CheckResultNoResult ComplianceCheckResult = ""
 )
 
 // ComplianceCheckSpec defines the desired state of ComplianceCheck
