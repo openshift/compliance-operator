@@ -191,89 +191,56 @@ func annotateParsedConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) 
 	return err
 }
 
-func createRemediations(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, remediations []*compv1alpha1.ComplianceRemediation) error {
-	for _, rem := range remediations {
-		fmt.Printf("Creating remediation %s\n", rem.Name)
-		if err := controllerutil.SetControllerReference(scan, rem, crClient.scheme); err != nil {
-			fmt.Printf("Failed to set remediation ownership %v", err)
-			return err
-		}
-
-		if rem.Labels == nil {
-			rem.Labels = make(map[string]string)
-		}
-		rem.Labels[compv1alpha1.ScanLabel] = scan.Name
-		rem.Labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
-		rem.Labels[mcfgv1.MachineConfigRoleLabelKey] = utils.GetFirstNodeRole(scan.Spec.NodeSelector)
-		if rem.Labels[mcfgv1.MachineConfigRoleLabelKey] == "" {
-			return fmt.Errorf("scan %s has no role assignment", scan.Name)
-		}
-
-		err := backoff.Retry(func() error {
-			err := crClient.client.Create(context.TODO(), rem)
-			if err != nil && !errors.IsAlreadyExists(err) {
-				return err
-			}
-			return nil
-		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
-		if err != nil {
-
-			fmt.Printf("Failed to create remediation: %v\n", err)
-			return err
-		}
-	}
-
-	return nil
-}
-
 type compResultIface interface {
 	metav1.Object
 	runtime.Object
 }
 
-func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, labels map[string]string, results []*compResultIface) error {
-	for _, rem := range results {
-		if err := controllerutil.SetControllerReference(scan, *rem, crClient.scheme); err != nil {
-			fmt.Printf("Failed to set remediation ownership %v", err)
+func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, labels map[string]string, res compResultIface) error {
+	kind := res.GetObjectKind()
+
+	if err := controllerutil.SetControllerReference(scan, res, crClient.scheme); err != nil {
+		fmt.Printf("Failed to set '%s' ownership %v", kind.GroupVersionKind().Kind, err)
+		return err
+	}
+
+	name := res.GetName()
+	fmt.Printf("Creating %s:%s", kind.GroupVersionKind().Kind, name)
+
+	res.SetLabels(labels)
+	err := backoff.Retry(func() error {
+		err := crClient.client.Create(context.TODO(), res)
+		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
+		return nil
+	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+	if err != nil {
+		fmt.Printf("Failed to create a '%s' object: %v\n", kind.GroupVersionKind().Kind, err)
+		return err
+	}
+	return nil
+}
 
-		name := (*rem).GetName()
-		kind := (*rem).GetObjectKind()
-		fmt.Printf("Creating %s:%s", kind.GroupVersionKind().Kind, name)
+func createRemediations(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, remediations []*compv1alpha1.ComplianceRemediation) error {
+	fmt.Printf("Will create %d remediations\n", len(remediations))
+	labels := make(map[string]string)
+	labels[compv1alpha1.ScanLabel] = scan.Name
+	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
+	labels[mcfgv1.MachineConfigRoleLabelKey] = utils.GetFirstNodeRole(scan.Spec.NodeSelector)
+	if labels[mcfgv1.MachineConfigRoleLabelKey] == "" {
+		return fmt.Errorf("scan %s has no role assignment", scan.Name)
+	}
 
-		(*rem).SetLabels(labels)
-		err := backoff.Retry(func() error {
-			err := crClient.client.Create(context.TODO(), *rem)
-			if err != nil && !errors.IsAlreadyExists(err) {
-				return err
-			}
-			return nil
-		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
-		if err != nil {
-
-			fmt.Printf("Failed to create a result: %v\n", err)
+	for _, rem := range remediations {
+		if err := createResults(crClient, scan, labels, rem); err != nil {
 			return err
 		}
 	}
 
+	fmt.Println("All remediations created")
 	return nil
 }
-
-/*
-func createChecks(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, checks []*compv1alpha1.ComplianceCheck) error {
-	fmt.Printf("Will create %d checks\n", len(checks))
-
-	labels := make(map[string]string)
-	labels[compv1alpha1.ScanLabel] = scan.Name
-	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
-
-	if err := createResults(crClient, scan, labels, checks)
-
-		fmt.Println("All checks created")
-	return nil
-}
-*/
 
 func createChecks(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, checks []*compv1alpha1.ComplianceCheck) error {
 	fmt.Printf("Will create %d checks\n", len(checks))
@@ -282,26 +249,8 @@ func createChecks(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSca
 	labels[compv1alpha1.ScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
 
-	for _, ch := range checks {
-		fmt.Printf("Creating check %s\n", ch.Name)
-		if err := controllerutil.SetControllerReference(scan, ch, crClient.scheme); err != nil {
-			fmt.Printf("Failed to set check ownership %v", err)
-			return err
-		}
-
-
-		err := backoff.Retry(func() error {
-			err := crClient.client.Create(context.TODO(), ch)
-			if err != nil && !errors.IsAlreadyExists(err) {
-				fmt.Printf("Failed to create check: %v\n", err)
-				return err
-			}
-			fmt.Printf("Check created")
-			return nil
-		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
-		if err != nil {
-
-			fmt.Printf("Failed to create check: %v\n", err)
+	for _, check := range checks {
+		if err := createResults(crClient, scan, labels, check); err != nil {
 			return err
 		}
 	}
@@ -421,7 +370,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 
 	fmt.Println("Creating check objects")
 	if err := createChecks(crclient, scan, scanChecks); err != nil {
-		fmt.Printf("Could not create remediation objects: %v\n", err)
+		fmt.Printf("Could not create check objects: %v\n", err)
 		os.Exit(2)
 	}
 
