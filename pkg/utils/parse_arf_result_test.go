@@ -30,7 +30,7 @@ func countResultItems(resultList []*ParseResult) (int, int) {
 			nRems++
 		}
 
-		if res.Check != nil {
+		if res.CheckResult != nil {
 			nChecks++
 		}
 	}

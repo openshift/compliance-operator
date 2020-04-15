@@ -14,8 +14,8 @@ var _ = Describe("Testing parse results diff", func() {
 	var (
 		remService    *compv1alpha1.ComplianceRemediation
 		remService2   *compv1alpha1.ComplianceRemediation
-		checkService  *compv1alpha1.ComplianceCheck
-		checkService2 *compv1alpha1.ComplianceCheck
+		checkService  *compv1alpha1.ComplianceCheckResult
+		checkService2 *compv1alpha1.ComplianceCheckResult
 		pRes          *ParseResult
 		pRes2         *ParseResult
 		oldList       []*ParseResult
@@ -54,25 +54,23 @@ var _ = Describe("Testing parse results diff", func() {
 
 		remService2 = remService.DeepCopy()
 
-		checkService = &compv1alpha1.ComplianceCheck{
+		checkService = &compv1alpha1.ComplianceCheckResult{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "checkService",
 			},
-			Spec: compv1alpha1.ComplianceCheckSpec{
-				ID:          "this_is_some_id",
-				Result:      "PASS",
-				Description: "This is a dummy check",
-			},
+			ID:          "this_is_some_id",
+			Status:      "PASS",
+			Description: "This is a dummy check",
 		}
 		checkService2 = checkService.DeepCopy()
 
 		pRes = &ParseResult{
-			Check:       checkService,
+			CheckResult: checkService,
 			Remediation: remService,
 		}
 
 		pRes2 = &ParseResult{
-			Check:       checkService2,
+			CheckResult: checkService2,
 			Remediation: remService2,
 		}
 
@@ -148,7 +146,7 @@ var _ = Describe("Testing parse results diff", func() {
 
 	Context("One list contains checks, the other does not", func() {
 		BeforeEach(func() {
-			newList[0].Check = nil
+			newList[0].CheckResult = nil
 		})
 
 		It("fails when one of the remediation checks is nil", func() {

@@ -17,14 +17,16 @@ func DiffRemediationList(oldList, newList []*ParseResult) bool {
 	}
 
 	sortMcSlice := func(parseResultSlice []*ParseResult) {
-		sort.SliceStable(parseResultSlice, func(i, j int) bool { return parseResultSlice[i].Check.Name < parseResultSlice[j].Check.Name })
+		sort.SliceStable(parseResultSlice, func(i, j int) bool {
+			return parseResultSlice[i].CheckResult.Name < parseResultSlice[j].CheckResult.Name
+		})
 	}
 
 	sortMcSlice(oldList)
 	sortMcSlice(newList)
 
 	for i := range oldList {
-		ok := diffChecks(oldList[i].Check, newList[i].Check)
+		ok := diffChecks(oldList[i].CheckResult, newList[i].CheckResult)
 		if !ok {
 			return false
 		}
@@ -39,14 +41,14 @@ func DiffRemediationList(oldList, newList []*ParseResult) bool {
 }
 
 // returns true if the checks are the same, false if they differ
-func diffChecks(old, new *compv1alpha1.ComplianceCheck) bool {
+func diffChecks(old, new *compv1alpha1.ComplianceCheckResult) bool {
 	if old == nil {
 		return new == nil
 	}
 
 	// should we be more picky and just compare what can be set with the remediations? e.g. OSImageURL can't
 	// be set with a remediation..
-	return reflect.DeepEqual(old.Spec, new.Spec)
+	return reflect.DeepEqual(old, new)
 }
 
 // returns true if the remediations are the same, false if they differ

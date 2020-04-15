@@ -174,7 +174,7 @@ rules:
   - compliance.openshift.io
   resources:
   - compliancescans/finalizers
-  - compliancechecks/finalizers
+  - compliancecheckresults/finalizers
   verbs:
   - update
 - apiGroups:
@@ -186,7 +186,7 @@ rules:
 - apiGroups:
   - compliance.openshift.io
   resources:
-  - compliancechecks
+  - compliancecheckresults
   verbs:
   - create
   - get

@@ -26,7 +26,7 @@ type XMLDocument struct {
 }
 
 type ParseResult struct {
-	Check       *compv1alpha1.ComplianceCheck
+	CheckResult *compv1alpha1.ComplianceCheckResult
 	Remediation *compv1alpha1.ComplianceRemediation
 }
 
@@ -80,17 +80,17 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 			continue
 		}
 
-		resCheck, err := newComplianceCheck(result, resultRule, ruleIDRef, scanName, namespace)
+		resCheck, err := newComplianceCheckResult(result, resultRule, ruleIDRef, scanName, namespace)
 		if err != nil {
 			continue
 		}
 
 		if resCheck != nil {
 			pr := &ParseResult{
-				Check: resCheck,
+				CheckResult: resCheck,
 			}
 
-			if resCheck.Spec.Result == compv1alpha1.CheckResultFail || resCheck.Spec.Result == compv1alpha1.CheckResultInfo {
+			if resCheck.Status == compv1alpha1.CheckResultFail || resCheck.Status == compv1alpha1.CheckResultInfo {
 				pr.Remediation = newComplianceRemediation(scheme, scanName, namespace, resultRule)
 			}
 
@@ -101,27 +101,25 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 	return parsedResults, nil
 }
 
-// Returns a new complianceCheck if the check data is usable
-func newComplianceCheck(result *xmldom.Node, rule *xmldom.Node, ruleIdRef, scanName, namespace string) (*compv1alpha1.ComplianceCheck, error) {
+// Returns a new complianceCheckResult if the check data is usable
+func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef, scanName, namespace string) (*compv1alpha1.ComplianceCheckResult, error) {
 	name := nameFromId(scanName, ruleIdRef)
-	mappedResult, err := mapComplianceCheckResult(result)
+	mappedStatus, err := mapComplianceCheckResultStatus(result)
 	if err != nil {
 		return nil, err
 	}
-	if mappedResult == compv1alpha1.CheckResultNoResult {
+	if mappedStatus == compv1alpha1.CheckResultNoResult {
 		return nil, nil
 	}
 
-	return &compv1alpha1.ComplianceCheck{
+	return &compv1alpha1.ComplianceCheckResult{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: compv1alpha1.ComplianceCheckSpec{
-			ID:          ruleIdRef,
-			Result:      mappedResult,
-			Description: complianceCheckDescription(rule),
-		},
+		ID:          ruleIdRef,
+		Status:      mappedStatus,
+		Description: complianceCheckResultDescription(rule),
 	}, nil
 }
 
@@ -134,7 +132,7 @@ func getSafeText(nptr *xmldom.Node, elem string) string {
 	return elemNode.Text
 }
 
-func complianceCheckDescription(rule *xmldom.Node) string {
+func complianceCheckResultDescription(rule *xmldom.Node) string {
 	title := getSafeText(rule, "title")
 	if title != "" {
 		title = title + "\n"
@@ -142,7 +140,7 @@ func complianceCheckDescription(rule *xmldom.Node) string {
 	return title + getSafeText(rule, "rationale")
 }
 
-func mapComplianceCheckResult(result *xmldom.Node) (compv1alpha1.ComplianceCheckResult, error) {
+func mapComplianceCheckResultStatus(result *xmldom.Node) (compv1alpha1.ComplianceCheckStatus, error) {
 	resultEl := result.FindOneByName("result")
 	if resultEl == nil {
 		return "", errors.New("result node has no 'result' attribute")

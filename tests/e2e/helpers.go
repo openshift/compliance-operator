@@ -352,24 +352,24 @@ func getConfigMapsFromScan(f *framework.Framework, scaninstance *compv1alpha1.Co
 	return configmaps.Items
 }
 
-func assertHasCheck(f *framework.Framework, suiteName, scanName string, check compv1alpha1.ComplianceCheck) error {
-	var getCheck compv1alpha1.ComplianceCheck
+func assertHasCheck(f *framework.Framework, suiteName, scanName string, check compv1alpha1.ComplianceCheckResult) error {
+	var getCheck compv1alpha1.ComplianceCheckResult
 
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: check.Name, Namespace: check.Namespace}, &getCheck)
 	if err != nil {
 		return err
 	}
 
-	if getCheck.Spec.Result != check.Spec.Result {
-		return fmt.Errorf("expected result %s got result %s", check.Spec.Result, getCheck.Spec.Result)
+	if getCheck.Status != check.Status {
+		return fmt.Errorf("expected result %s got result %s", check.Status, getCheck.Status)
 	}
 
-	if getCheck.Spec.ID != check.Spec.ID {
-		return fmt.Errorf("expected ID %s got ID %s", check.Spec.ID, getCheck.Spec.ID)
+	if getCheck.ID != check.ID {
+		return fmt.Errorf("expected ID %s got ID %s", check.ID, getCheck.ID)
 	}
 
 	if getCheck.Labels == nil {
-		return fmt.Errorf("compliancecheck has no labels")
+		return fmt.Errorf("complianceCheckResult has no labels")
 	}
 
 	if getCheck.Labels[compv1alpha1.SuiteLabel] != suiteName {

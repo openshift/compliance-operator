@@ -95,7 +95,7 @@ func createCrClient(config *rest.Config) (*complianceCrClient, error) {
 	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
 		&compv1alpha1.ComplianceScan{})
 	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
-		&compv1alpha1.ComplianceCheck{})
+		&compv1alpha1.ComplianceCheckResult{})
 	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
 		&metav1.CreateOptions{})
 
@@ -224,20 +224,19 @@ func createOneResult(crClient *complianceCrClient, owner metav1.Object, labels m
 	return nil
 }
 
-func getRemediationLabels(scan *compv1alpha1.ComplianceScan) map[string]string {
+func getRemediationLabels(scan *compv1alpha1.ComplianceScan) (map[string]string, error) {
 	labels := make(map[string]string)
 	labels[compv1alpha1.ScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
 	labels[mcfgv1.MachineConfigRoleLabelKey] = utils.GetFirstNodeRole(scan.Spec.NodeSelector)
 	if labels[mcfgv1.MachineConfigRoleLabelKey] == "" {
-		fmt.Printf("scan %s has no role assignment", scan.Name)
-		return nil
+		return nil, fmt.Errorf("scan %s has no role assignment", scan.Name)
 	}
 
-	return labels
+	return labels, nil
 }
 
-func getCheckLabels(scan *compv1alpha1.ComplianceScan) map[string]string {
+func getCheckResultLabels(scan *compv1alpha1.ComplianceScan) map[string]string {
 	labels := make(map[string]string)
 	labels[compv1alpha1.ScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
@@ -253,33 +252,33 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 	}
 
 	for _, pr := range parsedResults {
-		if pr == nil || pr.Check == nil {
+		if pr == nil || pr.CheckResult == nil {
 			fmt.Println("nil result or result.check, this shouldn't happen")
 			continue
 		}
 
-		checkLabels := getCheckLabels(scan)
-		if checkLabels == nil {
-			return fmt.Errorf("cannot create check labels")
+		checkResultLabels := getCheckResultLabels(scan)
+		if checkResultLabels == nil {
+			return fmt.Errorf("cannot create checkResult labels")
 		}
 
 		// check is owned by the scan
-		if err := createOneResult(crClient, scan, checkLabels, pr.Check); err != nil {
-			return fmt.Errorf("cannot create check %s: %v", pr.Check.Name, err)
+		if err := createOneResult(crClient, scan, checkResultLabels, pr.CheckResult); err != nil {
+			return fmt.Errorf("cannot create checkResult %s: %v", pr.CheckResult.Name, err)
 		}
 
 		if pr.Remediation == nil {
 			continue
 		}
 
-		remLabels := getRemediationLabels(scan)
-		if remLabels == nil {
-			return fmt.Errorf("cannot create remediation labels")
+		remLabels, err := getRemediationLabels(scan)
+		if err != nil {
+			return err
 		}
 
 		// remediation is owned by the check
-		if err := createOneResult(crClient, pr.Check, remLabels, pr.Remediation); err != nil {
-			return fmt.Errorf("cannot create remediation %s: %v", pr.Check.Name, err)
+		if err := createOneResult(crClient, pr.CheckResult, remLabels, pr.Remediation); err != nil {
+			return fmt.Errorf("cannot create remediation %s: %v", pr.CheckResult.Name, err)
 		}
 
 	}
