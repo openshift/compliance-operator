@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var log = logf.Log.WithName("scanctrl")
@@ -479,11 +480,11 @@ func getPVCForScan(instance *compv1alpha1.ComplianceScan) *corev1.PersistentVolu
 // pod names are limited to 63 chars, inclusive. Try to use a friendly name, if that can't be done,
 // just use a hash. Either way, the node would be present in a label of the pod.
 func getPodForNodeName(scanName, nodeName string) string {
-	return dnsLengthName("openscap-pod-", "%s-%s-pod", scanName, nodeName)
+	return utils.DNSLengthName("openscap-pod-", "%s-%s-pod", scanName, nodeName)
 }
 
 func getConfigMapForNodeName(scanName, nodeName string) string {
-	return dnsLengthName("openscap-pod-", "%s-%s-pod", scanName, nodeName)
+	return utils.DNSLengthName("openscap-pod-", "%s-%s-pod", scanName, nodeName)
 }
 
 func getPVCForScanName(instance *compv1alpha1.ComplianceScan) string {

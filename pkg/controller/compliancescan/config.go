@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 const (
@@ -190,11 +191,11 @@ func defaultOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev
 }
 
 func scriptCmForScan(scan *compv1alpha1.ComplianceScan) string {
-	return dnsLengthName("scap-entrypoint-", "%s-%s", scan.Name, OpenScapScriptConfigMapName)
+	return utils.DNSLengthName("scap-entrypoint-", "%s-%s", scan.Name, OpenScapScriptConfigMapName)
 }
 
 func envCmForScan(scan *compv1alpha1.ComplianceScan) string {
-	return dnsLengthName("scap-env-", "%s-%s", scan.Name, OpenScapEnvConfigMapName)
+	return utils.DNSLengthName("scap-env-", "%s-%s", scan.Name, OpenScapEnvConfigMapName)
 }
 
 func asOwner(scan *compv1alpha1.ComplianceScan) metav1.OwnerReference {

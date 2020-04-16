@@ -11,12 +11,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 const aggregatorSA = "remediation-aggregator"
 
 func createAggregatorPodName(scanName string) string {
-	return dnsLengthName("aggregator-pod-", "aggregator-pod-%s", scanName)
+	return utils.DNSLengthName("aggregator-pod-", "aggregator-pod-%s", scanName)
 }
 
 func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Logger) *corev1.Pod {
