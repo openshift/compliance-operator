@@ -27,7 +27,7 @@ import (
 var log = logf.Log.WithName("remediationctrl")
 
 const (
-	remediationNameAnnotationKey = "remediation.compliance.openshift.io/"
+	remediationNameAnnotationKey = "remediation/"
 )
 
 // Add creates a new ComplianceRemediation Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -368,7 +368,7 @@ func updateMachineConfig(r *ReconcileComplianceRemediation, current *mcfgv1.Mach
 }
 
 func getRemediationAnnotationKey(remName string) string {
-	return remediationNameAnnotationKey + remName
+	return utils.DNSLengthName(remediationNameAnnotationKey, remediationNameAnnotationKey+"%s", remName)
 }
 
 func ensureRemediationAnnotationIsSet(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) {

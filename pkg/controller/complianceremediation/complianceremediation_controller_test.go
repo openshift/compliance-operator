@@ -3,6 +3,8 @@ package complianceremediation
 import (
 	"context"
 	"fmt"
+	"reflect"
+
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -11,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -100,10 +101,10 @@ var _ = Describe("Testing complianceremediation controller", func() {
 		reconciler = ReconcileComplianceRemediation{client: client, scheme: scheme}
 	})
 
-	Context("Only a single remediation", func() {
+	Context("only a single remediation", func() {
 		It("should return an empty list if nothing matches", func() {
-			machineConfigs, err := getAppliedMcRemediations(&reconciler, complianceremediationinstance)
-			Expect(len(machineConfigs)).To(BeZero())
+			machineconfigs, err := getAppliedMcRemediations(&reconciler, complianceremediationinstance)
+			Expect(len(machineconfigs)).To(BeZero())
 			Expect(err).To(BeNil())
 		})
 	})
@@ -165,6 +166,22 @@ var _ = Describe("Testing complianceremediation controller", func() {
 					Expect(ok).To(BeTrue())
 				}
 			}
+		})
+	})
+
+	Context("getting remediation name annotations", func() {
+		It("should get non-cropped remediation name if it's short enough", func() {
+			annotationKey := getRemediationAnnotationKey("simple-remediation")
+			Expect(len(annotationKey)).ToNot(BeZero())
+			Expect(len(annotationKey)).To(BeNumerically("<", 64))
+		})
+
+		It("should get cropped remediation name if it's too long", func() {
+			annotationKey := getRemediationAnnotationKey(
+				"moderate-master-scan-1-sysctl-net-ipv4-icmp-echo-ignore-broadcasts123456789" +
+					"abcdefghijklmnopqrstuvwxyz")
+			Expect(len(annotationKey)).ToNot(BeZero())
+			Expect(len(annotationKey)).To(BeNumerically("<", 64))
 		})
 	})
 })
