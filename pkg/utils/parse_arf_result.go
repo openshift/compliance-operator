@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -16,11 +17,34 @@ import (
 
 const (
 	machineConfigFixType = "urn:xccdf:fix:script:ignition"
+	rulePrefix           = "xccdf_org.ssgproject.content_rule_"
 )
 
 // XMLDocument is a wrapper that keeps the interface XML-parser-agnostic
 type XMLDocument struct {
 	*xmldom.Document
+}
+
+type ParseResult struct {
+	CheckResult *compv1alpha1.ComplianceCheckResult
+	Remediation *compv1alpha1.ComplianceRemediation
+}
+
+type ruleHashTable map[string]*xmldom.Node
+
+func newRuleHashTable(dsDom *XMLDocument) ruleHashTable {
+	benchmarkDom := dsDom.Root.QueryOne("//component/Benchmark")
+	rules := benchmarkDom.Query("//Rule")
+
+	table := make(ruleHashTable)
+	for i := range rules {
+		ruleDefinition := rules[i]
+		ruleId := ruleDefinition.GetAttributeValue("id")
+
+		table[ruleId] = ruleDefinition
+	}
+
+	return table
 }
 
 // ParseContent parses the DataStream and returns the XML document
@@ -32,48 +56,165 @@ func ParseContent(dsReader io.Reader) (*XMLDocument, error) {
 	return &XMLDocument{dsDom}, nil
 }
 
-// ParseRemediationFromContentAndResults parses the content DS and the results from the scan, and generates
-// the necessary remediations
-func ParseRemediationFromContentAndResults(scheme *runtime.Scheme, scanName string, namespace string,
-	dsDom *XMLDocument, resultsReader io.Reader) ([]*compv1alpha1.ComplianceRemediation, error) {
-	remediations := make([]*compv1alpha1.ComplianceRemediation, 0)
+func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, namespace string,
+	dsDom *XMLDocument, resultsReader io.Reader) ([]*ParseResult, error) {
 
 	resultsDom, err := xmldom.Parse(resultsReader)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get the checks that had failed
-	failedRuleResults := filterFailedResults(resultsDom.Root.Query("//rule-result"))
+	ruleTable := newRuleHashTable(dsDom)
 
-	// Get group that contains remediations
-	remediationsDom := dsDom.Root.QueryOne("//component/Benchmark")
-	for _, frr := range failedRuleResults {
-		// Each result has the rule ID in the idref attribute
-		ruleIDRef := frr.GetAttributeValue("idref")
+	results := resultsDom.Root.Query("//rule-result")
+	parsedResults := make([]*ParseResult, 0)
+	for i := range results {
+		result := results[i]
+		ruleIDRef := result.GetAttributeValue("idref")
 		if ruleIDRef == "" {
 			continue
 		}
 
-		ruleDefinition := remediationsDom.FindByID(ruleIDRef)
-		if ruleDefinition == nil {
+		resultRule := ruleTable[ruleIDRef]
+		if resultRule == nil {
 			continue
 		}
 
-		for _, fix := range ruleDefinition.FindByName("fix") {
-			if !isMachineConfigFix(fix) {
-				continue
+		resCheck, err := newComplianceCheckResult(result, resultRule, ruleIDRef, scanName, namespace)
+		if err != nil {
+			continue
+		}
+
+		if resCheck != nil {
+			pr := &ParseResult{
+				CheckResult: resCheck,
 			}
 
-			newRemediation := remediationFromFixElement(scheme, fix, scanName, namespace)
-			if newRemediation == nil {
-				continue
+			if resCheck.Status == compv1alpha1.CheckResultFail || resCheck.Status == compv1alpha1.CheckResultInfo {
+				pr.Remediation = newComplianceRemediation(scheme, scanName, namespace, resultRule)
 			}
-			remediations = append(remediations, newRemediation)
+
+			parsedResults = append(parsedResults, pr)
 		}
 	}
 
-	return remediations, nil
+	return parsedResults, nil
+}
+
+// Returns a new complianceCheckResult if the check data is usable
+func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef, scanName, namespace string) (*compv1alpha1.ComplianceCheckResult, error) {
+	name := nameFromId(scanName, ruleIdRef)
+	mappedStatus, err := mapComplianceCheckResultStatus(result)
+	if err != nil {
+		return nil, err
+	}
+	if mappedStatus == compv1alpha1.CheckResultNoResult {
+		return nil, nil
+	}
+
+	mappedSeverity, err := mapComplianceCheckResultSeverity(rule)
+	if err != nil {
+		return nil, err
+	}
+
+	return &compv1alpha1.ComplianceCheckResult{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		ID:          ruleIdRef,
+		Status:      mappedStatus,
+		Severity:    mappedSeverity,
+		Description: complianceCheckResultDescription(rule),
+	}, nil
+}
+
+func getSafeText(nptr *xmldom.Node, elem string) string {
+	elemNode := nptr.FindOneByName(elem)
+	if elemNode == nil {
+		return ""
+	}
+
+	return elemNode.Text
+}
+
+func complianceCheckResultDescription(rule *xmldom.Node) string {
+	title := getSafeText(rule, "title")
+	if title != "" {
+		title = title + "\n"
+	}
+	return title + getSafeText(rule, "rationale")
+}
+
+func mapComplianceCheckResultSeverity(result *xmldom.Node) (compv1alpha1.ComplianceCheckResultSeverity, error) {
+	severityAttr := result.GetAttributeValue("severity")
+	if severityAttr == "" {
+		return "", errors.New("result node has no 'severity' attribute")
+	}
+
+	// All severities can be found in https://csrc.nist.gov/CSRC/media/Publications/nistir/7275/rev-4/final/documents/nistir-7275r4_updated-march-2012_clean.pdf
+	// section 6.6.4.2 table 9
+	switch severityAttr {
+	case "unknown":
+		return compv1alpha1.CheckResultSeverityUnknown, nil
+	case "info":
+		return compv1alpha1.CheckResultSeverityInfo, nil
+	case "low":
+		return compv1alpha1.CheckResultSeverityLow, nil
+	case "medium":
+		return compv1alpha1.CheckResultSeverityMedium, nil
+	case "high":
+		return compv1alpha1.CheckResultSeverityHigh, nil
+	}
+
+	return compv1alpha1.CheckResultSeverityUnknown, nil
+}
+
+func mapComplianceCheckResultStatus(result *xmldom.Node) (compv1alpha1.ComplianceCheckStatus, error) {
+	resultEl := result.FindOneByName("result")
+	if resultEl == nil {
+		return "", errors.New("result node has no 'result' attribute")
+	}
+
+	// All states can be found at https://csrc.nist.gov/CSRC/media/Publications/nistir/7275/rev-4/final/documents/nistir-7275r4_updated-march-2012_clean.pdf
+	// section 6.6.4.2, table 26
+	switch resultEl.Text {
+	// The standard says that "Fixed means the rule failed initially but was then fixed"
+	case "pass", "fixed":
+		return compv1alpha1.CheckResultPass, nil
+	case "fail":
+		return compv1alpha1.CheckResultFail, nil
+		// Unknown state is when the rule runs to completion, but then the results can't be interpreted
+	case "error", "unknown":
+		return compv1alpha1.CheckResultError, nil
+		// We map both notchecked and info to Info. Notchecked means the rule does not even have a check,
+		// and the administratos must inspect the rule manually (e.g. disable something in BIOS),
+		// informational means that the rule has a check which failed, but the severity is low, depending
+		// on the environment (e.g. disable USB support completely from the kernel cmdline)
+	case "notchecked", "informational":
+		return compv1alpha1.CheckResultInfo, nil
+		// We map notapplicable to Skipped. Notapplicable means the rule was selected
+		// but does not apply to the current configuration (e.g. arch-specific),
+	case "notapplicable":
+		return compv1alpha1.CheckResultSkipped, nil
+	case "notselected":
+		// We map notselected to nothing, as the test wasn't included in the benchmark
+		return compv1alpha1.CheckResultNoResult, nil
+	}
+
+	return compv1alpha1.CheckResultNoResult, fmt.Errorf("couldn't match %s to a known state", resultEl.Text)
+}
+
+func newComplianceRemediation(scheme *runtime.Scheme, scanName, namespace string, rule *xmldom.Node) *compv1alpha1.ComplianceRemediation {
+	for _, fix := range rule.FindByName("fix") {
+		if !isMachineConfigFix(fix) {
+			continue
+		}
+
+		return remediationFromFixElement(scheme, fix, scanName, namespace)
+	}
+
+	return nil
 }
 
 func isMachineConfigFix(fix *xmldom.Node) bool {
@@ -83,17 +224,11 @@ func isMachineConfigFix(fix *xmldom.Node) bool {
 	return false
 }
 
-func filterFailedResults(results []*xmldom.Node) []*xmldom.Node {
-	failed := make([]*xmldom.Node, 0)
-
-	for _, res := range results {
-		resultEl := res.FindOneByName("result")
-		if resultEl.Text == "fail" {
-			failed = append(failed, res)
-		}
-	}
-
-	return failed
+func nameFromId(scanName, ruleIdRef string) string {
+	ruleName := strings.TrimPrefix(ruleIdRef, rulePrefix)
+	dnsFriendlyFixId := strings.ReplaceAll(ruleName, "_", "-")
+	dnsFriendlyFixId = strings.ToLower(dnsFriendlyFixId)
+	return fmt.Sprintf("%s-%s", scanName, dnsFriendlyFixId)
 }
 
 func remediationFromFixElement(scheme *runtime.Scheme, fix *xmldom.Node, scanName, namespace string) *compv1alpha1.ComplianceRemediation {

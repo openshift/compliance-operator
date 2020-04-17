@@ -95,6 +95,8 @@ func createCrClient(config *rest.Config) (*complianceCrClient, error) {
 	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
 		&compv1alpha1.ComplianceScan{})
 	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
+		&compv1alpha1.ComplianceCheckResult{})
+	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
 		&metav1.CreateOptions{})
 
 	client, err := runtimeclient.New(config, runtimeclient.Options{
@@ -144,7 +146,7 @@ func readCompressedData(compressed string) (*bzip2.Reader, error) {
 	return bzip2.NewReader(compressedReader, &bzip2.ReaderConfig{})
 }
 
-func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*compv1alpha1.ComplianceRemediation, error) {
+func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*utils.ParseResult, error) {
 	var scanReader io.Reader
 
 	_, ok := cm.Annotations[configMapRemediationsProcessed]
@@ -171,7 +173,7 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string,
 		scanReader = strings.NewReader(cmScanResult)
 	}
 
-	return utils.ParseRemediationFromContentAndResults(scheme, scanName, namespace, content, scanReader)
+	return utils.ParseResultsFromContentAndXccdf(scheme, scanName, namespace, content, scanReader)
 }
 
 func annotateParsedConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) error {
@@ -189,36 +191,96 @@ func annotateParsedConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) 
 	return err
 }
 
-func createRemediations(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, remediations []*compv1alpha1.ComplianceRemediation) error {
-	for _, rem := range remediations {
-		fmt.Printf("Creating remediation %s\n", rem.Name)
-		if err := controllerutil.SetControllerReference(scan, rem, crClient.scheme); err != nil {
-			fmt.Printf("Failed to set remediation ownership %v", err)
+type compResultIface interface {
+	metav1.Object
+	runtime.Object
+}
+
+func createOneResult(crClient *complianceCrClient, owner metav1.Object, labels map[string]string, res compResultIface) error {
+	kind := res.GetObjectKind()
+
+	if err := controllerutil.SetControllerReference(owner, res, crClient.scheme); err != nil {
+		fmt.Printf("Failed to set '%s' ownership %v", kind.GroupVersionKind().Kind, err)
+		return err
+	}
+
+	res.SetLabels(labels)
+
+	name := res.GetName()
+	fmt.Printf("Creating %s:%s\n", kind.GroupVersionKind().Kind, name)
+
+	err := backoff.Retry(func() error {
+		err := crClient.client.Create(context.TODO(), res)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			fmt.Printf("Retrying with a backoff because of an error: %v\n", err)
 			return err
 		}
+		return nil
+	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+	if err != nil {
+		fmt.Printf("Failed to create a '%s' object: %v\n", kind.GroupVersionKind().Kind, err)
+		return err
+	}
+	return nil
+}
 
-		if rem.Labels == nil {
-			rem.Labels = make(map[string]string)
-		}
-		rem.Labels[compv1alpha1.ScanLabel] = scan.Name
-		rem.Labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
-		rem.Labels[mcfgv1.MachineConfigRoleLabelKey] = utils.GetFirstNodeRole(scan.Spec.NodeSelector)
-		if rem.Labels[mcfgv1.MachineConfigRoleLabelKey] == "" {
-			return fmt.Errorf("scan %s has no role assignment", scan.Name)
+func getRemediationLabels(scan *compv1alpha1.ComplianceScan) (map[string]string, error) {
+	labels := make(map[string]string)
+	labels[compv1alpha1.ScanLabel] = scan.Name
+	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
+	labels[mcfgv1.MachineConfigRoleLabelKey] = utils.GetFirstNodeRole(scan.Spec.NodeSelector)
+	if labels[mcfgv1.MachineConfigRoleLabelKey] == "" {
+		return nil, fmt.Errorf("scan %s has no role assignment", scan.Name)
+	}
+
+	return labels, nil
+}
+
+func getCheckResultLabels(scan *compv1alpha1.ComplianceScan) map[string]string {
+	labels := make(map[string]string)
+	labels[compv1alpha1.ScanLabel] = scan.Name
+	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
+
+	return labels
+}
+
+func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, parsedResults []*utils.ParseResult) error {
+	fmt.Printf("Will create %d result objects\n", len(parsedResults))
+	if len(parsedResults) == 0 {
+		fmt.Println("Nothing to create")
+		return nil
+	}
+
+	for _, pr := range parsedResults {
+		if pr == nil || pr.CheckResult == nil {
+			fmt.Println("nil result or result.check, this shouldn't happen")
+			continue
 		}
 
-		err := backoff.Retry(func() error {
-			err := crClient.client.Create(context.TODO(), rem)
-			if err != nil && !errors.IsAlreadyExists(err) {
-				return err
-			}
-			return nil
-		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+		checkResultLabels := getCheckResultLabels(scan)
+		if checkResultLabels == nil {
+			return fmt.Errorf("cannot create checkResult labels")
+		}
+
+		// check is owned by the scan
+		if err := createOneResult(crClient, scan, checkResultLabels, pr.CheckResult); err != nil {
+			return fmt.Errorf("cannot create checkResult %s: %v", pr.CheckResult.Name, err)
+		}
+
+		if pr.Remediation == nil {
+			continue
+		}
+
+		remLabels, err := getRemediationLabels(scan)
 		if err != nil {
-
-			fmt.Printf("Failed to create remediation: %v\n", err)
 			return err
 		}
+
+		// remediation is owned by the check
+		if err := createOneResult(crClient, pr.CheckResult, remLabels, pr.Remediation); err != nil {
+			return fmt.Errorf("cannot create remediation %s: %v", pr.CheckResult.Name, err)
+		}
+
 	}
 
 	return nil
@@ -233,7 +295,7 @@ func readContent(filename string) (*os.File, error) {
 }
 
 func aggregator(cmd *cobra.Command, args []string) {
-	var scanRemediations []*compv1alpha1.ComplianceRemediation
+	var scanParsedResults []*utils.ParseResult
 
 	aggregatorConf := parseConfig(cmd)
 
@@ -295,24 +357,24 @@ func aggregator(cmd *cobra.Command, args []string) {
 	for _, cm := range configMaps {
 		fmt.Printf("processing CM: %s\n", cm.Name)
 
-		cmRemediations, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, &cm)
+		cmParsedResults, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, &cm)
 		if err != nil {
 			fmt.Printf("Cannot parse CM %s into remediations, err: %v\n", cm.Name, err)
-		} else if cmRemediations == nil {
-			fmt.Println("Either no remediations found in result or result already processed")
+		} else if cmParsedResults == nil {
+			fmt.Println("Either no parsed results found in result or result already processed")
 			continue
 		}
-		fmt.Printf("CM %s contained %d remediations\n", cm.Name, len(cmRemediations))
+		fmt.Printf("CM %s contained %d parsed results\n", cm.Name, len(cmParsedResults))
 
-		// If there are any remediations, make sure all of them for the scan are
+		// If there are any results, make sure all of them for the scan are
 		// exactly the same
-		if scanRemediations == nil {
+		if scanParsedResults == nil {
 			// This is the first loop or only result
 			fmt.Println("This is the first remediation list, keeping it")
-			scanRemediations = cmRemediations
+			scanParsedResults = cmParsedResults
 		} else {
 			// All remediation lists in the scan must be equal
-			ok := utils.DiffRemediationList(scanRemediations, cmRemediations)
+			ok := utils.DiffRemediationList(scanParsedResults, cmParsedResults)
 			if !ok {
 				fmt.Println("The remediations differ between machines, this should never happen as the machines in a pool should be identical")
 				os.Exit(1)
@@ -323,8 +385,8 @@ func aggregator(cmd *cobra.Command, args []string) {
 	// At this point either scanRemediations is nil or contains a list
 	// of remediations for this scan
 	// Create the remediations
-	fmt.Println("Creating remediation objects")
-	if err := createRemediations(crclient, scan, scanRemediations); err != nil {
+	fmt.Println("Creating result objects")
+	if err := createResults(crclient, scan, scanParsedResults); err != nil {
 		fmt.Printf("Could not create remediation objects: %v\n", err)
 		os.Exit(1)
 	}

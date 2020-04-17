@@ -221,7 +221,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 	}
 
 	if len(nodes.Items) == 0 {
-		log.Info("Warning: No eligible nodes. Check the nodeSelector.")
+		log.Info("Warning: No eligible nodes. CheckResult the nodeSelector.")
 	}
 
 	// On each eligible node..
