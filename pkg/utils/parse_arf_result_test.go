@@ -89,6 +89,39 @@ var _ = Describe("XCCDF parser", func() {
 			})
 		})
 
+		Context("First check metadata", func() {
+			const (
+				expID          = "xccdf_org.ssgproject.content_rule_selinux_policytype"
+				expDescription = "Configure SELinux Policy\n."
+			)
+
+			var (
+				check *compv1alpha1.ComplianceCheckResult
+			)
+
+			BeforeEach(func() {
+				for i := range resultList {
+					if resultList[i].CheckResult != nil && resultList[i].CheckResult.ID == expID {
+						check = resultList[i].CheckResult
+						break
+					}
+				}
+				Expect(check).ToNot(BeNil())
+			})
+
+			It("Should have the expected status", func() {
+				Expect(check.Status).To(Equal(compv1alpha1.CheckResultPass))
+			})
+
+			It("Should have the expected severity", func() {
+				Expect(check.Severity).To(Equal(compv1alpha1.CheckResultSeverityHigh))
+			})
+
+			It("Should have the expected description", func() {
+				Expect(check.Description).To(Equal(expDescription))
+			})
+		})
+
 		Context("First remediation type", func() {
 			var (
 				rem     *compv1alpha1.ComplianceRemediation

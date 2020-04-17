@@ -7,6 +7,9 @@ spec:
   - JSONPath: .status
     name: Status
     type: string
+  - JSONPath: .severity
+    name: Severity
+    type: string
   group: compliance.openshift.io
   names:
     kind: ComplianceCheckResult
@@ -38,12 +41,16 @@ spec:
           type: string
         metadata:
           type: object
-        result:
+        severity:
+          description: The severity of a check status
+          type: string
+        status:
           description: The result of a check
           type: string
       required:
       - id
-      - result
+      - severity
+      - status
       type: object
   version: v1alpha1
   versions:

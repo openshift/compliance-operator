@@ -212,7 +212,7 @@ func createOneResult(crClient *complianceCrClient, owner metav1.Object, labels m
 	err := backoff.Retry(func() error {
 		err := crClient.client.Create(context.TODO(), res)
 		if err != nil && !errors.IsAlreadyExists(err) {
-			fmt.Printf("Retrying with a backoff because of an error: %v", err)
+			fmt.Printf("Retrying with a backoff because of an error: %v\n", err)
 			return err
 		}
 		return nil

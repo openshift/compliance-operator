@@ -112,6 +112,11 @@ func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef,
 		return nil, nil
 	}
 
+	mappedSeverity, err := mapComplianceCheckResultSeverity(rule)
+	if err != nil {
+		return nil, err
+	}
+
 	return &compv1alpha1.ComplianceCheckResult{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      name,
@@ -119,6 +124,7 @@ func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef,
 		},
 		ID:          ruleIdRef,
 		Status:      mappedStatus,
+		Severity:    mappedSeverity,
 		Description: complianceCheckResultDescription(rule),
 	}, nil
 }
@@ -138,6 +144,30 @@ func complianceCheckResultDescription(rule *xmldom.Node) string {
 		title = title + "\n"
 	}
 	return title + getSafeText(rule, "rationale")
+}
+
+func mapComplianceCheckResultSeverity(result *xmldom.Node) (compv1alpha1.ComplianceCheckResultSeverity, error) {
+	severityAttr := result.GetAttributeValue("severity")
+	if severityAttr == "" {
+		return "", errors.New("result node has no 'severity' attribute")
+	}
+
+	// All severities can be found in https://csrc.nist.gov/CSRC/media/Publications/nistir/7275/rev-4/final/documents/nistir-7275r4_updated-march-2012_clean.pdf
+	// section 6.6.4.2 table 9
+	switch severityAttr {
+	case "unknown":
+		return compv1alpha1.CheckResultSeverityUnknown, nil
+	case "info":
+		return compv1alpha1.CheckResultSeverityInfo, nil
+	case "low":
+		return compv1alpha1.CheckResultSeverityLow, nil
+	case "medium":
+		return compv1alpha1.CheckResultSeverityMedium, nil
+	case "high":
+		return compv1alpha1.CheckResultSeverityHigh, nil
+	}
+
+	return compv1alpha1.CheckResultSeverityUnknown, nil
 }
 
 func mapComplianceCheckResultStatus(result *xmldom.Node) (compv1alpha1.ComplianceCheckStatus, error) {

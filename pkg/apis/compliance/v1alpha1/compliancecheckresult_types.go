@@ -21,11 +21,22 @@ const (
 	CheckResultNoResult ComplianceCheckStatus = ""
 )
 
+type ComplianceCheckResultSeverity string
+
+const (
+	CheckResultSeverityUnknown ComplianceCheckResultSeverity = "unknown"
+	CheckResultSeverityInfo    ComplianceCheckResultSeverity = "info"
+	CheckResultSeverityLow     ComplianceCheckResultSeverity = "low"
+	CheckResultSeverityMedium  ComplianceCheckResultSeverity = "medium"
+	CheckResultSeverityHigh    ComplianceCheckResultSeverity = "high"
+)
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ComplianceCheckResult represent a result of a single compliance "test"
 // +kubebuilder:resource:path=compliancecheckresults,scope=Namespaced
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=`.status`
+// +kubebuilder:printcolumn:name="Severity",type="string",JSONPath=`.severity`
 type ComplianceCheckResult struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -33,7 +44,9 @@ type ComplianceCheckResult struct {
 	// A unique identifier of a check
 	ID string `json:"id"`
 	// The result of a check
-	Status ComplianceCheckStatus `json:"result"`
+	Status ComplianceCheckStatus `json:"status"`
+	// The severity of a check status
+	Severity ComplianceCheckResultSeverity `json:"severity"`
 	// A human-readable check description, what and why it does
 	Description string `json:"description,omitempty"`
 }
