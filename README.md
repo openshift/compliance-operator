@@ -17,7 +17,8 @@ First, become kubeadmin, either with `oc login` or by exporting `KUBECONFIG`.
 ```
 $ (clone repo)
 $ oc create -f deploy/ns.yaml
-$ for f in $(ls -1 deploy/crds/*crd.yaml); do oc create -f $f; done
+$ oc project openshift-compliance
+$ for f in $(ls -1 deploy/crds/*crd.yaml); do oc create -f $f -n openshift-compliance; done
 $ oc create -f deploy/
 ```
 
