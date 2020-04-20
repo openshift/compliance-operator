@@ -143,7 +143,7 @@ var _ = Describe("XCCDF parser", func() {
 				Expect(rem.Name).To(Equal(expName))
 			})
 			It("Should be a MC", func() {
-				Expect(rem.Spec.Type).To(Equal(compv1alpha1.McRemediation))
+				Expect(rem.Spec.Object.GetKind()).To(Equal("MachineConfig"))
 			})
 
 			Context("MC files", func() {
@@ -152,7 +152,8 @@ var _ = Describe("XCCDF parser", func() {
 				)
 
 				BeforeEach(func() {
-					mcFiles = rem.Spec.MachineConfigContents.Spec.Config.Storage.Files
+					mcfg, _ := ParseMachineConfig(rem, rem.Spec.Object)
+					mcFiles = mcfg.Spec.Config.Storage.Files
 				})
 
 				It("Should define one file", func() {

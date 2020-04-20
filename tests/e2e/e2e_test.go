@@ -401,7 +401,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				mcfgToBeDeleted := rem.Spec.MachineConfigContents.DeepCopy()
+				mcfgToBeDeleted := rem.Spec.Object.DeepCopy()
 				mcfgToBeDeleted.SetName(rem.GetMcName())
 				err = f.Client.Delete(goctx.TODO(), mcfgToBeDeleted)
 				if err != nil {
