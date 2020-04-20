@@ -132,7 +132,14 @@ func (in *ComplianceRemediationList) DeepCopyObject() runtime.Object {
 func (in *ComplianceRemediationSpec) DeepCopyInto(out *ComplianceRemediationSpec) {
 	*out = *in
 	out.ComplianceRemediationSpecMeta = in.ComplianceRemediationSpecMeta
-	in.MachineConfigContents.DeepCopyInto(&out.MachineConfigContents)
+	if in.MachineConfigContents != nil {
+		in, out := &in.MachineConfigContents, &out.MachineConfigContents
+		*out = (*in).DeepCopy()
+	}
+	if in.Object != nil {
+		in, out := &in.Object, &out.Object
+		*out = (*in).DeepCopy()
+	}
 	return
 }
 

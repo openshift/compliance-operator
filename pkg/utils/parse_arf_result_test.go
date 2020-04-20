@@ -1,18 +1,31 @@
 package utils
 
 import (
+	"fmt"
 	"io"
 	"os"
 
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
+
+func parseMachineConfig(rem *compv1alpha1.ComplianceRemediation, obj *unstructured.Unstructured) (*mcfgv1.MachineConfig, error) {
+	mcfg := &mcfgv1.MachineConfig{}
+	unstruct := obj.UnstructuredContent()
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstruct, mcfg)
+
+	if err != nil {
+		return nil, fmt.Errorf("The MachineConfig in the remediation '%s' is not valid: %s", rem.Name, err)
+	}
+	return mcfg, nil
+}
 
 func countResultItems(resultList []*ParseResult) (int, int) {
 	if resultList == nil {
@@ -143,7 +156,7 @@ var _ = Describe("XCCDF parser", func() {
 				Expect(rem.Name).To(Equal(expName))
 			})
 			It("Should be a MC", func() {
-				Expect(rem.Spec.Type).To(Equal(compv1alpha1.McRemediation))
+				Expect(rem.Spec.Object.GetKind()).To(Equal("MachineConfig"))
 			})
 
 			Context("MC files", func() {
@@ -152,7 +165,8 @@ var _ = Describe("XCCDF parser", func() {
 				)
 
 				BeforeEach(func() {
-					mcFiles = rem.Spec.MachineConfigContents.Spec.Config.Storage.Files
+					mcfg, _ := parseMachineConfig(rem, rem.Spec.Object)
+					mcFiles = mcfg.Spec.Config.Storage.Files
 				})
 
 				It("Should define one file", func() {

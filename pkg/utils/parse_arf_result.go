@@ -8,15 +8,16 @@ import (
 
 	"github.com/subchen/go-xmldom"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
+	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
 const (
 	machineConfigFixType = "urn:xccdf:fix:script:ignition"
+	kubernetesFixType    = "urn:xccdf:fix:script:kubernetes"
 	rulePrefix           = "xccdf_org.ssgproject.content_rule_"
 )
 
@@ -207,18 +208,19 @@ func mapComplianceCheckResultStatus(result *xmldom.Node) (compv1alpha1.Complianc
 
 func newComplianceRemediation(scheme *runtime.Scheme, scanName, namespace string, rule *xmldom.Node) *compv1alpha1.ComplianceRemediation {
 	for _, fix := range rule.FindByName("fix") {
-		if !isMachineConfigFix(fix) {
-			continue
+		if isRelevantFix(fix) {
+			return remediationFromFixElement(scheme, fix, scanName, namespace)
 		}
-
-		return remediationFromFixElement(scheme, fix, scanName, namespace)
 	}
 
 	return nil
 }
 
-func isMachineConfigFix(fix *xmldom.Node) bool {
+func isRelevantFix(fix *xmldom.Node) bool {
 	if fix.GetAttributeValue("system") == machineConfigFixType {
+		return true
+	}
+	if fix.GetAttributeValue("system") == kubernetesFixType {
 		return true
 	}
 	return false
@@ -242,8 +244,8 @@ func remediationFromFixElement(scheme *runtime.Scheme, fix *xmldom.Node, scanNam
 	return remediationFromString(scheme, remName, namespace, fix.Text)
 }
 
-func remediationFromString(scheme *runtime.Scheme, name string, namespace string, mcContent string) *compv1alpha1.ComplianceRemediation {
-	mcObject, err := rawObjectToMachineConfig(scheme, []byte(mcContent))
+func remediationFromString(scheme *runtime.Scheme, name string, namespace string, fixContent string) *compv1alpha1.ComplianceRemediation {
+	obj, err := rawObjectToUnstructured(scheme, fixContent)
 	if err != nil {
 		return nil
 	}
@@ -258,7 +260,7 @@ func remediationFromString(scheme *runtime.Scheme, name string, namespace string
 				Type:  compv1alpha1.McRemediation,
 				Apply: false,
 			},
-			MachineConfigContents: *mcObject,
+			Object: obj,
 		},
 		Status: compv1alpha1.ComplianceRemediationStatus{
 			ApplicationState: compv1alpha1.RemediationNotApplied,
@@ -266,29 +268,9 @@ func remediationFromString(scheme *runtime.Scheme, name string, namespace string
 	}
 }
 
-func rawObjectToMachineConfig(scheme *runtime.Scheme, in []byte) (*mcfgv1.MachineConfig, error) {
-	mcfgCodecs := serializer.NewCodecFactory(scheme)
-	m, err := runtime.Decode(mcfgCodecs.UniversalDecoder(mcfgv1.SchemeGroupVersion), in)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode raw bytes to mcfgv1.SchemeGroupVersion: %v", err)
-	}
-	if m == nil {
-		return nil, fmt.Errorf("expected mcfgv1.SchemeGroupVersion but got nil")
-	}
-
-	mc, ok := m.(*mcfgv1.MachineConfig)
-	if !ok {
-		return nil, fmt.Errorf("expected *mcfvgv1.MachineConfig but found %T", m)
-	}
-
-	// FIXME: Should we check the MC is valid? That at least one of the .spec fields
-	// are present?
-
-	// This might be a bug in the schema perhaps? If there are no kargs, the list is nill,
-	// but the MCO doesn't like that. Let's make sure the list is empty
-	if mc.Spec.KernelArguments == nil {
-		mc.Spec.KernelArguments = make([]string, 0)
-	}
-	return mc, nil
+func rawObjectToUnstructured(scheme *runtime.Scheme, in string) (*unstructured.Unstructured, error) {
+	obj := &unstructured.Unstructured{}
+	dec := k8syaml.NewYAMLToJSONDecoder(strings.NewReader(in))
+	err := dec.Decode(obj)
+	return obj, err
 }

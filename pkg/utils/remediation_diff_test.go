@@ -3,8 +3,11 @@ package utils
 import (
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -23,6 +26,30 @@ var _ = Describe("Testing parse results diff", func() {
 	)
 
 	BeforeEach(func() {
+		mc := &mcfgv1.MachineConfig{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "MachineConfig",
+				APIVersion: mcfgapi.GroupName + "/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{},
+			Spec: mcfgv1.MachineConfigSpec{
+				OSImageURL: "",
+				Config: igntypes.Config{
+					Systemd: igntypes.Systemd{
+						Units: []igntypes.Unit{
+							{
+								Contents: "let's pretend this is a service",
+								Enable:   true,
+								Name:     "service",
+							},
+						},
+					},
+				},
+				KernelArguments: nil,
+			},
+		}
+		unstructuredobj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(mc)
+		obj := &unstructured.Unstructured{Object: unstructuredobj}
 		remService = &compv1alpha1.ComplianceRemediation{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "remService",
@@ -32,23 +59,7 @@ var _ = Describe("Testing parse results diff", func() {
 					Type:  compv1alpha1.McRemediation,
 					Apply: false,
 				},
-				MachineConfigContents: mcfgv1.MachineConfig{
-					Spec: mcfgv1.MachineConfigSpec{
-						OSImageURL: "",
-						Config: igntypes.Config{
-							Systemd: igntypes.Systemd{
-								Units: []igntypes.Unit{
-									{
-										Contents: "let's pretend this is a service",
-										Enable:   true,
-										Name:     "service",
-									},
-								},
-							},
-						},
-						KernelArguments: nil,
-					},
-				},
+				Object: obj,
 			},
 		}
 
@@ -87,7 +98,17 @@ var _ = Describe("Testing parse results diff", func() {
 
 	Context("Different remediation parse results", func() {
 		BeforeEach(func() {
-			remService2.Spec.MachineConfigContents.Spec.Config.Systemd.Units[0].Enable = false
+			obj := remService2.Spec.Object
+			mcfg := &mcfgv1.MachineConfig{}
+			// Get object
+			unstruct := obj.UnstructuredContent()
+			runtime.DefaultUnstructuredConverter.FromUnstructured(unstruct, mcfg)
+			// Change object
+			mcfg.Spec.Config.Systemd.Units[0].Enable = false
+			// persist object
+			unstructuredobj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(mcfg)
+			newobj := &unstructured.Unstructured{Object: unstructuredobj}
+			remService2.Spec.Object = newobj
 		})
 
 		It("fail when the parse results are different", func() {
