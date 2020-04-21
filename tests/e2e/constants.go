@@ -7,4 +7,5 @@ var (
 	timeout              = time.Minute * 15
 	cleanupRetryInterval = time.Second * 1
 	cleanupTimeout       = time.Minute * 5
+	mcoWaitTimeout       = time.Minute * 30
 )

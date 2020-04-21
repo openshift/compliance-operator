@@ -460,7 +460,7 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 	}
 
 	// Should we make this configurable? Maybe 5 minutes is not enough time for slower clusters?
-	err = wait.PollImmediate(10*time.Second, 20*time.Minute, func() (bool, error) {
+	err = wait.PollImmediate(10*time.Second, mcoWaitTimeout, func() (bool, error) {
 		pool := &mcfgv1.MachineConfigPool{}
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name}, pool)
 		if err != nil {
@@ -756,7 +756,7 @@ func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName st
 
 	// When the pool updates, we need to wait for the machines to pick up the new rendered
 	// config
-	err = wait.PollImmediate(10*time.Second, 20*time.Minute, func() (bool, error) {
+	err = wait.PollImmediate(10*time.Second, mcoWaitTimeout, func() (bool, error) {
 		pool := &mcfgv1.MachineConfigPool{}
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
 		if err != nil {
@@ -918,7 +918,7 @@ func createMCPObject(f *framework.Framework, newPoolNodeLabel, oldPoolName, newP
 }
 
 func waitForPoolCondition(t *testing.T, f *framework.Framework, conditionType mcfgv1.MachineConfigPoolConditionType, newPoolName string) error {
-	return wait.PollImmediate(10*time.Second, 20*time.Minute, func() (bool, error) {
+	return wait.PollImmediate(10*time.Second, mcoWaitTimeout, func() (bool, error) {
 		pool := mcfgv1.MachineConfigPool{}
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: newPoolName}, &pool)
 		if err != nil {
