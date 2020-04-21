@@ -40,6 +40,8 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 )
 
 const (
@@ -398,12 +400,14 @@ func getMutualHttpsTransport(c *scapresultsConfig) (*http.Transport, error) {
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(ca)
 
-	// TODO: Configure cipher suites. Perhaps use library-go helper functions.
+	tlsConfig := &tls.Config{}
+	// Configures TLS 1.2
+	tlsConfig = libgocrypto.SecureTLSConfig(tlsConfig)
+	tlsConfig.RootCAs = pool
+	tlsConfig.Certificates = []tls.Certificate{cert}
+
 	return &http.Transport{
-		TLSClientConfig: &tls.Config{
-			RootCAs:      pool,
-			Certificates: []tls.Certificate{cert},
-		},
+		TLSClientConfig: tlsConfig,
 	}, nil
 }
 
