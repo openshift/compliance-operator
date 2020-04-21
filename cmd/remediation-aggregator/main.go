@@ -276,6 +276,25 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			return err
 		}
 
+		// Let's get the owner again to prevent errors like:
+		//		Retrying with a backoff because of an
+		//		 error: ComplianceRemediation.compliance.openshift.io
+		//		 "e2e-scan-no-empty-passwords" is invalid:
+		//		 metadata.ownerReferences.uid: Invalid value: "": uid must
+		//		 not be empty
+		var fullResult compv1alpha1.ComplianceCheckResult
+
+		err = backoff.Retry(func() error {
+			err := crClient.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: pr.CheckResult.Name,
+				Name:      pr.CheckResult.Namespace},
+				&fullResult)
+			if err != nil {
+				return err
+			}
+			return nil
+		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+
 		// remediation is owned by the check
 		if err := createOneResult(crClient, pr.CheckResult, remLabels, pr.Remediation); err != nil {
 			return fmt.Errorf("cannot create remediation %s: %v", pr.CheckResult.Name, err)
