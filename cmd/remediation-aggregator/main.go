@@ -277,7 +277,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		}
 
 		// remediation is owned by the check
-		if err := createOneResult(crClient, pr.CheckResult, remLabels, pr.Remediation); err != nil {
+		if err := createOneResult(crClient, scan, remLabels, pr.Remediation); err != nil {
 			return fmt.Errorf("cannot create remediation %s: %v", pr.CheckResult.Name, err)
 		}
 
