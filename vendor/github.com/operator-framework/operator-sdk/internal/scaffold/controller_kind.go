@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//nolint:lll
 package scaffold
 
 import (
@@ -99,8 +98,7 @@ func getCustomAPIImportPathAndIdent(m string) (p string, id string, err error) {
 	}
 	if id == "" {
 		if len(sm) == 2 {
-			return "", "",
-				fmt.Errorf(`custom import "%s" identifier is empty, remove "=" from passed string`, m)
+			return "", "", fmt.Errorf(`custom import "%s" identifier is empty, remove "=" from passed string`, m)
 		}
 		sp := strings.Split(p, "/")
 		if len(sp) > 1 {

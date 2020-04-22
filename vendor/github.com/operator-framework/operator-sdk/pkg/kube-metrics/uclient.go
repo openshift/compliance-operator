@@ -57,7 +57,7 @@ func getAPIResource(cfg *rest.Config, apiVersion, kind string) (*metav1.APIResou
 		return nil, nil, err
 	}
 
-	_, apiResourceLists, err := kclient.Discovery().ServerGroupsAndResources()
+	apiResourceLists, err := kclient.Discovery().ServerResources()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -72,8 +72,7 @@ func getAPIResource(cfg *rest.Config, apiVersion, kind string) (*metav1.APIResou
 		}
 	}
 
-	return nil, nil, fmt.Errorf("apiVersion %s and kind %s not found available in Kubernetes cluster",
-		apiVersion, kind)
+	return nil, nil, fmt.Errorf("apiVersion %s and kind %s not found available in Kubernetes cluster", apiVersion, kind)
 }
 
 func newForConfig(c *rest.Config, groupVersion string) (dynamic.Interface, error) {

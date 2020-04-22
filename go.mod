@@ -13,7 +13,7 @@ require (
 	github.com/onsi/gomega v1.9.0
 	github.com/openshift/library-go v0.0.0-20200303185131-81598fff9efa
 	github.com/openshift/machine-config-operator v4.2.0-alpha.0.0.20190917115525-033375cbe820+incompatible
-	github.com/operator-framework/operator-sdk v0.16.0
+	github.com/operator-framework/operator-sdk v0.15.2
 	github.com/securego/gosec v0.0.0-20200302134848-c998389da2ac
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5

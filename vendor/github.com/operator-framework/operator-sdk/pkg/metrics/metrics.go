@@ -89,13 +89,11 @@ func createOrUpdateService(ctx context.Context, client crclient.Client, s *v1.Se
 		if err != nil {
 			return nil, err
 		}
-		log.Info("Metrics Service object updated", "Service.Name",
-			s.Name, "Service.Namespace", s.Namespace)
+		log.Info("Metrics Service object updated", "Service.Name", s.Name, "Service.Namespace", s.Namespace)
 		return s, nil
 	}
 
-	log.Info("Metrics Service object created", "Service.Name",
-		s.Name, "Service.Namespace", s.Namespace)
+	log.Info("Metrics Service object created", "Service.Name", s.Name, "Service.Namespace", s.Namespace)
 	return s, nil
 }
 
@@ -154,8 +152,7 @@ func getPodOwnerRef(ctx context.Context, client crclient.Client, ns string) (*me
 }
 
 // findFinalOwnerRef tries to locate the final controller/owner based on the owner reference provided.
-func findFinalOwnerRef(ctx context.Context, client crclient.Client, ns string,
-	ownerRef *metav1.OwnerReference) (*metav1.OwnerReference, error) {
+func findFinalOwnerRef(ctx context.Context, client crclient.Client, ns string, ownerRef *metav1.OwnerReference) (*metav1.OwnerReference, error) {
 	if ownerRef == nil {
 		return nil, nil
 	}
@@ -172,7 +169,6 @@ func findFinalOwnerRef(ctx context.Context, client crclient.Client, ns string,
 		return findFinalOwnerRef(ctx, client, ns, newOwnerRef)
 	}
 
-	log.V(1).Info("Pods owner found", "Kind", ownerRef.Kind, "Name",
-		ownerRef.Name, "Namespace", ns)
+	log.V(1).Info("Pods owner found", "Kind", ownerRef.Kind, "Name", ownerRef.Name, "Namespace", ns)
 	return ownerRef, nil
 }

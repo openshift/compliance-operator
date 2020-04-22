@@ -91,8 +91,7 @@ func GetOperatorName() (string, error) {
 // ResourceExists returns true if the given resource kind exists
 // in the given api groupversion
 func ResourceExists(dc discovery.DiscoveryInterface, apiGroupVersion, kind string) (bool, error) {
-
-	_, apiLists, err := dc.ServerGroupsAndResources()
+	apiLists, err := dc.ServerResources()
 	if err != nil {
 		return false, err
 	}

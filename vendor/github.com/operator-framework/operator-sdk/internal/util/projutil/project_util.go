@@ -82,8 +82,7 @@ func CheckProjectRoot() error {
 	// we are at the project root.
 	if _, err := os.Stat(buildDockerfile); err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("must run command in project root dir: project structure requires %s",
-				buildDockerfile)
+			return fmt.Errorf("must run command in project root dir: project structure requires %s", buildDockerfile)
 		}
 		return fmt.Errorf("error while checking if current directory is the project root: %v", err)
 	}
@@ -151,8 +150,7 @@ func GetGoPkg() string {
 		goPath = MustSetWdGopath(goPath)
 	}
 	if !strings.HasPrefix(MustGetwd(), goPath) {
-		log.Fatal("Could not determine project repository path: $GOPATH not set, wd in default $HOME/go/src," +
-			" or wd does not contain a go.mod")
+		log.Fatal("Could not determine project repository path: $GOPATH not set, wd in default $HOME/go/src, or wd does not contain a go.mod")
 	}
 	return parseGoPkg(goPath)
 }
@@ -253,8 +251,7 @@ func CheckRepo(repo string) error {
 		return err
 	}
 	if !inGopathSrc && repo == "" {
-		return fmt.Errorf(`flag --repo must be set if the working directory is not in $GOPATH/src.
-		See "operator-sdk new -h"`)
+		return fmt.Errorf(`flag --repo must be set if the working directory is not in $GOPATH/src. See "operator-sdk new -h"`)
 	}
 	return nil
 }
