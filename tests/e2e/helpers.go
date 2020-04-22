@@ -32,7 +32,7 @@ const (
 
 type testExecution struct {
 	Name   string
-	TestFn func(*testing.T, *framework.Framework, *framework.Context, *mcTestCtx, string) error
+	TestFn func(*testing.T, *framework.Framework, *framework.TestCtx, *mcTestCtx, string) error
 }
 
 type mcTestCtx struct {
@@ -133,7 +133,7 @@ func executeTests(t *testing.T, tests ...testExecution) {
 	}
 }
 
-func cleanupTestEnv(t *testing.T, ctx *framework.Context) {
+func cleanupTestEnv(t *testing.T, ctx *framework.TestCtx) {
 	// If the tests didn't fail, clean up. Else, leave everything
 	// there so developers can debug the issue.
 	if !t.Failed() {
@@ -148,7 +148,7 @@ func cleanupTestEnv(t *testing.T, ctx *framework.Context) {
 // and creates a test context.
 //
 // NOTE: Whenever we add new types to the operator, we need to register them here for the e2e tests.
-func setupTestRequirements(t *testing.T) *framework.Context {
+func setupTestRequirements(t *testing.T) *framework.TestCtx {
 	// compliance-operator objects
 	coObjs := [3]runtime.Object{&compv1alpha1.ComplianceScanList{},
 		&compv1alpha1.ComplianceRemediationList{},
@@ -171,12 +171,12 @@ func setupTestRequirements(t *testing.T) *framework.Context {
 			t.Fatalf("TEST SETUP: failed to add custom resource scheme to framework: %v", err)
 		}
 	}
-	return framework.NewContext(t)
+	return framework.NewTestCtx(t)
 }
 
 // setupComplianceOperatorCluster creates a compliance-operator cluster and the resources it needs to operate
 // such as the namespace, permissions, etc.
-func setupComplianceOperatorCluster(t *testing.T, ctx *framework.Context) {
+func setupComplianceOperatorCluster(t *testing.T, ctx *framework.TestCtx) {
 	err := ctx.InitializeClusterResources(&framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 	if err != nil {
 		t.Fatalf("failed to initialize cluster resources: %v", err)

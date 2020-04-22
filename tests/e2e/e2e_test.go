@@ -20,7 +20,7 @@ func TestE2E(t *testing.T) {
 	executeTests(t,
 		testExecution{
 			Name: "TestSingleScanSucceeds",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &compv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-single-scan",
@@ -32,7 +32,7 @@ func TestE2E(t *testing.T) {
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 					},
 				}
-				// use Context's create helper to create the object and add a cleanup function for the new object
+				// use TestCtx's create helper to create the object and add a cleanup function for the new object
 				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 				if err != nil {
 					return err
@@ -47,7 +47,7 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestScanWithNodeSelectorFiltersCorrectly",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				selectWorkers := map[string]string{
 					"node-role.kubernetes.io/worker": "",
 				}
@@ -63,7 +63,7 @@ func TestE2E(t *testing.T) {
 						NodeSelector: selectWorkers,
 					},
 				}
-				// use Context's create helper to create the object and add a cleanup function for the new object
+				// use TestCtx's create helper to create the object and add a cleanup function for the new object
 				err := f.Client.Create(goctx.TODO(), testComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 				if err != nil {
 					return err
@@ -84,7 +84,7 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestScanWithInvalidContentFails",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &compv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-scan-w-invalid-content",
@@ -95,7 +95,7 @@ func TestE2E(t *testing.T) {
 						Content: "ssg-ocp4-non-existent.xml",
 					},
 				}
-				// use Context's create helper to create the object and add a cleanup function for the new object
+				// use TestCtx's create helper to create the object and add a cleanup function for the new object
 				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 				if err != nil {
 					return err
@@ -109,7 +109,7 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestScanWithInvalidProfileFails",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &compv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-scan-w-invalid-profile",
@@ -120,7 +120,7 @@ func TestE2E(t *testing.T) {
 						Content: "ssg-ocp4-ds.xml",
 					},
 				}
-				// use Context's create helper to create the object and add a cleanup function for the new object
+				// use TestCtx's create helper to create the object and add a cleanup function for the new object
 				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 				if err != nil {
 					return err
@@ -134,7 +134,7 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestMissingPodInRunningState",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &compv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-missing-pod-scan",
@@ -146,7 +146,7 @@ func TestE2E(t *testing.T) {
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 					},
 				}
-				// use Context's create helper to create the object and add a cleanup function for the new object
+				// use TestCtx's create helper to create the object and add a cleanup function for the new object
 				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 				if err != nil {
 					return err
@@ -179,7 +179,7 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestSuiteScan",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				suiteName := "test-suite-two-scans"
 
 				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
@@ -281,7 +281,7 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestAutoRemediate",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				// FIXME, maybe have a func that returns a struct with suite name and scan names?
 				suiteName := "test-remediate"
 				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
@@ -443,7 +443,7 @@ func TestE2E(t *testing.T) {
 		},
 		testExecution{
 			Name: "TestUnapplyRemediation",
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				// FIXME, maybe have a func that returns a struct with suite name and scan names?
 				suiteName := "test-unapply-remediation"
 
