@@ -606,8 +606,10 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, n
 		// when the pool is paused..
 		source := pool.Status.Configuration.Source
 		if pool.Spec.Paused == true {
+			t.Log("The pool is paused")
 			source = pool.Spec.Configuration.Source
 		}
+		t.Logf("These MCs are currently applied to the pool: %v", pool.Spec.Configuration.Source)
 
 		for _, mc := range source {
 			if mc.Name == rem.GetMcName() {
@@ -667,13 +669,13 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 			}
 		}
 
-		t.Logf("Remediation %s not present in pool %s, returning true", rem.GetMcName(), pool.Name)
+		t.Logf("Remediation %s not present in pool %s at %s , returning true", rem.GetMcName(), time.Now().UTC().String(), pool.Name)
 		return true, nil
 	}
 
 	err = waitForMachinePoolUpdate(t, f, pool, applyRemediation, predicate, nil)
 	if err != nil {
-		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
+		t.Errorf("Failed to wait for pool to update after applying MC: %s %v", time.Now().UTC().String(), err)
 		return err
 	}
 
@@ -732,7 +734,7 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 
 	err := waitForMachinePoolUpdate(t, f, pool.Name, preNoop, predicate, pool)
 	if err != nil {
-		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
+		t.Errorf("Failed to wait for pool to update after applying MC: %s: %v", time.Now().UTC().String(), err)
 		return err
 	}
 
