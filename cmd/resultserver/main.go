@@ -27,6 +27,8 @@ import (
 	"path"
 
 	"github.com/spf13/cobra"
+
+	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 )
 
 func defineFlags(cmd *cobra.Command) {
@@ -96,11 +98,11 @@ func server(c *config) {
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
 
-	// TODO: Configure cipher suites. Perhaps use library-go helper functions.
-	tlsConfig := &tls.Config{
-		ClientCAs:  caCertPool,
-		ClientAuth: tls.RequireAndVerifyClientCert,
-	}
+	tlsConfig := &tls.Config{}
+	// Configures TLS 1.2
+	tlsConfig = libgocrypto.SecureTLSConfig(tlsConfig)
+	tlsConfig.ClientCAs = caCertPool
+	tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 	tlsConfig.BuildNameToCertificate()
 	server := &http.Server{
 		Addr:      c.Address + ":" + c.Port,
