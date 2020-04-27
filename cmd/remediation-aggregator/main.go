@@ -236,10 +236,12 @@ func getRemediationLabels(scan *compv1alpha1.ComplianceScan) (map[string]string,
 	return labels, nil
 }
 
-func getCheckResultLabels(scan *compv1alpha1.ComplianceScan) map[string]string {
+func getCheckResultLabels(cr *compv1alpha1.ComplianceCheckResult, scan *compv1alpha1.ComplianceScan) map[string]string {
 	labels := make(map[string]string)
 	labels[compv1alpha1.ScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
+	labels[compv1alpha1.ComplianceCheckResultStatusLabel] = string(cr.Status)
+	labels[compv1alpha1.ComplianceCheckResultSeverityLabel] = string(cr.Severity)
 
 	return labels
 }
@@ -257,7 +259,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			continue
 		}
 
-		checkResultLabels := getCheckResultLabels(scan)
+		checkResultLabels := getCheckResultLabels(pr.CheckResult, scan)
 		if checkResultLabels == nil {
 			return fmt.Errorf("cannot create checkResult labels")
 		}

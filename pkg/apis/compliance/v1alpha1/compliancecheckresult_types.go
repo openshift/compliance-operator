@@ -6,6 +6,12 @@ import (
 
 type ComplianceCheckStatus string
 
+// ComplianceCheckResultLabel defines a label that will be included in the
+// ComplianceCheckResult objects. It indicates the result in an easy-to-find
+// way.
+const ComplianceCheckResultStatusLabel = "compliance.openshift.io/check-status"
+const ComplianceCheckResultSeverityLabel = "compliance.openshift.io/check-severity"
+
 const (
 	// The check ran to completion and passed
 	CheckResultPass ComplianceCheckStatus = "PASS"
