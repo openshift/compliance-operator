@@ -1,9 +1,10 @@
 package utils
 
 import (
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"reflect"
 	"sort"
+
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 // returns true if the lists are the same, false if they differ
@@ -58,11 +59,11 @@ func diffRemediations(old, new *compv1alpha1.ComplianceRemediation) bool {
 		return new == nil
 	}
 
-	if old.Spec.Type != new.Spec.Type {
+	if old.Spec.Object.GetKind() != new.Spec.Object.GetKind() {
 		return false
 	}
 
 	// should we be more picky and just compare what can be set with the remediations? e.g. OSImageURL can't
 	// be set with a remediation..
-	return reflect.DeepEqual(old.Spec.MachineConfigContents.Spec, new.Spec.MachineConfigContents.Spec)
+	return reflect.DeepEqual(old.Spec.Object, new.Spec.Object)
 }

@@ -254,8 +254,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 	// Construct the list of the statuses
 	for _, rem := range remList.Items {
 		if suite.Spec.AutoApplyRemediations {
-			switch rem.Spec.Type {
-			case compv1alpha1.McRemediation:
+			if utils.IsMachineConfig(rem.Spec.Object) {
 				// get relevant scan
 				scan := &compv1alpha1.ComplianceScan{}
 				scanKey := types.NamespacedName{Name: rem.Labels[compv1alpha1.ScanLabel], Namespace: rem.Namespace}
@@ -281,7 +280,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 						}
 					}
 				}
-			default:
+			} else {
 				logger.Info("Found remediation without applicable type. Not doing anything.", "ComplianceRemediation.Name", rem.Name)
 			}
 		}

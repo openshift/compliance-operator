@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -21,7 +22,6 @@ import (
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
 var log = logf.Log.WithName("remediationctrl")
@@ -96,13 +96,15 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 		return reconcile.Result{}, err
 	}
 
-	// First, we'll reconcile the MC that is the result of applying Remediations
-	switch remediationInstance.Spec.Type {
-	case compv1alpha1.McRemediation:
-		reqLogger.Info("Reconciling a MachineConfig remediation")
-		err = r.reconcileMcRemediation(remediationInstance, reqLogger)
-	default:
-		err = fmt.Errorf("unsupported remediation type %s", remediationInstance.Spec.Type)
+	if remediationInstance.Spec.Object != nil {
+		reqLogger.Info("Reconciling remediation")
+		err = r.reconcileRemediation(remediationInstance, reqLogger)
+	} else if remediationInstance.Spec.MachineConfigContents != nil {
+		reqLogger.Info("updating deprecated MachineConfig remediation")
+		err = r.updateDeprecatedMcRemediation(remediationInstance, reqLogger)
+	} else {
+		err = fmt.Errorf("No remediation specified. Both spec.object and spec.machineconfig are empty")
+		return common.ReturnWithRetriableError(reqLogger, common.WrapNonRetriableCtrlError(err))
 	}
 
 	// this would have been much nicer with go 1.13 using errors.Is()
@@ -119,6 +121,21 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 
 	reqLogger.Info("Done reconciling")
 	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileComplianceRemediation) updateDeprecatedMcRemediation(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
+	remCopy := instance.DeepCopy()
+	remCopy.Spec.Object = remCopy.Spec.MachineConfigContents.DeepCopy()
+	remCopy.Spec.MachineConfigContents = nil
+	return r.client.Update(context.TODO(), remCopy)
+}
+
+func (r *ReconcileComplianceRemediation) reconcileRemediation(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
+	if utils.IsMachineConfig(instance.Spec.Object) {
+		return r.reconcileMcRemediation(instance, logger)
+	}
+	// TODO(jaosorior): Create general flow of applying remediations
+	return nil
 }
 
 // reconcileMcRemediation makes sure that the list of selected ComplianceRemediations is reflected in an
@@ -218,7 +235,13 @@ func getApplicableMcList(r *ReconcileComplianceRemediation, instance *compv1alph
 			// TODO(jaosorior): Add status about remediation not being applicable
 			return appliedRemediations, nil
 		}
-		appliedRemediations = append(appliedRemediations, &instance.Spec.MachineConfigContents)
+
+		mc, err := utils.ParseMachineConfig(instance, instance.Spec.Object)
+		if err != nil {
+			logger.Error(err, "Cannot parse the MachineConfig for the remediation")
+			return appliedRemediations, err
+		}
+		appliedRemediations = append(appliedRemediations, mc)
 	}
 
 	return appliedRemediations, nil
@@ -243,9 +266,7 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compv1alph
 
 	appliedRemediations := make([]*mcfgv1.MachineConfig, 0, len(scanSuiteRemediations.Items))
 	for i := range scanSuiteRemediations.Items {
-		if scanSuiteRemediations.Items[i].Spec.Type != compv1alpha1.McRemediation {
-			// We'll only merge MachineConfigs
-			// TODO: Add a log line with a very high log level
+		if !utils.IsMachineConfig(scanSuiteRemediations.Items[i].Spec.Object) {
 			continue
 		}
 		if scanSuiteRemediations.Items[i].Status.ApplicationState != compv1alpha1.RemediationApplied {
@@ -263,7 +284,11 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compv1alph
 		}
 
 		// OK, we've got an applied MC, add it to the list
-		appliedRemediations = append(appliedRemediations, &scanSuiteRemediations.Items[i].Spec.MachineConfigContents)
+		mc, err := utils.ParseMachineConfig(&scanSuiteRemediations.Items[i], scanSuiteRemediations.Items[i].Spec.Object)
+		if err != nil {
+			return nil, err
+		}
+		appliedRemediations = append(appliedRemediations, mc)
 	}
 
 	return appliedRemediations, nil

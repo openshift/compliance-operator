@@ -8,19 +8,23 @@ import (
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 func isRemInList(mcList []*mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) bool {
+	remMc, _ := utils.ParseMachineConfig(rem, rem.Spec.Object)
 	for _, mc := range mcList {
-		if same := reflect.DeepEqual(mc.Spec, rem.Spec.MachineConfigContents.Spec); same == true {
+		if same := reflect.DeepEqual(mc.Spec, remMc.Spec); same == true {
 			return true
 		}
 	}
@@ -37,6 +41,25 @@ func getMockedRemediation(name string, labels map[string]string, applied bool, s
 		},
 	}
 
+	mc := &mcfgv1.MachineConfig{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "MachineConfig",
+			APIVersion: mcfgapi.GroupName + "/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{},
+		Spec: mcfgv1.MachineConfigSpec{
+			Config: igntypes.Config{
+				Ignition: igntypes.Ignition{
+					Version: igntypes.MaxVersion.String(),
+				},
+				Storage: igntypes.Storage{
+					Files: files,
+				},
+			},
+		},
+	}
+	unstructuredobj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(mc)
+	obj := &unstructured.Unstructured{Object: unstructuredobj}
 	return &compv1alpha1.ComplianceRemediation{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
@@ -44,23 +67,9 @@ func getMockedRemediation(name string, labels map[string]string, applied bool, s
 		},
 		Spec: compv1alpha1.ComplianceRemediationSpec{
 			ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
-				Type:  compv1alpha1.McRemediation,
 				Apply: applied,
 			},
-			MachineConfigContents: mcfgv1.MachineConfig{
-				TypeMeta:   metav1.TypeMeta{},
-				ObjectMeta: metav1.ObjectMeta{},
-				Spec: mcfgv1.MachineConfigSpec{
-					Config: igntypes.Config{
-						Ignition: igntypes.Ignition{
-							Version: igntypes.MaxVersion.String(),
-						},
-						Storage: igntypes.Storage{
-							Files: files,
-						},
-					},
-				},
-			},
+			Object: obj,
 		},
 		Status: compv1alpha1.ComplianceRemediationStatus{
 			ApplicationState: status,
@@ -90,6 +99,9 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				Name:   "testRem",
 				Labels: testRemLabels,
 			},
+			Spec: compv1alpha1.ComplianceRemediationSpec{
+				Object: nil,
+			},
 		}
 		objs = append(objs, complianceremediationinstance)
 
@@ -114,7 +126,6 @@ var _ = Describe("Testing complianceremediation controller", func() {
 		const numExisting = 10
 
 		BeforeEach(func() {
-			fmt.Println("creating")
 			for i := 0; i < numExisting; i++ {
 				name := fmt.Sprintf("existingRemediation-%02d", i)
 				rem := getMockedRemediation(name, testRemLabels, true, compv1alpha1.RemediationApplied)
