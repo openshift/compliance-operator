@@ -241,6 +241,7 @@ func getCheckResultLabels(cr *compv1alpha1.ComplianceCheckResult, scan *compv1al
 	labels[compv1alpha1.ScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels["compliancesuite"]
 	labels[compv1alpha1.ComplianceCheckResultStatusLabel] = string(cr.Status)
+	labels[compv1alpha1.ComplianceCheckResultSeverityLabel] = string(cr.Severity)
 
 	return labels
 }
