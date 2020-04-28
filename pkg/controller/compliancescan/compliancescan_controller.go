@@ -197,6 +197,18 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *compv1alpha1.C
 	}
 
 	if err = r.createScanPods(instance, nodes, logger); err != nil {
+		if !common.IsRetriable(err) {
+			// Surface non-retriable errors to the CR
+			log.Info("Updating scan status due to unretriable error")
+			scanCopy := instance.DeepCopy()
+			scanCopy.Status.ErrorMessage = err.Error()
+			scanCopy.Status.Result = compv1alpha1.ResultError
+			scanCopy.Status.Phase = compv1alpha1.PhaseDone
+			if updateerr := r.client.Status().Update(context.TODO(), scanCopy); updateerr != nil {
+				log.Error(updateerr, "Failed to update a scan")
+				return reconcile.Result{}, updateerr
+			}
+		}
 		return common.ReturnWithRetriableError(logger, err)
 	}
 
