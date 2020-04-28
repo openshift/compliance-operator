@@ -245,6 +245,35 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
+			Name: "TestScanWithEmptyTailoringCMNameFails",
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				exampleComplianceScan := &compv1alpha1.ComplianceScan{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-scan-w-empty-tailoring-cm",
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceScanSpec{
+						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
+						Content: "ssg-ocp4-ds.xml",
+						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
+							Name: "",
+						},
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				if err != nil {
+					return err
+				}
+				err = waitForScanStatus(t, f, namespace, "test-scan-w-empty-tailoring-cm", compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+				return scanResultIsExpected(f, namespace, "test-scan-w-empty-tailoring-cm", compv1alpha1.ResultError)
+			},
+		},
+		testExecution{
 			Name: "TestScanWithUnexistentTailoringCMFails",
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &compv1alpha1.ComplianceScan{
