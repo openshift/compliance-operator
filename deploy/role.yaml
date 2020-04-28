@@ -145,7 +145,7 @@ rules:
 - apiGroups:
   - security.openshift.io
   resourceNames:
-  - node-exporter
+  - privileged
   resources:
   - securitycontextconstraints
   verbs:

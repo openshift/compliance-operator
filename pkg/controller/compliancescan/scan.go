@@ -63,7 +63,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 			Namespace: scanInstance.Namespace,
 			Labels:    podLabels,
 			Annotations: map[string]string{
-				"openshift.io/scc": "node-exporter",
+				"openshift.io/scc": "privileged",
 			},
 		},
 		Spec: corev1.PodSpec{
