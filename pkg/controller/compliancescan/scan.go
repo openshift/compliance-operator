@@ -9,12 +9,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 )
 
-const resultscollectorSA = "resultscollector"
+const (
+	resultscollectorSA    = "resultscollector"
+	tailoringCMVolumeName = "tailoring"
+)
 
 func (r *ReconcileComplianceScan) createScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
 	// On each eligible node..
@@ -25,6 +30,12 @@ func (r *ReconcileComplianceScan) createScanPods(instance *compv1alpha1.Complian
 		if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
 			log.Error(err, "Failed to set pod ownership", "Pod.Name", pod)
 			return err
+		}
+
+		if instance.Spec.TailoringConfigMap != nil {
+			if err := r.addTailoringVolume(instance, pod); err != nil {
+				return err
+			}
 		}
 
 		// ..and launch it..
@@ -232,6 +243,58 @@ func (r *ReconcileComplianceScan) deleteScanPods(instance *compv1alpha1.Complian
 		}
 	}
 
+	return nil
+}
+
+func (r *ReconcileComplianceScan) addTailoringVolume(instance *compv1alpha1.ComplianceScan, pod *corev1.Pod) error {
+	mode := int32(0644)
+	if instance.Spec.TailoringConfigMap.Name == "" {
+		return common.NewNonRetriableCtrlError("tailoring config map name can't be empty")
+	}
+	name := instance.Spec.TailoringConfigMap.Name
+	ns := instance.Namespace
+
+	if err := r.validateTailoringConfigMap(name, ns); err != nil {
+		return err
+	}
+
+	pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
+		Name: tailoringCMVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: name,
+				},
+				DefaultMode: &mode,
+			},
+		},
+	})
+
+	// The index is used to get the references instead of copies
+	for i := range pod.Spec.Containers {
+		container := &pod.Spec.Containers[i]
+		if container.Name == OpenSCAPScanContainerName {
+			container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+				Name:      tailoringCMVolumeName,
+				MountPath: OpenScapTailoringDir,
+				ReadOnly:  true,
+			})
+		}
+	}
+
+	return nil
+}
+
+func (r *ReconcileComplianceScan) validateTailoringConfigMap(name, ns string) error {
+	tcmKey := types.NamespacedName{Name: name, Namespace: ns}
+	cm := &corev1.ConfigMap{}
+	err := r.client.Get(context.TODO(), tcmKey, cm)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return common.NewNonRetriableCtrlError("Tailoring ConfigMap not found")
+		}
+		return err
+	}
 	return nil
 }
 

@@ -22,14 +22,18 @@ const (
 	OpenScapEnvConfigMapName = "openscap-env-map"
 
 	// environment variables the default script consumes
-	OpenScapHostRootEnvName   = "HOSTROOT"
-	OpenScapProfileEnvName    = "PROFILE"
-	OpenScapContentEnvName    = "CONTENT"
-	OpenScapReportDirEnvName  = "REPORT_DIR"
-	OpenScapRuleEnvName       = "RULE"
-	OpenScapVerbosityeEnvName = "VERBOSITY"
+	OpenScapHostRootEnvName     = "HOSTROOT"
+	OpenScapProfileEnvName      = "PROFILE"
+	OpenScapContentEnvName      = "CONTENT"
+	OpenScapReportDirEnvName    = "REPORT_DIR"
+	OpenScapRuleEnvName         = "RULE"
+	OpenScapVerbosityeEnvName   = "VERBOSITY"
+	OpenScapTailoringDirEnvName = "TAILORING_DIR"
 
 	ResultServerPort = int32(8443)
+
+	// Tailoring constants
+	OpenScapTailoringDir = "/tailoring"
 )
 
 var defaultOpenScapScriptContents = `#!/bin/bash
@@ -67,6 +71,10 @@ cmd=(
 
 if [ ! -z $VERBOSITY ]; then
     cmd+=(--verbose $VERBOSITY)
+fi
+
+if [ ! -z "$TAILORING_DIR" ]; then
+	cmd+=(--tailoring-file "$TAILORING_DIR/tailoring.xml")
 fi
 
 cmd+=(
@@ -185,6 +193,10 @@ func defaultOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev
 	if scan.Spec.Debug {
 		// info seems like a good compromise in terms of verbosity
 		cm.Data[OpenScapVerbosityeEnvName] = "INFO"
+	}
+
+	if scan.Spec.TailoringConfigMap != nil {
+		cm.Data[OpenScapTailoringDirEnvName] = OpenScapTailoringDir
 	}
 
 	return cm

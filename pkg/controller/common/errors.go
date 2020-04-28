@@ -1,6 +1,8 @@
 package common
 
 import (
+	"fmt"
+
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -29,6 +31,14 @@ func WrapNonRetriableCtrlError(err error) *NonRetriableCtrlError {
 	return &NonRetriableCtrlError{
 		canRetry: false,
 		err:      err,
+	}
+}
+
+// NewNonRetriableCtrlError creates an error with the RetriableCtrlError interface
+func NewNonRetriableCtrlError(errorFmt string, args ...interface{}) *NonRetriableCtrlError {
+	return &NonRetriableCtrlError{
+		canRetry: false,
+		err:      fmt.Errorf(errorFmt, args...),
 	}
 }
 
