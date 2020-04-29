@@ -39,11 +39,6 @@ func (r *ReconcileComplianceScan) createScanPods(instance *compv1alpha1.Complian
 		}
 	}
 
-	// make sure the instance is updated with the node-pod labels
-	if err := r.client.Update(context.TODO(), instance); err != nil {
-		log.Error(err, "Failed to update a scan")
-		return err
-	}
 	return nil
 }
 
