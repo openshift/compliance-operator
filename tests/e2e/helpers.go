@@ -105,7 +105,7 @@ func (c *mcTestCtx) createE2EPool() error {
 // executeTest sets up everything that a e2e test needs to run, and executes the test.
 func executeTests(t *testing.T, tests ...testExecution) {
 	ctx := setupTestRequirements(t)
-	defer cleanupTestEnv(t, ctx)
+	defer ctx.Cleanup()
 
 	setupComplianceOperatorCluster(t, ctx)
 
@@ -130,17 +130,6 @@ func executeTests(t *testing.T, tests ...testExecution) {
 			}
 		})
 
-	}
-}
-
-func cleanupTestEnv(t *testing.T, ctx *framework.Context) {
-	// If the tests didn't fail, clean up. Else, leave everything
-	// there so developers can debug the issue.
-	if !t.Failed() {
-		t.Log("The tests passed. Cleaning up.")
-		ctx.Cleanup()
-	} else {
-		t.Log("The tests failed. Leaving the env there so you can debug.")
 	}
 }
 
