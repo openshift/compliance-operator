@@ -63,6 +63,14 @@ func resultCompare(lowResult ComplianceScanStatusResult, scanResult ComplianceSc
 	return lowResult
 }
 
+// TailoringConfigMapRef is a reference to a ConfigMap that contains the
+// tailoring file. It assumes a key called `tailoring.xml` which will
+// have the tailoring contents.
+type TailoringConfigMapRef struct {
+	// Name of the ConfigMap being referenced
+	Name string `json:"name"`
+}
+
 // ComplianceScanSpec defines the desired state of ComplianceScan
 // +k8s:openapi-gen=true
 type ComplianceScanSpec struct {
@@ -85,6 +93,10 @@ type ComplianceScanSpec struct {
 	// scan, this should match the selector of the MachineConfigPool you want
 	// to apply the remediations to.
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	// Is a reference to a ConfigMap that contains the
+	// tailoring file. It assumes a key called `tailoring.xml` which will
+	// have the tailoring contents.
+	TailoringConfigMap *TailoringConfigMapRef `json:"tailoringConfigMap,omitempty"`
 	// Disables cleaning up resources in the DONE phase, this might be useful for debugging.
 	Debug bool `json:"debug,omitempty"`
 }

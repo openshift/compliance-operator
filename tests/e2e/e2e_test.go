@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -43,6 +44,61 @@ func TestE2E(t *testing.T) {
 				}
 
 				return scanResultIsExpected(f, namespace, "test-single-scan", compv1alpha1.ResultCompliant)
+			},
+		},
+		testExecution{
+			Name: "TestSingleTailoredScanSucceeds",
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				defaultCleanupOpts := &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval}
+				tailoringCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-single-tailored-scan-succeeds-cm",
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						"tailoring.xml": `<?xml version="1.0" encoding="UTF-8"?>
+<xccdf-1.2:Tailoring xmlns:xccdf-1.2="http://checklists.nist.gov/xccdf/1.2" id="xccdf_compliance.openshift.io_tailoring_test-tailoredprofile">
+	<xccdf-1.2:benchmark href="/content/ssg-ocp4-ds.xml"></xccdf-1.2:benchmark>
+	<xccdf-1.2:version time="2020-04-28T07:04:13Z">1</xccdf-1.2:version>
+	<xccdf-1.2:Profile id="xccdf_compliance.openshift.io_profile_test-tailoredprofile">
+		<xccdf-1.2:title>Test Tailored Profile</xccdf-1.2:title>
+		<xccdf-1.2:description>Test Tailored Profile</xccdf-1.2:description>
+		<xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_no_netrc_files" selected="true"></xccdf-1.2:select>
+	</xccdf-1.2:Profile>
+</xccdf-1.2:Tailoring>`,
+					},
+				}
+
+				err := f.Client.Create(goctx.TODO(), tailoringCM, defaultCleanupOpts)
+				if err != nil {
+					return err
+				}
+
+				exampleComplianceScan := &compv1alpha1.ComplianceScan{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-single-tailored-scan-succeeds",
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceScanSpec{
+						Profile: "xccdf_compliance.openshift.io_profile_test-tailoredprofile",
+						Content: "ssg-ocp4-ds.xml",
+						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
+							Name: tailoringCM.Name,
+						},
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err = f.Client.Create(goctx.TODO(), exampleComplianceScan, defaultCleanupOpts)
+				if err != nil {
+					return err
+				}
+				err = waitForScanStatus(t, f, namespace, "test-single-tailored-scan-succeeds", compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+
+				return scanResultIsExpected(f, namespace, "test-single-tailored-scan-succeeds", compv1alpha1.ResultCompliant)
 			},
 		},
 		testExecution{
@@ -130,6 +186,120 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 				return scanResultIsExpected(f, namespace, "test-scan-w-invalid-profile", compv1alpha1.ResultError)
+			},
+		},
+		testExecution{
+			Name: "TestMalformedTailoredScanFails",
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				defaultCleanupOpts := &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval}
+				tailoringCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-malformed-tailored-scan-fails-cm",
+						Namespace: namespace,
+					},
+					// The tailored profile's namespace is wrong. It should be xccdf-1.2, but it was
+					// declared as xccdf. So it should report an error
+					Data: map[string]string{
+						"tailoring.xml": `<?xml version="1.0" encoding="UTF-8"?>
+<xccdf-1.2:Tailoring xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2" id="xccdf_compliance.openshift.io_tailoring_test-tailoredprofile">
+	<xccdf-1.2:benchmark href="/content/ssg-ocp4-ds.xml"></xccdf-1.2:benchmark>
+	<xccdf-1.2:version time="2020-04-28T07:04:13Z">1</xccdf-1.2:version>
+	<xccdf-1.2:Profile id="xccdf_compliance.openshift.io_profile_test-tailoredprofile">
+		<xccdf-1.2:title>Test Tailored Profile</xccdf-1.2:title>
+		<xccdf-1.2:description>Test Tailored Profile</xccdf-1.2:description>
+		<xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_no_netrc_files" selected="true"></xccdf-1.2:select>
+	</xccdf-1.2:Profile>
+</xccdf-1.2:Tailoring>`,
+					},
+				}
+
+				err := f.Client.Create(goctx.TODO(), tailoringCM, defaultCleanupOpts)
+				if err != nil {
+					return err
+				}
+
+				exampleComplianceScan := &compv1alpha1.ComplianceScan{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-malformed-tailored-scan-fails",
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceScanSpec{
+						Profile: "xccdf_compliance.openshift.io_profile_test-tailoredprofile",
+						Content: "ssg-ocp4-ds.xml",
+						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
+							Name: tailoringCM.Name,
+						},
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err = f.Client.Create(goctx.TODO(), exampleComplianceScan, defaultCleanupOpts)
+				if err != nil {
+					return err
+				}
+				err = waitForScanStatus(t, f, namespace, "test-malformed-tailored-scan-fails", compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+				return scanResultIsExpected(f, namespace, "test-malformed-tailored-scan-fails", compv1alpha1.ResultError)
+			},
+		},
+		testExecution{
+			Name: "TestScanWithEmptyTailoringCMNameFails",
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				exampleComplianceScan := &compv1alpha1.ComplianceScan{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-scan-w-empty-tailoring-cm",
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceScanSpec{
+						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
+						Content: "ssg-ocp4-ds.xml",
+						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
+							Name: "",
+						},
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				if err != nil {
+					return err
+				}
+				err = waitForScanStatus(t, f, namespace, "test-scan-w-empty-tailoring-cm", compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+				return scanResultIsExpected(f, namespace, "test-scan-w-empty-tailoring-cm", compv1alpha1.ResultError)
+			},
+		},
+		testExecution{
+			Name: "TestScanWithUnexistentTailoringCMFails",
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				exampleComplianceScan := &compv1alpha1.ComplianceScan{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-scan-w-unexistent-tailoring-cm",
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceScanSpec{
+						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
+						Content: "ssg-ocp4-ds.xml",
+						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
+							Name: "unexistent-tailoring-file",
+						},
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				if err != nil {
+					return err
+				}
+				err = waitForScanStatus(t, f, namespace, "test-scan-w-unexistent-tailoring-cm", compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+				return scanResultIsExpected(f, namespace, "test-scan-w-unexistent-tailoring-cm", compv1alpha1.ResultError)
 			},
 		},
 		testExecution{

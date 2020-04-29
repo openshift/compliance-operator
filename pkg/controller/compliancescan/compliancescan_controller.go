@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
@@ -196,7 +197,19 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *compv1alpha1.C
 	}
 
 	if err = r.createScanPods(instance, nodes, logger); err != nil {
-		return reconcile.Result{}, err
+		if !common.IsRetriable(err) {
+			// Surface non-retriable errors to the CR
+			log.Info("Updating scan status due to unretriable error")
+			scanCopy := instance.DeepCopy()
+			scanCopy.Status.ErrorMessage = err.Error()
+			scanCopy.Status.Result = compv1alpha1.ResultError
+			scanCopy.Status.Phase = compv1alpha1.PhaseDone
+			if updateerr := r.client.Status().Update(context.TODO(), scanCopy); updateerr != nil {
+				log.Error(updateerr, "Failed to update a scan")
+				return reconcile.Result{}, updateerr
+			}
+		}
+		return common.ReturnWithRetriableError(logger, err)
 	}
 
 	// if we got here, there are no new pods to be created, move to the next phase

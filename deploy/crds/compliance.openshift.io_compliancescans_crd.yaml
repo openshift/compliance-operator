@@ -70,6 +70,17 @@ spec:
                 a specific rule. Note that when leaving this empty, the scan will
                 check for all the rules for a specific profile.
               type: string
+            tailoringConfigMap:
+              description: Is a reference to a ConfigMap that contains the tailoring
+                file. It assumes a key called `tailoring.xml` which will have the
+                tailoring contents.
+              properties:
+                name:
+                  description: Name of the ConfigMap being referenced
+                  type: string
+              required:
+              - name
+              type: object
           type: object
         status:
           description: The status will give valuable information on what's going on
