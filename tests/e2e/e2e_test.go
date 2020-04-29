@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -345,6 +346,96 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 				return scanResultIsExpected(f, namespace, "test-missing-pod-scan", compv1alpha1.ResultCompliant)
+			},
+		},
+		testExecution{
+			Name: "TestApplyGenericRemediation",
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				remName := "test-apply-generic-remediation"
+				genericRem := &compv1alpha1.ComplianceRemediation{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      remName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceRemediationSpec{
+						ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
+							Apply: true,
+						},
+						Object: &unstructured.Unstructured{
+							Object: map[string]interface{}{
+								"kind":       "ConfigMap",
+								"apiVersion": "v1",
+								"metadata": map[string]interface{}{
+									"name":      "generic-rem-cm",
+									"namespace": namespace,
+								},
+								"data": map[string]interface{}{
+									"key": "value",
+								},
+							},
+						},
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), genericRem, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				if err != nil {
+					return err
+				}
+				err = waitForRemediationState(t, f, namespace, remName, compv1alpha1.RemediationApplied)
+				if err != nil {
+					return err
+				}
+
+				cm := &corev1.ConfigMap{}
+				err = waitForObjectToExist(t, f, "generic-rem-cm", namespace, cm)
+				if err != nil {
+					return err
+				}
+				val, ok := cm.Data["key"]
+				if !ok || val != "value" {
+					return fmt.Errorf("ComplianceRemediation '%s' generated a malformed ConfigMap", remName)
+				}
+				return nil
+			},
+		},
+		testExecution{
+			Name: "TestGenericRemediationFailsWithUnkownType",
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				remName := "test-generic-remediation-fails-unkown"
+				genericRem := &compv1alpha1.ComplianceRemediation{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      remName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceRemediationSpec{
+						ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
+							Apply: true,
+						},
+						Object: &unstructured.Unstructured{
+							Object: map[string]interface{}{
+								"kind":       "OopsyDoodle",
+								"apiVersion": "foo.bar/v1",
+								"metadata": map[string]interface{}{
+									"name":      "unkown-remediation",
+									"namespace": namespace,
+								},
+								"data": map[string]interface{}{
+									"key": "value",
+								},
+							},
+						},
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), genericRem, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				if err != nil {
+					return err
+				}
+				err = waitForRemediationState(t, f, namespace, remName, compv1alpha1.RemediationError)
+				if err != nil {
+					return err
+				}
+				return nil
 			},
 		},
 		testExecution{

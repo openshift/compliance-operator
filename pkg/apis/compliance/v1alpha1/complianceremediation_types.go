@@ -12,6 +12,7 @@ type RemediationApplicationState string
 const (
 	RemediationNotApplied RemediationApplicationState = "NotApplied"
 	RemediationApplied    RemediationApplicationState = "Applied"
+	RemediationError      RemediationApplicationState = "Error"
 )
 
 type RemediationType string
@@ -51,6 +52,7 @@ type ComplianceRemediationSpec struct {
 type ComplianceRemediationStatus struct {
 	// Whether the remediation is already applied or not
 	ApplicationState RemediationApplicationState `json:"applicationState,omitempty"`
+	ErrorMessage     string                      `json:"errorMessage,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

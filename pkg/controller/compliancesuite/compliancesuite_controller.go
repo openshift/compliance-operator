@@ -254,13 +254,13 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 	// Construct the list of the statuses
 	for _, rem := range remList.Items {
 		if suite.Spec.AutoApplyRemediations {
+			// get relevant scan
+			scan := &compv1alpha1.ComplianceScan{}
+			scanKey := types.NamespacedName{Name: rem.Labels[compv1alpha1.ScanLabel], Namespace: rem.Namespace}
+			if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
+				return reconcile.Result{}, err
+			}
 			if utils.IsMachineConfig(rem.Spec.Object) {
-				// get relevant scan
-				scan := &compv1alpha1.ComplianceScan{}
-				scanKey := types.NamespacedName{Name: rem.Labels[compv1alpha1.ScanLabel], Namespace: rem.Namespace}
-				if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
-					return reconcile.Result{}, err
-				}
 				// get affected pool
 				pool, affectedPoolExists := r.getAffectedMcfgPool(scan, mcfgpools)
 				// we only ned to operate on pools that are affected
@@ -281,7 +281,15 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 					}
 				}
 			} else {
-				logger.Info("Found remediation without applicable type. Not doing anything.", "ComplianceRemediation.Name", rem.Name)
+				// Only apply remediations once the scan is done. This hopefully ensures
+				// that we already have all the relevant remediations in place.
+				// We only care for remediations that haven't been applied
+				if scan.Status.Phase == compv1alpha1.PhaseDone &&
+					rem.Status.ApplicationState != compv1alpha1.RemediationApplied {
+					if err := r.applyGenericRemediation(rem, logger); err != nil {
+						return reconcile.Result{}, err
+					}
+				}
 			}
 		}
 	}
@@ -320,6 +328,17 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 		}
 	}
 	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileComplianceSuite) applyGenericRemediation(rem compv1alpha1.ComplianceRemediation,
+	logger logr.Logger) error {
+	remCopy := rem.DeepCopy()
+	remCopy.Spec.Apply = true
+	logger.Info("Setting Remediation to applied", "ComplianceRemediation.Name", rem.Name)
+	if err := r.client.Update(context.TODO(), remCopy); err != nil {
+		return err
+	}
+	return nil
 }
 
 // This gets the remediation to be applied. Note that before being able to do that, the machineConfigPool is
