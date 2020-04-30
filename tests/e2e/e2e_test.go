@@ -31,6 +31,7 @@ func TestE2E(t *testing.T) {
 						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
 						Content: "ssg-ocp4-ds.xml",
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						Debug:   true,
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -83,6 +84,7 @@ func TestE2E(t *testing.T) {
 						Profile: "xccdf_compliance.openshift.io_profile_test-tailoredprofile",
 						Content: "ssg-ocp4-ds.xml",
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						Debug:   true,
 						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
 							Name: tailoringCM.Name,
 						},
@@ -117,6 +119,7 @@ func TestE2E(t *testing.T) {
 						Content:      "ssg-ocp4-ds.xml",
 						Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						NodeSelector: selectWorkers,
+						Debug:        true,
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -149,6 +152,7 @@ func TestE2E(t *testing.T) {
 					Spec: compv1alpha1.ComplianceScanSpec{
 						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
 						Content: "ssg-ocp4-non-existent.xml",
+						Debug:   true,
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -174,6 +178,7 @@ func TestE2E(t *testing.T) {
 					Spec: compv1alpha1.ComplianceScanSpec{
 						Profile: "xccdf_org.ssgproject.content_profile_coreos-unexistent",
 						Content: "ssg-ocp4-ds.xml",
+						Debug:   true,
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -227,6 +232,7 @@ func TestE2E(t *testing.T) {
 						Profile: "xccdf_compliance.openshift.io_profile_test-tailoredprofile",
 						Content: "ssg-ocp4-ds.xml",
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						Debug:   true,
 						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
 							Name: tailoringCM.Name,
 						},
@@ -285,6 +291,7 @@ func TestE2E(t *testing.T) {
 						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
 						Content: "ssg-ocp4-ds.xml",
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						Debug:   true,
 						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
 							Name: "unexistent-tailoring-file",
 						},
@@ -314,6 +321,7 @@ func TestE2E(t *testing.T) {
 						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
 						Content: "ssg-ocp4-ds.xml",
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						Debug:   true,
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -376,6 +384,7 @@ func TestE2E(t *testing.T) {
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: selectWorkers,
+									Debug:        true,
 								},
 								Name: workerScanName,
 							},
@@ -385,6 +394,7 @@ func TestE2E(t *testing.T) {
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: selectMasters,
+									Debug:        true,
 								},
 								Name: masterScanName,
 							},
@@ -471,6 +481,7 @@ func TestE2E(t *testing.T) {
 									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: getPoolNodeRoleSelector(),
+									Debug:        true,
 								},
 								Name: workerScanName,
 							},
@@ -531,6 +542,7 @@ func TestE2E(t *testing.T) {
 									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: getPoolNodeRoleSelector(),
+									Debug:        true,
 								},
 								Name: secondWorkerScanName,
 							},
@@ -633,6 +645,7 @@ func TestE2E(t *testing.T) {
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: getPoolNodeRoleSelector(),
+									Debug:        true,
 								},
 								Name: workerScanName,
 							},
