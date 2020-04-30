@@ -61,6 +61,8 @@ spec:
             applicationState:
               description: Whether the remediation is already applied or not
               type: string
+            errorMessage:
+              type: string
           type: object
       type: object
   version: v1alpha1

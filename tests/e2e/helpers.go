@@ -219,6 +219,70 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 	return nil
 }
 
+// waitForRemediationState will poll until the complianceRemediation that we're lookingfor gets applied, or until
+// a timeout is reached.
+func waitForRemediationState(t *testing.T, f *framework.Framework, namespace, name string, state compv1alpha1.RemediationApplicationState) error {
+	rem := &compv1alpha1.ComplianceRemediation{}
+	var lastErr error
+	// retry and ignore errors until timeout
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
+		if lastErr != nil {
+			if apierrors.IsNotFound(lastErr) {
+				t.Logf("Waiting for availability of %s ComplianceRemediation\n", name)
+				return false, nil
+			}
+			t.Logf("Retrying. Got error: %v\n", lastErr)
+			return false, nil
+		}
+
+		if rem.Status.ApplicationState == state {
+			return true, nil
+		}
+		t.Logf("Waiting for run of %s ComplianceRemediation (%s)\n", name, rem.Status.ApplicationState)
+		return false, nil
+	})
+	// Error in function call
+	if lastErr != nil {
+		return lastErr
+	}
+	// Timeout
+	if timeouterr != nil {
+		return timeouterr
+	}
+	t.Logf("ComplianceRemediation ready (%s)\n", rem.Status.ApplicationState)
+	return nil
+}
+
+func waitForObjectToExist(t *testing.T, f *framework.Framework, name, namespace string, obj runtime.Object) error {
+	var lastErr error
+	// retry and ignore errors until timeout
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, obj)
+		if lastErr != nil {
+			if apierrors.IsNotFound(lastErr) {
+				t.Logf("Waiting for availability of %s ComplianceRemediation\n", name)
+				return false, nil
+			}
+			t.Logf("Retrying. Got error: %v\n", lastErr)
+			return false, nil
+		}
+
+		return true, nil
+	})
+	// Error in function call
+	if lastErr != nil {
+		return lastErr
+	}
+	// Timeout
+	if timeouterr != nil {
+		return timeouterr
+	}
+
+	t.Logf("Object found '%s' found\n", name)
+	return nil
+}
+
 // waitForScanStatus will poll until the compliancescan that we're lookingfor reaches a certain status, or until
 // a timeout is reached.
 func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus compv1alpha1.ComplianceScanStatusPhase, targetComplianceStatus compv1alpha1.ComplianceScanStatusResult) error {

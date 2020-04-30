@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -108,12 +109,13 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 	}
 
 	// this would have been much nicer with go 1.13 using errors.Is()
-	if err != nil {
+	// Only return if the error is retriable. Else, we persist it in the status
+	if err != nil && common.IsRetriable(err) {
 		return common.ReturnWithRetriableError(reqLogger, err)
 	}
 
 	// Second, we'll reconcile the status of the Remediation itself
-	err = r.reconcileRemediationStatus(remediationInstance, reqLogger)
+	err = r.reconcileRemediationStatus(remediationInstance, reqLogger, err)
 	// this would have been much nicer with go 1.13 using errors.Is()
 	if err != nil {
 		return common.ReturnWithRetriableError(reqLogger, err)
@@ -134,8 +136,35 @@ func (r *ReconcileComplianceRemediation) reconcileRemediation(instance *compv1al
 	if utils.IsMachineConfig(instance.Spec.Object) {
 		return r.reconcileMcRemediation(instance, logger)
 	}
-	// TODO(jaosorior): Create general flow of applying remediations
-	return nil
+	return r.reconcileGenericRemediation(instance, logger)
+}
+
+// Gets a generic remediation and ensures the object exists in the cluster if the
+// remediation if applicable
+func (r *ReconcileComplianceRemediation) reconcileGenericRemediation(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
+	obj := instance.Spec.Object
+	found := obj.DeepCopy()
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, found)
+	if instance.Spec.Apply {
+		if errors.IsNotFound(err) {
+			return r.client.Create(context.TODO(), obj)
+		} else if meta.IsNoMatchError(err) {
+			// If the kind is not available in the cluster, we can't retry
+			return common.NewNonRetriableCtrlError("Unable to create ComplianceRemediation. Make the CRD is installed: %s", err)
+		}
+		// TODO(jaosorior): If the object is found, should we update it?
+		return err
+	}
+	// unapply remediation
+	if err == nil {
+		return r.client.Delete(context.TODO(), obj)
+	} else if errors.IsNotFound(err) {
+		return nil
+	} else if meta.IsNoMatchError(err) {
+		// If the kind is not available in the cluster, we can't retry
+		return common.NewNonRetriableCtrlError("Unable to use ComplianceRemediation. Make the CRD is installed: %s", err)
+	}
+	return err
 }
 
 // reconcileMcRemediation makes sure that the list of selected ComplianceRemediations is reflected in an
@@ -182,9 +211,14 @@ func (r *ReconcileComplianceRemediation) reconcileMcRemediation(instance *compv1
 	return nil
 }
 
-func (r *ReconcileComplianceRemediation) reconcileRemediationStatus(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
+func (r *ReconcileComplianceRemediation) reconcileRemediationStatus(instance *compv1alpha1.ComplianceRemediation,
+	logger logr.Logger, errorApplying error) error {
 	instanceCopy := instance.DeepCopy()
-	if instance.Spec.Apply {
+	if errorApplying != nil {
+		instanceCopy.Status.ApplicationState = compv1alpha1.RemediationError
+		instanceCopy.Status.ErrorMessage = errorApplying.Error()
+		logger.Info("Remediation had an error")
+	} else if instance.Spec.Apply {
 		instanceCopy.Status.ApplicationState = compv1alpha1.RemediationApplied
 		logger.Info("Remediation will now be applied")
 	} else {
