@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	DefaultContentContainerImage = "quay.io/jhrozek/ocp4-openscap-content:latest"
+	DefaultContentContainerImage = "quay.io/complianceascode/ocp4:latest"
 	CACertDataKey                = "ca.crt"
 	CAKeyDataKey                 = "ca.key"
 	ServerCertInstanceSuffix     = "-rs"

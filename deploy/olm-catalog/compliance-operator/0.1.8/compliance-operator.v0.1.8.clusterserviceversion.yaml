@@ -71,7 +71,7 @@ metadata:
             "scans": [
               {
                 "content": "ssg-ocp4-ds.xml",
-                "contentImage": "quay.io/jhrozek/ocp4-openscap-content:latest",
+                "contentImage": "quay.io/complianceascode/ocp4:latest",
                 "name": "workers-scan",
                 "nodeSelector": {
                   "node-role.kubernetes.io/worker": ""
@@ -80,7 +80,7 @@ metadata:
               },
               {
                 "content": "ssg-ocp4-ds.xml",
-                "contentImage": "quay.io/jhrozek/ocp4-openscap-content:latest",
+                "contentImage": "quay.io/complianceascode/ocp4:latest",
                 "name": "masters-scan",
                 "nodeSelector": {
                   "node-role.kubernetes.io/master": ""
