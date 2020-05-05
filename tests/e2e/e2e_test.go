@@ -471,7 +471,7 @@ func TestE2E(t *testing.T) {
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
+									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: selectWorkers,
@@ -481,7 +481,7 @@ func TestE2E(t *testing.T) {
 							},
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
+									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: selectMasters,
@@ -567,7 +567,7 @@ func TestE2E(t *testing.T) {
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
+									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 									Content:      "ssg-ocp4-ds.xml",
@@ -628,7 +628,7 @@ func TestE2E(t *testing.T) {
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
+									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 									Content:      "ssg-ocp4-ds.xml",
@@ -732,7 +732,7 @@ func TestE2E(t *testing.T) {
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
+									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: getPoolNodeRoleSelector(),
