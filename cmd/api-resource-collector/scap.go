@@ -44,7 +44,7 @@ type scapContentDataStream struct {
 	client *kubernetes.Clientset
 	// Staging objects
 	dataStream *utils.XMLDocument
-	resources  map[string]string
+	resources  []string
 	found      map[string][]byte
 }
 
@@ -120,58 +120,33 @@ func (c *scapContentDataStream) FigureResources(profile string) error {
 const (
 	endPointTag    = "ocp-api-endpoint"
 	endPointTagEnd = endPointTag + "\">"
-	dumpTag        = "ocp-dump-location"
-	dumpTagEnd     = dumpTag + "\"><sub idref=\"xccdf_org.ssgproject.content_value_ocp_data_root\" use=\"legacy\" />"
 	codeTag        = "</code>"
 )
 
-// getPathsFromRuleWarning finds the API endpoint and save path from in. The expected structure is:
+// getPathsFromRuleWarning finds the API endpoint from in. The expected structure is:
 //
 //  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
-//  </code><code class="ocp-dump-location"><sub idref="xccdf_org.ssgproject.content_value_ocp_data_root" use="legacy" />
-//  /idp.yml</code>file.</warning>
-//
-// We return both values or none at all.
-func getPathsFromWarningXML(in string) (string, string) {
-	var (
-		apiPathOut  string
-		dumpPathOut string
-	)
-
+//  </code></warning>
+func getPathFromWarningXML(in string) string {
 	DBG("%s", in)
 	apiIndex := strings.Index(in, endPointTag)
 	if apiIndex == -1 {
-		return "", ""
+		return ""
 	}
 
 	apiValueBeginIndex := apiIndex + len(endPointTagEnd)
 	apiValueEndIndex := strings.Index(in[apiValueBeginIndex:], codeTag)
 	if apiValueEndIndex == -1 {
-		return "", ""
+		return ""
 	}
 
-	apiPathOut = in[apiValueBeginIndex : apiValueBeginIndex+apiValueEndIndex]
-
-	dumpIndex := strings.Index(in, dumpTag)
-	if dumpIndex == -1 {
-		return "", ""
-	}
-
-	dumpValueBeginIndex := dumpIndex + len(dumpTagEnd)
-	dumpValueEndIndex := strings.Index(in[dumpValueBeginIndex:], codeTag)
-	if dumpValueEndIndex == -1 {
-		return "", ""
-	}
-
-	dumpPathOut = in[dumpValueBeginIndex : dumpValueBeginIndex+dumpValueEndIndex]
-
-	return apiPathOut, dumpPathOut
+	return in[apiValueBeginIndex : apiValueBeginIndex+apiValueEndIndex]
 }
 
-// Collect the resource paths for objects that this scan needs to obtain, and their corresponding file paths based on
-// profile. The profile will have a series of "selected" checks that we grab all of the path info from.
-func getResourcePaths(ds *utils.XMLDocument, profile string) map[string]string {
-	out := map[string]string{}
+// Collect the resource paths for objects that this scan needs to obtain.
+// The profile will have a series of "selected" checks that we grab all of the path info from.
+func getResourcePaths(ds *utils.XMLDocument, profile string) []string {
+	out := []string{}
 	selectedChecks := []string{}
 
 	// First we find the Profile node, to locate the enabled checks.
@@ -223,11 +198,11 @@ func getResourcePaths(ds *utils.XMLDocument, profile string) map[string]string {
 			continue
 		}
 
-		apiPath, dumpPath := getPathsFromWarningXML(warning.XML())
-		if len(apiPath) == 0 || len(dumpPath) == 0 {
+		apiPath := getPathFromWarningXML(warning.XML())
+		if len(apiPath) == 0 {
 			continue
 		}
-		out[apiPath] = dumpPath
+		out = append(out, apiPath)
 	}
 
 	return out
@@ -242,11 +217,11 @@ func (c *scapContentDataStream) FetchResources() error {
 	return nil
 }
 
-func fetch(client *kubernetes.Clientset, objects map[string]string) (map[string][]byte, error) {
+func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, error) {
 	results := map[string][]byte{}
-	for uri, file := range objects {
+	for _, uri := range objects {
 		err := func() error {
-			LOG("Fetching URI: '%s' File: '%s'", uri, file)
+			LOG("Fetching URI: '%s'", uri)
 			req := client.RESTClient().Get().RequestURI(uri)
 			stream, err := req.Stream()
 			if err != nil {
@@ -265,7 +240,7 @@ func fetch(client *kubernetes.Clientset, objects map[string]string) (map[string]
 			if err != nil {
 				return err
 			}
-			results[file] = yaml
+			results[uri] = yaml
 			return nil
 		}()
 		if err != nil {
@@ -279,12 +254,34 @@ func (c *scapContentDataStream) SaveResources(to string) error {
 	return saveResources(to, c.found)
 }
 
-func saveResources(dir string, data map[string][]byte) error {
-	for f, d := range data {
-		err := ioutil.WriteFile(path.Join(dir, f), d, 0600)
+func saveResources(rootDir string, data map[string][]byte) error {
+	for apiPath, fileContents := range data {
+		saveDir, saveFile, err := getSaveDirectoryAndFileName(rootDir, apiPath)
+		if err != nil {
+			return err
+		}
+		err = os.MkdirAll(saveDir, os.ModePerm)
+		if err != nil {
+			return err
+		}
+		err = ioutil.WriteFile(path.Join(saveDir, saveFile), fileContents, 0600)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// Returns the absolute directory path (including rootDir) and filename for the given apiPath.
+func getSaveDirectoryAndFileName(rootDir string, apiPath string) (string, string, error) {
+	base := path.Base(apiPath)
+	if base == "." || base == "/" {
+		return "", "", fmt.Errorf("bad object path: %s", apiPath)
+	}
+	subDirs := path.Dir(apiPath)
+	if subDirs == "." {
+		return "", "", fmt.Errorf("bad object path: %s", apiPath)
+	}
+
+	return path.Join(rootDir, subDirs), base, nil
 }
