@@ -120,7 +120,7 @@ func getScanConfigMaps(clientset *kubernetes.Clientset, scan, namespace string) 
 
 	// Look for configMap with this scan label
 	listOpts := metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("compliance-scan=%s", scan),
+		LabelSelector: fmt.Sprintf("%s=%s", compv1alpha1.ComplianceScanIndicatorLabel, scan),
 	}
 
 	cMapList, err = clientset.CoreV1().ConfigMaps(namespace).List(listOpts)

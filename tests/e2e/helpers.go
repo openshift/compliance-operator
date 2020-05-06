@@ -396,7 +396,7 @@ func getPodsForScan(f *framework.Framework, scanName string) ([]corev1.Pod, erro
 func getConfigMapsFromScan(f *framework.Framework, scaninstance *compv1alpha1.ComplianceScan) []corev1.ConfigMap {
 	var configmaps corev1.ConfigMapList
 	labelselector := map[string]string{
-		"compliance-scan": scaninstance.Name,
+		compv1alpha1.ComplianceScanIndicatorLabel: scaninstance.Name,
 	}
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(labelselector),

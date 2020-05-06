@@ -375,7 +375,13 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 		}
 
 		if instance.NeedsRescan() {
+			if err = r.deleteResultConfigMaps(instance, logger); err != nil {
+				log.Error(err, "Cannot delete result ConfigMaps")
+				return reconcile.Result{}, err
+			}
+
 			// reset phase
+			log.Info("Resetting scan")
 			instanceCopy := instance.DeepCopy()
 			instanceCopy.Status.Phase = compv1alpha1.PhasePending
 			instanceCopy.Status.Result = compv1alpha1.ResultNotAvailable
@@ -409,6 +415,16 @@ func (r *ReconcileComplianceScan) createPVCForScan(instance *compv1alpha1.Compli
 		return err
 	}
 	if err := r.client.Create(context.TODO(), pvc); err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
+}
+
+func (r *ReconcileComplianceScan) deleteResultConfigMaps(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
+	inNs := client.InNamespace(instance.Namespace)
+	withLabel := client.MatchingLabels{compv1alpha1.ComplianceScanIndicatorLabel: instance.Name}
+	err := r.client.DeleteAllOf(context.Background(), &corev1.ConfigMap{}, inNs, withLabel)
+	if err != nil {
 		return err
 	}
 	return nil

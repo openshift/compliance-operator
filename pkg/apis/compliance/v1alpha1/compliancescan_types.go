@@ -10,6 +10,10 @@ import (
 // should be re-run
 const ComplianceScanRescanAnnotation = "compliance.openshift.io/rescan"
 
+// ComplianceScanIndicatorLabel serves as an indicator for which ComplianceScan
+// owns the referenced object
+const ComplianceScanIndicatorLabel = "compliance-scan"
+
 // Represents the status of the compliance scan run.
 type ComplianceScanStatusPhase string
 
