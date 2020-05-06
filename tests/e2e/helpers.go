@@ -301,7 +301,7 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 		}
 
 		if suite.Status.AggregatedPhase != targetStatus {
-			t.Logf("Waiting until suite %s is done", suite.Name)
+			t.Logf("Waiting until suite %s reaches target status '%s'. Current status: %s", suite.Name, targetStatus, suite.Status.AggregatedPhase)
 			return false, nil
 		}
 

@@ -8,7 +8,6 @@ import (
 
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -614,54 +613,51 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				// We can re-run the scan at this moment and check that we got one less remediation
-				secondSuiteName := "test-recheck-remediations"
-				secondWorkerScanName := fmt.Sprintf("%s-workers-scan", secondSuiteName)
-
-				secondSuite := &compv1alpha1.ComplianceSuite{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      secondSuiteName,
-						Namespace: namespace,
-					},
-					Spec: compv1alpha1.ComplianceSuiteSpec{
-						AutoApplyRemediations: false,
-						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
-							{
-								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/complianceascode/ocp4:latest",
-									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
-									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
-									Content:      "ssg-ocp4-ds.xml",
-									NodeSelector: getPoolNodeRoleSelector(),
-									Debug:        true,
-								},
-								Name: secondWorkerScanName,
-							},
-						},
-					},
-				}
-
-				err = f.Client.Create(goctx.TODO(), secondSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				// We can re-run the scan at this moment and check that it's now compliant
+				// and it's reflected in a CheckResult
+				workerScanKey := types.NamespacedName{Name: workerScanName, Namespace: namespace}
+				foundWorkerScan := &compv1alpha1.ComplianceScan{}
+				err = f.Client.Get(goctx.TODO(), workerScanKey, foundWorkerScan)
 				if err != nil {
 					return err
 				}
-				t.Logf("Second scan launched")
+				workerScan := foundWorkerScan.DeepCopy()
+				if workerScan.Annotations == nil {
+					workerScan.Annotations = make(map[string]string)
+				}
+				workerScan.Annotations[compv1alpha1.ComplianceScanRescanAnnotation] = ""
+				err = f.Client.Update(goctx.TODO(), workerScan)
+				if err != nil {
+					return err
+				}
+				t.Logf("Scan re-launched")
+
+				// Scan has been re-started
+				t.Logf("Scan phase should be reset")
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseRunning, compv1alpha1.ResultNotAvailable)
+				if err != nil {
+					return err
+				}
 
 				// Ensure that all the scans in the suite have finished and are marked as Done
-				err = waitForSuiteScansStatus(t, f, namespace, secondSuiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
+				t.Logf("Let's wait for it to be done now")
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
 				if err != nil {
 					return err
 				}
-				t.Logf("Second scan finished")
+				t.Logf("scan re-run has finished")
 
-				// Now the remediation should not be created
-				workersNoRootLoginsRemName2 := fmt.Sprintf("%s-no-direct-root-logins", secondWorkerScanName)
-				remCheck := &compv1alpha1.ComplianceRemediation{}
-				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: workersNoRootLoginsRemName2, Namespace: namespace}, remCheck)
-				if err == nil {
-					return fmt.Errorf("remediation %s found unexpectedly", workersNoRootLoginsRemName2)
-				} else if !errors.IsNotFound(err) {
-					t.Errorf("Unexpected error %v", err)
+				// Now the check should be passing
+				checkNoDirectRootLogins := compv1alpha1.ComplianceCheckResult{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf("%s-no-direct-root-logins", workerScanName),
+						Namespace: namespace,
+					},
+					ID:     "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
+					Status: compv1alpha1.CheckResultPass,
+				}
+				err = assertHasCheck(f, suiteName, workerScanName, checkNoDirectRootLogins)
+				if err != nil {
 					return err
 				}
 
