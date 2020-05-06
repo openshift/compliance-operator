@@ -183,6 +183,9 @@ rules:
   - complianceremediations
   verbs:
   - create
+  - get
+  - update
+  - patch
 - apiGroups:
   - compliance.openshift.io
   resources:
@@ -190,3 +193,5 @@ rules:
   verbs:
   - create
   - get
+  - update
+  - patch
