@@ -144,6 +144,14 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	logger.Info("Phase: Pending")
 
+	// Remove annotation if needed
+	if instance.NeedsRescan() {
+		instanceCopy := instance.DeepCopy()
+		delete(instanceCopy.Annotations, compv1alpha1.ComplianceScanRescanAnnotation)
+		err := r.client.Update(context.TODO(), instanceCopy)
+		return reconcile.Result{}, err
+	}
+
 	err := createConfigMaps(r, scriptCmForScan(instance), envCmForScan(instance), instance)
 	if err != nil {
 		logger.Error(err, "Cannot create the configmaps")
@@ -329,7 +337,8 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 	var nodes corev1.NodeList
 	var err error
 	logger.Info("Phase: Done")
-	if !instance.Spec.Debug {
+	// We need to remove resources before doing a re-scan
+	if !instance.Spec.Debug || instance.NeedsRescan() {
 		if nodes, err = getTargetNodes(r, instance); err != nil {
 			log.Error(err, "Cannot get nodes")
 			return reconcile.Result{}, err
@@ -362,6 +371,16 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 
 		if err = r.deleteRootCASecret(instance, logger); err != nil {
 			log.Error(err, "Cannot delete CA secret")
+			return reconcile.Result{}, err
+		}
+
+		if instance.NeedsRescan() {
+			// reset phase
+			instanceCopy := instance.DeepCopy()
+			instanceCopy.Status.Phase = compv1alpha1.PhasePending
+			instanceCopy.Status.Result = compv1alpha1.ResultNotAvailable
+			instanceCopy.Status.CurrentIndex = instance.Status.CurrentIndex + 1
+			err = r.client.Status().Update(context.TODO(), instanceCopy)
 			return reconcile.Result{}, err
 		}
 	}
