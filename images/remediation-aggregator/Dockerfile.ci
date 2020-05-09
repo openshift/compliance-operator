@@ -1,5 +1,5 @@
 # Step one: build aggregator
-FROM registry.svc.ci.openshift.org/ocp/builder:golang-1.12 AS builder
+FROM registry.svc.ci.openshift.org/ocp/builder:golang-1.13 AS builder
 
 WORKDIR /go/src/github.com/openshift/compliance-operator
 
