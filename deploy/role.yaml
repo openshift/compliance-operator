@@ -26,6 +26,8 @@ rules:
   - watch      # The Suite controller must watch configMaps
   - patch      # The Suite controller annotates configMaps
   - update     # The Suite controller annotates configMaps
+  - delete            # Needed for result cleanup on re-scanning
+  - deletecollection  # Needed for result cleanup on re-scanning
 - apiGroups:
   - ""
   resources:
@@ -183,6 +185,9 @@ rules:
   - complianceremediations
   verbs:
   - create
+  - get
+  - update
+  - patch
 - apiGroups:
   - compliance.openshift.io
   resources:
@@ -190,3 +195,5 @@ rules:
   verbs:
   - create
   - get
+  - update
+  - patch

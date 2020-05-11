@@ -31,6 +31,7 @@ import (
 
 	backoff "github.com/cenkalti/backoff/v3"
 	"github.com/dsnet/compress/bzip2"
+	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -41,7 +42,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	libgocrypto "github.com/openshift/library-go/pkg/crypto"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 const (
@@ -240,7 +241,7 @@ func getConfigMap(owner *unstructured.Unstructured, configMapName, filename stri
 				},
 			},
 			Labels: map[string]string{
-				"compliance-scan": owner.GetName(),
+				compv1alpha1.ComplianceScanIndicatorLabel: owner.GetName(),
 			},
 		},
 		Data: map[string]string{

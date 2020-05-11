@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -36,6 +37,7 @@ func defineFlags(cmd *cobra.Command) {
 	cmd.Flags().String("port", "8443", "Server port")
 	cmd.Flags().String("path", "/", "Content path")
 	cmd.Flags().String("owner", "", "Object owner")
+	cmd.Flags().String("scan-index", "", "The current index of the scan")
 	cmd.Flags().String("tls-server-cert", "", "Path to the server cert")
 	cmd.Flags().String("tls-server-key", "", "Path to the server key")
 	cmd.Flags().String("tls-ca", "", "Path to the CA certificate")
@@ -51,10 +53,12 @@ type config struct {
 }
 
 func parseConfig(cmd *cobra.Command) *config {
+	basePath := getValidStringArg(cmd, "path")
+	index := getValidStringArg(cmd, "scan-index")
 	conf := &config{
 		Address: getValidStringArg(cmd, "address"),
 		Port:    getValidStringArg(cmd, "port"),
-		Path:    getValidStringArg(cmd, "path"),
+		Path:    filepath.Join(basePath, index),
 		Cert:    getValidStringArg(cmd, "tls-server-cert"),
 		Key:     getValidStringArg(cmd, "tls-server-key"),
 		CA:      getValidStringArg(cmd, "tls-ca"),
@@ -69,6 +73,16 @@ func getValidStringArg(cmd *cobra.Command, name string) string {
 		os.Exit(1)
 	}
 	return val
+}
+
+func ensureDir(path string) error {
+	err := os.MkdirAll(path, 0750)
+	if err != nil && !os.IsExist(err) {
+		log.Fatal(err)
+		return err
+	}
+
+	return nil
 }
 
 func main() {
@@ -90,6 +104,12 @@ func main() {
 }
 
 func server(c *config) {
+	err := ensureDir(c.Path)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	caCert, err := ioutil.ReadFile(c.CA)
 	if err != nil {
 		fmt.Println(err)

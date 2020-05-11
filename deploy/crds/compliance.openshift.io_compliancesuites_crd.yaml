@@ -113,6 +113,11 @@ spec:
                 description: ComplianceScanStatusWrapper provides a ComplianceScanStatus
                   and a Name
                 properties:
+                  currentIndex:
+                    description: Specifies the current index of the scan. Given multiple
+                      scans, this marks the amount that have been executed.
+                    format: int64
+                    type: integer
                   errormsg:
                     description: If there are issues on the scan, this will be filled
                       up with an error message.

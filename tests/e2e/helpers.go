@@ -301,7 +301,7 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 		}
 
 		if suite.Status.AggregatedPhase != targetStatus {
-			t.Logf("Waiting until suite %s is done", suite.Name)
+			t.Logf("Waiting until suite %s reaches target status '%s'. Current status: %s", suite.Name, targetStatus, suite.Status.AggregatedPhase)
 			return false, nil
 		}
 
@@ -396,7 +396,7 @@ func getPodsForScan(f *framework.Framework, scanName string) ([]corev1.Pod, erro
 func getConfigMapsFromScan(f *framework.Framework, scaninstance *compv1alpha1.ComplianceScan) []corev1.ConfigMap {
 	var configmaps corev1.ConfigMapList
 	labelselector := map[string]string{
-		"compliance-scan": scaninstance.Name,
+		compv1alpha1.ComplianceScanIndicatorLabel: scaninstance.Name,
 	}
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(labelselector),

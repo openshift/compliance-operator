@@ -98,6 +98,8 @@ func createCrClient(config *rest.Config) (*complianceCrClient, error) {
 		&compv1alpha1.ComplianceCheckResult{})
 	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
 		&metav1.CreateOptions{})
+	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
+		&metav1.UpdateOptions{})
 
 	client, err := runtimeclient.New(config, runtimeclient.Options{
 		Scheme: scheme,
@@ -118,7 +120,7 @@ func getScanConfigMaps(clientset *kubernetes.Clientset, scan, namespace string) 
 
 	// Look for configMap with this scan label
 	listOpts := metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("compliance-scan=%s", scan),
+		LabelSelector: fmt.Sprintf("%s=%s", compv1alpha1.ComplianceScanIndicatorLabel, scan),
 	}
 
 	cMapList, err = clientset.CoreV1().ConfigMaps(namespace).List(listOpts)
@@ -196,7 +198,7 @@ type compResultIface interface {
 	runtime.Object
 }
 
-func createOneResult(crClient *complianceCrClient, owner metav1.Object, labels map[string]string, res compResultIface) error {
+func createOrUpdateOneResult(crClient *complianceCrClient, owner metav1.Object, labels map[string]string, exists bool, res compResultIface) error {
 	kind := res.GetObjectKind()
 
 	if err := controllerutil.SetControllerReference(owner, res, crClient.scheme); err != nil {
@@ -210,9 +212,14 @@ func createOneResult(crClient *complianceCrClient, owner metav1.Object, labels m
 	fmt.Printf("Creating %s:%s\n", kind.GroupVersionKind().Kind, name)
 
 	err := backoff.Retry(func() error {
-		err := crClient.client.Create(context.TODO(), res)
+		var err error
+		if !exists {
+			err = crClient.client.Create(context.TODO(), res)
+		} else {
+			err = crClient.client.Update(context.TODO(), res)
+		}
 		if err != nil && !errors.IsAlreadyExists(err) {
-			fmt.Printf("Retrying with a backoff because of an error: %v\n", err)
+			fmt.Printf("Retrying with a backoff because of an error while creating or updating object: %v\n", err)
 			return err
 		}
 		return nil
@@ -264,9 +271,18 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			return fmt.Errorf("cannot create checkResult labels")
 		}
 
+		crkey := getObjKey(pr.CheckResult.GetName(), pr.CheckResult.GetNamespace())
+		foundCheckResult := &compv1alpha1.ComplianceCheckResult{}
+		// Copy type metadata so dynamic client copies data correctly
+		foundCheckResult.TypeMeta = pr.CheckResult.TypeMeta
+		checkResultExists, err := getObjectIfFound(crClient, crkey, foundCheckResult)
+		if checkResultExists {
+			// Copy resource version and other metadata needed for update
+			foundCheckResult.ObjectMeta.DeepCopyInto(&pr.CheckResult.ObjectMeta)
+		}
 		// check is owned by the scan
-		if err := createOneResult(crClient, scan, checkResultLabels, pr.CheckResult); err != nil {
-			return fmt.Errorf("cannot create checkResult %s: %v", pr.CheckResult.Name, err)
+		if err := createOrUpdateOneResult(crClient, scan, checkResultLabels, checkResultExists, pr.CheckResult); err != nil {
+			return fmt.Errorf("cannot create or update checkResult %s: %v", pr.CheckResult.Name, err)
 		}
 
 		if pr.Remediation == nil {
@@ -278,14 +294,46 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			return err
 		}
 
+		remkey := getObjKey(pr.Remediation.GetName(), pr.Remediation.GetNamespace())
+		foundRemediation := &compv1alpha1.ComplianceRemediation{}
+		// Copy type metadata so dynamic client copies data correctly
+		foundRemediation.TypeMeta = pr.Remediation.TypeMeta
+		remExists, err := getObjectIfFound(crClient, remkey, foundRemediation)
+		if remExists {
+			// Copy resource version and other metadata needed for update
+			foundRemediation.ObjectMeta.DeepCopyInto(&pr.Remediation.ObjectMeta)
+		}
 		// remediation is owned by the check
-		if err := createOneResult(crClient, pr.CheckResult, remLabels, pr.Remediation); err != nil {
-			return fmt.Errorf("cannot create remediation %s: %v", pr.CheckResult.Name, err)
+		if err := createOrUpdateOneResult(crClient, pr.CheckResult, remLabels, remExists, pr.Remediation); err != nil {
+			return fmt.Errorf("cannot create or update remediation %s: %v", pr.Remediation.Name, err)
 		}
 
 	}
 
 	return nil
+}
+
+func getObjKey(name, ns string) types.NamespacedName {
+	return types.NamespacedName{Name: name, Namespace: ns}
+}
+
+// Returns whether or not an object exists, and updates the data in the obj.
+// If there is an error that is not acceptable, it'll be returned
+func getObjectIfFound(crClient *complianceCrClient, key types.NamespacedName, obj runtime.Object) (bool, error) {
+	var found bool
+	err := backoff.Retry(func() error {
+		err := crClient.client.Get(context.TODO(), key, obj)
+		if errors.IsNotFound(err) {
+			return nil
+		} else if err != nil {
+			fmt.Printf("Retrying with a backoff because of an error while getting object: %v\n", err)
+			return err
+		}
+		found = true
+		return nil
+	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+
+	return found, err
 }
 
 func readContent(filename string) (*os.File, error) {

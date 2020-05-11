@@ -6,6 +6,14 @@ import (
 
 // +genclient
 
+// ComplianceScanRescanAnnotation indicates that a ComplianceScan
+// should be re-run
+const ComplianceScanRescanAnnotation = "compliance.openshift.io/rescan"
+
+// ComplianceScanIndicatorLabel serves as an indicator for which ComplianceScan
+// owns the referenced object
+const ComplianceScanIndicatorLabel = "compliance-scan"
+
 // Represents the status of the compliance scan run.
 type ComplianceScanStatusPhase string
 
@@ -115,6 +123,9 @@ type ComplianceScanStatus struct {
 	// If there are issues on the scan, this will be filled up with an error
 	// message.
 	ErrorMessage string `json:"errormsg,omitempty"`
+	// Specifies the current index of the scan. Given multiple scans, this marks the
+	// amount that have been executed.
+	CurrentIndex int64 `json:"currentIndex,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -136,6 +147,17 @@ type ComplianceScan struct {
 	// scan; and, more importantly, if the scan is successful (compliant) or
 	// not (non-compliant)
 	Status ComplianceScanStatus `json:"status,omitempty"`
+}
+
+// NeedsRescan indicates whether a ComplianceScan needs to
+// rescan or not
+func (cs *ComplianceScan) NeedsRescan() bool {
+	annotations := cs.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+	_, needsRescan := annotations[ComplianceScanRescanAnnotation]
+	return needsRescan
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
