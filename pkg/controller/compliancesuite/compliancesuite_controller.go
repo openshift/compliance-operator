@@ -7,10 +7,14 @@ import (
 
 	"github.com/go-logr/logr"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -35,7 +39,7 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileComplianceSuite{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+	return &ReconcileComplianceSuite{client: mgr.GetClient(), scheme: mgr.GetScheme(), recorder: mgr.GetEventRecorderFor("suitectrl")}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -71,8 +75,9 @@ var _ reconcile.Reconciler = &ReconcileComplianceSuite{}
 type ReconcileComplianceSuite struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
+	client   client.Client
+	scheme   *runtime.Scheme
+	recorder record.EventRecorder
 }
 
 // Reconcile reads that state of the cluster for a ComplianceSuite object and makes changes based on the state read
@@ -147,6 +152,9 @@ func (r *ReconcileComplianceSuite) reconcileScanStatus(suite *compv1alpha1.Compl
 				logger.Error(err, "Could not update scan status")
 				return err
 			}
+			if r.recorder != nil && suite.IsResultAvailable() {
+				r.generateEventsForSuite(suite, logger)
+			}
 			return nil
 		}
 	}
@@ -167,7 +175,6 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 		logger.Info("Not updating scan, the phase is the same", "ComplianceScan.Name", scanStatusWrap.Name, "ComplianceScan.Phase", scanStatusWrap.Phase)
 		return nil
 	}
-
 	modScanStatus := compv1alpha1.ScanStatusWrapperFromScan(scan)
 
 	// Replace the copy so we use fresh metadata
@@ -175,9 +182,42 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 	suite.Status.ScanStatuses[idx] = modScanStatus
 	suite.Status.AggregatedPhase = suite.LowestCommonState()
 	suite.Status.AggregatedResult = suite.LowestCommonResult()
-	logger.Info("Updating scan status", "ComplianceScan.Name", scanStatusWrap.Name, "ComplianceScan.Phase", scanStatusWrap.Phase)
+	logger.Info("Updating scan status", "ComplianceScan.Name", modScanStatus.Name, "ComplianceScan.Phase", modScanStatus.Phase)
 
 	return r.client.Status().Update(context.TODO(), suite)
+}
+
+func (r *ReconcileComplianceSuite) generateEventsForSuite(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) {
+	logger.Info("Generating events for suite")
+
+	// Event for Suite
+	r.recorder.Event(
+		suite,
+		corev1.EventTypeNormal,
+		"ResultAvailable",
+		fmt.Sprintf("ComplianceSuite's result is: %s", suite.Status.AggregatedResult),
+	)
+
+	ownerRefs := suite.GetOwnerReferences()
+	if len(ownerRefs) == 0 {
+		return //there is nothing to do, since no owner is set
+	}
+	for _, ownerRef := range ownerRefs {
+		// we are making an assumption that the GRC policy has a single owner, or we chose the first owner in the list
+		if string(ownerRef.UID) == "" {
+			continue //there is nothing to do, since no owner UID is set
+		}
+		// FIXME(jaosorior): Figure out a less hacky way to check this
+		if ownerRef.Kind == "Policy" {
+			pol := getParentPolicy(&ownerRef, suite.GetNamespace())
+			r.recorder.Event(
+				pol,
+				corev1.EventTypeNormal,
+				fmt.Sprintf("policy: %s/%s", suite.Namespace, suite.Name),
+				resultToACMPolicyStatus(suite),
+			)
+		}
+	}
 }
 
 func (r *ReconcileComplianceSuite) addScanStatus(suite *compv1alpha1.ComplianceSuite, scan *compv1alpha1.ComplianceScan, logger logr.Logger) error {
@@ -371,4 +411,34 @@ func (r *ReconcileComplianceSuite) getAffectedMcfgPool(scan *compv1alpha1.Compli
 		}
 	}
 	return mcfgv1.MachineConfigPool{}, false
+}
+
+func getParentPolicy(ownerRef *metav1.OwnerReference, ns string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": ownerRef.APIVersion,
+			"kind":       ownerRef.Kind,
+			"metadata": map[string]interface{}{
+				"name":      ownerRef.Name,
+				"namespace": ns,
+				"uid":       ownerRef.UID,
+			},
+		},
+	}
+}
+
+// Converts the given result of a ComplianceSuite into a string that's usable by ACM
+func resultToACMPolicyStatus(suite *compv1alpha1.ComplianceSuite) string {
+	const instfmt string = "; To view aggregated results, execute the following in the managed cluster: kubectl get compliancesuites -n %s %s"
+	instructions := fmt.Sprintf(instfmt, suite.Namespace, suite.Name)
+	var result string
+	switch suite.Status.AggregatedResult {
+	case compv1alpha1.ResultCompliant:
+		result = "Compliant"
+	case compv1alpha1.ResultNonCompliant:
+		result = "NonCompliant"
+	default:
+		result = "UnknownCompliancy"
+	}
+	return result + instructions
 }
