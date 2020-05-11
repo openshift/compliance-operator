@@ -2,6 +2,7 @@ package compliancescan
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -385,7 +386,11 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 			instanceCopy := instance.DeepCopy()
 			instanceCopy.Status.Phase = compv1alpha1.PhasePending
 			instanceCopy.Status.Result = compv1alpha1.ResultNotAvailable
-			instanceCopy.Status.CurrentIndex = instance.Status.CurrentIndex + 1
+			if instance.Status.CurrentIndex == math.MaxInt64 {
+				instanceCopy.Status.CurrentIndex = 0
+			} else {
+				instanceCopy.Status.CurrentIndex = instance.Status.CurrentIndex + 1
+			}
 			err = r.client.Status().Update(context.TODO(), instanceCopy)
 			return reconcile.Result{}, err
 		}
