@@ -16,12 +16,12 @@ import (
 
 const aggregatorSA = "remediation-aggregator"
 
-func createAggregatorPodName(scanName string) string {
+func getAggregatorPodName(scanName string) string {
 	return utils.DNSLengthName("aggregator-pod-", "aggregator-pod-%s", scanName)
 }
 
 func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Logger) *corev1.Pod {
-	podName := createAggregatorPodName(scanInstance.Name)
+	podName := getAggregatorPodName(scanInstance.Name)
 
 	podLabels := map[string]string{
 		"complianceScan": scanInstance.Name,
@@ -92,17 +92,8 @@ func (r *ReconcileComplianceScan) launchAggregatorPod(scanInstance *compv1alpha1
 		return err
 	}
 
-	if errors.IsAlreadyExists(err) {
-		// If the pod was already created, just return
-		return nil
-	}
-
-	if scanInstance.Annotations == nil {
-		scanInstance.Annotations = make(map[string]string)
-	}
-
-	scanInstance.Annotations[AggregatorPodAnnotation] = pod.Name
-	return r.client.Update(context.TODO(), scanInstance)
+	// If the pod was already created, just return
+	return nil
 }
 
 func (r *ReconcileComplianceScan) deleteAggregator(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
@@ -119,6 +110,6 @@ func (r *ReconcileComplianceScan) deleteAggregator(instance *compv1alpha1.Compli
 func isAggregatorRunning(r *ReconcileComplianceScan, scanInstance *compv1alpha1.ComplianceScan, logger logr.Logger) (bool, error) {
 	logger.Info("Checking aggregator pod for scan", "ComplianceScan.Name", scanInstance.Name)
 
-	podName := scanInstance.Annotations[AggregatorPodAnnotation]
+	podName := getAggregatorPodName(scanInstance.Name)
 	return isPodRunning(r, podName, scanInstance.Namespace, logger)
 }
