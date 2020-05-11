@@ -40,6 +40,7 @@ const (
 	OPENSCAP
 	RESULT_SERVER
 	AGGREGATOR
+	API_RESOURCE_COLLECTOR
 )
 
 var componentDefaults = []struct {
@@ -50,6 +51,7 @@ var componentDefaults = []struct {
 	{"quay.io/jhrozek/openscap-ocp:latest", "OPENSCAP_IMAGE"},
 	{"quay.io/compliance-operator/resultserver:latest", "RESULT_SERVER_IMAGE"},
 	{"quay.io/compliance-operator/remediation-aggregator", "REMEDIATION_AGGREGATOR_IMAGE"},
+	{"quay.io/compliance-operator/api-resource-collector:latest", "API_RESOURCE_COLLECTOR_IMAGE"},
 }
 
 // GetComponentImage returns a full image pull spec for a given component

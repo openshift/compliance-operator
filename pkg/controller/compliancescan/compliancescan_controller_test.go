@@ -38,6 +38,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test",
 			},
+			Spec: compv1alpha1.ComplianceScanSpec{},
 		}
 		objs = append(objs, compliancescaninstance)
 

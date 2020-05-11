@@ -56,6 +56,8 @@ const (
 	ResultError ComplianceScanStatusResult = "ERROR"
 	// ResultNonCompliant represents the compliance scan having found a gap
 	ResultNonCompliant ComplianceScanStatusResult = "NON-COMPLIANT"
+	ScanTypeNode       ComplianceScanType         = "Node"
+	ScanTypePlatform   ComplianceScanType         = "Platform"
 )
 
 func resultCompare(lowResult ComplianceScanStatusResult, scanResult ComplianceScanStatusResult) ComplianceScanStatusResult {
@@ -79,9 +81,15 @@ type TailoringConfigMapRef struct {
 	Name string `json:"name"`
 }
 
+// ComplianceScanType
+// +k8s:openapi-gen=true
+type ComplianceScanType string
+
 // ComplianceScanSpec defines the desired state of ComplianceScan
 // +k8s:openapi-gen=true
 type ComplianceScanSpec struct {
+	// The type of Compliance scan.
+	ScanType ComplianceScanType `json:"scanType,omitempty"`
 	// Is the image with the content (Data Stream), that will be used to run
 	// OpenSCAP.
 	ContentImage string `json:"contentImage,omitempty"`

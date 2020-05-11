@@ -81,6 +81,9 @@ spec:
               required:
               - name
               type: object
+            scanType:
+              description: The type of Compliance scan.
+              type: string
           type: object
         status:
           description: The status will give valuable information on what's going on
