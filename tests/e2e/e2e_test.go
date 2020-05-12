@@ -948,7 +948,7 @@ func TestE2E(t *testing.T) {
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:ignition_remediation",
+									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Content:      "ssg-ocp4-ds.xml",
 									NodeSelector: selectWorkers,
@@ -958,7 +958,7 @@ func TestE2E(t *testing.T) {
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ScanType:     compv1alpha1.ScanTypePlatform,
-									ContentImage: "quay.io/mrogers950/ocp4-openscap-content:platform",
+									ContentImage: "quay.io/compliance-operator/ocp4-openscap-content:platform_test",
 									Profile:      "xccdf_org.ssgproject.content_profile_platform-moderate",
 									Content:      "ssg-ocp4-ds.xml",
 								},
