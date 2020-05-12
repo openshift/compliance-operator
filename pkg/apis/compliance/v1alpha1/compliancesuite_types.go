@@ -116,3 +116,8 @@ func (s *ComplianceSuite) LowestCommonResult() ComplianceScanStatusResult {
 
 	return lowestCommonResult
 }
+
+func (s *ComplianceSuite) IsResultAvailable() bool {
+	result := s.LowestCommonResult()
+	return result != "" && result != ResultNotAvailable
+}
