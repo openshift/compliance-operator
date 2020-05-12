@@ -18,6 +18,7 @@ spec:
           image: "quay.io/compliance-operator/compliance-operator:latest"
           command:
           - compliance-operator
+          - operator
           imagePullPolicy: Always
           env:
             - name: WATCH_NAMESPACE
