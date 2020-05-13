@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -52,7 +53,7 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileComplianceScan{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+	return &ReconcileComplianceScan{client: mgr.GetClient(), scheme: mgr.GetScheme(), recorder: mgr.GetEventRecorderFor("scanctrl")}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -89,8 +90,9 @@ var _ reconcile.Reconciler = &ReconcileComplianceScan{}
 type ReconcileComplianceScan struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
+	client   client.Client
+	scheme   *runtime.Scheme
+	recorder record.EventRecorder
 }
 
 // Reconcile reads that state of the cluster for a ComplianceScan object and makes changes based on the state read
@@ -353,7 +355,13 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1
 	log.Info("Moving on to the Done phase")
 	instance.Status.Phase = compv1alpha1.PhaseDone
 	err = r.client.Status().Update(context.TODO(), instance)
-	return reconcile.Result{}, err
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if r.recorder != nil {
+		r.generateResultEventForScan(instance, logger)
+	}
+	return reconcile.Result{}, nil
 }
 
 func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
@@ -428,6 +436,16 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileComplianceScan) generateResultEventForScan(scan *compv1alpha1.ComplianceScan, logger logr.Logger) {
+	logger.Info("Generating result event for scan")
+
+	// Event for Suite
+	r.recorder.Eventf(
+		scan, corev1.EventTypeNormal, "ResultAvailable",
+		"ComplianceScan's result is: %s", scan.Status.Result,
+	)
 }
 
 func getTargetNodes(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan) (corev1.NodeList, error) {
