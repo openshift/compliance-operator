@@ -107,6 +107,10 @@ func ComplianceScanFromWrapper(sw *ComplianceScanSpecWrapper) *ComplianceScan {
 }
 
 func (s *ComplianceSuite) LowestCommonState() ComplianceScanStatusPhase {
+	if len(s.Status.ScanStatuses) == 0 {
+		return PhasePending
+	}
+
 	lowestCommonState := PhaseDone
 
 	for _, scanStatusWrap := range s.Status.ScanStatuses {
@@ -117,6 +121,10 @@ func (s *ComplianceSuite) LowestCommonState() ComplianceScanStatusPhase {
 }
 
 func (s *ComplianceSuite) LowestCommonResult() ComplianceScanStatusResult {
+	if len(s.Status.ScanStatuses) == 0 {
+		return ResultNotAvailable
+	}
+
 	lowestCommonResult := ResultCompliant
 
 	for _, scanStatusWrap := range s.Status.ScanStatuses {
