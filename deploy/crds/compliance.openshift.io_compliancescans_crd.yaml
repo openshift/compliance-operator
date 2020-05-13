@@ -70,6 +70,9 @@ spec:
                 a specific rule. Note that when leaving this empty, the scan will
                 check for all the rules for a specific profile.
               type: string
+            scanType:
+              description: The type of Compliance scan.
+              type: string
             tailoringConfigMap:
               description: Is a reference to a ConfigMap that contains the tailoring
                 file. It assumes a key called `tailoring.xml` which will have the
@@ -81,9 +84,6 @@ spec:
               required:
               - name
               type: object
-            scanType:
-              description: The type of Compliance scan.
-              type: string
           type: object
         status:
           description: The status will give valuable information on what's going on

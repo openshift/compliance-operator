@@ -6,6 +6,7 @@ require (
 	github.com/ajeddeloh/go-json v0.0.0-20200220154158-5ae607161559 // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2
 	github.com/coreos/ignition v0.35.0
+	github.com/docker/docker v1.4.2-0.20190927142053-ada3c14355ce
 	github.com/dsnet/compress v0.0.1
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
 	github.com/go-logr/logr v0.1.0
@@ -15,9 +16,9 @@ require (
 	github.com/openshift/library-go v0.0.0-20200303185131-81598fff9efa
 	github.com/openshift/machine-config-operator v4.2.0-alpha.0.0.20190917115525-033375cbe820+incompatible
 	github.com/operator-framework/operator-sdk v0.16.0
+	github.com/robfig/cron v1.1.0
 	github.com/securego/gosec v0.0.0-20200302134848-c998389da2ac
 	github.com/spf13/cobra v0.0.5
-	github.com/spf13/pflag v1.0.5
 	github.com/subchen/go-xmldom v1.1.2
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	go.uber.org/zap v1.10.0

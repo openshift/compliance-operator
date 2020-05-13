@@ -234,6 +234,7 @@ e2e: namespace operator-sdk image-to-cluster openshift-user ## Run the end-to-en
 	@sed -i 's%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%$(RESULTSERVER_IMAGE_PATH)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):latest%$(REMEDIATION_AGGREGATOR_IMAGE_PATH)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME):latest%$(API_RESOURCE_COLLECTOR_IMAGE_PATH)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH)%' deploy/operator.yaml
 	@echo "Running e2e tests"
 	unset GOFLAGS && $(GOPATH)/bin/operator-sdk test local ./tests/e2e --skip-cleanup-error --image "$(OPERATOR_IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 	@echo "Restoring image references in deploy/operator.yaml"
@@ -242,6 +243,7 @@ e2e: namespace operator-sdk image-to-cluster openshift-user ## Run the end-to-en
 	@sed -i 's%$(RESULTSERVER_IMAGE_PATH)%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(REMEDIATION_AGGREGATOR_IMAGE_PATH)%$(IMAGE_REPO)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(API_RESOURCE_COLLECTOR_IMAGE_PATH)%$(IMAGE_REPO)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME):latest%' deploy/operator.yaml
+	@sed -i 's%$(OPERATOR_IMAGE_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 
 e2e-local: operator-sdk ## Run the end-to-end tests on a locally running operator (e.g. using make run)
 	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
@@ -249,11 +251,13 @@ e2e-local: operator-sdk ## Run the end-to-end tests on a locally running operato
 	@sed -i 's%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%$(RESULTSCOLLECTOR_IMAGE_PATH)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%$(RESULTSERVER_IMAGE_PATH)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME):latest%$(API_RESOURCE_COLLECTOR_IMAGE_PATH)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH)%' deploy/operator.yaml
 	unset GOFLAGS && $(GOPATH)/bin/operator-sdk test local ./tests/e2e --up-local --skip-cleanup-error --image "$(OPERATOR_IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 	@echo "Restoring image references in deploy/operator.yaml"
 	@sed -i 's%$(RESULTSCOLLECTOR_IMAGE_PATH)%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(RESULTSERVER_IMAGE_PATH)%$(IMAGE_REPO)/$(RESULTSERVER_IMAGE_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(API_RESOURCE_COLLECTOR_IMAGE_PATH)%$(IMAGE_REPO)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME):latest%' deploy/operator.yaml
+	@sed -i 's%$(OPERATOR_IMAGE_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 
 # If IMAGE_FORMAT is not defined, it means that we're not running on CI, so we
 # probably want to push the compliance-operator image to the cluster we're

@@ -101,6 +101,16 @@ rules:
   - compliance-operator
   verbs:
   - "update"
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - delete 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -198,3 +208,17 @@ rules:
   - get
   - update
   - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rerunner
+rules:
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - compliancescans
+  verbs:
+  - get
+  - list
+  - update

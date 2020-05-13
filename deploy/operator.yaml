@@ -42,6 +42,8 @@ spec:
               value: "quay.io/compliance-operator/remediation-aggregator:latest"
             - name: API_RESOURCE_COLLECTOR_IMAGE
               value: "quay.io/compliance-operator/api-resource-collector:latest"
+            - name: OPERATOR_IMAGE
+              value: "quay.io/compliance-operator/compliance-operator:latest"
       nodeSelector:
         node-role.kubernetes.io/master: ""
       tolerations:

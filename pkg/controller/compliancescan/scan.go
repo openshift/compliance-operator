@@ -14,6 +14,7 @@ import (
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 const (
@@ -125,7 +126,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 			Containers: []corev1.Container{
 				{
 					Name:  "log-collector",
-					Image: GetComponentImage(LOG_COLLECTOR),
+					Image: utils.GetComponentImage(utils.LOG_COLLECTOR),
 					Args: []string{
 						"--arf-file=/reports/report-arf.xml",
 						"--results-file=/reports/report.xml",
@@ -155,7 +156,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 				},
 				{
 					Name:    OpenSCAPScanContainerName,
-					Image:   GetComponentImage(OPENSCAP),
+					Image:   utils.GetComponentImage(utils.OPENSCAP),
 					Command: []string{OpenScapScriptPath},
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &trueVal,
@@ -293,7 +294,7 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 				},
 				{
 					Name:            PlatformScanResourceCollectorName,
-					Image:           GetComponentImage(API_RESOURCE_COLLECTOR),
+					Image:           utils.GetComponentImage(utils.API_RESOURCE_COLLECTOR),
 					Args:            collectorArgs,
 					ImagePullPolicy: corev1.PullAlways,
 					VolumeMounts: []corev1.VolumeMount{
@@ -311,7 +312,7 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 			Containers: []corev1.Container{
 				{
 					Name:  "log-collector",
-					Image: GetComponentImage(LOG_COLLECTOR),
+					Image: utils.GetComponentImage(utils.LOG_COLLECTOR),
 					Args: []string{
 						"--arf-file=/reports/report-arf.xml",
 						"--results-file=/reports/report.xml",
@@ -341,7 +342,7 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 				},
 				{
 					Name:    OpenSCAPScanContainerName,
-					Image:   GetComponentImage(OPENSCAP),
+					Image:   utils.GetComponentImage(utils.OPENSCAP),
 					Command: []string{OpenScapScriptPath},
 					VolumeMounts: []corev1.VolumeMount{
 						{

@@ -8,8 +8,6 @@ import (
 	// purposes, but only as a string shortener
 	// #nosec G505
 
-	"os"
-
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -32,39 +30,6 @@ const (
 	RootCAPrefix                 = "root-ca-"
 	CertValidityDays             = 1
 )
-
-type ComplianceComponent uint
-
-const (
-	LOG_COLLECTOR = iota
-	OPENSCAP
-	RESULT_SERVER
-	AGGREGATOR
-	API_RESOURCE_COLLECTOR
-)
-
-var componentDefaults = []struct {
-	defaultImage string
-	envVar       string
-}{
-	{"quay.io/compliance-operator/resultscollector:latest", "LOG_COLLECTOR_IMAGE"},
-	{"quay.io/jhrozek/openscap-ocp:latest", "OPENSCAP_IMAGE"},
-	{"quay.io/compliance-operator/resultserver:latest", "RESULT_SERVER_IMAGE"},
-	{"quay.io/compliance-operator/remediation-aggregator", "REMEDIATION_AGGREGATOR_IMAGE"},
-	{"quay.io/compliance-operator/api-resource-collector:latest", "API_RESOURCE_COLLECTOR_IMAGE"},
-}
-
-// GetComponentImage returns a full image pull spec for a given component
-// based on the component type
-func GetComponentImage(component ComplianceComponent) string {
-	comp := componentDefaults[component]
-
-	imageTag := os.Getenv(comp.envVar)
-	if imageTag == "" {
-		imageTag = comp.defaultImage
-	}
-	return imageTag
-}
 
 func absContentPath(relContentPath string) string {
 	return path.Join("/content/", relContentPath)
