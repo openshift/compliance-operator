@@ -77,6 +77,8 @@ TEST_OPTIONS?=
 E2E_SKIP_CONTAINER_PUSH?=false
 # Use default images in the e2e test run. Note that this takes precedence over E2E_SKIP_CONTAINER_PUSH
 E2E_USE_DEFAULT_IMAGES?=false
+# In a local-env e2e run, push images to the cluster but skip building them. Useful if the container push fails.
+E2E_SKIP_CONTAINER_BUILD?=false
 
 # Pass extra flags to the e2e test run.
 # e.g. to run a specific test in the e2e test suite, do:
@@ -277,6 +279,9 @@ e2e-local: operator-sdk ## Run the end-to-end tests on a locally running operato
 #
 # If the E2E_USE_DEFAULT_IMAGES environment variable is used, this will do
 # nothing, and the default images will be used.
+#
+# If the E2E_SKIP_CONTAINER_BUILD environment variable is used, this will push
+# the previously built images.
 .PHONY: image-to-cluster
 ifdef IMAGE_FORMAT
 image-to-cluster:
@@ -300,9 +305,17 @@ image-to-cluster:
 	$(eval RESULTSCOLLECTOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(RESULTSCOLLECTOR_IMAGE_NAME):$(TAG))
 	$(eval RESULTSERVER_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(RESULTSERVER_IMAGE_NAME):$(TAG))
 	$(eval REMEDIATION_AGGREGATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):$(TAG))
+	$(eval API_RESOURCE_COLLECTOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME):$(TAG))
+else ifeq ($(E2E_SKIP_CONTAINER_BUILD), true)
+image-to-cluster: namespace cluster-image-push
+	@echo "E2E_SKIP_CONTAINER_BUILD variable detected. Using previously built local images."
 else
-image-to-cluster: namespace openshift-user image
+image-to-cluster: namespace image cluster-image-push
 	@echo "IMAGE_FORMAT variable missing. We're in local enviornment."
+endif
+
+.PHONY: cluster-image-push
+cluster-image-push: namespace openshift-user
 	@echo "Temporarily exposing the default route to the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
 	@echo "Pushing image $(OPERATOR_IMAGE_PATH):$(TAG) to the image registry"
@@ -321,7 +334,6 @@ image-to-cluster: namespace openshift-user image
 	$(eval RESULTSERVER_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(RESULTSERVER_IMAGE_NAME):$(TAG))
 	$(eval REMEDIATION_AGGREGATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):$(TAG))
 	$(eval API_RESOURCE_COLLECTOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME):$(TAG))
-endif
 
 .PHONY: namespace
 namespace:
