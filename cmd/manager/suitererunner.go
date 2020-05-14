@@ -5,12 +5,17 @@ import (
 	"fmt"
 	"os"
 
+	backoff "github.com/cenkalti/backoff/v3"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+const maxScanUpdateRetries = 5
 
 var rerunnerCmd = &cobra.Command{
 	Use:   "suitererunner",
@@ -73,16 +78,40 @@ func RerunSuite(cmd *cobra.Command, args []string) {
 	fmt.Printf("Got %d scans from the ComplianceSuite '%s'\n", len(scans.Items), conf.Name)
 
 	for _, scan := range scans.Items {
-		scanCopy := scan.DeepCopy()
-		if scanCopy.Annotations == nil {
-			scanCopy.Annotations = make(map[string]string)
-		}
-		scanCopy.Annotations[compv1alpha1.ComplianceScanRescanAnnotation] = ""
+		currentScan := &scan
+		key := types.NamespacedName{Name: scan.GetName(), Namespace: scan.GetNamespace()}
+		err := backoff.Retry(func() error {
+			var scanCopy *compv1alpha1.ComplianceScan
+			if currentScan == nil {
+				fmt.Printf("Re-fetching ComplianceScan '%s' since the reference we had is no longer valid\n", scanCopy.Name)
+				err = conf.client.client.Get(context.TODO(), key, currentScan)
+				if err != nil {
+					fmt.Printf("Error re-fetching ComplianceScan '%s': %s\n", scanCopy.Name, err)
+					return err
+				}
+			} else {
+				scanCopy = currentScan.DeepCopy()
+			}
+			if scanCopy.Annotations == nil {
+				scanCopy.Annotations = make(map[string]string)
+			}
+			scanCopy.Annotations[compv1alpha1.ComplianceScanRescanAnnotation] = ""
 
-		fmt.Printf("Re-running ComplianceScan '%s'\n", scanCopy.Name)
-		err := conf.client.client.Update(context.TODO(), scanCopy)
+			fmt.Printf("Re-running ComplianceScan '%s'\n", scanCopy.Name)
+			err := conf.client.client.Update(context.TODO(), scanCopy)
+			if err != nil && (errors.IsResourceExpired(err) || errors.IsConflict(err)) {
+				currentScan = nil
+				return err
+			} else if err != nil {
+				fmt.Printf("Error while updating scan '%s', err: %s\n", scanCopy.Name, err)
+				fmt.Printf("Retrying.\n")
+				return err
+			}
+			return nil
+		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxScanUpdateRetries))
+
 		if err != nil {
-			fmt.Printf("Error while updating scan '%s', err: %s\n", scanCopy.Name, err)
+			fmt.Printf("Couldn't update scan '%s', err: %s\n", scan.Name, err)
 			os.Exit(1)
 		}
 	}
