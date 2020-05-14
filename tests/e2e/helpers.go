@@ -219,6 +219,52 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 	return nil
 }
 
+// waitForReScanStatus will poll until the compliancescan that we're lookingfor reaches a certain status for a re-scan, or until
+// a timeout is reached.
+func waitForReScanStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus compv1alpha1.ComplianceScanStatusPhase) error {
+	foundScan := &compv1alpha1.ComplianceScan{}
+	// unset initial index
+	var scanIndex int64 = -1
+	var lastErr error
+	// retry and ignore errors until timeout
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, foundScan)
+		if lastErr != nil {
+			if apierrors.IsNotFound(lastErr) {
+				t.Logf("Waiting for availability of %s compliancescan\n", name)
+				return false, nil
+			}
+			t.Logf("Retrying. Got error: %v\n", lastErr)
+			return false, nil
+		}
+		// Set index
+		if scanIndex == -1 {
+			scanIndex = foundScan.Status.CurrentIndex
+			t.Logf("Initial scan index set to %d. Waiting for re-scan\n", scanIndex)
+			return false, nil
+		} else if foundScan.Status.CurrentIndex == scanIndex {
+			t.Logf("re-scan hasn't taken place. CurrentIndex %d. Waiting for re-scan\n", scanIndex)
+			return false, nil
+		}
+
+		if foundScan.Status.Phase == targetStatus {
+			return true, nil
+		}
+		t.Logf("Waiting for run of %s compliancescan (%s)\n", name, foundScan.Status.Phase)
+		return false, nil
+	})
+	// Error in function call
+	if lastErr != nil {
+		return lastErr
+	}
+	// Timeout
+	if timeouterr != nil {
+		return timeouterr
+	}
+	t.Logf("ComplianceScan ready (%s)\n", foundScan.Status.Phase)
+	return nil
+}
+
 // waitForRemediationState will poll until the complianceRemediation that we're lookingfor gets applied, or until
 // a timeout is reached.
 func waitForRemediationState(t *testing.T, f *framework.Framework, namespace, name string, state compv1alpha1.RemediationApplicationState) error {

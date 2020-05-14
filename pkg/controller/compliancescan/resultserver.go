@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 const resultserverSA = "default"
@@ -112,7 +113,7 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 					Containers: []corev1.Container{
 						{
 							Name:            "result-server",
-							Image:           GetComponentImage(RESULT_SERVER),
+							Image:           utils.GetComponentImage(utils.RESULT_SERVER),
 							ImagePullPolicy: corev1.PullAlways,
 							Args: []string{
 								"--path=/reports/",

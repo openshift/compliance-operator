@@ -83,6 +83,9 @@ spec:
                       only for a specific rule. Note that when leaving this empty,
                       the scan will check for all the rules for a specific profile.
                     type: string
+                  scanType:
+                    description: The type of Compliance scan.
+                    type: string
                   tailoringConfigMap:
                     description: Is a reference to a ConfigMap that contains the tailoring
                       file. It assumes a key called `tailoring.xml` which will have
@@ -94,11 +97,14 @@ spec:
                     required:
                     - name
                     type: object
-                  scanType:
-                    description: The type of Compliance scan.
-                    type: string
                 type: object
               type: array
+            schedule:
+              description: Defines a schedule for the scans to run. This is in cronjob
+                format. Note the scan will still be triggered immediately, and the
+                scheduled scans will start running only after the initial results
+                are ready.
+              type: string
           required:
           - scans
           type: object

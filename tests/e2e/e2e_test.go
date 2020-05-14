@@ -550,6 +550,66 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
+			Name: "TestScheduledSuite",
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				suiteName := "test-scheduled-suite"
+
+				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
+				selectWorkers := map[string]string{
+					"node-role.kubernetes.io/worker": "",
+				}
+
+				testSuite := &compv1alpha1.ComplianceSuite{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceSuiteSpec{
+						AutoApplyRemediations: false,
+						Schedule:              "*/2 * * * *",
+						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
+							{
+								Name: workerScanName,
+								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+									ContentImage: "quay.io/complianceascode/ocp4:latest",
+									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+									Content:      "ssg-ocp4-ds.xml",
+									Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
+									NodeSelector: selectWorkers,
+									Debug:        true,
+								},
+							},
+						},
+					},
+				}
+
+				err := f.Client.Create(goctx.TODO(), testSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				if err != nil {
+					return err
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
+				if err != nil {
+					return err
+				}
+
+				// Wait for one re-scan
+				err = waitForReScanStatus(t, f, namespace, workerScanName, compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+
+				// Wait for a second one to assert this is running scheduled as expected
+				err = waitForReScanStatus(t, f, namespace, workerScanName, compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+
+				return nil
+			},
+		},
+		testExecution{
 			Name: "TestAutoRemediate",
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				// FIXME, maybe have a func that returns a struct with suite name and scan names?

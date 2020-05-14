@@ -4,6 +4,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// SuiteLabel indicates that an object (normally the ComplianceScan
+// or a ComplianceRemediation) belongs to a certain ComplianceSuite.
+// This is an easy way to filter them.
+const SuiteLabel = "compliance.openshift.io/suite"
+
 // ComplianceScanSpecWrapper provides a ComplianceScanSpec and a Name
 // +k8s:openapi-gen=true
 type ComplianceScanSpecWrapper struct {
@@ -29,6 +34,10 @@ type ComplianceScanStatusWrapper struct {
 type ComplianceSuiteSpec struct {
 	// Defines whether or not the remediations should be applied automatically
 	AutoApplyRemediations bool `json:"autoApplyRemediations,omitempty"`
+	// Defines a schedule for the scans to run. This is in cronjob format.
+	// Note the scan will still be triggered immediately, and the scheduled
+	// scans will start running only after the initial results are ready.
+	Schedule string `json:"schedule,omitempty"`
 	// Contains a list of the scans to execute on the cluster
 	// +listType=atomic
 	Scans []ComplianceScanSpecWrapper `json:"scans"`
@@ -98,6 +107,10 @@ func ComplianceScanFromWrapper(sw *ComplianceScanSpecWrapper) *ComplianceScan {
 }
 
 func (s *ComplianceSuite) LowestCommonState() ComplianceScanStatusPhase {
+	if len(s.Status.ScanStatuses) == 0 {
+		return PhasePending
+	}
+
 	lowestCommonState := PhaseDone
 
 	for _, scanStatusWrap := range s.Status.ScanStatuses {
@@ -108,6 +121,10 @@ func (s *ComplianceSuite) LowestCommonState() ComplianceScanStatusPhase {
 }
 
 func (s *ComplianceSuite) LowestCommonResult() ComplianceScanStatusResult {
+	if len(s.Status.ScanStatuses) == 0 {
+		return ResultNotAvailable
+	}
+
 	lowestCommonResult := ResultCompliant
 
 	for _, scanStatusWrap := range s.Status.ScanStatuses {

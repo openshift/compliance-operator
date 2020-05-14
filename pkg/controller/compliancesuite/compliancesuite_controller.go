@@ -113,6 +113,10 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 		return common.ReturnWithRetriableError(reqLogger, err)
 	}
 
+	if suiteCopy.IsResultAvailable() {
+		return res, r.reconcileScanRerunnerCronJob(suiteCopy, reqLogger)
+	}
+
 	return res, nil
 }
 
@@ -259,7 +263,7 @@ func launchScanForSuite(r *ReconcileComplianceSuite, suite *compv1alpha1.Complia
 func newScanForSuite(suite *compv1alpha1.ComplianceSuite, scanWrap *compv1alpha1.ComplianceScanSpecWrapper) *compv1alpha1.ComplianceScan {
 	scan := compv1alpha1.ComplianceScanFromWrapper(scanWrap)
 	scan.SetLabels(map[string]string{
-		"compliancesuite": suite.Name,
+		compv1alpha1.SuiteLabel: suite.Name,
 	})
 	scan.SetNamespace(suite.Namespace)
 	return scan
@@ -278,7 +282,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 	mcfgpools := &mcfgv1.MachineConfigPoolList{}
 	affectedMcfgPools := map[string]*mcfgv1.MachineConfigPool{}
 	listOpts := client.ListOptions{
-		LabelSelector: labels.SelectorFromSet(labels.Set{"complianceoperator.openshift.io/suite": suite.Name}),
+		LabelSelector: labels.SelectorFromSet(labels.Set{compv1alpha1.SuiteLabel: suite.Name}),
 	}
 
 	if err := r.client.List(context.TODO(), &remList, &listOpts); err != nil {

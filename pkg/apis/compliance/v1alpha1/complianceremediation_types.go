@@ -23,8 +23,6 @@ const (
 )
 
 const (
-	// SuiteLabel defines the label that associates the Remediation with the suite
-	SuiteLabel = "complianceoperator.openshift.io/suite"
 	// ScanLabel defines the label that associates the Remediation with the scan
 	ScanLabel = "complianceoperator.openshift.io/scan"
 )
