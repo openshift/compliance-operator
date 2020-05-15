@@ -24,25 +24,26 @@ func (r *ReconcileComplianceSuite) reconcileScanRerunnerCronJob(suite *compv1alp
 	if suite.Spec.Schedule == "" {
 		return r.handleDelete(rerunner, logger)
 	}
-	// Verify that the Schedule is in a correct format
-	_, err := cron.ParseStandard(suite.Spec.Schedule)
-	if err != nil {
-		msg := "ComplianceSuite's schedule is wrongly formatted"
-		r.recorder.Event(
-			suite,
-			corev1.EventTypeWarning,
-			"ScheduleFormatError",
-			msg,
-		)
-		logger.Info("WARNING: " + msg)
-		// TODO(jaosorior): Should we surface this to the CRD?
-	}
 
 	if err := controllerutil.SetControllerReference(suite, rerunner, r.scheme); err != nil {
 		log.Error(err, "Failed to set pod ownership", "CronJob.Name", rerunner.GetName())
 		return err
 	}
 	return r.handleCreate(rerunner, logger)
+}
+
+// validates that the provided schedule is correctly set. Else it returns false (not valid) and an
+// error message
+func (r *ReconcileComplianceSuite) validateSchedule(suite *compv1alpha1.ComplianceSuite) (bool, string) {
+	if suite.Spec.Schedule == "" {
+		return true, ""
+	}
+	// Verify that the Schedule is in a correct format
+	_, err := cron.ParseStandard(suite.Spec.Schedule)
+	if err != nil {
+		return false, "ComplianceSuite's schedule is wrongly formatted"
+	}
+	return true, ""
 }
 
 func (r *ReconcileComplianceSuite) handleCreate(rerunner *batchv1beta1.CronJob, logger logr.Logger) error {

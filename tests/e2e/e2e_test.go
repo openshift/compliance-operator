@@ -446,6 +446,47 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
+			Name: "TestSuiteWithInvalidScheduleShowsError",
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				suiteName := "test-suite-with-invalid-schedule"
+				testSuite := &compv1alpha1.ComplianceSuite{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceSuiteSpec{
+						AutoApplyRemediations: false,
+						Schedule:              "This is WRONG",
+						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
+							{
+								Name: fmt.Sprintf("%s-workers-scan", suiteName),
+								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+									ContentImage: "quay.io/complianceascode/ocp4:latest",
+									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+									Content:      "ssg-ocp4-ds.xml",
+									NodeSelector: map[string]string{
+										"node-role.kubernetes.io/worker": "",
+									},
+									Debug: true,
+								},
+							},
+						},
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), testSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				if err != nil {
+					return err
+				}
+
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultError)
+				if err != nil {
+					return err
+				}
+				return suiteErrorMessageMatchesRegex(t, f, namespace, suiteName, "Suite was invalid: .*")
+			},
+		},
+		testExecution{
 			Name: "TestSuiteScan",
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				suiteName := "test-suite-two-scans"

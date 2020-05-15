@@ -103,6 +103,11 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 		return reconcile.Result{}, err
 	}
 
+	if isValid, errorMsg := r.validateSuite(suite); !isValid {
+		// return immediately and don't schedule nor reconcile scans
+		return reconcile.Result{}, r.issueValidationError(suite, errorMsg, reqLogger)
+	}
+
 	suiteCopy := suite.DeepCopy()
 	if err := r.reconcileScans(suiteCopy, reqLogger); err != nil {
 		return common.ReturnWithRetriableError(reqLogger, err)
@@ -118,6 +123,36 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 	}
 
 	return res, nil
+}
+
+func (r *ReconcileComplianceSuite) validateSuite(suite *compv1alpha1.ComplianceSuite) (bool, string) {
+	if isValid, errorMsg := r.validateSchedule(suite); !isValid {
+		return isValid, errorMsg
+	}
+	return true, ""
+}
+
+func (r *ReconcileComplianceSuite) issueValidationError(suite *compv1alpha1.ComplianceSuite, errorMsg string, logger logr.Logger) error {
+	enhancedMessage := fmt.Sprintf("Suite was invalid: %s", errorMsg)
+	logger.Info(enhancedMessage)
+
+	// Issue event
+	r.recorder.Event(
+		suite,
+		corev1.EventTypeWarning,
+		"SuiteValidationError",
+		errorMsg,
+	)
+
+	// Update status
+	suiteCopy := suite.DeepCopy()
+	suiteCopy.Status.AggregatedPhase = compv1alpha1.PhaseDone
+	suiteCopy.Status.AggregatedResult = compv1alpha1.ResultError
+	suiteCopy.Status.ErrorMessage = enhancedMessage
+	if suiteCopy.Status.ScanStatuses == nil {
+		suiteCopy.Status.ScanStatuses = make([]compv1alpha1.ComplianceScanStatusWrapper, 0)
+	}
+	return r.client.Status().Update(context.TODO(), suiteCopy)
 }
 
 func (r *ReconcileComplianceSuite) reconcileScans(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) error {

@@ -117,6 +117,8 @@ spec:
             aggregatedResult:
               description: Represents the result of the compliance scan
               type: string
+            errorMessage:
+              type: string
             scanStatuses:
               items:
                 description: ComplianceScanStatusWrapper provides a ComplianceScanStatus
