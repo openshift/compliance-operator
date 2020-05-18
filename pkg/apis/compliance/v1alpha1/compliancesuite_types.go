@@ -50,6 +50,7 @@ type ComplianceSuiteStatus struct {
 	ScanStatuses     []ComplianceScanStatusWrapper `json:"scanStatuses"`
 	AggregatedPhase  ComplianceScanStatusPhase     `json:"aggregatedPhase,omitempty"`
 	AggregatedResult ComplianceScanStatusResult    `json:"aggregatedResult,omitempty"`
+	ErrorMessage     string                        `json:"errorMessage,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

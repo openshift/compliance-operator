@@ -4,6 +4,7 @@ import (
 	goctx "context"
 	"errors"
 	"fmt"
+	"regexp"
 	"testing"
 	"time"
 
@@ -356,6 +357,11 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 			return false, fmt.Errorf("expecting %s got %s", targetComplianceStatus, suite.Status.AggregatedResult)
 		}
 
+		// If we were expecting an error, there's no use checking the scans
+		if targetComplianceStatus == compv1alpha1.ResultError {
+			return true, nil
+		}
+
 		// Now as a sanity check make sure that the scan statuses match the aggregated
 		// suite status
 
@@ -409,6 +415,23 @@ func scanResultIsExpected(f *framework.Framework, namespace, name string, expect
 		if cs.Status.ErrorMessage == "" {
 			return fmt.Errorf("The ComplianceScan 'errormsg' wasn't set (it was empty). Even if we expected an error")
 		}
+	}
+	return nil
+}
+
+func suiteErrorMessageMatchesRegex(t *testing.T, f *framework.Framework, namespace, name, regexToMatch string) error {
+	t.Logf("Fetching suite: '%s'", name)
+	cs := &compv1alpha1.ComplianceSuite{}
+	key := types.NamespacedName{Name: name, Namespace: namespace}
+	err := f.Client.Get(goctx.TODO(), key, cs)
+	if err != nil {
+		return err
+	}
+	re := regexp.MustCompile(regexToMatch)
+	if !re.MatchString(cs.Status.ErrorMessage) {
+		return fmt.Errorf("The error message found in the compliance suite '%s' "+
+			"didn't match the expected regex. Found: '%s', Expected regex: '%s'",
+			name, cs.Status.ErrorMessage, regexToMatch)
 	}
 	return nil
 }
