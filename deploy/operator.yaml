@@ -32,8 +32,8 @@ spec:
             - name: OPERATOR_NAME
               value: "compliance-operator"
             - name: OPENSCAP_IMAGE
-              # Trying hardcoding this temporarily until its propagated to CI
-              value: "quay.io/mrogers950/openscap-ocp:latest"
+              # Hardcoding this temporarily until its propagated to CI
+              value: "quay.io/compliance-operator/openscap-ocp:1.3.3"
             - name: LOG_COLLECTOR_IMAGE
               value: "quay.io/compliance-operator/resultscollector:latest"
             - name: RESULT_SERVER_IMAGE

@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	resultscollectorSA    = "resultscollector"
-	tailoringCMVolumeName = "tailoring"
+	resultscollectorSA     = "resultscollector"
+	apiResourceCollectorSA = "api-resource-collector"
+	tailoringCMVolumeName  = "tailoring"
 )
 
 func (r *ReconcileComplianceScan) createScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
@@ -274,7 +275,7 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 			Labels:    podLabels,
 		},
 		Spec: corev1.PodSpec{
-			ServiceAccountName: resultscollectorSA,
+			ServiceAccountName: apiResourceCollectorSA,
 			InitContainers: []corev1.Container{
 				{
 					Name:  "content-container",

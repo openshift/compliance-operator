@@ -260,7 +260,7 @@ func saveResources(rootDir string, data map[string][]byte) error {
 		if err != nil {
 			return err
 		}
-		err = os.MkdirAll(saveDir, os.ModePerm)
+		err = os.MkdirAll(saveDir, 0700)
 		if err != nil {
 			return err
 		}

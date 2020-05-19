@@ -17,14 +17,13 @@ IMAGE_REPO?=quay.io/compliance-operator
 RUNTIME?=podman
 
 # Temporary
-OPENSCAP_IMAGE_REPO?=quay.io/mrogers950
-OPENSCAP_IMAGE_TAG?=yamlprobe
+OPENSCAP_IMAGE_TAG?=1.3.3
 
 # Image path to use. Set this if you want to use a specific path for building
 # or your e2e tests. This is overwritten if we bulid the image and push it to
 # the cluster or if we're on CI.
 OPERATOR_IMAGE_PATH?=$(IMAGE_REPO)/$(APP_NAME)
-OPENSCAP_IMAGE_PATH=$(OPENSCAP_IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME)
+OPENSCAP_IMAGE_PATH=$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME)
 OPENSCAP_DOCKERFILE_PATH=./images/openscap/Dockerfile
 RESULTSCOLLECTOR_IMAGE_PATH=$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME)
 RESULTSCOLLECTOR_DOCKERFILE_PATH=./images/resultscollector/Dockerfile

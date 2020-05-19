@@ -53,11 +53,23 @@ metadata:
   name: api-resource-collector
 subjects:
 - kind: ServiceAccount
-  name: resultscollector
+  name: api-resource-collector
   namespace: openshift-compliance
 roleRef:
   kind: ClusterRole
   name: cluster-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: api-resource-collector-logging
+subjects:
+- kind: ServiceAccount
+  name: api-resource-collector
+roleRef:
+  kind: Role
+  name: resultscollector
   apiGroup: rbac.authorization.k8s.io
 ---
 kind: RoleBinding
