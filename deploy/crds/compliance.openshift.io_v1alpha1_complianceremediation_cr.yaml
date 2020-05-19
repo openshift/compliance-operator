@@ -14,7 +14,7 @@ metadata:
 spec:
   apply: false
   type: MachineConfig
-  machineConfigContents:
+  object:
     apiVersion: machineconfiguration.openshift.io/v1
     kind: MachineConfig
     spec:
