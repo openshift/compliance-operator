@@ -4,16 +4,11 @@ metadata:
   name: example-compliancesuite
 spec:
   autoApplyRemediations: false
+  schedule: "0 1 * * *"
   scans:
-      - name: workers-scan
-        profile: xccdf_org.ssgproject.content_profile_moderate
-        content: ssg-ocp4-ds.xml
-        contentImage: quay.io/complianceascode/ocp4:latest
-        nodeSelector:
-            node-role.kubernetes.io/worker: ""
-      - name: masters-scan
-        profile: xccdf_org.ssgproject.content_profile_moderate
-        content: ssg-ocp4-ds.xml
-        contentImage: quay.io/complianceascode/ocp4:latest
-        nodeSelector:
-            node-role.kubernetes.io/master: ""
+    - name: workers-scan
+      profile: xccdf_org.ssgproject.content_profile_moderate
+      content: ssg-ocp4-ds.xml
+      contentImage: quay.io/complianceascode/ocp4:latest
+      nodeSelector:
+        node-role.kubernetes.io/worker: ""

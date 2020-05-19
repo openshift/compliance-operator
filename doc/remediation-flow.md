@@ -24,12 +24,6 @@ We want to accomplish:
    * The operator would also watch for API resources that affect compliance
      (such as `MachineConfigs`) and re-run the scan if those are updated
 
-Note: We presume that the results the scanner provide contain
-remediations. This is not true as of today (Nov-22), but we can mock this
-step by creating the `MachineConfig` remediation by building a custom
-content image that reuses e.g. the bash remediations with `MachineConfig`
-content.
-
 ### High-level overview
 An OCP cluster consists of the Kubernetes engine running on nodes. From
 the compliance scan perspective, we would be scanning the nodes and the
@@ -76,24 +70,15 @@ spec:
       node-role.kubernetes.io/master: ""
     profile: xccdf_org.ssgproject.content_profile_coreos-ncp
 status:
-  remediationOverview:
-  - apply: false
-    remediationName: masters-scan-no-empty-passwords
-    scanName: masters-scan
-    type: MachineConfig
-  - apply: false
-    remediationName: workers-scan-no-empty-passwords
-    scanName: workers-scan
-    type: MachineConfig
-  - apply: false
-    remediationName: masters-scan-no-direct-root-logins
-    scanName: masters-scan
-    type: MachineConfig
+  aggregatedPhase: DONE
+  aggregatedResult: NON-COMPLIANT
   scanStatuses:
   - name: workers-scan
     phase: DONE
+    result: NON-COMPLIANT
   - name: masters-scan
     phase: DONE
+    result: NON-COMPLIANT
 ```
 
 The remediation looks like this:
@@ -102,8 +87,8 @@ apiVersion: compliance.openshift.io/v1alpha1
 kind: ComplianceRemediation
 metadata:
   labels:
+    compliance.openshift.io/suite: example-compliancesuite
     complianceoperator.openshift.io/scan: masters-scan
-    complianceoperator.openshift.io/suite: example-compliancesuite
     machineconfiguration.openshift.io/role: master
   name: masters-scan-no-direct-root-logins
   namespace: openshift-compliance
@@ -115,8 +100,7 @@ metadata:
     name: example-compliancesuite
 spec:
   apply: false
-  type: MachineConfig
-  machineConfigContents:
+  object:
     apiVersion: machineconfiguration.openshift.io/v1
     kind: MachineConfig
     spec:
@@ -137,9 +121,9 @@ spec:
 ```
 
 ### The scan-remediate-repeat flow
-The general flow is common for the cluster scan as well as the node
-scan. How the remediations are represented and therefore how they are
-applied then differs for node scans and then cluster scan.
+The general flow is common for the platform scan as well as the node
+scan.  How the remediations are represented and therefore how they are applied
+differs for node and platform scans.
 
 Coming from the administrator side, the admin would define the
 `ComplianceSuite` CR and add the scans. First, the `ComplianceScan` CR
@@ -152,7 +136,8 @@ so that if the suite gets deleted, the remediations would be as well.
 The `ComplianceRemediation` objects would link back to the suite with
 labels that identify the suite and the scan respectively. This way, the
 administrator would be able to get and inspect the remediations with the
-usual `oc` command, e.g. `oc get complianceremediations --selector compliancescan=worker-nodes-rhel`.
+usual `oc` command, e.g.
+`oc get complianceremediations --selector compliance.openshift.io/suite=example-compliancesuite`.
 
 Once the administrator reviews the remediations, they would set the `apply`
 field to `true`. At that point, the remediation controller would pick up
@@ -198,53 +183,7 @@ and re-run the scans.
 TODO: Optimize the scans based on the pool the MC is applied to or just re-run
 the whole thing?
 
-### MVP
-The goal of the MVP is to implement the whole flow of scan and remediation without
-watching for changes that affect compliance. The point is to prove that the design
-is viable and find issues either on the operator side or more concrete proposals
-for the changes we need from the OpenScap team.
-
-For the MVP, we'll implement the following:
-   * Change the CRDs to include the `ComplianceSuite` that wraps the scan, provides
-     the status and links the remediations
-   * Parse the remediations from the content. This would be a throwaway implementation
-     for now, because for now we would scan the XML output until OpenScap provides
-     the JSON output.
-        * We might as well put the remediation to the rule description before we
-          figure out a better way to store the remediations along with the content
-   * Implement the `ComplianceRemediation` CR including the `apply` semantics. This is
-     partially done in this branch, but not completely.
-
- What would explicitly not be included from the design above:
-   * Re-running the scans after the pools update
-   * Detecting other changes that bring the cluster out of compliance
-   * Cluster-level checks and remediations
-
-### How to test the MVP
-The first thing to know is that the content as developed in the
-ComplianceAsCode repository has no MachineConfig remediations and
-additionally, the parser in the master branch only produces HTML report
-which is difficult to parse. Therefore you need to test with a custom content
-image that provides some remediations to test with and with a scanner that
-produces the parseable ARF format.
-
-The content image can be found at `quay.io/jhrozek/ocp4-openscap-content:remediation_demo`
-and the modified scanner at `quay.io/jhrozek/openscap-ocp:remediations_demo`.
-The content image will be referenced from the `ComplianceSuite` CR and the scanner
-image would be set via an environment variable, for example:
-
-```bash
-make run OPENSCAP_IMAGE=quay.io/jhrozek/openscap-ocp:remediations_demo
-```
-
-The content includes remediations for two checks:
- * `no_direct_root_logins`
- * `no_empty_passwords`
-
-So even if you run the whole suite, the operator would only be able to parse out
-these two remediations.
-
-#### Running the suite
+#### Working with remediations
 Run the operator first, then create the `ComplianceSuite` CR:
 
     oc create -f deploy/crds/compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
@@ -253,41 +192,51 @@ You'll be able to watch the Suite:
 
     oc describe compliancesuites/example-compliancesuite
 
-Eventually the scan will finish and should find some issues and remediations:
+Eventually the scan will finish and should find some issues:
 
 ```
-  Status:
-  Remediation Overview:
-    Apply:             false
-    Remediation Name:  workers-scan-no-empty-passwords
-    Scan Name:         workers-scan
-    Type:              MachineConfig
-    Apply:             false
-    Remediation Name:  masters-scan-no-direct-root-logins
-    Scan Name:         masters-scan
-    Type:              MachineConfig
-    Apply:             false
-    Remediation Name:  masters-scan-no-empty-passwords
-    Scan Name:         masters-scan
-    Type:              MachineConfig
+Status:
+  Aggregated Phase:   DONE
+  Aggregated Result:  NON-COMPLIANT
   Scan Statuses:
-    Name:   workers-scan
-    Phase:  DONE
-    Name:   masters-scan
-    Phase:  DONE
+    Name:    workers-scan
+    Phase:   DONE
+    Result:  NON-COMPLIANT
 ```
 
+We can fetch the generated remediations as follows:
+
+```
+$ oc get complianceremediations --selector compliance.openshift.io/suite=example-compliancesuite
+
+NAME                                                             STATE
+workers-scan-auditd-name-format                                  NotApplied
+workers-scan-coredump-disable-backtraces                         NotApplied
+workers-scan-coredump-disable-storage                            NotApplied
+workers-scan-disable-ctrlaltdel-burstaction                      NotApplied
+workers-scan-disable-users-coredumps                             NotApplied
+workers-scan-grub2-audit-argument                                NotApplied
+workers-scan-grub2-audit-backlog-limit-argument                  NotApplied
+workers-scan-grub2-page-poison-argument                          NotApplied
+workers-scan-grub2-pti-argument                                  NotApplied
+workers-scan-kernel-module-atm-disabled                          NotApplied
+workers-scan-kernel-module-bluetooth-disabled                    NotApplied
+workers-scan-kernel-module-can-disabled                          NotApplied
+workers-scan-kernel-module-cramfs-disabled                       NotApplied
+workers-scan-kernel-module-firewire-core-disabled                NotApplied
+...
+```
 Because remediations are not applied automatically, you'll want to edit the remediation
 and apply it yourself:
 
-    oc edit complianceremediations/masters-scan-no-direct-root-logins
+    oc edit complianceremediations/workers-scan-no-direct-root-logins
 
 Would open an editor that will contain (simplified):
 ```yaml
 spec:
   # Change to true
   apply: false
-  machineConfigContents: |-
+  object:
     apiVersion: machineconfiguration.openshift.io/v1
     kind: MachineConfig
     metadata:
@@ -299,15 +248,15 @@ After you change `apply` to `true`, the `Remediations`  controller picks up
 the remediation, reads the MC out of it and applies the remediation as a merged MC.
 View the created MC with:
 
-    oc describe machineconfigs/75-masters-scan-example-compliancesuite
+    oc describe machineconfigs/75-workers-scan-example-compliancesuite
 
 Try also applying the other remediation:
 
-    oc edit complianceremediations/masters-scan-no-empty-passwords
+    oc edit complianceremediations/workers-scan-no-empty-passwords
 
 And then view the merged MC again:
 
-    oc describe machineconfigs/75-masters-scan-example-compliancesuite
+    oc describe machineconfigs/75-workers-scan-example-compliancesuite
 
 You'll see that both remediations were merged into a single one. Now you'll probably
 want to wait until the MCs are applied and the nodes rebooted. Afterwards, delete
