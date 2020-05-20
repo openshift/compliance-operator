@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/compliance-operator/pkg/apis"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	compsuitectrl "github.com/openshift/compliance-operator/pkg/controller/compliancesuite"
@@ -212,6 +213,18 @@ func setupTestRequirements(t *testing.T) *framework.Context {
 			t.Fatalf("TEST SETUP: failed to add custom resource scheme to framework: %v", err)
 		}
 	}
+
+	// Additional testing objects
+	testObjs := [1]runtime.Object{
+		&configv1.OAuth{},
+	}
+	for _, obj := range testObjs {
+		err := framework.AddToFrameworkScheme(configv1.Install, obj)
+		if err != nil {
+			t.Fatalf("TEST SETUP: failed to add configv1 resource scheme to framework: %v", err)
+		}
+	}
+
 	// MCO objects
 	mcoObjs := [2]runtime.Object{
 		&mcfgv1.MachineConfigPoolList{},
