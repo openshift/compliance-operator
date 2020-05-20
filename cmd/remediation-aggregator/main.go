@@ -277,9 +277,6 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		}
 
 		checkResultLabels := getCheckResultLabels(pr.CheckResult, scan)
-		if checkResultLabels == nil {
-			return fmt.Errorf("cannot create checkResult labels")
-		}
 		checkResultAnnotations := getCheckResultAnnotations(pr.CheckResult, scan)
 
 		crkey := getObjKey(pr.CheckResult.GetName(), pr.CheckResult.GetNamespace())
