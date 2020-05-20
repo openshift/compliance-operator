@@ -1,6 +1,8 @@
 package v1alpha1
 
 import (
+	"strings"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -11,6 +13,10 @@ type ComplianceCheckStatus string
 // way.
 const ComplianceCheckResultStatusLabel = "compliance.openshift.io/check-status"
 const ComplianceCheckResultSeverityLabel = "compliance.openshift.io/check-severity"
+
+// ComplianceCheckResultRuleAnnotation exposes the DNS-friendly name of a rule as a label.
+// This provides a way to link a result to a Rule object.
+const ComplianceCheckResultRuleAnnotation = "compliance.openshift.io/rule"
 
 const (
 	// The check ran to completion and passed
@@ -55,6 +61,15 @@ type ComplianceCheckResult struct {
 	Severity ComplianceCheckResultSeverity `json:"severity"`
 	// A human-readable check description, what and why it does
 	Description string `json:"description,omitempty"`
+}
+
+// IDToDNSFriendlyName gets the ID from the scan and returns a DNS
+// friendly name
+func (ccr *ComplianceCheckResult) IDToDNSFriendlyName() string {
+	const rulePrefix = "xccdf_org.ssgproject.content_rule_"
+	ruleName := strings.TrimPrefix(ccr.ID, rulePrefix)
+	dnsFriendlyFixID := strings.ReplaceAll(ruleName, "_", "-")
+	return strings.ToLower(dnsFriendlyFixID)
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

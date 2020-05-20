@@ -198,7 +198,7 @@ type compResultIface interface {
 	runtime.Object
 }
 
-func createOrUpdateOneResult(crClient *complianceCrClient, owner metav1.Object, labels map[string]string, exists bool, res compResultIface) error {
+func createOrUpdateOneResult(crClient *complianceCrClient, owner metav1.Object, labels map[string]string, annotations map[string]string, exists bool, res compResultIface) error {
 	kind := res.GetObjectKind()
 
 	if err := controllerutil.SetControllerReference(owner, res, crClient.scheme); err != nil {
@@ -207,6 +207,9 @@ func createOrUpdateOneResult(crClient *complianceCrClient, owner metav1.Object, 
 	}
 
 	res.SetLabels(labels)
+	if annotations != nil {
+		res.SetAnnotations(annotations)
+	}
 
 	name := res.GetName()
 	fmt.Printf("Creating %s:%s\n", kind.GroupVersionKind().Kind, name)
@@ -253,6 +256,13 @@ func getCheckResultLabels(cr *compv1alpha1.ComplianceCheckResult, scan *compv1al
 	return labels
 }
 
+func getCheckResultAnnotations(cr *compv1alpha1.ComplianceCheckResult, scan *compv1alpha1.ComplianceScan) map[string]string {
+	annotations := make(map[string]string)
+	annotations[compv1alpha1.ComplianceCheckResultRuleAnnotation] = string(cr.IDToDNSFriendlyName())
+
+	return annotations
+}
+
 func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, parsedResults []*utils.ParseResult) error {
 	fmt.Printf("Will create %d result objects\n", len(parsedResults))
 	if len(parsedResults) == 0 {
@@ -270,6 +280,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		if checkResultLabels == nil {
 			return fmt.Errorf("cannot create checkResult labels")
 		}
+		checkResultAnnotations := getCheckResultAnnotations(pr.CheckResult, scan)
 
 		crkey := getObjKey(pr.CheckResult.GetName(), pr.CheckResult.GetNamespace())
 		foundCheckResult := &compv1alpha1.ComplianceCheckResult{}
@@ -281,7 +292,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			foundCheckResult.ObjectMeta.DeepCopyInto(&pr.CheckResult.ObjectMeta)
 		}
 		// check is owned by the scan
-		if err := createOrUpdateOneResult(crClient, scan, checkResultLabels, checkResultExists, pr.CheckResult); err != nil {
+		if err := createOrUpdateOneResult(crClient, scan, checkResultLabels, checkResultAnnotations, checkResultExists, pr.CheckResult); err != nil {
 			return fmt.Errorf("cannot create or update checkResult %s: %v", pr.CheckResult.Name, err)
 		}
 
@@ -304,7 +315,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			foundRemediation.ObjectMeta.DeepCopyInto(&pr.Remediation.ObjectMeta)
 		}
 		// remediation is owned by the check
-		if err := createOrUpdateOneResult(crClient, pr.CheckResult, remLabels, remExists, pr.Remediation); err != nil {
+		if err := createOrUpdateOneResult(crClient, pr.CheckResult, remLabels, nil, remExists, pr.Remediation); err != nil {
 			return fmt.Errorf("cannot create or update remediation %s: %v", pr.Remediation.Name, err)
 		}
 
