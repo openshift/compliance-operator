@@ -580,6 +580,7 @@ func TestE2E(t *testing.T) {
 					},
 					ID:     "xccdf_org.ssgproject.content_rule_wireless_disable_in_bios",
 					Status: compv1alpha1.CheckResultInfo,
+					Severity: compv1alpha1.CheckResultSeverityUnknown, // yes, it's really uknown in the DS
 				}
 
 				err = assertHasCheck(f, suiteName, workerScanName, checkWifiInBios)
@@ -756,6 +757,7 @@ func TestE2E(t *testing.T) {
 					},
 					ID:     "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 					Status: compv1alpha1.CheckResultPass,
+					Severity:compv1alpha1.CheckResultSeverityMedium,
 				}
 				err = assertHasCheck(f, suiteName, workerScanName, checkNoDirectRootLogins)
 				if err != nil {
