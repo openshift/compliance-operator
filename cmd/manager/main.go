@@ -33,6 +33,7 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(operatorCmd)
 	rootCmd.AddCommand(rerunnerCmd)
+	rootCmd.AddCommand(resultServerCmd)
 }
 
 func main() {
