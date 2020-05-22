@@ -9,11 +9,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
 )
 
 func (r *ReconcileComplianceScan) handleRootCASecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	exist, err := secretExists(r.client, RootCAPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	exist, err := secretExists(r.client, RootCAPrefix+instance.Name, instance.GetNamespace())
 	if err != nil {
 		return err
 	}
@@ -22,7 +21,7 @@ func (r *ReconcileComplianceScan) handleRootCASecret(instance *compv1alpha1.Comp
 	}
 
 	logger.Info("creating CA", "ComplianceScan.Name", instance.Name)
-	secret, err := makeCASecret(instance, common.GetComplianceOperatorNamespace())
+	secret, err := makeCASecret(instance, instance.GetNamespace())
 	if err != nil {
 		return err
 	}
@@ -41,7 +40,7 @@ func (r *ReconcileComplianceScan) handleRootCASecret(instance *compv1alpha1.Comp
 }
 
 func (r *ReconcileComplianceScan) handleResultServerSecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	exist, err := secretExists(r.client, ServerCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	exist, err := secretExists(r.client, ServerCertPrefix+instance.Name, instance.GetNamespace())
 	if err != nil {
 		return err
 	}
@@ -50,7 +49,7 @@ func (r *ReconcileComplianceScan) handleResultServerSecret(instance *compv1alpha
 	}
 
 	logger.Info("creating server cert", "ComplianceScan.Name", instance.Name)
-	secret, err := makeServerCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
+	secret, err := makeServerCertSecret(r.client, instance, instance.GetNamespace())
 	if err != nil {
 		return err
 	}
@@ -68,7 +67,7 @@ func (r *ReconcileComplianceScan) handleResultServerSecret(instance *compv1alpha
 }
 
 func (r *ReconcileComplianceScan) handleResultClientSecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	exist, err := secretExists(r.client, ClientCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	exist, err := secretExists(r.client, ClientCertPrefix+instance.Name, instance.GetNamespace())
 	if err != nil {
 		return err
 	}
@@ -77,7 +76,7 @@ func (r *ReconcileComplianceScan) handleResultClientSecret(instance *compv1alpha
 	}
 
 	logger.Info("creating client cert", "ComplianceScan.Name", instance.Name)
-	secret, err := makeClientCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
+	secret, err := makeClientCertSecret(r.client, instance, instance.GetNamespace())
 	if err != nil {
 		return err
 	}
@@ -97,21 +96,21 @@ func (r *ReconcileComplianceScan) handleResultClientSecret(instance *compv1alpha
 
 func (r *ReconcileComplianceScan) deleteRootCASecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	logger.Info("deleting CA", "ComplianceScan.Name", instance.Name)
-	ns := common.GetComplianceOperatorNamespace()
+	ns := instance.GetNamespace()
 	secret := certSecret(getCASecretName(instance), ns, []byte{}, []byte{}, []byte{})
 	return r.deleteSecret(secret)
 }
 
 func (r *ReconcileComplianceScan) deleteResultServerSecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	logger.Info("deleting server cert", "ComplianceScan.Name", instance.Name)
-	ns := common.GetComplianceOperatorNamespace()
+	ns := instance.GetNamespace()
 	secret := certSecret(getServerCertSecretName(instance), ns, []byte{}, []byte{}, []byte{})
 	return r.deleteSecret(secret)
 }
 
 func (r *ReconcileComplianceScan) deleteResultClientSecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	logger.Info("deleting client cert", "ComplianceScan.Name", instance.Name)
-	ns := common.GetComplianceOperatorNamespace()
+	ns := instance.GetNamespace()
 	secret := certSecret(getClientCertSecretName(instance), ns, []byte{}, []byte{}, []byte{})
 	return r.deleteSecret(secret)
 }
