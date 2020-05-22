@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
@@ -136,7 +137,7 @@ func createConfigMaps(r *ReconcileComplianceScan, scriptCmName, envCmName, platf
 
 	if err := r.client.Get(context.TODO(), types.NamespacedName{
 		Name:      scriptCmName,
-		Namespace: scan.Namespace,
+		Namespace: common.GetComplianceOperatorNamespace(),
 	}, cm); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
@@ -148,7 +149,7 @@ func createConfigMaps(r *ReconcileComplianceScan, scriptCmName, envCmName, platf
 
 	if err := r.client.Get(context.TODO(), types.NamespacedName{
 		Name:      envCmName,
-		Namespace: scan.Namespace,
+		Namespace: common.GetComplianceOperatorNamespace(),
 	}, cm); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
@@ -160,7 +161,7 @@ func createConfigMaps(r *ReconcileComplianceScan, scriptCmName, envCmName, platf
 
 	if err := r.client.Get(context.TODO(), types.NamespacedName{
 		Name:      platformEnvCmName,
-		Namespace: scan.Namespace,
+		Namespace: common.GetComplianceOperatorNamespace(),
 	}, cm); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
@@ -177,9 +178,10 @@ func defaultOpenScapScriptCm(name string, scan *compv1alpha1.ComplianceScan) *co
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: scan.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				asOwner(scan),
+			Namespace: common.GetComplianceOperatorNamespace(),
+			Labels: map[string]string{
+				compv1alpha1.ScanLabel:   scan.Name,
+				compv1alpha1.ScriptLabel: "",
 			},
 		},
 		Data: map[string]string{
@@ -192,9 +194,10 @@ func platformOpenScapScriptCm(name string, scan *compv1alpha1.ComplianceScan) *c
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: scan.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				asOwner(scan),
+			Namespace: common.GetComplianceOperatorNamespace(),
+			Labels: map[string]string{
+				compv1alpha1.ScanLabel:   scan.Name,
+				compv1alpha1.ScriptLabel: "",
 			},
 		},
 		Data: map[string]string{
@@ -209,9 +212,10 @@ func defaultOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: scan.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				asOwner(scan),
+			Namespace: common.GetComplianceOperatorNamespace(),
+			Labels: map[string]string{
+				compv1alpha1.ScanLabel:   scan.Name,
+				compv1alpha1.ScriptLabel: "",
 			},
 		},
 		Data: map[string]string{
@@ -245,9 +249,10 @@ func platformOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *core
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: scan.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				asOwner(scan),
+			Namespace: common.GetComplianceOperatorNamespace(),
+			Labels: map[string]string{
+				compv1alpha1.ScanLabel:   scan.Name,
+				compv1alpha1.ScriptLabel: "",
 			},
 		},
 		Data: map[string]string{
@@ -279,16 +284,4 @@ func envCmForScan(scan *compv1alpha1.ComplianceScan) string {
 
 func envCmForPlatformScan(scan *compv1alpha1.ComplianceScan) string {
 	return utils.DNSLengthName("scap-env-", "%s-%s", scan.Name, OpenScapPlatformEnvConfigMapName)
-}
-
-func asOwner(scan *compv1alpha1.ComplianceScan) metav1.OwnerReference {
-	bTrue := true
-
-	return metav1.OwnerReference{
-		APIVersion: scan.APIVersion,
-		Kind:       scan.Kind,
-		Name:       scan.Name,
-		UID:        scan.UID,
-		Controller: &bTrue,
-	}
 }

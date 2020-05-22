@@ -9,9 +9,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
@@ -34,11 +34,6 @@ func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.Comp
 
 	logger.Info("Creating scan result server pod")
 	deployment := resultServer(instance, resultServerLabels, logger)
-	if err = controllerutil.SetControllerReference(instance, deployment, r.scheme); err != nil {
-		log.Error(err, "Failed to set deployment ownership", "deployment", deployment)
-		return err
-	}
-
 	err = r.client.Create(context.TODO(), deployment)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logger.Error(err, "Cannot create deployment", "deployment", deployment)
@@ -47,11 +42,6 @@ func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.Comp
 	logger.Info("ResultServer Deployment launched", "Deployment.Name", deployment.Name)
 
 	service := resultServerService(instance, resultServerLabels)
-	if err = controllerutil.SetControllerReference(instance, service, r.scheme); err != nil {
-		log.Error(err, "Failed to set service ownership", "service", service)
-		return err
-	}
-
 	err = r.client.Create(context.TODO(), service)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logger.Error(err, "Cannot create service", "service", service)
@@ -96,7 +86,7 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getResultServerName(scanInstance),
-			Namespace: scanInstance.Namespace,
+			Namespace: common.GetComplianceOperatorNamespace(),
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &oneReplica,
@@ -165,7 +155,7 @@ func resultServerService(scanInstance *compv1alpha1.ComplianceScan, labels map[s
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getResultServerName(scanInstance),
-			Namespace: scanInstance.Namespace,
+			Namespace: common.GetComplianceOperatorNamespace(),
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: labels,

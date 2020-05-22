@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
@@ -187,7 +188,7 @@ func annotateParsedConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) 
 	cmCopy.Annotations[configMapRemediationsProcessed] = ""
 
 	err := backoff.Retry(func() error {
-		_, err := clientset.CoreV1().ConfigMaps(cmCopy.Namespace).Update(cmCopy)
+		_, err := clientset.CoreV1().ConfigMaps(common.GetComplianceOperatorNamespace()).Update(cmCopy)
 		return err
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 	return err
@@ -391,7 +392,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 	}
 
 	// Find all the configmaps for a scan
-	configMaps, err := getScanConfigMaps(clientset, aggregatorConf.ScanName, aggregatorConf.Namespace)
+	configMaps, err := getScanConfigMaps(clientset, aggregatorConf.ScanName, common.GetComplianceOperatorNamespace())
 	if err != nil {
 		fmt.Printf("getScanConfigMaps failed: %v\n", err)
 		os.Exit(1)

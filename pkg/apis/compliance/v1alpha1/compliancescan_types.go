@@ -14,6 +14,9 @@ const ComplianceScanRescanAnnotation = "compliance.openshift.io/rescan"
 // owns the referenced object
 const ComplianceScanIndicatorLabel = "compliance-scan"
 
+// ScriptLabel defines that the object is a script for a scan object
+const ScriptLabel = "complianceoperator.openshift.io/scan-script"
+
 // Represents the status of the compliance scan run.
 type ComplianceScanStatusPhase string
 

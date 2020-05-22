@@ -43,6 +43,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 )
 
 const (
@@ -232,14 +233,6 @@ func getConfigMap(owner *unstructured.Unstructured, configMapName, filename stri
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        configMapName,
 			Annotations: annotations,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: owner.GetAPIVersion(),
-					Kind:       owner.GetKind(),
-					Name:       owner.GetName(),
-					UID:        owner.GetUID(),
-				},
-			},
 			Labels: map[string]string{
 				compv1alpha1.ComplianceScanIndicatorLabel: owner.GetName(),
 			},
@@ -293,7 +286,7 @@ func uploadResultConfigMap(xccdfContents *resultFileContents, exitcode string,
 			return err
 		}
 		confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results", xccdfContents.contents, xccdfContents.compressed, exitcode)
-		_, err = clientset.CoreV1().ConfigMaps(scapresultsconf.Namespace).Create(confMap)
+		_, err = clientset.CoreV1().ConfigMaps(common.GetComplianceOperatorNamespace()).Create(confMap)
 
 		if errors.IsAlreadyExists(err) {
 			return nil
@@ -311,7 +304,7 @@ func uploadErrorConfigMap(errorMsg *resultFileContents, exitcode string,
 			return err
 		}
 		confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "error-msg", errorMsg.contents, errorMsg.compressed, exitcode)
-		_, err = clientset.CoreV1().ConfigMaps(scapresultsconf.Namespace).Create(confMap)
+		_, err = clientset.CoreV1().ConfigMaps(common.GetComplianceOperatorNamespace()).Create(confMap)
 
 		if errors.IsAlreadyExists(err) {
 			return nil

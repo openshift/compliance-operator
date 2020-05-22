@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
@@ -38,10 +37,6 @@ func (r *ReconcileComplianceScan) createNodeScanPods(instance *compv1alpha1.Comp
 		// ..schedule a pod..
 		logger.Info("Creating a pod for node", "Pod.Name", node.Name)
 		pod := newScanPodForNode(instance, &node, logger)
-		if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
-			log.Error(err, "Failed to set pod ownership", "Pod.Name", pod)
-			return err
-		}
 
 		if instance.Spec.TailoringConfigMap != nil {
 			if err := r.addTailoringVolume(instance, pod); err != nil {
@@ -67,10 +62,6 @@ func (r *ReconcileComplianceScan) createNodeScanPods(instance *compv1alpha1.Comp
 func (r *ReconcileComplianceScan) createPlatformScanPod(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	logger.Info("Creating a Platform scan pod")
 	pod := newPlatformScanPod(instance, logger)
-	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
-		log.Error(err, "Failed to set pod ownership", "pod", pod)
-		return err
-	}
 
 	err := r.client.Create(context.TODO(), pod)
 	if errors.IsAlreadyExists(err) {
@@ -98,7 +89,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
-			Namespace: scanInstance.Namespace,
+			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels:    podLabels,
 			Annotations: map[string]string{
 				"openshift.io/scc": "privileged",
@@ -271,7 +262,7 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
-			Namespace: scanInstance.Namespace,
+			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels:    podLabels,
 		},
 		Spec: corev1.PodSpec{
