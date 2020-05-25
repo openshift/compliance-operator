@@ -286,7 +286,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 			}
 			if running {
 				// at least one pod is still running, just go back to the queue
-				return reconcile.Result{}, err
+				return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, err
 			}
 		}
 	}
