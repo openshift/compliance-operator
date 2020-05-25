@@ -117,6 +117,22 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, err
 	}
 
+	// examine DeletionTimestamp to determine if object is under deletion
+	if instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// registering our finalizer.
+		if !common.ContainsFinalizer(instance.ObjectMeta.Finalizers, compv1alpha1.ScanFinalizer) {
+			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, compv1alpha1.ScanFinalizer)
+			if err := r.client.Update(context.TODO(), instance); err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+	} else {
+		// The object is being deleted
+		return r.scanDeleteHandler(instance, reqLogger)
+	}
+
 	// At this point, we make a copy of the instance, so we can modify it in the functions below.
 	scanToBeUpdated := instance.DeepCopy()
 
@@ -437,6 +453,45 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 	return reconcile.Result{}, nil
 }
 
+func (r *ReconcileComplianceScan) scanDeleteHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+	if common.ContainsFinalizer(instance.ObjectMeta.Finalizers, compv1alpha1.ScanFinalizer) {
+		scanToBeDeleted := instance.DeepCopy()
+
+		// Force remove rescan annotation since we're deleting the scan
+		if scanToBeDeleted.NeedsRescan() {
+			delete(scanToBeDeleted.Annotations, compv1alpha1.ComplianceScanRescanAnnotation)
+		}
+		// Force debug to be false so we actually remove dependent objects
+		scanToBeDeleted.Spec.Debug = false
+
+		// remove objects by forcing handling of phase DONE
+		if _, err := r.phaseDoneHandler(scanToBeDeleted, logger); err != nil {
+			// if fail to delete the external dependency here, return with error
+			// so that it can be retried
+			return reconcile.Result{}, err
+		}
+
+		if err := r.deleteResultConfigMaps(scanToBeDeleted, logger); err != nil {
+			log.Error(err, "Cannot delete result ConfigMaps")
+			return reconcile.Result{}, err
+		}
+
+		if err := r.deletePVCForScan(scanToBeDeleted); err != nil {
+			log.Error(err, "Cannot delete result PVC")
+			return reconcile.Result{}, err
+		}
+
+		// remove our finalizer from the list and update it.
+		scanToBeDeleted.ObjectMeta.Finalizers = common.RemoveFinalizer(scanToBeDeleted.ObjectMeta.Finalizers, compv1alpha1.ScanFinalizer)
+		if err := r.client.Update(context.TODO(), scanToBeDeleted); err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
+	// Stop reconciliation as the item is being deleted
+	return reconcile.Result{}, nil
+}
+
 func (r *ReconcileComplianceScan) generateResultEventForScan(scan *compv1alpha1.ComplianceScan, logger logr.Logger) {
 	logger.Info("Generating result event for scan")
 
@@ -469,6 +524,14 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *compv1alpha1.Complianc
 func (r *ReconcileComplianceScan) createPVCForScan(instance *compv1alpha1.ComplianceScan) error {
 	pvc := getPVCForScan(instance)
 	if err := r.client.Create(context.TODO(), pvc); err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
+}
+
+func (r *ReconcileComplianceScan) deletePVCForScan(instance *compv1alpha1.ComplianceScan) error {
+	pvc := getPVCForScan(instance)
+	if err := r.client.Delete(context.TODO(), pvc); err != nil && !errors.IsNotFound(err) {
 		return err
 	}
 	return nil
