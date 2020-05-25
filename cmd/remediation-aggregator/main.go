@@ -256,9 +256,9 @@ func getCheckResultLabels(cr *compv1alpha1.ComplianceCheckResult, scan *compv1al
 	return labels
 }
 
-func getCheckResultAnnotations(cr *compv1alpha1.ComplianceCheckResult, scan *compv1alpha1.ComplianceScan) map[string]string {
+func getCheckResultAnnotations(cr *compv1alpha1.ComplianceCheckResult) map[string]string {
 	annotations := make(map[string]string)
-	annotations[compv1alpha1.ComplianceCheckResultRuleAnnotation] = string(cr.IDToDNSFriendlyName())
+	annotations[compv1alpha1.ComplianceCheckResultRuleAnnotation] = cr.IDToDNSFriendlyName()
 
 	return annotations
 }
@@ -277,7 +277,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		}
 
 		checkResultLabels := getCheckResultLabels(pr.CheckResult, scan)
-		checkResultAnnotations := getCheckResultAnnotations(pr.CheckResult, scan)
+		checkResultAnnotations := getCheckResultAnnotations(pr.CheckResult)
 
 		crkey := getObjKey(pr.CheckResult.GetName(), pr.CheckResult.GetNamespace())
 		foundCheckResult := &compv1alpha1.ComplianceCheckResult{}
