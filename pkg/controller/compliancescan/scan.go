@@ -39,7 +39,7 @@ func (r *ReconcileComplianceScan) createNodeScanPods(instance *compv1alpha1.Comp
 		pod := newScanPodForNode(instance, &node, logger)
 
 		if instance.Spec.TailoringConfigMap != nil {
-			if err := r.addTailoringVolume(instance, pod); err != nil {
+			if err := r.reconcileTailoring(instance, pod, logger); err != nil {
 				return err
 			}
 		}
@@ -442,17 +442,27 @@ func (r *ReconcileComplianceScan) deleteScanPods(instance *compv1alpha1.Complian
 	return nil
 }
 
-func (r *ReconcileComplianceScan) addTailoringVolume(instance *compv1alpha1.ComplianceScan, pod *corev1.Pod) error {
-	mode := int32(0644)
+func (r *ReconcileComplianceScan) reconcileTailoring(instance *compv1alpha1.ComplianceScan, pod *corev1.Pod, logger logr.Logger) error {
 	if instance.Spec.TailoringConfigMap.Name == "" {
 		return common.NewNonRetriableCtrlError("tailoring config map name can't be empty")
 	}
 	name := instance.Spec.TailoringConfigMap.Name
 	ns := instance.Namespace
 
-	if err := r.validateTailoringConfigMap(name, ns); err != nil {
+	tailoringCMName := getReplicatedTailoringCMName(instance.Name)
+	tailoringCMNamespace := common.GetComplianceOperatorNamespace()
+	if err := r.reconcileReplicatedTailoringConfigMap(name, ns, tailoringCMName, tailoringCMNamespace, instance.Name, logger); err != nil {
 		return err
 	}
+
+	if err := r.addTailoringVolume(tailoringCMName, pod); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *ReconcileComplianceScan) addTailoringVolume(name string, pod *corev1.Pod) error {
+	mode := int32(0644)
 
 	pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
 		Name: tailoringCMVolumeName,
@@ -481,19 +491,6 @@ func (r *ReconcileComplianceScan) addTailoringVolume(instance *compv1alpha1.Comp
 	return nil
 }
 
-func (r *ReconcileComplianceScan) validateTailoringConfigMap(name, ns string) error {
-	tcmKey := types.NamespacedName{Name: name, Namespace: ns}
-	cm := &corev1.ConfigMap{}
-	err := r.client.Get(context.TODO(), tcmKey, cm)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return common.NewNonRetriableCtrlError("Tailoring ConfigMap not found")
-		}
-		return err
-	}
-	return nil
-}
-
 func (r *ReconcileComplianceScan) deletePlatformScanPod(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	logger.Info("Deleting the platform scan pod for instance", "instance", instance.Name)
 	pod := newPlatformScanPod(instance, logger)
@@ -508,6 +505,76 @@ func (r *ReconcileComplianceScan) deletePlatformScanPod(instance *compv1alpha1.C
 		logger.Info("deleted pod", "pod", pod)
 	}
 
+	return nil
+}
+
+// Creates a private configmap that'll only be used by this operator.
+func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(origName, origNs, privName, privNs, scanName string, logger logr.Logger) error {
+	logger.Info("Reconciling Tailoring ConfigMap", "ConfigMap.Name", origName, "ConfigMap.Namespace", origNs)
+
+	origCM := &corev1.ConfigMap{}
+	origKey := types.NamespacedName{Name: origName, Namespace: origNs}
+	err := r.client.Get(context.TODO(), origKey, origCM)
+	if err != nil && errors.IsNotFound(err) {
+		return common.NewNonRetriableCtrlError("Tailoring ConfigMap not found")
+	} else if err != nil {
+		log.Error(err, "Failed to get spec tailoring ConfigMap", "ConfigMap.Name", origName, "ConfigMap.Namespace", origNs)
+		return err
+	}
+
+	origData, ok := origCM.Data["tailoring.xml"]
+	if !ok {
+		return common.NewNonRetriableCtrlError("Tailoring ConfigMap missing `tailoring.xml` key")
+	}
+	if origData == "" {
+		return common.NewNonRetriableCtrlError("Tailoring ConfigMap's key `tailoring.xml` is empty")
+	}
+
+	privCM := &corev1.ConfigMap{}
+	privKey := types.NamespacedName{Name: privName, Namespace: privNs}
+	err = r.client.Get(context.TODO(), privKey, privCM)
+	if err != nil && errors.IsNotFound(err) {
+		newCM := &corev1.ConfigMap{}
+		newCM.SetName(privName)
+		newCM.SetNamespace(privNs)
+		if newCM.Labels == nil {
+			newCM.Labels = make(map[string]string)
+		}
+		newCM.Labels[compv1alpha1.ScanLabel] = scanName
+		newCM.Labels[compv1alpha1.ScriptLabel] = ""
+		if newCM.Data == nil {
+			newCM.Data = make(map[string]string)
+		}
+		newCM.Data["tailoring.xml"] = origData
+		logger.Info("Creating private Tailoring ConfigMap", "ConfigMap.Name", privName, "ConfigMap.Namespace", privNs)
+		err = r.client.Create(context.TODO(), newCM)
+		// Ignore error if CM already exists
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return nil
+		}
+		return err
+	} else if err != nil {
+		log.Error(err, "Failed to get private tailoring ConfigMap", "ConfigMap.Name", privName, "ConfigMap.Namespace", privNs)
+		return err
+	}
+	privData, _ := privCM.Data["tailoring.xml"]
+
+	// privCM needs update
+	if privData != origData {
+		updatedCM := privCM.DeepCopy()
+		if updatedCM.Data == nil {
+			updatedCM.Data = make(map[string]string)
+		}
+		if updatedCM.Labels == nil {
+			updatedCM.Labels = make(map[string]string)
+		}
+		updatedCM.Labels[compv1alpha1.ScanLabel] = scanName
+		updatedCM.Labels[compv1alpha1.ScriptLabel] = ""
+		updatedCM.Data["tailoring.xml"] = origData
+		logger.Info("Updating private Tailoring ConfigMap", "ConfigMap.Name", privName, "ConfigMap.Namespace", privNs)
+		return r.client.Update(context.TODO(), updatedCM)
+	}
+	logger.Info("Private Tailoring ConfigMap is up-to-date", "ConfigMap.Name", privName, "ConfigMap.Namespace", privNs)
 	return nil
 }
 
@@ -528,4 +595,8 @@ func getScanResult(cm *corev1.ConfigMap) (compv1alpha1.ComplianceScanStatusResul
 		}
 	}
 	return compv1alpha1.ResultError, fmt.Errorf("The ConfigMap '%s' was missing 'exit-code'", cm.Name)
+}
+
+func getReplicatedTailoringCMName(instanceName string) string {
+	return utils.DNSLengthName("tp-", "tp-%s", instanceName)
 }
