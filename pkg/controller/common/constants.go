@@ -10,9 +10,14 @@ var complianceOperatorNamespace = "openshift-compliance"
 
 func init() {
 	if isRunModeLocal() {
-		ns, ok := os.LookupEnv("WATCH_NAMESPACE")
+		ns, ok := os.LookupEnv("OPERATOR_NAMESPACE")
 		if ok {
 			complianceOperatorNamespace = ns
+		} else {
+			ns, ok := os.LookupEnv("WATCH_NAMESPACE")
+			if ok {
+				complianceOperatorNamespace = ns
+			}
 		}
 	} else {
 		ns, err := k8sutil.GetOperatorNamespace()

@@ -64,6 +64,7 @@ SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./
 # ====================
 KUBECONFIG?=$(HOME)/.kube/config
 export NAMESPACE?=openshift-compliance
+export OPERATOR_NAMESPACE?=openshift-compliance
 
 # Operator-sdk variables
 # ======================
