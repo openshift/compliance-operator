@@ -272,7 +272,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 
 		if running {
 			// The platform scan pod is still running, go back to queue.
-			return reconcile.Result{}, err
+			return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, err
 		}
 	default: // ScanTypeNode
 		if nodes, err = getTargetNodes(r, instance); err != nil {
