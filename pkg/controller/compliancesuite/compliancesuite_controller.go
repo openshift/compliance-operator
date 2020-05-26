@@ -103,6 +103,22 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 		return reconcile.Result{}, err
 	}
 
+	// examine DeletionTimestamp to determine if object is under deletion
+	if suite.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// registering our finalizer.
+		if !common.ContainsFinalizer(suite.ObjectMeta.Finalizers, compv1alpha1.SuiteFinalizer) {
+			suite.ObjectMeta.Finalizers = append(suite.ObjectMeta.Finalizers, compv1alpha1.SuiteFinalizer)
+			if err := r.client.Update(context.TODO(), suite); err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+	} else {
+		// The object is being deleted
+		return reconcile.Result{}, r.suiteDeleteHandler(suite, reqLogger)
+	}
+
 	if isValid, errorMsg := r.validateSuite(suite); !isValid {
 		// return immediately and don't schedule nor reconcile scans
 		return reconcile.Result{}, r.issueValidationError(suite, errorMsg, reqLogger)
@@ -123,6 +139,22 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 	}
 
 	return res, nil
+}
+
+func (r *ReconcileComplianceSuite) suiteDeleteHandler(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) error {
+	rerunner := getRerunner(suite)
+	err := r.client.Delete(context.TODO(), rerunner)
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+
+	suiteCopy := suite.DeepCopy()
+	// remove our finalizer from the list and update it.
+	suiteCopy.ObjectMeta.Finalizers = common.RemoveFinalizer(suiteCopy.ObjectMeta.Finalizers, compv1alpha1.SuiteFinalizer)
+	if err := r.client.Update(context.TODO(), suiteCopy); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *ReconcileComplianceSuite) validateSuite(suite *compv1alpha1.ComplianceSuite) (bool, string) {
