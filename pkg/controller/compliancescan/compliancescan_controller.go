@@ -452,6 +452,10 @@ func (r *ReconcileComplianceScan) scanDeleteHandler(instance *compv1alpha1.Compl
 			delete(scanToBeDeleted.Annotations, compv1alpha1.ComplianceScanRescanAnnotation)
 		}
 		// Force debug to be false so we actually remove dependent objects
+		// NOTE(jaosorior): When we're in debug mode, objects don't get deleted
+		// to aide in debugging. if we're actually going through a deletion as
+		// is the case in this code-path, then we REALLY want to make sure everything
+		// gets deleted.
 		scanToBeDeleted.Spec.Debug = false
 
 		// remove objects by forcing handling of phase DONE
