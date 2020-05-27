@@ -135,6 +135,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 						"--exit-code-file=/reports/exit_code",
 						"--oscap-output-file=/reports/cmd_output",
 						"--config-map-name=" + cmName,
+						"--node-name=" + node.Name,
 						"--owner=" + scanInstance.Name,
 						"--namespace=" + scanInstance.Namespace,
 						"--resultserveruri=" + getResultServerURI(scanInstance),

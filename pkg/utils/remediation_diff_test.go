@@ -1,178 +1,270 @@
 package utils
 
 import (
+	"fmt"
 	"github.com/clarketm/json"
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Testing parse results diff", func() {
+func getItemById(list []*ParseResultContextItem, id string) *ParseResultContextItem {
+	for _, item := range list {
+		if id == item.Id {
+			return item
+		}
+	}
+
+	return nil
+}
+
+func getRemediation(serviceName string) *compv1alpha1.ComplianceRemediation {
+	ignConfig := igntypes.Config{
+		Systemd: igntypes.Systemd{
+			Units: []igntypes.Unit{
+				{
+					Contents: "let's pretend this is a service",
+					Enable:   true,
+					Name:     serviceName,
+				},
+			},
+		},
+	}
+
+	rawIgnCfg, _ := json.Marshal(ignConfig)
+	mc := &mcfgv1.MachineConfig{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "MachineConfig",
+			APIVersion: mcfgapi.GroupName + "/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{},
+		Spec: mcfgv1.MachineConfigSpec{
+			OSImageURL: "",
+			Config: runtime.RawExtension{
+				Raw: rawIgnCfg,
+			},
+			KernelArguments: nil,
+		},
+	}
+
+	unstructuredobj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(mc)
+	obj := &unstructured.Unstructured{Object: unstructuredobj}
+
+	return &compv1alpha1.ComplianceRemediation{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "remService",
+		},
+		Spec: compv1alpha1.ComplianceRemediationSpec{
+			ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
+				Type:  compv1alpha1.McRemediation,
+				Apply: false,
+			},
+			Object: obj,
+		},
+	}
+}
+
+func checkWithRemediation(id, serviceName string) *ParseResult {
+	checkService := &compv1alpha1.ComplianceCheckResult{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "checkService",
+		},
+		ID:          id,
+		Status:      "PASS",
+		Description: "This is a dummy check",
+	}
+
+	return &ParseResult{
+		Id:          id,
+		CheckResult: checkService,
+		Remediation: getRemediation(serviceName),
+	}
+}
+
+var _ = Describe("Testing reconciling differing parse results", func() {
 	var (
-		remService    *compv1alpha1.ComplianceRemediation
-		remService2   *compv1alpha1.ComplianceRemediation
-		checkService  *compv1alpha1.ComplianceCheckResult
-		checkService2 *compv1alpha1.ComplianceCheckResult
-		pRes          *ParseResult
-		pRes2         *ParseResult
-		oldList       []*ParseResult
-		newList       []*ParseResult
+		list1 []*ParseResult
+		list2 []*ParseResult
+		list3 []*ParseResult
+
+		consistent []*ParseResultContextItem
+		reconciled *ParseResultContextItem
+		err        error
+
+		prCtx *ParseResultContext
 	)
 
+	AssertReconcilesWithResults := func(results string) {
+		It("Reconciles the previously inconsistent result", func() {
+			Expect(err).To(BeNil())
+			Expect(consistent).To(HaveLen(3))
+		})
+
+		It("Marks every source separately in an annotation", func() {
+			Expect(reconciled.Annotations).ToNot(BeNil())
+			Expect(reconciled.Annotations).To(HaveKeyWithValue(compv1alpha1.ComplianceCheckResultInconsistentSourceAnnotation, results))
+			Expect(reconciled.Annotations).ToNot(HaveKey(compv1alpha1.ComplianceCheckResultMostCommonAnnotation))
+		})
+
+		It("Does not find a common state", func() {
+			Expect(reconciled.Annotations).ToNot(BeNil())
+			Expect(reconciled.Annotations).ToNot(HaveKey(compv1alpha1.ComplianceCheckResultMostCommonAnnotation))
+		})
+	}
+
+	ParseAndReconcile := func() {
+		prCtx.AddResults("source1", list1)
+		prCtx.AddResults("source2", list2)
+		prCtx.AddResults("source3", list3)
+
+		consistent = prCtx.GetConsistentResults()
+	}
+
 	BeforeEach(func() {
-		ignConfig := igntypes.Config{
-			Systemd: igntypes.Systemd{
-				Units: []igntypes.Unit{
-					{
-						Contents: "let's pretend this is a service",
-						Enable:   true,
-						Name:     "service",
-					},
-				},
-			},
-		}
-		rawIgnCfg, _ := json.Marshal(ignConfig)
-		mc := &mcfgv1.MachineConfig{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "MachineConfig",
-				APIVersion: mcfgapi.GroupName + "/v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{},
-			Spec: mcfgv1.MachineConfigSpec{
-				OSImageURL: "",
-				Config: runtime.RawExtension{
-					Raw: rawIgnCfg,
-				},
-				KernelArguments: nil,
-			},
-		}
-		unstructuredobj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(mc)
-		obj := &unstructured.Unstructured{Object: unstructuredobj}
-		remService = &compv1alpha1.ComplianceRemediation{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "remService",
-			},
-			Spec: compv1alpha1.ComplianceRemediationSpec{
-				ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
-					Type:  compv1alpha1.McRemediation,
-					Apply: false,
-				},
-				Object: obj,
-			},
+		list1 = []*ParseResult{}
+		list2 = []*ParseResult{}
+		list3 = []*ParseResult{}
+
+		for i := 0; i < 3; i++ {
+			id := fmt.Sprintf("checkid_%d", i)
+			service := fmt.Sprintf("service_%d", i)
+
+			list1 = append(list1, checkWithRemediation(id, service))
+			list2 = append(list2, checkWithRemediation(id, service))
+			list3 = append(list3, checkWithRemediation(id, service))
 		}
 
-		remService2 = remService.DeepCopy()
-
-		checkService = &compv1alpha1.ComplianceCheckResult{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "checkService",
-			},
-			ID:          "this_is_some_id",
-			Status:      "PASS",
-			Description: "This is a dummy check",
-		}
-		checkService2 = checkService.DeepCopy()
-
-		pRes = &ParseResult{
-			CheckResult: checkService,
-			Remediation: remService,
-		}
-
-		pRes2 = &ParseResult{
-			CheckResult: checkService2,
-			Remediation: remService2,
-		}
-
-		oldList = append(oldList, pRes)
-		newList = append(newList, pRes2)
+		prCtx = NewParseResultContext()
 	})
 
-	Context("Same parse results", func() {
-		It("passes when the parse results are the same", func() {
-			ok := DiffRemediationList(oldList, newList)
-			Expect(ok).To(BeTrue())
+	Context("Handling consistent results", func() {
+		It("Merges all results to the consistent list", func() {
+			prCtx.AddResults("source1", list1)
+			Expect(prCtx.consistent).To(HaveLen(3))
+			Expect(prCtx.inconsistent).To(HaveLen(0))
+			Expect(prCtx.consistent["checkid_1"].sources).To(ConsistOf("source1"))
+
+			prCtx.AddResults("source2", list2)
+			Expect(prCtx.consistent).To(HaveLen(3))
+			Expect(prCtx.inconsistent).To(HaveLen(0))
+			Expect(prCtx.consistent["checkid_1"].sources).To(ConsistOf("source1", "source2"))
+
+			prCtx.AddResults("source3", list3)
+			Expect(prCtx.consistent).To(HaveLen(3))
+			Expect(prCtx.inconsistent).To(HaveLen(0))
+			Expect(prCtx.consistent["checkid_1"].sources).To(ConsistOf("source1", "source2", "source3"))
 		})
 	})
 
-	Context("Different remediation parse results", func() {
-		BeforeEach(func() {
-			spec := remService2.Spec.Object.Object["spec"].(map[string]interface{})
-			config := spec["config"].(map[string]interface{})
-			systemd := config["systemd"].(map[string]interface{})
-			units := systemd["units"].([]interface{})
-			unitInfo := units[0].(map[string]interface{})
-			unitInfo["enable"] = interface{}(false)
+	Context("Handling inconsistent results", func() {
+		JustBeforeEach(func() {
+			list2[0].CheckResult.Status = compv1alpha1.CheckResultFail
 		})
 
-		It("fail when the parse results are different", func() {
-			ok := DiffRemediationList(oldList, newList)
-			Expect(ok).To(BeFalse())
-		})
-	})
+		It("Indentifies the inconsistent result", func() {
+			prCtx.AddResults("source1", list1)
+			Expect(prCtx.consistent).To(HaveLen(3))
+			Expect(prCtx.inconsistent).To(HaveLen(0))
+			Expect(prCtx.consistent["checkid_1"].sources).To(ConsistOf("source1"))
 
-	Context("Different check parse results", func() {
-		BeforeEach(func() {
-			checkService2.Name = "foo"
-		})
+			prCtx.AddResults("source2", list2)
+			Expect(prCtx.consistent).To(HaveLen(2))
+			Expect(prCtx.inconsistent).To(HaveLen(1))
+			Expect(prCtx.inconsistent["checkid_0"][0].sources).To(ConsistOf("source1"))
+			Expect(prCtx.inconsistent["checkid_0"][0].CheckResult.Status).To(BeEquivalentTo(compv1alpha1.CheckResultPass))
+			Expect(prCtx.inconsistent["checkid_0"][1].sources).To(ConsistOf("source2"))
+			Expect(prCtx.inconsistent["checkid_0"][1].CheckResult.Status).To(BeEquivalentTo(compv1alpha1.CheckResultFail))
 
-		It("fail when the parse results are different", func() {
-			ok := DiffRemediationList(oldList, newList)
-			Expect(ok).To(BeFalse())
-		})
-	})
-
-	Context("Different parse results list lengths", func() {
-		BeforeEach(func() {
-			newList = append(newList, pRes)
-		})
-
-		It("fail when the parse results are different", func() {
-			ok := DiffRemediationList(oldList, newList)
-			Expect(ok).To(BeFalse())
+			prCtx.AddResults("source3", list3)
+			Expect(prCtx.consistent).To(HaveLen(2))
+			Expect(prCtx.inconsistent).To(HaveLen(1))
+			Expect(prCtx.inconsistent["checkid_0"][0].sources).To(ConsistOf("source1"))
+			Expect(prCtx.inconsistent["checkid_0"][0].CheckResult.Status).To(BeEquivalentTo(compv1alpha1.CheckResultPass))
+			Expect(prCtx.inconsistent["checkid_0"][1].sources).To(ConsistOf("source2"))
+			Expect(prCtx.inconsistent["checkid_0"][1].CheckResult.Status).To(BeEquivalentTo(compv1alpha1.CheckResultFail))
+			Expect(prCtx.inconsistent["checkid_0"][2].sources).To(ConsistOf("source3"))
+			Expect(prCtx.inconsistent["checkid_0"][2].CheckResult.Status).To(BeEquivalentTo(compv1alpha1.CheckResultPass))
 		})
 	})
 
-	Context("One or both parse results lists are nil", func() {
-		It("fails when one of the lists is nil", func() {
-			ok := DiffRemediationList(oldList, nil)
-			Expect(ok).To(BeFalse())
+	Context("Reconciling inconsistent results", func() {
+		JustBeforeEach(func() {
+			list2[0].CheckResult.Status = compv1alpha1.CheckResultFail
 
-			ok = DiffRemediationList(nil, newList)
-			Expect(ok).To(BeFalse())
+			ParseAndReconcile()
+			reconciled = getItemById(consistent, "checkid_0")
 		})
 
-		It("passes when both lists are nil", func() {
-			ok := DiffRemediationList(nil, nil)
-			Expect(ok).To(BeTrue())
-		})
-	})
-
-	Context("One list contains remediations, the other does not", func() {
-		BeforeEach(func() {
-			newList[0].Remediation = nil
+		It("Reconciles the previously inconsistent result", func() {
+			Expect(err).To(BeNil())
+			Expect(consistent).To(HaveLen(3))
 		})
 
-		It("fails when one of the remediation lists is nil", func() {
-			ok := DiffRemediationList(oldList, newList)
-			Expect(ok).To(BeFalse())
+		It("Annotates the previously inconsistent result", func() {
+			Expect(reconciled.Annotations).ToNot(BeNil())
+			Expect(reconciled.Annotations).To(HaveKeyWithValue(compv1alpha1.ComplianceCheckResultInconsistentSourceAnnotation, "source2:FAIL"))
+			Expect(reconciled.Annotations).To(HaveKeyWithValue(compv1alpha1.ComplianceCheckResultMostCommonAnnotation, "PASS"))
+		})
+
+		It("Creates a remediation", func() {
+			Expect(reconciled.Remediation).ToNot(BeNil())
 		})
 	})
 
-	Context("One list contains checks, the other does not", func() {
-		BeforeEach(func() {
-			newList[0].CheckResult = nil
+	Context("No common result", func() {
+		JustBeforeEach(func() {
+			list2[0].CheckResult.Status = compv1alpha1.CheckResultFail
+			list3[0].CheckResult.Status = compv1alpha1.CheckResultInfo
+
+			ParseAndReconcile()
+			reconciled = getItemById(consistent, "checkid_0")
 		})
 
-		It("fails when one of the remediation checks is nil", func() {
-			ok := DiffRemediationList(oldList, newList)
-			Expect(ok).To(BeFalse())
+		AssertReconcilesWithResults("source1:PASS,source2:FAIL,source3:INFO")
+
+		It("Creates a remediation", func() {
+			Expect(reconciled.Remediation).ToNot(BeNil())
+		})
+	})
+
+	Context("Result that prevents creating a remediation", func() {
+		JustBeforeEach(func() {
+			list2[0].CheckResult.Status = compv1alpha1.CheckResultError
+			list3[0].CheckResult.Status = compv1alpha1.CheckResultInfo
+
+			ParseAndReconcile()
+			reconciled = getItemById(consistent, "checkid_0")
+		})
+
+		AssertReconcilesWithResults("source1:PASS,source2:ERROR,source3:INFO")
+
+		It("Does NOT create a remediation because one of the checks errored out", func() {
+			Expect(reconciled.Remediation).To(BeNil())
+		})
+	})
+
+	Context("If the remediations differ, the check result is ERROR", func() {
+		JustBeforeEach(func() {
+			list2[0].Remediation = getRemediation("anotherService")
+
+			ParseAndReconcile()
+			reconciled = getItemById(consistent, "checkid_0")
+		})
+
+		It("Marks the check as an error", func() {
+			Expect(reconciled.CheckResult.Status).To(BeEquivalentTo("ERROR"))
+			Expect(reconciled.Annotations).ToNot(BeNil())
+			Expect(reconciled.Annotations).To(HaveKey(compv1alpha1.ComplianceCheckResultErrorAnnotation))
+		})
+
+		It("Does NOT create a remediation because one of the checks errored out", func() {
+			Expect(reconciled.Remediation).To(BeNil())
 		})
 	})
 })

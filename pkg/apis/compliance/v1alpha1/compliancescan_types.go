@@ -75,6 +75,8 @@ const (
 	ResultError ComplianceScanStatusResult = "ERROR"
 	// ResultNonCompliant represents the compliance scan having found a gap
 	ResultNonCompliant ComplianceScanStatusResult = "NON-COMPLIANT"
+	// ResultInconsistent represents checks differing across the machines
+	ResultInconsistent ComplianceScanStatusResult = "INCONSISTENT"
 	ScanTypeNode       ComplianceScanType         = "Node"
 	ScanTypePlatform   ComplianceScanType         = "Platform"
 )
@@ -83,9 +85,10 @@ func resultCompare(lowResult ComplianceScanStatusResult, scanResult ComplianceSc
 	orderedResults := make(map[ComplianceScanStatusResult]int)
 	orderedResults[ResultNotAvailable] = 0
 	orderedResults[ResultError] = 1
-	orderedResults[ResultNonCompliant] = 2
-	orderedResults[ResultNotApplicable] = 3
-	orderedResults[ResultCompliant] = 4
+	orderedResults[ResultInconsistent] = 2
+	orderedResults[ResultNonCompliant] = 3
+	orderedResults[ResultNotApplicable] = 4
+	orderedResults[ResultCompliant] = 5
 
 	if orderedResults[lowResult] > orderedResults[scanResult] {
 		return scanResult

@@ -71,6 +71,7 @@ type scapresultsConfig struct {
 	CmdOutputFile   string
 	ScanName        string
 	ConfigMapName   string
+	NodeName        string
 	Namespace       string
 	ResultServerURI string
 	Timeout         int64
@@ -86,6 +87,7 @@ func defineResultcollectorFlags(cmd *cobra.Command) {
 	cmd.Flags().String("oscap-output-file", "", "A file containing the oscap command's output.")
 	cmd.Flags().String("owner", "", "The compliance scan that owns the configMap objects.")
 	cmd.Flags().String("config-map-name", "", "The configMap to upload to, typically the podname.")
+	cmd.Flags().String("node-name", "", "The node that was scanned.")
 	cmd.Flags().String("namespace", "openshift-compliance", "Running pod namespace.")
 	cmd.Flags().Int64("timeout", 3600, "How long to wait for the file.")
 	cmd.Flags().String("resultserveruri", "", "The resultserver URI name.")
@@ -119,6 +121,9 @@ func parseConfig(cmd *cobra.Command) *scapresultsConfig {
 	if conf.ResultServerURI == "" {
 		conf.ResultServerURI = "http://" + conf.ScanName + "-rs:8080/"
 	}
+
+	// platform scans have no node name
+	conf.NodeName, _ = cmd.Flags().GetString("node-name")
 	return &conf
 }
 
@@ -222,12 +227,15 @@ func readResultsFile(filename string, timeout int64) (*resultFileContents, error
 	return &rfContents, nil
 }
 
-func getConfigMap(owner metav1.Object, configMapName, filename string, contents []byte, compressed bool, exitcode string) *corev1.ConfigMap {
+func getConfigMap(owner metav1.Object, configMapName, filename, nodeName string, contents []byte, compressed bool, exitcode string) *corev1.ConfigMap {
 	annotations := map[string]string{}
 	if compressed {
 		annotations = map[string]string{
 			"openscap-scan-result/compressed": "",
 		}
+	}
+	if nodeName != "" {
+		annotations["openscap-scan-result/node"] = nodeName
 	}
 
 	return &corev1.ConfigMap{
@@ -291,7 +299,7 @@ func uploadResultConfigMap(xccdfContents *resultFileContents, exitcode string,
 		if err != nil {
 			return err
 		}
-		confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results", xccdfContents.contents, xccdfContents.compressed, exitcode)
+		confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results", scapresultsconf.NodeName, xccdfContents.contents, xccdfContents.compressed, exitcode)
 		err = client.client.Create(context.TODO(), confMap)
 
 		if errors.IsAlreadyExists(err) {
@@ -309,7 +317,7 @@ func uploadErrorConfigMap(errorMsg *resultFileContents, exitcode string,
 		if err != nil {
 			return err
 		}
-		confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "error-msg", errorMsg.contents, errorMsg.compressed, exitcode)
+		confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "error-msg", scapresultsconf.NodeName, errorMsg.contents, errorMsg.compressed, exitcode)
 		err = client.client.Create(context.TODO(), confMap)
 
 		if errors.IsAlreadyExists(err) {
