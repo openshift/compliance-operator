@@ -27,6 +27,7 @@ type XMLDocument struct {
 }
 
 type ParseResult struct {
+	Id          string
 	CheckResult *compv1alpha1.ComplianceCheckResult
 	Remediation *compv1alpha1.ComplianceRemediation
 }
@@ -88,13 +89,11 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 
 		if resCheck != nil {
 			pr := &ParseResult{
+				Id:          ruleIDRef,
 				CheckResult: resCheck,
 			}
 
-			if resCheck.Status == compv1alpha1.CheckResultFail || resCheck.Status == compv1alpha1.CheckResultInfo {
-				pr.Remediation = newComplianceRemediation(scheme, scanName, namespace, resultRule)
-			}
-
+			pr.Remediation = newComplianceRemediation(scheme, scanName, namespace, resultRule)
 			parsedResults = append(parsedResults, pr)
 		}
 	}

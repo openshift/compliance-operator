@@ -1088,6 +1088,94 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
+			Name:       "TestInconsistentResult",
+			IsParallel: false,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				suiteName := "test-inconsistent"
+				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
+				selectWorkers := map[string]string{
+					"node-role.kubernetes.io/worker": "",
+				}
+
+				workersComplianceSuite := &compv1alpha1.ComplianceSuite{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceSuiteSpec{
+						AutoApplyRemediations: false,
+						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
+							{
+								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+									ContentImage: "quay.io/complianceascode/ocp4:latest",
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
+									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
+									Content:      rhcosContentFile,
+									NodeSelector: selectWorkers,
+									Debug:        true,
+								},
+								Name: workerScanName,
+							},
+						},
+					},
+				}
+
+				workerNodes := getNodesWithSelector(f, selectWorkers)
+				err := createEtcSecurettyOnNode(f, namespace, "create-etc-securetty-job", workerNodes[0].Name)
+				if err != nil {
+					return err
+				}
+				defer removeEtcSecurettyOnNode(f, namespace, "remove-etc-securetty-job", workerNodes[0].Name)
+
+				err = f.Client.Create(goctx.TODO(), workersComplianceSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				if err != nil {
+					return err
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultInconsistent)
+				if err != nil {
+					t.Errorf("Got an unexpected status")
+				}
+
+				// The check for the no-direct-root-logins rule should be inconsistent
+				var rootLoginCheck compv1alpha1.ComplianceCheckResult
+				rootLoginCheckName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
+
+				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: rootLoginCheckName, Namespace: namespace}, &rootLoginCheck)
+				if err != nil {
+					return err
+				}
+
+				if rootLoginCheck.Status != compv1alpha1.CheckResultInconsistent {
+					return fmt.Errorf("expected the %s result to be inconsistent, the check result was %s", rootLoginCheckName, rootLoginCheck.Status)
+				}
+
+				// The annotations should list the node that had a different result
+				inconsistentSources := rootLoginCheck.Annotations[compv1alpha1.ComplianceCheckResultInconsistentSourceAnnotation]
+				expected := workerNodes[0].Name + ":" + string(compv1alpha1.CheckResultPass)
+				if inconsistentSources != expected {
+					return fmt.Errorf("expected that node %s would report %s, instead it reports %s", workerNodes[0].Name, expected, inconsistentSources)
+				}
+				// Since all the other nodes consistently fail, there should also be a common result
+				mostCommonState := rootLoginCheck.Annotations[compv1alpha1.ComplianceCheckResultMostCommonAnnotation]
+				if mostCommonState != string(compv1alpha1.CheckResultFail) {
+					return fmt.Errorf("expected that there would be a common FAIL state, instead got %s", mostCommonState)
+				}
+
+				// Since all states were either pass or fail, we still create the remediation
+				workerRemediations := []string{
+					fmt.Sprintf("%s-no-direct-root-logins", workerScanName),
+				}
+				err = assertHasRemediations(t, f, suiteName, workerScanName, "worker", workerRemediations)
+				if err != nil {
+					return err
+				}
+
+				return nil
+			},
+		},
+		testExecution{
 			Name:       "TestPlatformAndNodeSuiteScan",
 			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {

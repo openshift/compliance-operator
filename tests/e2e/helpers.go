@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	v1 "k8s.io/api/batch/v1"
+	"k8s.io/client-go/kubernetes"
+
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	corev1 "k8s.io/api/core/v1"
@@ -1238,4 +1241,109 @@ func scanHasValidPVCReference(f *framework.Framework, namespace, scanName string
 	pvcName := scan.Status.ResultsStorage.Name
 	pvcNamespace := scan.Status.ResultsStorage.Namespace
 	return f.Client.Get(goctx.TODO(), types.NamespacedName{Name: pvcName, Namespace: pvcNamespace}, pvc)
+}
+
+func privCommandJobOnHost(namespace, name, nodeName, command string) *v1.Job {
+	ttl := int32(0)
+	runAs := int64(0)
+	priv := true
+
+	return &v1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: v1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    name,
+							Image:   "busybox",
+							Command: []string{"/bin/sh"},
+							Args:    []string{"-c", command},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "hostroot",
+									MountPath: "/hostroot",
+								},
+							},
+							SecurityContext: &corev1.SecurityContext{
+								Privileged: &priv,
+								RunAsUser:  &runAs,
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "hostroot",
+							VolumeSource: corev1.VolumeSource{
+								HostPath: &corev1.HostPathVolumeSource{
+									Path: "/",
+								},
+							},
+						},
+					},
+					RestartPolicy:      "Never",
+					NodeName:           nodeName,
+					ServiceAccountName: "resultscollector",
+				},
+			},
+			TTLSecondsAfterFinished: &ttl,
+		},
+	}
+}
+
+func createEtcSecurettyJob(namespace, name, nodeName string) *v1.Job {
+	return privCommandJobOnHost(namespace, name, nodeName, "touch /hostroot/etc/securetty")
+}
+
+func removeEtcSecurettyJob(namespace, name, nodeName string) *v1.Job {
+	return privCommandJobOnHost(namespace, name, nodeName, "rm -f /hostroot/etc/securetty")
+}
+
+func waitForJob(jobCallback wait.ConditionFunc) error {
+	return wait.PollImmediate(retryInterval, timeout, jobCallback)
+}
+
+func jobCompleted(c kubernetes.Interface, name, namespace string) wait.ConditionFunc {
+	return func() (bool, error) {
+		job, err := c.BatchV1().Jobs(namespace).Get(goctx.TODO(), name, metav1.GetOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return false, err
+		}
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		if job.Status.Succeeded == 0 {
+			return false, nil
+		}
+		return true, nil
+	}
+}
+
+func runJob(f *framework.Framework, namespace string, jobToRun *v1.Job) error {
+	job, err := f.KubeClient.BatchV1().Jobs(namespace).Create(goctx.TODO(), jobToRun, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+
+	if err := waitForJob(jobCompleted(f.KubeClient, job.Name, namespace)); err != nil {
+		return err
+	}
+
+	if err := f.KubeClient.BatchV1().Jobs(namespace).Delete(goctx.TODO(), job.Name, metav1.DeleteOptions{}); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Create a job, wait for it to complete and delete it
+func createEtcSecurettyOnNode(f *framework.Framework, namespace, name, nodeName string) error {
+	return runJob(f, namespace, createEtcSecurettyJob(namespace, name, nodeName))
+}
+
+// Create a job, wait for it to complete and delete it
+func removeEtcSecurettyOnNode(f *framework.Framework, namespace, name, nodeName string) error {
+	return runJob(f, namespace, removeEtcSecurettyJob(namespace, name, nodeName))
 }
