@@ -202,7 +202,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 				},
 			},
 			NodeSelector: map[string]string{
-				NodeHostnameLabel: node.Labels[NodeHostnameLabel],
+				corev1.LabelHostname: node.Labels[corev1.LabelHostname],
 			},
 			RestartPolicy: corev1.RestartPolicyOnFailure,
 			Volumes: []corev1.Volume{
