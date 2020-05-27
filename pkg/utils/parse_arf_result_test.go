@@ -42,7 +42,7 @@ func countResultItems(resultList []*ParseResult) (int, int) {
 
 var _ = Describe("XCCDF parser", func() {
 	const (
-		totalRemediations = 5
+		totalRemediations = 8
 		totalChecks       = 235
 	)
 

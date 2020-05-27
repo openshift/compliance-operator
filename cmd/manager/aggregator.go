@@ -122,18 +122,23 @@ func readCompressedData(compressed string) (*bzip2.Reader, error) {
 	return bzip2.NewReader(compressedReader, &bzip2.ReaderConfig{})
 }
 
-func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*utils.ParseResult, error) {
+// parseResultRemediations parses scan results from a configMap with the help of DS provided in the
+// content parameter.
+// Returns a triple of (array-of-ParseResults, source, error) where source identifies the entity whose
+// scan produced this configMap -- typically a nodeName for node scans. For platform scans, the source
+// is empty. The source is used later when reconciling inconsistent results
+func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*utils.ParseResult, string, error) {
 	var scanReader io.Reader
 
 	_, ok := cm.Annotations[configMapRemediationsProcessed]
 	if ok {
 		fmt.Printf("ConfigMap %s already processed\n", cm.Name)
-		return nil, nil
+		return nil, "", nil
 	}
 
 	cmScanResult, ok := cm.Data["results"]
 	if !ok {
-		return nil, fmt.Errorf("no results in configmap %s", cm.Name)
+		return nil, "", fmt.Errorf("no results in configmap %s", cm.Name)
 	}
 
 	_, ok = cm.Annotations[configMapCompressed]
@@ -141,7 +146,7 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string,
 		fmt.Printf("Results are compressed\n")
 		scanResult, err := readCompressedData(cmScanResult)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		defer scanResult.Close()
 		scanReader = scanResult
@@ -149,7 +154,11 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string,
 		scanReader = strings.NewReader(cmScanResult)
 	}
 
-	return utils.ParseResultsFromContentAndXccdf(scheme, scanName, namespace, content, scanReader)
+	// This would return an empty string for a platform check that is handled later explicitly
+	nodeName := cm.Annotations["openscap-scan-result/node"]
+
+	table, err := utils.ParseResultsFromContentAndXccdf(scheme, scanName, namespace, content, scanReader)
+	return table, nodeName, err
 }
 
 func getScanResult(cm *v1.ConfigMap) (compv1alpha1.ComplianceScanStatusResult, string) {
@@ -272,38 +281,46 @@ func getRemediationLabels(scan *compv1alpha1.ComplianceScan) (map[string]string,
 	return labels, nil
 }
 
-func getCheckResultLabels(cr *compv1alpha1.ComplianceCheckResult, scan *compv1alpha1.ComplianceScan) map[string]string {
+func getCheckResultLabels(cr *compv1alpha1.ComplianceCheckResult, resultLabels map[string]string, scan *compv1alpha1.ComplianceScan) map[string]string {
 	labels := make(map[string]string)
 	labels[compv1alpha1.ScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels[compv1alpha1.SuiteLabel]
 	labels[compv1alpha1.ComplianceCheckResultStatusLabel] = string(cr.Status)
 	labels[compv1alpha1.ComplianceCheckResultSeverityLabel] = string(cr.Severity)
 
+	for k, v := range resultLabels {
+		labels[k] = v
+	}
+
 	return labels
 }
 
-func getCheckResultAnnotations(cr *compv1alpha1.ComplianceCheckResult) map[string]string {
+func getCheckResultAnnotations(cr *compv1alpha1.ComplianceCheckResult, resultAnnotations map[string]string) map[string]string {
 	annotations := make(map[string]string)
 	annotations[compv1alpha1.ComplianceCheckResultRuleAnnotation] = cr.IDToDNSFriendlyName()
+
+	for k, v := range resultAnnotations {
+		annotations[k] = v
+	}
 
 	return annotations
 }
 
-func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, parsedResults []*utils.ParseResult) error {
-	fmt.Printf("Will create %d result objects\n", len(parsedResults))
-	if len(parsedResults) == 0 {
+func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, consistentResults []*utils.ParseResultContextItem) error {
+	fmt.Printf("Will create %d result objects\n", len(consistentResults))
+	if len(consistentResults) == 0 {
 		fmt.Println("Nothing to create")
 		return nil
 	}
 
-	for _, pr := range parsedResults {
+	for _, pr := range consistentResults {
 		if pr == nil || pr.CheckResult == nil {
 			fmt.Println("nil result or result.check, this shouldn't happen")
 			continue
 		}
 
-		checkResultLabels := getCheckResultLabels(pr.CheckResult, scan)
-		checkResultAnnotations := getCheckResultAnnotations(pr.CheckResult)
+		checkResultLabels := getCheckResultLabels(pr.CheckResult, pr.Labels, scan)
+		checkResultAnnotations := getCheckResultAnnotations(pr.CheckResult, pr.Annotations)
 
 		crkey := getObjKey(pr.CheckResult.GetName(), pr.CheckResult.GetNamespace())
 		foundCheckResult := &compv1alpha1.ComplianceCheckResult{}
@@ -319,7 +336,10 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			return fmt.Errorf("cannot create or update checkResult %s: %v", pr.CheckResult.Name, err)
 		}
 
-		if pr.Remediation == nil {
+		if pr.Remediation == nil ||
+			(pr.CheckResult.Status != compv1alpha1.CheckResultFail &&
+				pr.CheckResult.Status != compv1alpha1.CheckResultInfo &&
+				pr.CheckResult.Status != compv1alpha1.CheckResultInconsistent) {
 			continue
 		}
 
@@ -371,8 +391,6 @@ func getObjectIfFound(crClient *complianceCrClient, key types.NamespacedName, ob
 }
 
 func aggregator(cmd *cobra.Command, args []string) {
-	var scanParsedResults []*utils.ParseResult
-
 	aggregatorConf := parseAggregatorConfig(cmd)
 
 	cfg, err := config.GetConfig()
@@ -418,12 +436,14 @@ func aggregator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	prCtx := utils.NewParseResultContext()
+
 	// For each configmap, create a list of remediations
 	for i := range configMaps {
 		cm := &configMaps[i]
 		fmt.Printf("processing CM: %s\n", cm.Name)
 
-		cmParsedResults, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, cm)
+		cmParsedResults, source, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, cm)
 		if err != nil {
 			fmt.Printf("Cannot parse CM %s into remediations, err: %v\n", cm.Name, err)
 		} else if cmParsedResults == nil {
@@ -432,30 +452,19 @@ func aggregator(cmd *cobra.Command, args []string) {
 		}
 		fmt.Printf("CM %s contained %d parsed results\n", cm.Name, len(cmParsedResults))
 
-		// If there are any results, make sure all of them for the scan are
-		// exactly the same
-		if scanParsedResults == nil {
-			// This is the first loop or only result
-			fmt.Println("This is the first remediation list, keeping it")
-			scanParsedResults = cmParsedResults
-		} else {
-			// All remediation lists in the scan must be equal
-			ok := utils.DiffRemediationList(scanParsedResults, cmParsedResults)
-			if !ok {
-				fmt.Println("The remediations differ between machines, this should never happen as the machines in a pool should be identical")
-				os.Exit(1)
-			}
-		}
-
+		prCtx.AddResults(source, cmParsedResults)
 		// If the CM was processed, annotate it with the result
 		annotateCMWithScanResult(&configMaps[i], cmParsedResults)
 	}
+
+	// Once we gathered all results, try to reconcile those that are inconsistent
+	consistentParsedResults := prCtx.GetConsistentResults()
 
 	// At this point either scanRemediations is nil or contains a list
 	// of remediations for this scan
 	// Create the remediations
 	fmt.Println("Creating result objects")
-	if err := createResults(crclient, scan, scanParsedResults); err != nil {
+	if err := createResults(crclient, scan, consistentParsedResults); err != nil {
 		fmt.Printf("Could not create remediation objects: %v\n", err)
 		os.Exit(1)
 	}
