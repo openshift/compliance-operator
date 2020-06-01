@@ -25,7 +25,7 @@ var rerunnerCmd = &cobra.Command{
 }
 
 func init() {
-	defineFlags(rerunnerCmd)
+	defineRerunnerFlags(rerunnerCmd)
 }
 
 type rerunnerconfig struct {
@@ -34,7 +34,7 @@ type rerunnerconfig struct {
 	client    *complianceCrClient
 }
 
-func defineFlags(cmd *cobra.Command) {
+func defineRerunnerFlags(cmd *cobra.Command) {
 	cmd.Flags().String("name", "", "The name of the ComplianceSuite to be re-run")
 	cmd.Flags().String("namespace", "", "The namespace of the ComplianceSuite to be re-run")
 }

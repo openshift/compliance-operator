@@ -113,9 +113,10 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 					Containers: []corev1.Container{
 						{
 							Name:            "result-server",
-							Image:           utils.GetComponentImage(utils.RESULT_SERVER),
+							Image:           utils.GetComponentImage(utils.OPERATOR),
 							ImagePullPolicy: corev1.PullAlways,
-							Args: []string{
+							Command: []string{
+								"compliance-operator", "resultserver",
 								"--path=/reports/",
 								"--address=0.0.0.0",
 								fmt.Sprintf("--port=%d", ResultServerPort),

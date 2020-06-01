@@ -1,18 +1,1 @@
-# Step one: build resultserver
-FROM registry.access.redhat.com/ubi8/go-toolset as builder
-
-WORKDIR /go/src/github.com/openshift/compliance-operator
-
-ENV GOFLAGS=-mod=vendor
-COPY . .
-RUN make resultserver 
-
-# Step two: containerize resultserver
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
-
-USER root
-
-# build resultserver
-COPY --from=builder /go/src/github.com/openshift/compliance-operator/build/_output/bin/resultserver /usr/local/bin/resultserver
-
-ENTRYPOINT ["/usr/local/bin/resultserver"]

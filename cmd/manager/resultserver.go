@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"path"
@@ -32,7 +31,20 @@ import (
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 )
 
-func defineFlags(cmd *cobra.Command) {
+var resultServerCmd = &cobra.Command{
+	Use:   "resultserver",
+	Short: "A tool to receive raw SCAP scan results.",
+	Long:  "A tool to receive raw SCAP scan results.",
+	Run: func(cmd *cobra.Command, args []string) {
+		server(parseResultServerConfig(cmd))
+	},
+}
+
+func init() {
+	defineResultServerFlags(resultServerCmd)
+}
+
+func defineResultServerFlags(cmd *cobra.Command) {
 	cmd.Flags().String("address", "1.1.1.1", "Server address")
 	cmd.Flags().String("port", "8443", "Server port")
 	cmd.Flags().String("path", "/", "Content path")
@@ -43,7 +55,7 @@ func defineFlags(cmd *cobra.Command) {
 	cmd.Flags().String("tls-ca", "", "Path to the CA certificate")
 }
 
-type config struct {
+type resultServerConfig struct {
 	Address string
 	Port    string
 	Path    string
@@ -52,10 +64,10 @@ type config struct {
 	CA      string
 }
 
-func parseConfig(cmd *cobra.Command) *config {
+func parseResultServerConfig(cmd *cobra.Command) *resultServerConfig {
 	basePath := getValidStringArg(cmd, "path")
 	index := getValidStringArg(cmd, "scan-index")
-	conf := &config{
+	conf := &resultServerConfig{
 		Address: getValidStringArg(cmd, "address"),
 		Port:    getValidStringArg(cmd, "port"),
 		Path:    filepath.Join(basePath, index),
@@ -66,44 +78,17 @@ func parseConfig(cmd *cobra.Command) *config {
 	return conf
 }
 
-func getValidStringArg(cmd *cobra.Command, name string) string {
-	val, _ := cmd.Flags().GetString(name)
-	if val == "" {
-		fmt.Fprintf(os.Stderr, "The command line argument '%s' is mandatory.\n", name)
-		os.Exit(1)
-	}
-	return val
-}
-
 func ensureDir(path string) error {
 	err := os.MkdirAll(path, 0750)
 	if err != nil && !os.IsExist(err) {
-		log.Fatal(err)
+		log.Error(err, "Couldn't ensure directory")
 		return err
 	}
 
 	return nil
 }
 
-func main() {
-	var srvCmd = &cobra.Command{
-		Use:   "resultserver",
-		Short: "A tool to receive raw SCAP scan results.",
-		Long:  "A tool to receive raw SCAP scan results.",
-		Run: func(cmd *cobra.Command, args []string) {
-			server(parseConfig(cmd))
-		},
-	}
-
-	defineFlags(srvCmd)
-
-	if err := srvCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-}
-
-func server(c *config) {
+func server(c *resultServerConfig) {
 	err := ensureDir(c.Path)
 	if err != nil {
 		fmt.Println(err)
@@ -132,14 +117,14 @@ func server(c *config) {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		filename := r.Header.Get("X-Report-Name")
 		if filename == "" {
-			log.Println("Rejecting. No \"X-Report-Name\" header given.")
+			log.Info("Rejecting. No \"X-Report-Name\" header given.")
 			http.Error(w, "Missing report name header", 400)
 			return
 		}
 		encoding := r.Header.Get("Content-Encoding")
 		extraExtension := encoding
 		if encoding != "" && encoding != "bzip2" {
-			log.Println("Rejecting. Invalid \"Content-Encoding\" header given.")
+			log.Info("Rejecting. Invalid \"Content-Encoding\" header given.")
 			http.Error(w, "invalid content encoding header", 400)
 			return
 		} else if encoding == "bzip2" {
@@ -150,7 +135,7 @@ func server(c *config) {
 		filePath := path.Join(c.Path, filename+".xml"+extraExtension)
 		f, err := os.Create(filePath)
 		if err != nil {
-			log.Printf("Error creating file: %s", filePath)
+			log.Info("Error creating file", "file-path", filePath)
 			http.Error(w, "Error creating file", 500)
 			return
 		}
@@ -159,12 +144,12 @@ func server(c *config) {
 
 		_, err = io.Copy(f, r.Body)
 		if err != nil {
-			log.Printf("Error writing file %s", filePath)
+			log.Info("Error writing file", "file-path", filePath)
 			http.Error(w, "Error writing file", 500)
 			return
 		}
-		log.Printf("Received file %s", filePath)
+		log.Info("Received file", "file-path", filePath)
 	})
-	log.Println("Listening...")
-	log.Fatal(server.ListenAndServeTLS(c.Cert, c.Key))
+	log.Info("Listening...")
+	log.Error(server.ListenAndServeTLS(c.Cert, c.Key), "Error in server")
 }

@@ -36,8 +36,6 @@ spec:
               value: "quay.io/compliance-operator/openscap-ocp:1.3.3"
             - name: LOG_COLLECTOR_IMAGE
               value: "quay.io/compliance-operator/resultscollector:latest"
-            - name: RESULT_SERVER_IMAGE
-              value: "quay.io/compliance-operator/resultserver:latest"
             - name: REMEDIATION_AGGREGATOR_IMAGE
               value: "quay.io/compliance-operator/remediation-aggregator:latest"
             - name: API_RESOURCE_COLLECTOR_IMAGE

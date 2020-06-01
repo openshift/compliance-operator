@@ -10,9 +10,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
 	compapis "github.com/openshift/compliance-operator/pkg/apis"
 )
+
+var log = logf.Log.WithName("cmd")
 
 type complianceCrClient struct {
 	client runtimeclient.Client
