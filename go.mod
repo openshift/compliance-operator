@@ -6,11 +6,12 @@ require (
 	github.com/ajeddeloh/go-json v0.0.0-20200220154158-5ae607161559 // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2
 	github.com/coreos/ignition v0.35.0
-	github.com/docker/docker v1.4.2-0.20190927142053-ada3c14355ce
+	github.com/docker/docker v1.4.2-0.20190927142053-ada3c14355ce // indirect
 	github.com/dsnet/compress v0.0.1
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.1
+	github.com/google/go-cmp v0.3.1
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
 	github.com/openshift/library-go v0.0.0-20200303185131-81598fff9efa

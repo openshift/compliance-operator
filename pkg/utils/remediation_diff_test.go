@@ -91,7 +91,7 @@ var _ = Describe("Testing parse results diff", func() {
 
 	Context("Same parse results", func() {
 		It("passes when the parse results are the same", func() {
-			ok := DiffRemediationList(oldList, newList)
+			ok, _ := DiffRemediationList(oldList, newList)
 			Expect(ok).To(BeTrue())
 		})
 	})
@@ -112,7 +112,7 @@ var _ = Describe("Testing parse results diff", func() {
 		})
 
 		It("fail when the parse results are different", func() {
-			ok := DiffRemediationList(oldList, newList)
+			ok, _ := DiffRemediationList(oldList, newList)
 			Expect(ok).To(BeFalse())
 		})
 	})
@@ -123,7 +123,7 @@ var _ = Describe("Testing parse results diff", func() {
 		})
 
 		It("fail when the parse results are different", func() {
-			ok := DiffRemediationList(oldList, newList)
+			ok, _ := DiffRemediationList(oldList, newList)
 			Expect(ok).To(BeFalse())
 		})
 	})
@@ -134,22 +134,22 @@ var _ = Describe("Testing parse results diff", func() {
 		})
 
 		It("fail when the parse results are different", func() {
-			ok := DiffRemediationList(oldList, newList)
+			ok, _ := DiffRemediationList(oldList, newList)
 			Expect(ok).To(BeFalse())
 		})
 	})
 
 	Context("One or both parse results lists are nil", func() {
 		It("fails when one of the lists is nil", func() {
-			ok := DiffRemediationList(oldList, nil)
+			ok, _ := DiffRemediationList(oldList, nil)
 			Expect(ok).To(BeFalse())
 
-			ok = DiffRemediationList(nil, newList)
+			ok, _ = DiffRemediationList(nil, newList)
 			Expect(ok).To(BeFalse())
 		})
 
 		It("passes when both lists are nil", func() {
-			ok := DiffRemediationList(nil, nil)
+			ok, _ := DiffRemediationList(nil, nil)
 			Expect(ok).To(BeTrue())
 		})
 	})
@@ -160,7 +160,7 @@ var _ = Describe("Testing parse results diff", func() {
 		})
 
 		It("fails when one of the remediation lists is nil", func() {
-			ok := DiffRemediationList(oldList, newList)
+			ok, _ := DiffRemediationList(oldList, newList)
 			Expect(ok).To(BeFalse())
 		})
 	})
@@ -171,7 +171,7 @@ var _ = Describe("Testing parse results diff", func() {
 		})
 
 		It("fails when one of the remediation checks is nil", func() {
-			ok := DiffRemediationList(oldList, newList)
+			ok, _ := DiffRemediationList(oldList, newList)
 			Expect(ok).To(BeFalse())
 		})
 	})

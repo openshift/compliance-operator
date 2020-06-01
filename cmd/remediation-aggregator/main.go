@@ -432,9 +432,11 @@ func aggregator(cmd *cobra.Command, args []string) {
 			scanParsedResults = cmParsedResults
 		} else {
 			// All remediation lists in the scan must be equal
-			ok := utils.DiffRemediationList(scanParsedResults, cmParsedResults)
+			ok, remDiff := utils.DiffRemediationList(scanParsedResults, cmParsedResults)
 			if !ok {
 				fmt.Println("The remediations differ between machines, this should never happen as the machines in a pool should be identical")
+				fmt.Println("The full diff between remediations follows:")
+				fmt.Println(remDiff)
 				os.Exit(1)
 			}
 		}

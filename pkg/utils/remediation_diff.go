@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"github.com/google/go-cmp/cmp"
 	"reflect"
 	"sort"
 
@@ -8,13 +9,17 @@ import (
 )
 
 // returns true if the lists are the same, false if they differ
-func DiffRemediationList(oldList, newList []*ParseResult) bool {
+func DiffRemediationList(oldList, newList []*ParseResult) (bool, string) {
+	var res bool
+	var stringDiff string
+
 	if newList == nil {
-		return oldList == nil
+		res = oldList == nil
+		return res, "At least one of the lists was null"
 	}
 
 	if len(newList) != len(oldList) {
-		return false
+		return false, "Lists had different length"
 	}
 
 	sortMcSlice := func(parseResultSlice []*ParseResult) {
@@ -26,19 +31,22 @@ func DiffRemediationList(oldList, newList []*ParseResult) bool {
 	sortMcSlice(oldList)
 	sortMcSlice(newList)
 
+	res = true
 	for i := range oldList {
 		ok := diffChecks(oldList[i].CheckResult, newList[i].CheckResult)
 		if !ok {
-			return false
+			stringDiff += cmp.Diff(oldList[i].CheckResult, newList[i].CheckResult)
+			res = false
 		}
 
 		ok = diffRemediations(oldList[i].Remediation, newList[i].Remediation)
 		if !ok {
-			return false
+			stringDiff += cmp.Diff(oldList[i].Remediation, newList[i].Remediation)
+			res = false
 		}
 	}
 
-	return true
+	return res, stringDiff
 }
 
 // returns true if the checks are the same, false if they differ
