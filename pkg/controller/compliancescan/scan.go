@@ -63,6 +63,12 @@ func (r *ReconcileComplianceScan) createPlatformScanPod(instance *compv1alpha1.C
 	logger.Info("Creating a Platform scan pod")
 	pod := newPlatformScanPod(instance, logger)
 
+	if instance.Spec.TailoringConfigMap != nil {
+		if err := r.reconcileTailoring(instance, pod, logger); err != nil {
+			return err
+		}
+	}
+
 	err := r.client.Create(context.TODO(), pod)
 	if errors.IsAlreadyExists(err) {
 		logger.Info("Pod already exists. This is fine.", "pod", pod)
