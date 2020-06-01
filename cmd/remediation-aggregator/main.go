@@ -34,11 +34,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	compapis "github.com/openshift/compliance-operator/pkg/apis"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
@@ -90,17 +91,7 @@ func createCrClient(config *rest.Config) (*complianceCrClient, error) {
 
 	v1.AddToScheme(scheme)
 	mcfgv1.AddToScheme(scheme)
-
-	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
-		&compv1alpha1.ComplianceRemediation{})
-	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
-		&compv1alpha1.ComplianceScan{})
-	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
-		&compv1alpha1.ComplianceCheckResult{})
-	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
-		&metav1.CreateOptions{})
-	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
-		&metav1.UpdateOptions{})
+	compapis.AddToScheme(scheme)
 
 	client, err := runtimeclient.New(config, runtimeclient.Options{
 		Scheme: scheme,
@@ -115,16 +106,15 @@ func createCrClient(config *rest.Config) (*complianceCrClient, error) {
 	}, nil
 }
 
-func getScanConfigMaps(clientset *kubernetes.Clientset, scan, namespace string) ([]v1.ConfigMap, error) {
-	var cMapList *v1.ConfigMapList
+func getScanConfigMaps(crClient *complianceCrClient, scan, namespace string) ([]v1.ConfigMap, error) {
+	cMapList := &v1.ConfigMapList{}
 	var err error
 
 	// Look for configMap with this scan label
-	listOpts := metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", compv1alpha1.ComplianceScanIndicatorLabel, scan),
-	}
+	inNs := client.InNamespace(namespace)
+	withLabel := client.MatchingLabels{compv1alpha1.ComplianceScanIndicatorLabel: scan}
 
-	cMapList, err = clientset.CoreV1().ConfigMaps(namespace).List(listOpts)
+	err = crClient.client.List(context.TODO(), cMapList, inNs, withLabel)
 	if err != nil {
 		fmt.Printf("Error waiting for CMs of scan %s: %v\n", scan, err)
 		return nil, err
@@ -179,7 +169,7 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string,
 	return utils.ParseResultsFromContentAndXccdf(scheme, scanName, namespace, content, scanReader)
 }
 
-func annotateParsedConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) error {
+func annotateParsedConfigMap(crClient *complianceCrClient, cm *v1.ConfigMap) error {
 	cmCopy := cm.DeepCopy()
 
 	if cmCopy.Annotations == nil {
@@ -188,8 +178,7 @@ func annotateParsedConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) 
 	cmCopy.Annotations[configMapRemediationsProcessed] = ""
 
 	err := backoff.Retry(func() error {
-		_, err := clientset.CoreV1().ConfigMaps(common.GetComplianceOperatorNamespace()).Update(cmCopy)
-		return err
+		return crClient.client.Update(context.TODO(), cmCopy)
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 	return err
 }
@@ -364,12 +353,6 @@ func aggregator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		fmt.Printf("Cannot create clientset: %v\n", err)
-		os.Exit(1)
-	}
-
 	crclient, err := createCrClient(config)
 	if err != nil {
 		fmt.Printf("Cannot create client for our types: %v\n", err)
@@ -392,7 +375,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 	}
 
 	// Find all the configmaps for a scan
-	configMaps, err := getScanConfigMaps(clientset, aggregatorConf.ScanName, common.GetComplianceOperatorNamespace())
+	configMaps, err := getScanConfigMaps(crclient, aggregatorConf.ScanName, common.GetComplianceOperatorNamespace())
 	if err != nil {
 		fmt.Printf("getScanConfigMaps failed: %v\n", err)
 		os.Exit(1)
@@ -453,7 +436,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 	// Annotate configMaps, so we don't need to re-parse them
 	fmt.Println("Annotating ConfigMaps")
 	for _, cm := range configMaps {
-		err = annotateParsedConfigMap(clientset, &cm)
+		err = annotateParsedConfigMap(crclient, &cm)
 		if err != nil {
 			fmt.Printf("Cannot annotate the CM: %v\n", err)
 			os.Exit(1)
