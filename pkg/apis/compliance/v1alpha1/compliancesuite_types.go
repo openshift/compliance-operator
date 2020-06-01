@@ -9,6 +9,10 @@ import (
 // This is an easy way to filter them.
 const SuiteLabel = "compliance.openshift.io/suite"
 
+// SuiteFinalizer is a finalizer for ComplianceSuites. It gets automatically
+// added by the ComplianceSuite controller in order to delete resources.
+const SuiteFinalizer = "suite.finalizers.compliance.openshift.io"
+
 // ComplianceScanSpecWrapper provides a ComplianceScanSpec and a Name
 // +k8s:openapi-gen=true
 type ComplianceScanSpecWrapper struct {

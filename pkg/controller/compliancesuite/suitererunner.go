@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-logr/logr"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/robfig/cron"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
@@ -12,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/openshift/compliance-operator/pkg/utils"
 )
@@ -23,11 +23,6 @@ func (r *ReconcileComplianceSuite) reconcileScanRerunnerCronJob(suite *compv1alp
 	rerunner := getRerunner(suite)
 	if suite.Spec.Schedule == "" {
 		return r.handleDelete(rerunner, logger)
-	}
-
-	if err := controllerutil.SetControllerReference(suite, rerunner, r.scheme); err != nil {
-		log.Error(err, "Failed to set pod ownership", "CronJob.Name", rerunner.GetName())
-		return err
 	}
 	return r.handleCreate(rerunner, logger)
 }
@@ -83,7 +78,7 @@ func getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
 	return &batchv1beta1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getRerunnerName(suite),
-			Namespace: suite.Namespace,
+			Namespace: common.GetComplianceOperatorNamespace(),
 		},
 		Spec: batchv1beta1.CronJobSpec{
 			Schedule: suite.Spec.Schedule,

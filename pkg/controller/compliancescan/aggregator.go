@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
@@ -30,7 +31,7 @@ func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Log
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
-			Namespace: scanInstance.Namespace,
+			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels:    podLabels,
 		},
 		Spec: corev1.PodSpec{
@@ -111,5 +112,5 @@ func isAggregatorRunning(r *ReconcileComplianceScan, scanInstance *compv1alpha1.
 	logger.Info("Checking aggregator pod for scan", "ComplianceScan.Name", scanInstance.Name)
 
 	podName := getAggregatorPodName(scanInstance.Name)
-	return isPodRunning(r, podName, scanInstance.Namespace, logger)
+	return isPodRunning(r, podName, common.GetComplianceOperatorNamespace(), logger)
 }

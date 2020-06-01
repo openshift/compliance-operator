@@ -16,7 +16,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -69,16 +68,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
-	// Watch for changes to secondary resource Pods and requeue the owner ComplianceScan
-	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &compv1alpha1.ComplianceScan{},
-	})
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -115,6 +104,22 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 		}
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
+	}
+
+	// examine DeletionTimestamp to determine if object is under deletion
+	if instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// registering our finalizer.
+		if !common.ContainsFinalizer(instance.ObjectMeta.Finalizers, compv1alpha1.ScanFinalizer) {
+			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, compv1alpha1.ScanFinalizer)
+			if err := r.client.Update(context.TODO(), instance); err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+	} else {
+		// The object is being deleted
+		return r.scanDeleteHandler(instance, reqLogger)
 	}
 
 	// At this point, we make a copy of the instance, so we can modify it in the functions below.
@@ -256,7 +261,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 
 		if running {
 			// The platform scan pod is still running, go back to queue.
-			return reconcile.Result{}, err
+			return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, err
 		}
 	default: // ScanTypeNode
 		if nodes, err = getTargetNodes(r, instance); err != nil {
@@ -286,7 +291,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 			}
 			if running {
 				// at least one pod is still running, just go back to the queue
-				return reconcile.Result{}, err
+				return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, err
 			}
 		}
 	}
@@ -327,11 +332,6 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1
 
 	logger.Info("Creating an aggregator pod for scan")
 	aggregator := newAggregatorPod(instance, logger)
-	if err = controllerutil.SetControllerReference(instance, aggregator, r.scheme); err != nil {
-		log.Error(err, "Failed to set aggregator pod ownership", "aggregator", aggregator)
-		return reconcile.Result{}, err
-	}
-
 	err = r.launchAggregatorPod(instance, aggregator, logger)
 	if err != nil {
 		log.Error(err, "Failed to launch aggregator pod", "aggregator", aggregator)
@@ -413,6 +413,11 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 			return reconcile.Result{}, err
 		}
 
+		if err = r.deleteScriptConfigMaps(instance, logger); err != nil {
+			log.Error(err, "Cannot delete script ConfigMaps")
+			return reconcile.Result{}, err
+		}
+
 		if instance.NeedsRescan() {
 			if err = r.deleteResultConfigMaps(instance, logger); err != nil {
 				log.Error(err, "Cannot delete result ConfigMaps")
@@ -434,6 +439,49 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 		}
 	}
 
+	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileComplianceScan) scanDeleteHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+	if common.ContainsFinalizer(instance.ObjectMeta.Finalizers, compv1alpha1.ScanFinalizer) {
+		scanToBeDeleted := instance.DeepCopy()
+
+		// Force remove rescan annotation since we're deleting the scan
+		if scanToBeDeleted.NeedsRescan() {
+			delete(scanToBeDeleted.Annotations, compv1alpha1.ComplianceScanRescanAnnotation)
+		}
+		// Force debug to be false so we actually remove dependent objects
+		// NOTE(jaosorior): When we're in debug mode, objects don't get deleted
+		// to aide in debugging. if we're actually going through a deletion as
+		// is the case in this code-path, then we REALLY want to make sure everything
+		// gets deleted.
+		scanToBeDeleted.Spec.Debug = false
+
+		// remove objects by forcing handling of phase DONE
+		if _, err := r.phaseDoneHandler(scanToBeDeleted, logger); err != nil {
+			// if fail to delete the external dependency here, return with error
+			// so that it can be retried
+			return reconcile.Result{}, err
+		}
+
+		if err := r.deleteResultConfigMaps(scanToBeDeleted, logger); err != nil {
+			log.Error(err, "Cannot delete result ConfigMaps")
+			return reconcile.Result{}, err
+		}
+
+		if err := r.deletePVCForScan(scanToBeDeleted); err != nil {
+			log.Error(err, "Cannot delete result PVC")
+			return reconcile.Result{}, err
+		}
+
+		// remove our finalizer from the list and update it.
+		scanToBeDeleted.ObjectMeta.Finalizers = common.RemoveFinalizer(scanToBeDeleted.ObjectMeta.Finalizers, compv1alpha1.ScanFinalizer)
+		if err := r.client.Update(context.TODO(), scanToBeDeleted); err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
+	// Stop reconciliation as the item is being deleted
 	return reconcile.Result{}, nil
 }
 
@@ -468,18 +516,35 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *compv1alpha1.Complianc
 
 func (r *ReconcileComplianceScan) createPVCForScan(instance *compv1alpha1.ComplianceScan) error {
 	pvc := getPVCForScan(instance)
-	if err := controllerutil.SetControllerReference(instance, pvc, r.scheme); err != nil {
-		log.Error(err, "Failed to set pvc ownership", "pvc", pvc.Name)
-		return err
-	}
 	if err := r.client.Create(context.TODO(), pvc); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 	return nil
 }
 
+func (r *ReconcileComplianceScan) deletePVCForScan(instance *compv1alpha1.ComplianceScan) error {
+	pvc := getPVCForScan(instance)
+	if err := r.client.Delete(context.TODO(), pvc); err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+	return nil
+}
+
+func (r *ReconcileComplianceScan) deleteScriptConfigMaps(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
+	inNs := client.InNamespace(common.GetComplianceOperatorNamespace())
+	withLabel := client.MatchingLabels{
+		compv1alpha1.ScanLabel:   instance.Name,
+		compv1alpha1.ScriptLabel: "",
+	}
+	err := r.client.DeleteAllOf(context.Background(), &corev1.ConfigMap{}, inNs, withLabel)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *ReconcileComplianceScan) deleteResultConfigMaps(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	inNs := client.InNamespace(instance.Namespace)
+	inNs := client.InNamespace(common.GetComplianceOperatorNamespace())
 	withLabel := client.MatchingLabels{compv1alpha1.ComplianceScanIndicatorLabel: instance.Name}
 	err := r.client.DeleteAllOf(context.Background(), &corev1.ConfigMap{}, inNs, withLabel)
 	if err != nil {
@@ -491,7 +556,7 @@ func (r *ReconcileComplianceScan) deleteResultConfigMaps(instance *compv1alpha1.
 // returns true if the pod is still running, false otherwise
 func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *compv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
 	podName := getPodForNodeName(scanInstance.Name, node.Name)
-	return isPodRunning(r, podName, scanInstance.Namespace, logger)
+	return isPodRunning(r, podName, common.GetComplianceOperatorNamespace(), logger)
 }
 
 // returns true if the pod is still running, false otherwise
@@ -499,7 +564,7 @@ func isPlatformScanPodRunning(r *ReconcileComplianceScan, scanInstance *compv1al
 	logger.Info("Retrieving platform scan pod.", "Name", scanInstance.Name+"-"+PlatformScanName)
 
 	podName := getPodForNodeName(scanInstance.Name, PlatformScanName)
-	return isPodRunning(r, podName, scanInstance.Namespace, logger)
+	return isPodRunning(r, podName, common.GetComplianceOperatorNamespace(), logger)
 }
 
 func isPodRunning(r *ReconcileComplianceScan, podName, namespace string, logger logr.Logger) (bool, error) {
@@ -532,7 +597,7 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 	case compv1alpha1.ScanTypePlatform:
 		targetCM := types.NamespacedName{
 			Name:      getConfigMapForNodeName(instance.Name, PlatformScanName),
-			Namespace: instance.Namespace,
+			Namespace: common.GetComplianceOperatorNamespace(),
 		}
 
 		foundCM := &corev1.ConfigMap{}
@@ -561,7 +626,7 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 		for _, node := range nodes.Items {
 			targetCM := types.NamespacedName{
 				Name:      getConfigMapForNodeName(instance.Name, node.Name),
-				Namespace: instance.Namespace,
+				Namespace: common.GetComplianceOperatorNamespace(),
 			}
 
 			foundCM := &corev1.ConfigMap{}
@@ -599,7 +664,7 @@ func getPVCForScan(instance *compv1alpha1.ComplianceScan) *corev1.PersistentVolu
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getPVCForScanName(instance),
-			Namespace: instance.Namespace,
+			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels: map[string]string{
 				"complianceScan": instance.Name,
 			},
