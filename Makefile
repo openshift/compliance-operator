@@ -4,8 +4,6 @@ export APP_NAME=compliance-operator
 RESULTSCOLLECTORBIN=resultscollector
 OPENSCAP_IMAGE_NAME=openscap-ocp
 RESULTSCOLLECTOR_IMAGE_NAME=$(RESULTSCOLLECTORBIN)
-REMEDIATION_AGGREGATORBIN=remediation-aggregator
-REMEDIATION_AGGREGATOR_IMAGE_NAME=$(REMEDIATION_AGGREGATORBIN)
 API_RESOURCE_COLLECTORBIN=api-resource-collector
 API_RESOURCE_COLLECTOR_IMAGE_NAME=$(API_RESOURCE_COLLECTORBIN)
 
@@ -26,8 +24,6 @@ OPENSCAP_IMAGE_PATH=$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME)
 OPENSCAP_DOCKERFILE_PATH=./images/openscap/Dockerfile
 RESULTSCOLLECTOR_IMAGE_PATH=$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME)
 RESULTSCOLLECTOR_DOCKERFILE_PATH=./images/resultscollector/Dockerfile
-REMEDIATION_AGGREGATOR_IMAGE_PATH=$(IMAGE_REPO)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME)
-REMEDIATION_AGGREGATOR_DOCKERFILE_PATH=./images/remediation-aggregator/Dockerfile
 API_RESOURCE_COLLECTOR_IMAGE_PATH=$(IMAGE_REPO)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME)
 API_RESOURCE_COLLECTOR_DOCKERFILE_PATH=./images/api-resource-collector/Dockerfile
 
@@ -44,7 +40,6 @@ GOBUILD=$(GO) build
 BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 RESULTSCOLLECTOR_TARGET=$(TARGET_DIR)/bin/$(RESULTSCOLLECTORBIN)
-AGGREGATOR_TARGET=$(TARGET_DIR)/bin/$(REMEDIATION_AGGREGATORBIN)
 API_RESOURCE_COLLECTOR_TARGET=$(TARGET_DIR)/bin/$(API_RESOURCE_COLLECTORBIN)
 MAIN_PKG=cmd/manager/main.go
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
@@ -106,7 +101,7 @@ help: ## Show this help screen
 
 
 .PHONY: image
-image: fmt operator-sdk operator-image resultscollector-image remediation-aggregator-image api-resource-collector-image ## Build the compliance-operator container image
+image: fmt operator-sdk operator-image resultscollector-image api-resource-collector-image ## Build the compliance-operator container image
 
 .PHONY: operator-image
 operator-image: operator-sdk
@@ -120,25 +115,18 @@ openscap-image:
 resultscollector-image:
 	$(RUNTIME) build -f $(RESULTSCOLLECTOR_DOCKERFILE_PATH) -t $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG) .
 
-.PHONY: remediation-aggregator-image
-remediation-aggregator-image:
-	$(RUNTIME) build -f $(REMEDIATION_AGGREGATOR_DOCKERFILE_PATH) -t $(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG) .
-
 .PHONY: api-resource-collector-image
 api-resource-collector-image:
 	$(RUNTIME) build -f $(API_RESOURCE_COLLECTOR_DOCKERFILE_PATH) -t $(API_RESOURCE_COLLECTOR_IMAGE_PATH):$(TAG) .
 
 .PHONY: build
-build: fmt manager resultscollector remediation-aggregator api-resource-collector ## Build the compliance-operator binary
+build: fmt manager resultscollector api-resource-collector ## Build the compliance-operator binary
 
 manager:
 	$(GO) build -o $(TARGET) github.com/openshift/compliance-operator/cmd/manager
 
 resultscollector:
 	$(GO) build -o $(RESULTSCOLLECTOR_TARGET) github.com/openshift/compliance-operator/cmd/resultscollector
-
-remediation-aggregator:
-	$(GO) build -o $(AGGREGATOR_TARGET) github.com/openshift/compliance-operator/cmd/remediation-aggregator
 
 api-resource-collector:
 	$(GO) build -o $(API_RESOURCE_COLLECTOR_TARGET) github.com/openshift/compliance-operator/cmd/api-resource-collector
@@ -222,7 +210,6 @@ e2e: namespace operator-sdk image-to-cluster openshift-user ## Run the end-to-en
 	@echo "Replacing workload references in deploy/operator.yaml"
 	@sed -i 's%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%$(RESULTSCOLLECTOR_IMAGE_PATH)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%$(OPENSCAP_IMAGE_PATH):$(OPENSCAP_IMAGE_TAG)%' deploy/operator.yaml
-	@sed -i 's%$(IMAGE_REPO)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):latest%$(REMEDIATION_AGGREGATOR_IMAGE_PATH)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME):latest%$(API_RESOURCE_COLLECTOR_IMAGE_PATH)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH)%' deploy/operator.yaml
 	@echo "Running e2e tests"
@@ -230,7 +217,6 @@ e2e: namespace operator-sdk image-to-cluster openshift-user ## Run the end-to-en
 	@echo "Restoring image references in deploy/operator.yaml"
 	@sed -i 's%$(RESULTSCOLLECTOR_IMAGE_PATH)%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(OPENSCAP_IMAGE_PATH):$(OPENSCAP_IMAGE_TAG)%$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%' deploy/operator.yaml
-	@sed -i 's%$(REMEDIATION_AGGREGATOR_IMAGE_PATH)%$(IMAGE_REPO)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(API_RESOURCE_COLLECTOR_IMAGE_PATH)%$(IMAGE_REPO)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(OPERATOR_IMAGE_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 
@@ -278,8 +264,6 @@ image-to-cluster:
 	$(eval OPERATOR_IMAGE_PATH = $(IMAGE_FORMAT))
 	$(eval component = compliance-resultscollector)
 	$(eval RESULTSCOLLECTOR_IMAGE_PATH = $(IMAGE_FORMAT))
-	$(eval component = compliance-remediation-aggregator)
-	$(eval REMEDIATION_AGGREGATOR_IMAGE_PATH = $(IMAGE_FORMAT))
 else ifeq ($(E2E_USE_DEFAULT_IMAGES), true)
 image-to-cluster:
 	@echo "E2E_USE_DEFAULT_IMAGES variable detected. Using default images."
@@ -288,7 +272,6 @@ image-to-cluster:
 	@echo "E2E_SKIP_CONTAINER_PUSH variable detected. Using previously pushed images."
 	$(eval OPERATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(APP_NAME):$(TAG))
 	$(eval RESULTSCOLLECTOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(RESULTSCOLLECTOR_IMAGE_NAME):$(TAG))
-	$(eval REMEDIATION_AGGREGATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):$(TAG))
 	$(eval API_RESOURCE_COLLECTOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME):$(TAG))
 else ifeq ($(E2E_SKIP_CONTAINER_BUILD), true)
 image-to-cluster: namespace cluster-image-push
@@ -307,13 +290,11 @@ cluster-image-push: namespace openshift-user
 		$(RUNTIME) login --tls-verify=false -u $(OPENSHIFT_USER) -p $(shell oc whoami -t) $${IMAGE_REGISTRY_HOST}; \
 		$(RUNTIME) push --tls-verify=false $(OPERATOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(APP_NAME):$(TAG); \
 		$(RUNTIME) push --tls-verify=false $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(RESULTSCOLLECTOR_IMAGE_NAME):$(TAG); \
-		$(RUNTIME) push --tls-verify=false $(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):$(TAG); \
 		$(RUNTIME) push --tls-verify=false $(API_RESOURCE_COLLECTOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME):$(TAG)
 	@echo "Removing the route from the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
 	$(eval OPERATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(APP_NAME):$(TAG))
 	$(eval RESULTSCOLLECTOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(RESULTSCOLLECTOR_IMAGE_NAME):$(TAG))
-	$(eval REMEDIATION_AGGREGATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):$(TAG))
 	$(eval API_RESOURCE_COLLECTOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME):$(TAG))
 
 .PHONY: namespace
@@ -335,8 +316,6 @@ push: image
 	$(RUNTIME) push $(OPERATOR_IMAGE_PATH):$(TAG)
 	# resultscollector
 	$(RUNTIME) push $(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)
-	# remediation-aggregator
-	$(RUNTIME) push $(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)
 	# api-resource-collector
 	$(RUNTIME) push $(API_RESOURCE_COLLECTOR_IMAGE_PATH):$(TAG)
 
@@ -369,7 +348,6 @@ release-tag-image: package-version-to-tag
 	@echo "Temporarily overriding image tags in deploy/operator.yaml"
 	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH):$(TAG)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%$(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)%' deploy/operator.yaml
-	@sed -i 's%$(IMAGE_REPO)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):latest%$(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME):latest%$(API_RESOURCE_COLLECTOR_IMAGE_PATH):$(TAG)%' deploy/operator.yaml
 
 .PHONY: undo-deploy-tag-image
@@ -377,7 +355,6 @@ undo-deploy-tag-image: package-version-to-tag
 	@echo "Restoring image tags in deploy/operator.yaml"
 	@sed -i 's%$(OPERATOR_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(RESULTSCOLLECTOR_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(RESULTSCOLLECTOR_IMAGE_NAME):latest%' deploy/operator.yaml
-	@sed -i 's%$(REMEDIATION_AGGREGATOR_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(REMEDIATION_AGGREGATOR_IMAGE_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(API_RESOURCE_COLLECTOR_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(API_RESOURCE_COLLECTOR_IMAGE_NAME):latest%' deploy/operator.yaml
 
 .PHONY: git-release

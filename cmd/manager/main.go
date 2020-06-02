@@ -34,6 +34,7 @@ func init() {
 	rootCmd.AddCommand(operatorCmd)
 	rootCmd.AddCommand(rerunnerCmd)
 	rootCmd.AddCommand(resultServerCmd)
+	rootCmd.AddCommand(aggregatorCmd)
 }
 
 func main() {

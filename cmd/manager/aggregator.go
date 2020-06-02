@@ -36,10 +36,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	compapis "github.com/openshift/compliance-operator/pkg/apis"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
@@ -52,58 +50,35 @@ const (
 	maxRetries                     = 15
 )
 
+var aggregatorCmd = &cobra.Command{
+	Use:   "aggregator",
+	Short: "Aggregate configMaps complianceRemediations",
+	Long:  "A tool to aggregate configMaps with scan results to complianceRemediation types",
+	Run:   aggregator,
+}
+
+func init() {
+	defineAggregatorFlags(aggregatorCmd)
+}
+
 type aggregatorConfig struct {
 	Content   string
 	ScanName  string
 	Namespace string
 }
 
-type complianceCrClient struct {
-	client runtimeclient.Client
-	scheme *runtime.Scheme
-}
-
-func defineFlags(cmd *cobra.Command) {
+func defineAggregatorFlags(cmd *cobra.Command) {
 	cmd.Flags().String("content", "", "The path to the OpenScap content")
 	cmd.Flags().String("scan", "", "The compliance scan that owns the configMap objects.")
 	cmd.Flags().String("namespace", "openshift-compliance", "Running pod namespace.")
 }
 
-func parseConfig(cmd *cobra.Command) *aggregatorConfig {
+func parseAggregatorConfig(cmd *cobra.Command) *aggregatorConfig {
 	var conf aggregatorConfig
 	conf.Content = getValidStringArg(cmd, "content")
 	conf.ScanName = getValidStringArg(cmd, "scan")
 	conf.Namespace = getValidStringArg(cmd, "namespace")
 	return &conf
-}
-
-func getValidStringArg(cmd *cobra.Command, name string) string {
-	val, _ := cmd.Flags().GetString(name)
-	if val == "" {
-		fmt.Fprintf(os.Stderr, "The command line argument '%s' is mandatory.\n", name)
-		os.Exit(1)
-	}
-	return val
-}
-
-func createCrClient(config *rest.Config) (*complianceCrClient, error) {
-	scheme := runtime.NewScheme()
-
-	v1.AddToScheme(scheme)
-	mcfgv1.AddToScheme(scheme)
-	compapis.AddToScheme(scheme)
-
-	client, err := runtimeclient.New(config, runtimeclient.Options{
-		Scheme: scheme,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &complianceCrClient{
-		client: client,
-		scheme: scheme,
-	}, nil
 }
 
 func getScanConfigMaps(crClient *complianceCrClient, scan, namespace string) ([]v1.ConfigMap, error) {
@@ -345,7 +320,7 @@ func readContent(filename string) (*os.File, error) {
 func aggregator(cmd *cobra.Command, args []string) {
 	var scanParsedResults []*utils.ParseResult
 
-	aggregatorConf := parseConfig(cmd)
+	aggregatorConf := parseAggregatorConfig(cmd)
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -442,22 +417,4 @@ func aggregator(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 	}
-}
-
-var rootCmd = &cobra.Command{
-	Use:   "aggregator",
-	Short: "Aggregate configMaps complianceRemediations",
-	Long:  "A tool to aggregate configMaps with scan results to complianceRemediation types",
-	Run:   aggregator,
-}
-
-func main() {
-	defineFlags(rootCmd)
-
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	os.Exit(0)
 }
