@@ -34,9 +34,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -51,24 +50,30 @@ const (
 	maxRetries                     = 15
 )
 
+var aggregatorCmd = &cobra.Command{
+	Use:   "aggregator",
+	Short: "Aggregate configMaps complianceRemediations",
+	Long:  "A tool to aggregate configMaps with scan results to complianceRemediation types",
+	Run:   aggregator,
+}
+
+func init() {
+	defineAggregatorFlags(aggregatorCmd)
+}
+
 type aggregatorConfig struct {
 	Content   string
 	ScanName  string
 	Namespace string
 }
 
-type complianceCrClient struct {
-	client runtimeclient.Client
-	scheme *runtime.Scheme
-}
-
-func defineFlags(cmd *cobra.Command) {
+func defineAggregatorFlags(cmd *cobra.Command) {
 	cmd.Flags().String("content", "", "The path to the OpenScap content")
 	cmd.Flags().String("scan", "", "The compliance scan that owns the configMap objects.")
 	cmd.Flags().String("namespace", "openshift-compliance", "Running pod namespace.")
 }
 
-func parseConfig(cmd *cobra.Command) *aggregatorConfig {
+func parseAggregatorConfig(cmd *cobra.Command) *aggregatorConfig {
 	var conf aggregatorConfig
 	conf.Content = getValidStringArg(cmd, "content")
 	conf.ScanName = getValidStringArg(cmd, "scan")
@@ -76,55 +81,15 @@ func parseConfig(cmd *cobra.Command) *aggregatorConfig {
 	return &conf
 }
 
-func getValidStringArg(cmd *cobra.Command, name string) string {
-	val, _ := cmd.Flags().GetString(name)
-	if val == "" {
-		fmt.Fprintf(os.Stderr, "The command line argument '%s' is mandatory.\n", name)
-		os.Exit(1)
-	}
-	return val
-}
-
-func createCrClient(config *rest.Config) (*complianceCrClient, error) {
-	scheme := runtime.NewScheme()
-
-	v1.AddToScheme(scheme)
-	mcfgv1.AddToScheme(scheme)
-
-	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
-		&compv1alpha1.ComplianceRemediation{})
-	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
-		&compv1alpha1.ComplianceScan{})
-	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
-		&compv1alpha1.ComplianceCheckResult{})
-	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
-		&metav1.CreateOptions{})
-	scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion,
-		&metav1.UpdateOptions{})
-
-	client, err := runtimeclient.New(config, runtimeclient.Options{
-		Scheme: scheme,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &complianceCrClient{
-		client: client,
-		scheme: scheme,
-	}, nil
-}
-
-func getScanConfigMaps(clientset *kubernetes.Clientset, scan, namespace string) ([]v1.ConfigMap, error) {
-	var cMapList *v1.ConfigMapList
+func getScanConfigMaps(crClient *complianceCrClient, scan, namespace string) ([]v1.ConfigMap, error) {
+	cMapList := &v1.ConfigMapList{}
 	var err error
 
 	// Look for configMap with this scan label
-	listOpts := metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", compv1alpha1.ComplianceScanIndicatorLabel, scan),
-	}
+	inNs := client.InNamespace(namespace)
+	withLabel := client.MatchingLabels{compv1alpha1.ComplianceScanIndicatorLabel: scan}
 
-	cMapList, err = clientset.CoreV1().ConfigMaps(namespace).List(listOpts)
+	err = crClient.client.List(context.TODO(), cMapList, inNs, withLabel)
 	if err != nil {
 		fmt.Printf("Error waiting for CMs of scan %s: %v\n", scan, err)
 		return nil, err
@@ -179,7 +144,7 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string,
 	return utils.ParseResultsFromContentAndXccdf(scheme, scanName, namespace, content, scanReader)
 }
 
-func annotateParsedConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) error {
+func annotateParsedConfigMap(crClient *complianceCrClient, cm *v1.ConfigMap) error {
 	cmCopy := cm.DeepCopy()
 
 	if cmCopy.Annotations == nil {
@@ -188,8 +153,7 @@ func annotateParsedConfigMap(clientset *kubernetes.Clientset, cm *v1.ConfigMap) 
 	cmCopy.Annotations[configMapRemediationsProcessed] = ""
 
 	err := backoff.Retry(func() error {
-		_, err := clientset.CoreV1().ConfigMaps(common.GetComplianceOperatorNamespace()).Update(cmCopy)
-		return err
+		return crClient.client.Update(context.TODO(), cmCopy)
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 	return err
 }
@@ -356,17 +320,11 @@ func readContent(filename string) (*os.File, error) {
 func aggregator(cmd *cobra.Command, args []string) {
 	var scanParsedResults []*utils.ParseResult
 
-	aggregatorConf := parseConfig(cmd)
+	aggregatorConf := parseAggregatorConfig(cmd)
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		fmt.Printf("Can't create incluster config: %v\n", err)
-		os.Exit(1)
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		fmt.Printf("Cannot create clientset: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -392,7 +350,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 	}
 
 	// Find all the configmaps for a scan
-	configMaps, err := getScanConfigMaps(clientset, aggregatorConf.ScanName, common.GetComplianceOperatorNamespace())
+	configMaps, err := getScanConfigMaps(crclient, aggregatorConf.ScanName, common.GetComplianceOperatorNamespace())
 	if err != nil {
 		fmt.Printf("getScanConfigMaps failed: %v\n", err)
 		os.Exit(1)
@@ -453,28 +411,10 @@ func aggregator(cmd *cobra.Command, args []string) {
 	// Annotate configMaps, so we don't need to re-parse them
 	fmt.Println("Annotating ConfigMaps")
 	for _, cm := range configMaps {
-		err = annotateParsedConfigMap(clientset, &cm)
+		err = annotateParsedConfigMap(crclient, &cm)
 		if err != nil {
 			fmt.Printf("Cannot annotate the CM: %v\n", err)
 			os.Exit(1)
 		}
 	}
-}
-
-var rootCmd = &cobra.Command{
-	Use:   "aggregator",
-	Short: "Aggregate configMaps complianceRemediations",
-	Long:  "A tool to aggregate configMaps with scan results to complianceRemediation types",
-	Run:   aggregator,
-}
-
-func main() {
-	defineFlags(rootCmd)
-
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	os.Exit(0)
 }
