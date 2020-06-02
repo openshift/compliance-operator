@@ -35,6 +35,7 @@ func init() {
 	rootCmd.AddCommand(rerunnerCmd)
 	rootCmd.AddCommand(resultServerCmd)
 	rootCmd.AddCommand(aggregatorCmd)
+	rootCmd.AddCommand(resultcollectorCmd)
 }
 
 func main() {

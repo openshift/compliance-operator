@@ -17,6 +17,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -36,10 +37,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -50,8 +48,18 @@ const (
 	crdGroup      = "compliance.openshift.io"
 	crdAPIVersion = "v1alpha1"
 	crdPlurals    = "compliancescans"
-	maxRetries    = 15
 )
+
+var resultcollectorCmd = &cobra.Command{
+	Use:   "resultscollector",
+	Short: "A tool to do an OpenSCAP scan from a pod.",
+	Long:  "A tool to do an OpenSCAP scan from a pod.",
+	Run:   resultCollectorMain,
+}
+
+func init() {
+	defineResultcollectorFlags(resultcollectorCmd)
+}
 
 type scapresultsConfig struct {
 	ArfFile         string
@@ -68,7 +76,7 @@ type scapresultsConfig struct {
 	CA              string
 }
 
-func defineFlags(cmd *cobra.Command) {
+func defineResultcollectorFlags(cmd *cobra.Command) {
 	cmd.Flags().String("arf-file", "", "The ARF file to watch.")
 	cmd.Flags().String("results-file", "", "The XCCDF results file to watch.")
 	cmd.Flags().String("exit-code-file", "", "A file containing the oscap command's exit code.")
@@ -104,29 +112,16 @@ func parseConfig(cmd *cobra.Command) *scapresultsConfig {
 	return &conf
 }
 
-func getValidStringArg(cmd *cobra.Command, name string) string {
-	val, _ := cmd.Flags().GetString(name)
-	if val == "" {
-		fmt.Fprintf(os.Stderr, "The command line argument '%s' is mandatory.\n", name)
-		os.Exit(1)
-	}
-	return val
-}
-
-func getOpenSCAPScanInstance(name, namespace string, dynclient dynamic.Interface) (*unstructured.Unstructured, error) {
-	openscapScanRes := schema.GroupVersionResource{
-		Group:    crdGroup,
-		Version:  crdAPIVersion,
-		Resource: crdPlurals,
-	}
-
-	openscapScan, err := dynclient.Resource(openscapScanRes).Namespace(namespace).Get(name, metav1.GetOptions{})
+func getOpenSCAPScanInstance(name, namespace string, client *complianceCrClient) (*compv1alpha1.ComplianceScan, error) {
+	key := types.NamespacedName{Name: name, Namespace: namespace}
+	scan := &compv1alpha1.ComplianceScan{}
+	err := client.client.Get(context.TODO(), key, scan)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
 	}
 
-	return openscapScan, nil
+	return scan, nil
 }
 
 func waitForResultsFile(filename string, timeout int64) *os.File {
@@ -217,7 +212,7 @@ func readResultsFile(filename string, timeout int64) (*resultFileContents, error
 	return &rfContents, nil
 }
 
-func getConfigMap(owner *unstructured.Unstructured, configMapName, filename string, contents []byte, compressed bool, exitcode string) *corev1.ConfigMap {
+func getConfigMap(owner metav1.Object, configMapName, filename string, contents []byte, compressed bool, exitcode string) *corev1.ConfigMap {
 	annotations := map[string]string{}
 	if compressed {
 		annotations = map[string]string{
@@ -232,6 +227,7 @@ func getConfigMap(owner *unstructured.Unstructured, configMapName, filename stri
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        configMapName,
+			Namespace:   common.GetComplianceOperatorNamespace(),
 			Annotations: annotations,
 			Labels: map[string]string{
 				compv1alpha1.ComplianceScanIndicatorLabel: owner.GetName(),
@@ -278,15 +274,15 @@ func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scap
 }
 
 func uploadResultConfigMap(xccdfContents *resultFileContents, exitcode string,
-	scapresultsconf *scapresultsConfig, clientset *kubernetes.Clientset, dynclient dynamic.Interface) error {
+	scapresultsconf *scapresultsConfig, client *complianceCrClient) error {
 	return backoff.Retry(func() error {
 		fmt.Println("Trying to upload results ConfigMap")
-		openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, dynclient)
+		openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, client)
 		if err != nil {
 			return err
 		}
 		confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results", xccdfContents.contents, xccdfContents.compressed, exitcode)
-		_, err = clientset.CoreV1().ConfigMaps(common.GetComplianceOperatorNamespace()).Create(confMap)
+		err = client.client.Create(context.TODO(), confMap)
 
 		if errors.IsAlreadyExists(err) {
 			return nil
@@ -296,15 +292,15 @@ func uploadResultConfigMap(xccdfContents *resultFileContents, exitcode string,
 }
 
 func uploadErrorConfigMap(errorMsg *resultFileContents, exitcode string,
-	scapresultsconf *scapresultsConfig, clientset *kubernetes.Clientset, dynclient dynamic.Interface) error {
+	scapresultsconf *scapresultsConfig, client *complianceCrClient) error {
 	return backoff.Retry(func() error {
 		fmt.Println("Trying to upload error ConfigMap")
-		openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, dynclient)
+		openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, client)
 		if err != nil {
 			return err
 		}
 		confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "error-msg", errorMsg.contents, errorMsg.compressed, exitcode)
-		_, err = clientset.CoreV1().ConfigMaps(common.GetComplianceOperatorNamespace()).Create(confMap)
+		err = client.client.Create(context.TODO(), confMap)
 
 		if errors.IsAlreadyExists(err) {
 			return nil
@@ -313,8 +309,7 @@ func uploadErrorConfigMap(errorMsg *resultFileContents, exitcode string,
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 }
 
-func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConfig,
-	clientset *kubernetes.Clientset, dynclient dynamic.Interface) {
+func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConfig, client *complianceCrClient) {
 	arfContents, err := readResultsFile(scapresultsconf.ArfFile, scapresultsconf.Timeout)
 	if err != nil {
 		fmt.Println(err)
@@ -340,7 +335,7 @@ func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConf
 	}()
 
 	go func() {
-		err = uploadResultConfigMap(xccdfContents, exitcode, scapresultsconf, clientset, dynclient)
+		err = uploadResultConfigMap(xccdfContents, exitcode, scapresultsconf, client)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
@@ -351,15 +346,14 @@ func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConf
 	wg.Wait()
 }
 
-func handleErrorInOscapRun(exitcode string, scapresultsconf *scapresultsConfig,
-	clientset *kubernetes.Clientset, dynclient dynamic.Interface) {
+func handleErrorInOscapRun(exitcode string, scapresultsconf *scapresultsConfig, client *complianceCrClient) {
 	errorMsg, err := readResultsFile(scapresultsconf.CmdOutputFile, scapresultsconf.Timeout)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	err = uploadErrorConfigMap(errorMsg, exitcode, scapresultsconf, clientset, dynclient)
+	err = uploadErrorConfigMap(errorMsg, exitcode, scapresultsconf, client)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -417,17 +411,13 @@ func resultCollectorMain(cmd *cobra.Command, args []string) {
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Can't create incluster config: %v\n", err)
 		os.Exit(1)
 	}
-	clientset, err := kubernetes.NewForConfig(config)
+
+	crclient, err := createCrClient(config)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	dynclient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Cannot create client for our types: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -435,24 +425,8 @@ func resultCollectorMain(cmd *cobra.Command, args []string) {
 	fmt.Printf("Got exit-code \"%s\" from file.\n", exitcode)
 
 	if exitCodeIsError(exitcode) {
-		handleErrorInOscapRun(exitcode, scapresultsconf, clientset, dynclient)
+		handleErrorInOscapRun(exitcode, scapresultsconf, crclient)
 		return
 	}
-	handleCompleteSCAPResults(exitcode, scapresultsconf, clientset, dynclient)
-}
-
-func main() {
-	var rootCmd = &cobra.Command{
-		Use:   "resultscollector",
-		Short: "A tool to do an OpenSCAP scan from a pod.",
-		Long:  "A tool to do an OpenSCAP scan from a pod.",
-		Run:   resultCollectorMain,
-	}
-
-	defineFlags(rootCmd)
-
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	handleCompleteSCAPResults(exitcode, scapresultsconf, crclient)
 }
