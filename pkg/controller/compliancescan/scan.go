@@ -124,8 +124,9 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 			Containers: []corev1.Container{
 				{
 					Name:  "log-collector",
-					Image: utils.GetComponentImage(utils.LOG_COLLECTOR),
-					Args: []string{
+					Image: utils.GetComponentImage(utils.OPERATOR),
+					Command: []string{
+						"compliance-operator", "resultscollector",
 						"--arf-file=/reports/report-arf.xml",
 						"--results-file=/reports/report.xml",
 						"--exit-code-file=/reports/exit_code",
@@ -310,8 +311,9 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 			Containers: []corev1.Container{
 				{
 					Name:  "log-collector",
-					Image: utils.GetComponentImage(utils.LOG_COLLECTOR),
-					Args: []string{
+					Image: utils.GetComponentImage(utils.OPERATOR),
+					Command: []string{
+						"compliance-operator", "resultscollector",
 						"--arf-file=/reports/report-arf.xml",
 						"--results-file=/reports/report.xml",
 						"--exit-code-file=/reports/exit_code",

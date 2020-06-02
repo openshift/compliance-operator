@@ -47,7 +47,6 @@ import (
 const (
 	configMapRemediationsProcessed = "compliance-remediations/processed"
 	configMapCompressed            = "openscap-scan-result/compressed"
-	maxRetries                     = 15
 )
 
 var aggregatorCmd = &cobra.Command{

@@ -15,6 +15,10 @@ import (
 	compapis "github.com/openshift/compliance-operator/pkg/apis"
 )
 
+const (
+	maxRetries = 15
+)
+
 var log = logf.Log.WithName("cmd")
 
 type complianceCrClient struct {

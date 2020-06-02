@@ -5,8 +5,7 @@ import "os"
 type ComplianceComponent uint
 
 const (
-	LOG_COLLECTOR = iota
-	OPENSCAP
+	OPENSCAP = iota
 	API_RESOURCE_COLLECTOR
 	OPERATOR
 )
@@ -15,7 +14,6 @@ var componentDefaults = []struct {
 	defaultImage string
 	envVar       string
 }{
-	{"quay.io/compliance-operator/resultscollector:latest", "LOG_COLLECTOR_IMAGE"},
 	{"quay.io/jhrozek/openscap-ocp:latest", "OPENSCAP_IMAGE"},
 	{"quay.io/compliance-operator/api-resource-collector:latest", "API_RESOURCE_COLLECTOR_IMAGE"},
 	{"quay.io/compliance-operator/compliance-operator:latest", "OPERATOR_IMAGE"},
