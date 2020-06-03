@@ -169,7 +169,7 @@ test-unit: fmt ## Run the unit tests
 ifndef JUNITFILE
 	@$(GO) test $(TEST_OPTIONS) $(PKGS)
 else
-	@$(GO) test $(TEST_OPTIONS) -json $(PKGS) --ginkgo.noColor | gotest2junit -v > $(JUNITFILE)
+	@set -o pipefail; $(GO) test $(TEST_OPTIONS) -json $(PKGS) | gotest2junit -v > $(JUNITFILE)
 endif
 
 .PHONY: test-benchmark

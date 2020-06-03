@@ -47,12 +47,12 @@ func (r *ReconcileComplianceScan) createNodeScanPods(instance *compv1alpha1.Comp
 		// ..and launch it..
 		err := r.client.Create(context.TODO(), pod)
 		if errors.IsAlreadyExists(err) {
-			logger.Info("Pod already exists. This is fine.", "Pod.Name", pod)
+			logger.Info("Pod already exists. This is fine.", "Pod.Name", pod.Name)
 		} else if err != nil {
-			log.Error(err, "Failed to launch a pod", "Pod.Name", pod)
+			log.Error(err, "Failed to launch a pod", "Pod.Name", pod.Name)
 			return err
 		} else {
-			logger.Info("Launched a pod", "Pod.Name", pod)
+			logger.Info("Launched a pod", "Pod.Name", pod.Name)
 		}
 	}
 
@@ -439,12 +439,12 @@ func (r *ReconcileComplianceScan) deleteScanPods(instance *compv1alpha1.Complian
 		// Delete it.
 		err := r.client.Delete(context.TODO(), pod)
 		if errors.IsNotFound(err) {
-			logger.Info("Pod is already gone. This is fine.", "Pod.Name", pod)
+			logger.Info("Pod is already gone. This is fine.", "Pod.Name", pod.Name)
 		} else if err != nil {
-			log.Error(err, "Failed to delete a pod", "Pod.Name", pod)
+			log.Error(err, "Failed to delete a pod", "Pod.Name", pod.Name)
 			return err
 		} else {
-			logger.Info("deleted pod", "Pod.Name", pod)
+			logger.Info("deleted pod", "Pod.Name", pod.Name)
 		}
 	}
 

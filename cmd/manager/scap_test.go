@@ -10,14 +10,14 @@ func TestSCAPContentParsing(t *testing.T) {
 	debugLog = true
 	tests := map[string]struct {
 		profile  string
-		expected map[string]string
+		expected []string
 		data     string
 	}{
 		"ssg-ocp4-ds.xml(mocked) new": {
 			profile: "xccdf_org.ssgproject.content_profile_platform-moderate",
 			data:    "../../tests/data/ssg-ocp4-ds-new.xml",
-			expected: map[string]string{
-				"/apis/config.openshift.io/v1/oauths/cluster": "/idp.yml",
+			expected: []string{
+				"/apis/config.openshift.io/v1/oauths/cluster",
 			},
 		},
 	}
