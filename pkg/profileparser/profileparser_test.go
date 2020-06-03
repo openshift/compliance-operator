@@ -42,7 +42,7 @@ var (
 
 func init() {
 	pcfg = &ParserConfig{
-		DataStreamPath: "../../tests/data/ssg-ocp4-ds.xml",
+		DataStreamPath: "../../tests/data/ssg-ocp4-ds-new.xml",
 		ProfileBundleKey: types.NamespacedName{
 			Namespace: "test-namespace",
 			Name:      "test-profile",
