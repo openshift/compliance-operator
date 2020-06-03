@@ -30,6 +30,9 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 	)
 
 	BeforeEach(func() {
+		// Uncomment these lines if you need to debug the controller's output.
+		// dev, _ := zap.NewDevelopment()
+		// logger = zapr.NewLogger(dev)
 		logger = zapr.NewLogger(zap.NewNop())
 		objs := []runtime.Object{}
 
@@ -107,14 +110,16 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				podName1 := getPodForNodeName(compliancescaninstance.Name, nodeinstance1.Name)
 				reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: podName1,
+						Name:      podName1,
+						Namespace: common.GetComplianceOperatorNamespace(),
 					},
 				})
 
 				podName2 := getPodForNodeName(compliancescaninstance.Name, nodeinstance2.Name)
 				reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: podName2,
+						Name:      podName2,
+						Namespace: common.GetComplianceOperatorNamespace(),
 					},
 				})
 
@@ -127,6 +132,11 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 
 			It("should stay in RUNNING state", func() {
 				result, err := reconciler.phaseRunningHandler(compliancescaninstance, logger)
+				pods := &corev1.PodList{}
+				reconciler.client.List(context.TODO(), pods)
+				for _, pod := range pods.Items {
+					fmt.Printf("* OZZ: Found pod: %s\n", pod.Name)
+				}
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
 				Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseRunning))
@@ -139,7 +149,8 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				podName1 := getPodForNodeName(compliancescaninstance.Name, nodeinstance1.Name)
 				reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: podName1,
+						Name:      podName1,
+						Namespace: common.GetComplianceOperatorNamespace(),
 					},
 					Status: corev1.PodStatus{
 						Phase: corev1.PodSucceeded,
@@ -149,7 +160,8 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				podName2 := getPodForNodeName(compliancescaninstance.Name, nodeinstance2.Name)
 				reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: podName2,
+						Name:      podName2,
+						Namespace: common.GetComplianceOperatorNamespace(),
 					},
 					Status: corev1.PodStatus{
 						Phase: corev1.PodSucceeded,
@@ -178,14 +190,16 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			podName1 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name)
 			reconciler.client.Create(context.TODO(), &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: podName1,
+					Name:      podName1,
+					Namespace: common.GetComplianceOperatorNamespace(),
 				},
 			})
 
 			podName2 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name)
 			reconciler.client.Create(context.TODO(), &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: podName2,
+					Name:      podName2,
+					Namespace: common.GetComplianceOperatorNamespace(),
 				},
 			})
 
