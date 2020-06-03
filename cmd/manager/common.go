@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"github.com/spf13/cobra"
@@ -53,4 +54,12 @@ func getValidStringArg(cmd *cobra.Command, name string) string {
 		os.Exit(1)
 	}
 	return val
+}
+
+func readContent(filename string) (*os.File, error) {
+	// gosec complains that the file is passed through an evironment variable. But
+	// this is not a security issue because none of the files are user-provided
+	cleanFileName := filepath.Clean(filename)
+	// #nosec G304
+	return os.Open(cleanFileName)
 }

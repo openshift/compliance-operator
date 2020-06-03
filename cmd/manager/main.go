@@ -37,6 +37,7 @@ func init() {
 	rootCmd.AddCommand(aggregatorCmd)
 	rootCmd.AddCommand(resultcollectorCmd)
 	rootCmd.AddCommand(apiResourceCollectorCmd)
+	rootCmd.AddCommand(profileparserCmd)
 }
 
 func main() {

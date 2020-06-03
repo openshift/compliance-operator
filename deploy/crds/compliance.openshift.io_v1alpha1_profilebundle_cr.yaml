@@ -1,0 +1,7 @@
+apiVersion: compliance.openshift.io/v1alpha1
+kind: ProfileBundle
+metadata:
+  name: ocp4
+spec:
+  contentImage: quay.io/complianceascode/ocp4:latest
+  contentFile: ssg-ocp4-ds.xml

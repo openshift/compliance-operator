@@ -19,6 +19,7 @@ require (
 	github.com/robfig/cron v1.1.0
 	github.com/securego/gosec v0.0.0-20200302134848-c998389da2ac
 	github.com/spf13/cobra v0.0.5
+	github.com/spf13/pflag v1.0.5
 	github.com/subchen/go-xmldom v1.1.2
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	go.uber.org/zap v1.10.0
