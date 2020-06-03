@@ -256,14 +256,15 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 	podLabels := map[string]string{
 		"complianceScan": scanInstance.Name,
 	}
-	collectorArgs := []string{
+	collectorCmd := []string{
+		"compliance-operator", "api-resource-collector",
 		"--content=/content/" + scanInstance.Spec.Content,
 		"--resultdir=" + PlatformScanDataRoot,
 		"--profile=" + scanInstance.Spec.Profile,
 	}
 
 	if scanInstance.Spec.Debug {
-		collectorArgs = append(collectorArgs, "--debug")
+		collectorCmd = append(collectorCmd, "--debug")
 	}
 
 	return &corev1.Pod{
@@ -293,8 +294,8 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 				},
 				{
 					Name:            PlatformScanResourceCollectorName,
-					Image:           utils.GetComponentImage(utils.API_RESOURCE_COLLECTOR),
-					Args:            collectorArgs,
+					Image:           utils.GetComponentImage(utils.OPERATOR),
+					Command:         collectorCmd,
 					ImagePullPolicy: corev1.PullAlways,
 					VolumeMounts: []corev1.VolumeMount{
 						{

@@ -26,6 +26,17 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+var apiResourceCollectorCmd = &cobra.Command{
+	Use:   "api-resource-collector",
+	Short: "Stages cluster resources for OpenSCAP scanning.",
+	Long:  "Stages cluster resources for OpenSCAP scanning.",
+	Run:   runAPIResourceCollector,
+}
+
+func init() {
+	defineAPIResourceCollectorFlags(apiResourceCollectorCmd)
+}
+
 // ResourceFetcher sources content for resource paths to gather, and then saves the path contents.
 // This interface is provided primarily for code organization.
 type ResourceFetcher interface {
@@ -46,7 +57,7 @@ type fetcherConfig struct {
 	Local     bool
 }
 
-func defineFlags(cmd *cobra.Command) {
+func defineAPIResourceCollectorFlags(cmd *cobra.Command) {
 	cmd.Flags().String("content", "", "The path to the OpenSCAP content file.")
 	cmd.Flags().String("resultdir", "", "The directory to write the collected object files to.")
 	cmd.Flags().String("profile", "", "The scan profile.")
@@ -54,7 +65,7 @@ func defineFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("debug", false, "Print debug messages.")
 }
 
-func parseConfig(cmd *cobra.Command) *fetcherConfig {
+func parseAPIResourceCollectorConfig(cmd *cobra.Command) *fetcherConfig {
 	var conf fetcherConfig
 	conf.Content = getValidStringArg(cmd, "content")
 	conf.ResultDir = getValidStringArg(cmd, "resultdir")
@@ -67,15 +78,6 @@ func parseConfig(cmd *cobra.Command) *fetcherConfig {
 	conf.Local = local
 	debugLog, _ = cmd.Flags().GetBool("debug")
 	return &conf
-}
-
-func getValidStringArg(cmd *cobra.Command, name string) string {
-	val, _ := cmd.Flags().GetString(name)
-	if val == "" {
-		fmt.Fprintf(os.Stderr, "The command line argument '%s' is mandatory.\n", name)
-		os.Exit(1)
-	}
-	return val
 }
 
 // getConfig returns the rest config, from KUBECONFIG if local or in-cluster if !local
@@ -103,8 +105,8 @@ func getConfig(local bool) *rest.Config {
 	return conf
 }
 
-func run(cmd *cobra.Command, args []string) {
-	fetcherConf := parseConfig(cmd)
+func runAPIResourceCollector(cmd *cobra.Command, args []string) {
+	fetcherConf := parseAPIResourceCollectorConfig(cmd)
 	kubeClient, err := kubernetes.NewForConfig(getConfig(fetcherConf.Local))
 	if err != nil {
 		FATAL("Error building kubeClient: %v", err)
@@ -129,21 +131,4 @@ func run(cmd *cobra.Command, args []string) {
 	if err := fetcher.SaveResources(fetcherConf.ResultDir); err != nil {
 		FATAL("Error saving resources: %v", err)
 	}
-}
-
-var rootCmd = &cobra.Command{
-	Use:   "api-resource-collector",
-	Short: "Stages cluster resources for OpenSCAP scanning.",
-	Long:  "Stages cluster resources for OpenSCAP scanning.",
-	Run:   run,
-}
-
-func main() {
-	defineFlags(rootCmd)
-
-	if err := rootCmd.Execute(); err != nil {
-		FATAL("%v", err)
-	}
-
-	os.Exit(0)
 }

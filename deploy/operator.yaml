@@ -34,10 +34,6 @@ spec:
             - name: OPENSCAP_IMAGE
               # Hardcoding this temporarily until its propagated to CI
               value: "quay.io/compliance-operator/openscap-ocp:1.3.3"
-            - name: LOG_COLLECTOR_IMAGE
-              value: "quay.io/compliance-operator/resultscollector:latest"
-            - name: API_RESOURCE_COLLECTOR_IMAGE
-              value: "quay.io/compliance-operator/api-resource-collector:latest"
             - name: OPERATOR_IMAGE
               value: "quay.io/compliance-operator/compliance-operator:latest"
       nodeSelector:

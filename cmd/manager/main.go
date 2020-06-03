@@ -36,6 +36,7 @@ func init() {
 	rootCmd.AddCommand(resultServerCmd)
 	rootCmd.AddCommand(aggregatorCmd)
 	rootCmd.AddCommand(resultcollectorCmd)
+	rootCmd.AddCommand(apiResourceCollectorCmd)
 }
 
 func main() {

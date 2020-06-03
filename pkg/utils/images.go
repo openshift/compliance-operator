@@ -6,7 +6,6 @@ type ComplianceComponent uint
 
 const (
 	OPENSCAP = iota
-	API_RESOURCE_COLLECTOR
 	OPERATOR
 )
 
@@ -15,7 +14,6 @@ var componentDefaults = []struct {
 	envVar       string
 }{
 	{"quay.io/jhrozek/openscap-ocp:latest", "OPENSCAP_IMAGE"},
-	{"quay.io/compliance-operator/api-resource-collector:latest", "API_RESOURCE_COLLECTOR_IMAGE"},
 	{"quay.io/compliance-operator/compliance-operator:latest", "OPERATOR_IMAGE"},
 }
 
