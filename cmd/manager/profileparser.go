@@ -10,12 +10,11 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"github.com/subchen/go-xmldom"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -32,7 +31,20 @@ var profileparserCmd = &cobra.Command{
 }
 
 func init() {
-	defineRerunnerFlags(profileparserCmd)
+	defineProfileParserFlags(profileparserCmd)
+}
+
+func defineProfileParserFlags(cmd *cobra.Command) {
+	cmd.Flags().String("ds-path", "/content/ssg-ocp4-ds.xml", "Path to the datastream xml file")
+	cmd.Flags().String("name", "", "Name of the ProfileBundle object")
+	cmd.Flags().String("namespace", "", "Namespace of the ProfileBundle object")
+
+	flags := cmd.Flags()
+	flags.AddFlagSet(zap.FlagSet())
+
+	// Add flags registered by imported packages (e.g. glog and
+	// controller-runtime)
+	flags.AddGoFlagSet(flag.CommandLine)
 }
 
 // XMLDocument is a wrapper that keeps the interface XML-parser-agnostic
@@ -40,44 +52,31 @@ type XMLDocument struct {
 	*xmldom.Document
 }
 
-func assertNotEmpty(param, paramName string) {
-	if param == "" {
-		log.Info("This cli parameter can't be empty", "parameter", paramName)
-		os.Exit(1)
-	}
-}
-
-func newParserConfig() *profileparser.ParserConfig {
+func newParserConfig(cmd *cobra.Command) *profileparser.ParserConfig {
 	pcfg := profileparser.ParserConfig{}
 
-	// Add the zap logger flag set to the CLI. The flag set must
-	// be added before calling pflag.Parse().
-	pflag.CommandLine.AddFlagSet(zap.FlagSet())
+	flags := cmd.Flags()
+	if err := flags.Parse(zap.FlagSet().Args()); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to parse zap flagset: %v", zap.FlagSet().Args())
+		os.Exit(1)
+	}
 
-	// Add flags registered by imported packages (e.g. glog and
-	// controller-runtime)
-	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
-
-	pflag.StringVar(&pcfg.DataStreamPath, "ds-path", "/content/ssg-ocp4-ds.xml", "Path to the datastream xml file")
-	pflag.StringVar(&pcfg.ProfileBundleKey.Name, "profile-bundle-name", "", "Name of the ProfileBundle object")
-	pflag.StringVar(&pcfg.ProfileBundleKey.Namespace, "profile-bundle-namespace", "", "Namespace of the ProfileBundle object")
-
-	pflag.Parse()
+	pcfg.DataStreamPath = getValidStringArg(cmd, "ds-path")
+	pcfg.ProfileBundleKey.Name = getValidStringArg(cmd, "name")
+	pcfg.ProfileBundleKey.Namespace = getValidStringArg(cmd, "namespace")
 
 	logf.SetLogger(zap.Logger())
 
 	printVersion()
 
-	assertNotEmpty(pcfg.ProfileBundleKey.Name, "profile-bundle-name")
-	assertNotEmpty(pcfg.ProfileBundleKey.Namespace, "profile-bundle-namespace")
-
-	config, err := rest.InClusterConfig()
+	// Get a config to talk to the apiserver
+	cfg, err := config.GetConfig()
 	if err != nil {
-		fmt.Printf("Can't create incluster config: %v\n", err)
+		log.Error(err, "")
 		os.Exit(1)
 	}
 
-	crclient, err := createCrClient(config)
+	crclient, err := createCrClient(cfg)
 	if err != nil {
 		fmt.Printf("Can't kubernetes client: %v\n", err)
 		os.Exit(1)
@@ -198,7 +197,7 @@ func updateProfileBundleStatus(pcfg *profileparser.ParserConfig, pb *cmpv1alpha1
 }
 
 func runProfileParser(cmd *cobra.Command, args []string) {
-	pcfg := newParserConfig()
+	pcfg := newParserConfig(cmd)
 
 	pb, err := getProfileBundle(pcfg)
 	if err != nil {

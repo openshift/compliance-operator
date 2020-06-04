@@ -185,8 +185,8 @@ func newPodForBundle(pb *compliancev1alpha1.ProfileBundle) *corev1.Pod {
 					Image: utils.GetComponentImage(utils.OPERATOR),
 					Command: []string{
 						"compliance-operator", "profileparser",
-						"--profile-bundle-name", pb.Name,
-						"--profile-bundle-namespace", pb.Namespace,
+						"--name", pb.Name,
+						"--namespace", pb.Namespace,
 						"--ds-path", path.Join("/content", pb.Spec.ContentFile),
 					},
 					VolumeMounts: []corev1.VolumeMount{
