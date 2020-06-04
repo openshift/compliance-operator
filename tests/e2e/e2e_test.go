@@ -29,7 +29,7 @@ func TestE2E(t *testing.T) {
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
 						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
-						Content: "ssg-ocp4-ds.xml",
+						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						Debug:   true,
 					},
@@ -59,7 +59,7 @@ func TestE2E(t *testing.T) {
 					Data: map[string]string{
 						"tailoring.xml": `<?xml version="1.0" encoding="UTF-8"?>
 <xccdf-1.2:Tailoring xmlns:xccdf-1.2="http://checklists.nist.gov/xccdf/1.2" id="xccdf_compliance.openshift.io_tailoring_test-tailoredprofile">
-	<xccdf-1.2:benchmark href="/content/ssg-ocp4-ds.xml"></xccdf-1.2:benchmark>
+	<xccdf-1.2:benchmark href="/content/ssg-rhcos4-ds.xml"></xccdf-1.2:benchmark>
 	<xccdf-1.2:version time="2020-04-28T07:04:13Z">1</xccdf-1.2:version>
 	<xccdf-1.2:Profile id="xccdf_compliance.openshift.io_profile_test-tailoredprofile">
 		<xccdf-1.2:title>Test Tailored Profile</xccdf-1.2:title>
@@ -82,7 +82,7 @@ func TestE2E(t *testing.T) {
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
 						Profile: "xccdf_compliance.openshift.io_profile_test-tailoredprofile",
-						Content: "ssg-ocp4-ds.xml",
+						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						Debug:   true,
 						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
@@ -116,7 +116,7 @@ func TestE2E(t *testing.T) {
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
 						Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
-						Content:      "ssg-ocp4-ds.xml",
+						Content:      rhcosContentFile,
 						Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						NodeSelector: selectWorkers,
 						Debug:        true,
@@ -177,7 +177,7 @@ func TestE2E(t *testing.T) {
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
 						Profile: "xccdf_org.ssgproject.content_profile_coreos-unexistent",
-						Content: "ssg-ocp4-ds.xml",
+						Content: rhcosContentFile,
 						Debug:   true,
 					},
 				}
@@ -207,7 +207,7 @@ func TestE2E(t *testing.T) {
 					Data: map[string]string{
 						"tailoring.xml": `<?xml version="1.0" encoding="UTF-8"?>
 <xccdf-1.2:Tailoring xmlns:xccdf="http://checklists.nist.gov/xccdf/1.2" id="xccdf_compliance.openshift.io_tailoring_test-tailoredprofile">
-	<xccdf-1.2:benchmark href="/content/ssg-ocp4-ds.xml"></xccdf-1.2:benchmark>
+	<xccdf-1.2:benchmark href="/content/ssg-rhcos4-ds.xml"></xccdf-1.2:benchmark>
 	<xccdf-1.2:version time="2020-04-28T07:04:13Z">1</xccdf-1.2:version>
 	<xccdf-1.2:Profile id="xccdf_compliance.openshift.io_profile_test-tailoredprofile">
 		<xccdf-1.2:title>Test Tailored Profile</xccdf-1.2:title>
@@ -230,7 +230,7 @@ func TestE2E(t *testing.T) {
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
 						Profile: "xccdf_compliance.openshift.io_profile_test-tailoredprofile",
-						Content: "ssg-ocp4-ds.xml",
+						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						Debug:   true,
 						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
@@ -260,7 +260,7 @@ func TestE2E(t *testing.T) {
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
 						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
-						Content: "ssg-ocp4-ds.xml",
+						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
 							Name: "",
@@ -289,7 +289,7 @@ func TestE2E(t *testing.T) {
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
 						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
-						Content: "ssg-ocp4-ds.xml",
+						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						Debug:   true,
 						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
@@ -319,7 +319,7 @@ func TestE2E(t *testing.T) {
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
 						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
-						Content: "ssg-ocp4-ds.xml",
+						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						Debug:   true,
 					},
@@ -463,7 +463,7 @@ func TestE2E(t *testing.T) {
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
-									Content:      "ssg-ocp4-ds.xml",
+									Content:      rhcosContentFile,
 									NodeSelector: map[string]string{
 										"node-role.kubernetes.io/worker": "",
 									},
@@ -513,7 +513,7 @@ func TestE2E(t *testing.T) {
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
-									Content:      "ssg-ocp4-ds.xml",
+									Content:      rhcosContentFile,
 									NodeSelector: selectWorkers,
 									Debug:        true,
 								},
@@ -523,7 +523,7 @@ func TestE2E(t *testing.T) {
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
-									Content:      "ssg-ocp4-ds.xml",
+									Content:      rhcosContentFile,
 									NodeSelector: selectMasters,
 									Debug:        true,
 								},
@@ -578,8 +578,8 @@ func TestE2E(t *testing.T) {
 						Name:      fmt.Sprintf("%s-wireless-disable-in-bios", workerScanName),
 						Namespace: namespace,
 					},
-					ID:     "xccdf_org.ssgproject.content_rule_wireless_disable_in_bios",
-					Status: compv1alpha1.CheckResultInfo,
+					ID:       "xccdf_org.ssgproject.content_rule_wireless_disable_in_bios",
+					Status:   compv1alpha1.CheckResultInfo,
 					Severity: compv1alpha1.CheckResultSeverityUnknown, // yes, it's really uknown in the DS
 				}
 
@@ -615,7 +615,7 @@ func TestE2E(t *testing.T) {
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
-									Content:      "ssg-ocp4-ds.xml",
+									Content:      rhcosContentFile,
 									Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
 									NodeSelector: selectWorkers,
 									Debug:        true,
@@ -671,7 +671,7 @@ func TestE2E(t *testing.T) {
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
 									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
-									Content:      "ssg-ocp4-ds.xml",
+									Content:      rhcosContentFile,
 									NodeSelector: getPoolNodeRoleSelector(),
 									Debug:        true,
 								},
@@ -755,9 +755,9 @@ func TestE2E(t *testing.T) {
 						Name:      fmt.Sprintf("%s-no-direct-root-logins", workerScanName),
 						Namespace: namespace,
 					},
-					ID:     "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
-					Status: compv1alpha1.CheckResultPass,
-					Severity:compv1alpha1.CheckResultSeverityMedium,
+					ID:       "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
+					Status:   compv1alpha1.CheckResultPass,
+					Severity: compv1alpha1.CheckResultSeverityMedium,
 				}
 				err = assertHasCheck(f, suiteName, workerScanName, checkNoDirectRootLogins)
 				if err != nil {
@@ -833,7 +833,7 @@ func TestE2E(t *testing.T) {
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
-									Content:      "ssg-ocp4-ds.xml",
+									Content:      rhcosContentFile,
 									NodeSelector: getPoolNodeRoleSelector(),
 									Debug:        true,
 								},
@@ -952,7 +952,7 @@ func TestE2E(t *testing.T) {
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
-									Content:      "ssg-ocp4-ds.xml",
+									Content:      ocpContentFile,
 									NodeSelector: selectWorkers,
 								},
 								Name: workerScanName,
@@ -962,7 +962,7 @@ func TestE2E(t *testing.T) {
 									ScanType:     compv1alpha1.ScanTypePlatform,
 									ContentImage: "quay.io/compliance-operator/ocp4-openscap-content:platform_test",
 									Profile:      "xccdf_org.ssgproject.content_profile_platform-moderate",
-									Content:      "ssg-ocp4-ds.xml",
+									Content:      ocpContentFile,
 								},
 								Name: platformScanName,
 							},
