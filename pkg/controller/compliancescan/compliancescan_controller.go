@@ -317,7 +317,7 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1
 		return reconcile.Result{}, err
 	}
 
-	result, isReady, err := gatherResults(r, instance, nodes)
+	result, isReady, err := gatherResults(r, instance, nodes, logger)
 
 	// We only wait if there are no errors.
 	if err == nil && !isReady {
@@ -587,7 +587,7 @@ func isPodRunning(r *ReconcileComplianceScan, podName, namespace string, logger 
 // for the OpenSCAP check. If the results haven't yet been persisted in
 // the relevant ConfigMap, the a requeue will be requested since the
 // results are not ready.
-func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList) (compv1alpha1.ComplianceScanStatusResult, bool, error) {
+func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) (compv1alpha1.ComplianceScanStatusResult, bool, error) {
 	var lastNonCompliance compv1alpha1.ComplianceScanStatusResult
 	var result compv1alpha1.ComplianceScanStatusResult
 	compliant := true
@@ -631,6 +631,7 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 
 			foundCM := &corev1.ConfigMap{}
 			err := r.client.Get(context.TODO(), targetCM, foundCM)
+			logger.Info("XXX: found a node CM", "foundCM", foundCM)
 
 			// Could be a transient error, so we requeue if there's any
 			// error here.
