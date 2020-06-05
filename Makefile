@@ -187,6 +187,7 @@ e2e: namespace operator-sdk image-to-cluster openshift-user ## Run the end-to-en
 	@sed -i 's%$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%$(OPENSCAP_IMAGE_PATH):$(OPENSCAP_IMAGE_TAG)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH)%' deploy/operator.yaml
 	@echo "Running e2e tests"
+	@echo "Using KUBECONFIG: $(KUBECONFIG)"
 	unset GOFLAGS && $(GOPATH)/bin/operator-sdk test local ./tests/e2e --skip-cleanup-error --image "$(OPERATOR_IMAGE_PATH)" --namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 	@echo "Restoring image references in deploy/operator.yaml"
 	@sed -i 's%$(OPENSCAP_IMAGE_PATH):$(OPENSCAP_IMAGE_TAG)%$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%' deploy/operator.yaml
