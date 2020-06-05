@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/go-logr/logr"
 	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -98,6 +100,24 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		return reconcile.Result{}, err
 	}
 
+	// examine DeletionTimestamp to determine if object is under deletion
+	if instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// registering our finalizer.
+		if !common.ContainsFinalizer(instance.ObjectMeta.Finalizers, compliancev1alpha1.ProfileBundleFinalizer) {
+			pb := instance.DeepCopy()
+			pb.ObjectMeta.Finalizers = append(pb.ObjectMeta.Finalizers, compliancev1alpha1.ProfileBundleFinalizer)
+			if err := r.client.Update(context.TODO(), pb); err != nil {
+				return reconcile.Result{}, err
+			}
+			return reconcile.Result{}, nil
+		}
+	} else {
+		// The object is being deleted
+		return reconcile.Result{}, r.profileBundleDeleteHandler(instance, reqLogger)
+	}
+
 	// Define a new Pod object
 	pod := newPodForBundle(instance)
 
@@ -148,6 +168,24 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 	return reconcile.Result{}, nil
 }
 
+func (r *ReconcileProfileBundle) profileBundleDeleteHandler(pb *compliancev1alpha1.ProfileBundle, logger logr.Logger) error {
+	logger.Info("The ProfileBundle is being deleted")
+	pod := newPodForBundle(pb)
+	logger.Info("Deleting profileparser pod", "Pod.Name", pod.Name)
+	err := r.client.Delete(context.TODO(), pod)
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+
+	pbCopy := pb.DeepCopy()
+	// remove our finalizer from the list and update it.
+	pbCopy.ObjectMeta.Finalizers = common.RemoveFinalizer(pbCopy.ObjectMeta.Finalizers, compliancev1alpha1.ProfileBundleFinalizer)
+	if err := r.client.Update(context.TODO(), pbCopy); err != nil {
+		return err
+	}
+	return nil
+}
+
 // newPodForBundle returns a busybox pod with the same name/namespace as the cr
 func newPodForBundle(pb *compliancev1alpha1.ProfileBundle) *corev1.Pod {
 	labels := map[string]string{
@@ -156,7 +194,7 @@ func newPodForBundle(pb *compliancev1alpha1.ProfileBundle) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pb.Name + "-pp",
-			Namespace: pb.Namespace,
+			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels:    labels,
 		},
 

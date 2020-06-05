@@ -4,6 +4,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// ProfileBundleFinalizer is a finalizer for ProfileBundles. It gets automatically
+// added by the ProfileBundle controller in order to delete resources.
+const ProfileBundleFinalizer = "profilebundle.finalizers.compliance.openshift.io"
+
 // DataStreamStatusType is the type for the data stream status
 type DataStreamStatusType string
 
