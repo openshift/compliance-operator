@@ -119,7 +119,7 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 		}
 	} else {
 		// The object is being deleted
-		return r.scanDeleteHandler(instance, reqLogger)
+		//return r.scanDeleteHandler(instance, reqLogger)
 	}
 
 	// At this point, we make a copy of the instance, so we can modify it in the functions below.
