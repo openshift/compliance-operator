@@ -232,7 +232,7 @@ func defaultOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev
 
 	if scan.Spec.Debug {
 		// info seems like a good compromise in terms of verbosity
-		cm.Data[OpenScapVerbosityeEnvName] = "INFO"
+		cm.Data[OpenScapVerbosityeEnvName] = "DEVEL"
 	}
 
 	if scan.Spec.TailoringConfigMap != nil {
