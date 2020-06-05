@@ -578,8 +578,8 @@ func TestE2E(t *testing.T) {
 						Name:      fmt.Sprintf("%s-wireless-disable-in-bios", workerScanName),
 						Namespace: namespace,
 					},
-					ID:     "xccdf_org.ssgproject.content_rule_wireless_disable_in_bios",
-					Status: compv1alpha1.CheckResultInfo,
+					ID:       "xccdf_org.ssgproject.content_rule_wireless_disable_in_bios",
+					Status:   compv1alpha1.CheckResultInfo,
 					Severity: compv1alpha1.CheckResultSeverityUnknown, // yes, it's really uknown in the DS
 				}
 
@@ -732,22 +732,22 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				t.Logf("Scan re-launched")
+				E2ELogf(t, "Scan re-launched")
 
 				// Scan has been re-started
-				t.Logf("Scan phase should be reset")
+				E2ELogf(t, "Scan phase should be reset")
 				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseRunning, compv1alpha1.ResultNotAvailable)
 				if err != nil {
 					return err
 				}
 
 				// Ensure that all the scans in the suite have finished and are marked as Done
-				t.Logf("Let's wait for it to be done now")
+				E2ELogf(t, "Let's wait for it to be done now")
 				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
 				if err != nil {
 					return err
 				}
-				t.Logf("scan re-run has finished")
+				E2ELogf(t, "scan re-run has finished")
 
 				// Now the check should be passing
 				checkNoDirectRootLogins := compv1alpha1.ComplianceCheckResult{
@@ -755,9 +755,9 @@ func TestE2E(t *testing.T) {
 						Name:      fmt.Sprintf("%s-no-direct-root-logins", workerScanName),
 						Namespace: namespace,
 					},
-					ID:     "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
-					Status: compv1alpha1.CheckResultPass,
-					Severity:compv1alpha1.CheckResultSeverityMedium,
+					ID:       "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
+					Status:   compv1alpha1.CheckResultPass,
+					Severity: compv1alpha1.CheckResultSeverityMedium,
 				}
 				err = assertHasCheck(f, suiteName, workerScanName, checkNoDirectRootLogins)
 				if err != nil {
@@ -766,7 +766,7 @@ func TestE2E(t *testing.T) {
 
 				// The test should not leave junk around, let's remove the MC and wait for the nodes to stabilize
 				// again
-				t.Logf("Removing applied remediation")
+				E2ELogf(t, "Removing applied remediation")
 				// Fetch remediation here so it can be deleted
 				rem := &compv1alpha1.ComplianceRemediation{}
 				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: workersNoRootLoginsRemName, Namespace: namespace}, rem)
@@ -780,7 +780,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				t.Logf("MC deleted, will wait for the machines to come back up")
+				E2ELogf(t, "MC deleted, will wait for the machines to come back up")
 
 				dummyAction := func() error {
 					return nil
@@ -809,7 +809,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				t.Logf("The test succeeded!")
+				E2ELogf(t, "The test succeeded!")
 				return nil
 			},
 		},
@@ -870,16 +870,16 @@ func TestE2E(t *testing.T) {
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
 				err = applyRemediationAndCheck(t, f, namespace, workersNoRootLoginsRemName, testPoolName)
 				if err != nil {
-					t.Logf("WARNING: Got an error while applying remediation '%s': %v", workersNoRootLoginsRemName, err)
+					E2ELogf(t, "WARNING: Got an error while applying remediation '%s': %v", workersNoRootLoginsRemName, err)
 				}
-				t.Logf("Remediation %s applied", workersNoRootLoginsRemName)
+				E2ELogf(t, "Remediation %s applied", workersNoRootLoginsRemName)
 
 				workersNoEmptyPassRemName := fmt.Sprintf("%s-no-empty-passwords", workerScanName)
 				err = applyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName)
 				if err != nil {
-					t.Logf("WARNING: Got an error while applying remediation '%s': %v", workersNoEmptyPassRemName, err)
+					E2ELogf(t, "WARNING: Got an error while applying remediation '%s': %v", workersNoEmptyPassRemName, err)
 				}
-				t.Logf("Remediation %s applied", workersNoEmptyPassRemName)
+				E2ELogf(t, "Remediation %s applied", workersNoEmptyPassRemName)
 
 				// unpause the MCP so that the remediation gets applied
 				err = unPauseMachinePoolAndWait(t, f, testPoolName)
@@ -897,15 +897,15 @@ func TestE2E(t *testing.T) {
 				mcName := types.NamespacedName{Name: fmt.Sprintf("75-%s-%s", workerScanName, suiteName)}
 				mcBoth := &mcfgv1.MachineConfig{}
 				err = f.Client.Get(goctx.TODO(), mcName, mcBoth)
-				t.Logf("MC %s exists", mcName.Name)
+				E2ELogf(t, "MC %s exists", mcName.Name)
 
 				// Revert one remediation. The MC should stay, but its generation should bump
-				t.Logf("Will revert remediation %s", workersNoEmptyPassRemName)
+				E2ELogf(t, "Will revert remediation %s", workersNoEmptyPassRemName)
 				err = unApplyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName, false)
 				if err != nil {
-					t.Logf("WARNING: Got an error while unapplying remediation '%s': %v", workersNoEmptyPassRemName, err)
+					E2ELogf(t, "WARNING: Got an error while unapplying remediation '%s': %v", workersNoEmptyPassRemName, err)
 				}
-				t.Logf("Remediation %s reverted", workersNoEmptyPassRemName)
+				E2ELogf(t, "Remediation %s reverted", workersNoEmptyPassRemName)
 				mcOne := &mcfgv1.MachineConfig{}
 				err = f.Client.Get(goctx.TODO(), mcName, mcOne)
 
@@ -914,11 +914,11 @@ func TestE2E(t *testing.T) {
 				}
 
 				// When we unapply the second remediation, the MC should be deleted, too
-				t.Logf("Will revert remediation %s", workersNoRootLoginsRemName)
+				E2ELogf(t, "Will revert remediation %s", workersNoRootLoginsRemName)
 				err = unApplyRemediationAndCheck(t, f, namespace, workersNoRootLoginsRemName, testPoolName, true)
-				t.Logf("Remediation %s reverted", workersNoEmptyPassRemName)
+				E2ELogf(t, "Remediation %s reverted", workersNoEmptyPassRemName)
 
-				t.Logf("No remediation-based MCs should exist now")
+				E2ELogf(t, "No remediation-based MCs should exist now")
 				mcShouldntExist := &mcfgv1.MachineConfig{}
 				err = f.Client.Get(goctx.TODO(), mcName, mcShouldntExist)
 				if err == nil {

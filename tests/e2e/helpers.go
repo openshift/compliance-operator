@@ -42,6 +42,14 @@ type mcTestCtx struct {
 	pools []*mcfgv1.MachineConfigPool
 }
 
+func E2ELogf(t *testing.T, format string, args ...interface{}) {
+	t.Logf(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), format), args...)
+}
+
+func E2ELog(t *testing.T, format string) {
+	t.Log(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), format))
+}
+
 func newMcTestCtx(f *framework.Framework, t *testing.T) (*mcTestCtx, error) {
 	return &mcTestCtx{f: f, t: t}, nil
 }
@@ -74,7 +82,7 @@ func (c *mcTestCtx) cleanupTrackedPools() {
 		}
 
 		// Then delete the pool itself
-		c.t.Logf("Removing pool %s\n", p.Name)
+		E2ELogf(c.t, "Removing pool %s\n", p.Name)
 		err = c.f.Client.Delete(goctx.TODO(), p)
 		if err != nil {
 			c.t.Errorf("Could not remove pool %s: %v\n", p.Name, err)
@@ -89,7 +97,7 @@ func (c *mcTestCtx) trackPool(pool *mcfgv1.MachineConfigPool) {
 		}
 	}
 	c.pools = append(c.pools, pool)
-	c.t.Logf("Tracking pool %s\n", pool.Name)
+	E2ELogf(c.t, "Tracking pool %s\n", pool.Name)
 }
 
 func (c *mcTestCtx) createE2EPool() error {
@@ -171,7 +179,7 @@ func setupComplianceOperatorCluster(t *testing.T, ctx *framework.Context) {
 	if err != nil {
 		t.Fatalf("failed to initialize cluster resources: %v", err)
 	}
-	t.Log("Initialized cluster resources")
+	E2ELog(t, "Initialized cluster resources")
 	namespace, err := ctx.GetNamespace()
 	if err != nil {
 		t.Fatal(err)
@@ -195,17 +203,17 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, exampleComplianceScan)
 		if lastErr != nil {
 			if apierrors.IsNotFound(lastErr) {
-				t.Logf("Waiting for availability of %s compliancescan\n", name)
+				E2ELogf(t, "Waiting for availability of %s compliancescan\n", name)
 				return false, nil
 			}
-			t.Logf("Retrying. Got error: %v\n", lastErr)
+			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
 			return false, nil
 		}
 
 		if exampleComplianceScan.Status.Phase == targetStatus {
 			return true, nil
 		}
-		t.Logf("Waiting for run of %s compliancescan (%s)\n", name, exampleComplianceScan.Status.Phase)
+		E2ELogf(t, "Waiting for run of %s compliancescan (%s)\n", name, exampleComplianceScan.Status.Phase)
 		return false, nil
 	})
 	// Error in function call
@@ -216,7 +224,7 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 	if timeouterr != nil {
 		return timeouterr
 	}
-	t.Logf("ComplianceScan ready (%s)\n", exampleComplianceScan.Status.Phase)
+	E2ELogf(t, "ComplianceScan ready (%s)\n", exampleComplianceScan.Status.Phase)
 	return nil
 }
 
@@ -232,26 +240,26 @@ func waitForReScanStatus(t *testing.T, f *framework.Framework, namespace, name s
 		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, foundScan)
 		if lastErr != nil {
 			if apierrors.IsNotFound(lastErr) {
-				t.Logf("Waiting for availability of %s compliancescan\n", name)
+				E2ELogf(t, "Waiting for availability of %s compliancescan\n", name)
 				return false, nil
 			}
-			t.Logf("Retrying. Got error: %v\n", lastErr)
+			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
 			return false, nil
 		}
 		// Set index
 		if scanIndex == -1 {
 			scanIndex = foundScan.Status.CurrentIndex
-			t.Logf("Initial scan index set to %d. Waiting for re-scan\n", scanIndex)
+			E2ELogf(t, "Initial scan index set to %d. Waiting for re-scan\n", scanIndex)
 			return false, nil
 		} else if foundScan.Status.CurrentIndex == scanIndex {
-			t.Logf("re-scan hasn't taken place. CurrentIndex %d. Waiting for re-scan\n", scanIndex)
+			E2ELogf(t, "re-scan hasn't taken place. CurrentIndex %d. Waiting for re-scan\n", scanIndex)
 			return false, nil
 		}
 
 		if foundScan.Status.Phase == targetStatus {
 			return true, nil
 		}
-		t.Logf("Waiting for run of %s compliancescan (%s)\n", name, foundScan.Status.Phase)
+		E2ELogf(t, "Waiting for run of %s compliancescan (%s)\n", name, foundScan.Status.Phase)
 		return false, nil
 	})
 	// Error in function call
@@ -262,7 +270,7 @@ func waitForReScanStatus(t *testing.T, f *framework.Framework, namespace, name s
 	if timeouterr != nil {
 		return timeouterr
 	}
-	t.Logf("ComplianceScan ready (%s)\n", foundScan.Status.Phase)
+	E2ELogf(t, "ComplianceScan ready (%s)\n", foundScan.Status.Phase)
 	return nil
 }
 
@@ -276,17 +284,17 @@ func waitForRemediationState(t *testing.T, f *framework.Framework, namespace, na
 		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
 		if lastErr != nil {
 			if apierrors.IsNotFound(lastErr) {
-				t.Logf("Waiting for availability of %s ComplianceRemediation\n", name)
+				E2ELogf(t, "Waiting for availability of %s ComplianceRemediation\n", name)
 				return false, nil
 			}
-			t.Logf("Retrying. Got error: %v\n", lastErr)
+			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
 			return false, nil
 		}
 
 		if rem.Status.ApplicationState == state {
 			return true, nil
 		}
-		t.Logf("Waiting for run of %s ComplianceRemediation (%s)\n", name, rem.Status.ApplicationState)
+		E2ELogf(t, "Waiting for run of %s ComplianceRemediation (%s)\n", name, rem.Status.ApplicationState)
 		return false, nil
 	})
 	// Error in function call
@@ -297,7 +305,7 @@ func waitForRemediationState(t *testing.T, f *framework.Framework, namespace, na
 	if timeouterr != nil {
 		return timeouterr
 	}
-	t.Logf("ComplianceRemediation ready (%s)\n", rem.Status.ApplicationState)
+	E2ELogf(t, "ComplianceRemediation ready (%s)\n", rem.Status.ApplicationState)
 	return nil
 }
 
@@ -308,10 +316,10 @@ func waitForObjectToExist(t *testing.T, f *framework.Framework, name, namespace 
 		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, obj)
 		if lastErr != nil {
 			if apierrors.IsNotFound(lastErr) {
-				t.Logf("Waiting for availability of %s ComplianceRemediation\n", name)
+				E2ELogf(t, "Waiting for availability of %s ComplianceRemediation\n", name)
 				return false, nil
 			}
-			t.Logf("Retrying. Got error: %v\n", lastErr)
+			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
 			return false, nil
 		}
 
@@ -326,7 +334,7 @@ func waitForObjectToExist(t *testing.T, f *framework.Framework, name, namespace 
 		return timeouterr
 	}
 
-	t.Logf("Object found '%s' found\n", name)
+	E2ELogf(t, "Object found '%s' found\n", name)
 	return nil
 }
 
@@ -340,15 +348,15 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, suite)
 		if lastErr != nil {
 			if apierrors.IsNotFound(lastErr) {
-				t.Logf("Waiting for availability of %s compliancesuite\n", name)
+				E2ELogf(t, "Waiting for availability of %s compliancesuite\n", name)
 				return false, nil
 			}
-			t.Logf("Retrying. Got error: %v\n", lastErr)
+			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
 			return false, nil
 		}
 
 		if suite.Status.AggregatedPhase != targetStatus {
-			t.Logf("Waiting until suite %s reaches target status '%s'. Current status: %s", suite.Name, targetStatus, suite.Status.AggregatedPhase)
+			E2ELogf(t, "Waiting until suite %s reaches target status '%s'. Current status: %s", suite.Name, targetStatus, suite.Status.AggregatedPhase)
 			return false, nil
 		}
 
@@ -398,7 +406,7 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 		return timeouterr
 	}
 
-	t.Logf("All scans in ComplianceSuite have finished (%s)\n", suite.Name)
+	E2ELogf(t, "All scans in ComplianceSuite have finished (%s)\n", suite.Name)
 	return nil
 }
 
@@ -420,7 +428,7 @@ func scanResultIsExpected(f *framework.Framework, namespace, name string, expect
 }
 
 func suiteErrorMessageMatchesRegex(t *testing.T, f *framework.Framework, namespace, name, regexToMatch string) error {
-	t.Logf("Fetching suite: '%s'", name)
+	E2ELogf(t, "Fetching suite: '%s'", name)
 	cs := &compv1alpha1.ComplianceSuite{}
 	key := types.NamespacedName{Name: name, Namespace: namespace}
 	err := f.Client.Get(goctx.TODO(), key, cs)
@@ -545,11 +553,11 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 		for _, expRem := range remNameList {
 			_, ok := scanSuiteMapNames[expRem]
 			if !ok {
-				t.Logf("expected remediation %s not yet found", expRem)
+				E2ELogf(t, "expected remediation %s not yet found", expRem)
 				return false, nil
 			}
 		}
-		t.Logf("expected remediations found!")
+		E2ELogf(t, "expected remediations found!")
 		return true, nil
 	})
 
@@ -582,7 +590,7 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 			return err
 		}
 	}
-	t.Logf("Pre-update, MC Pool %s has generation %d", poolPre.Name, poolPre.Status.ObservedGeneration)
+	E2ELogf(t, "Pre-update, MC Pool %s has generation %d", poolPre.Name, poolPre.Status.ObservedGeneration)
 
 	err := action()
 	if err != nil {
@@ -607,11 +615,11 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 		}
 
 		if !ok {
-			t.Logf("Predicate not true yet, waiting")
+			E2ELogf(t, "Predicate not true yet, waiting")
 			return false, nil
 		}
 
-		t.Logf("Will check for update, Gen: %d, previous %d updated %d/%d unavailable %d",
+		E2ELogf(t, "Will check for update, Gen: %d, previous %d updated %d/%d unavailable %d",
 			pool.Status.ObservedGeneration, poolPre.Status.ObservedGeneration,
 			pool.Status.UpdatedMachineCount, pool.Status.MachineCount,
 			pool.Status.UnavailableMachineCount)
@@ -621,11 +629,11 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 		if (pool.Status.ObservedGeneration != poolPre.Status.ObservedGeneration) &&
 			pool.Spec.Paused == true || ((pool.Status.UpdatedMachineCount == pool.Status.MachineCount) &&
 			(pool.Status.UnavailableMachineCount == 0)) {
-			t.Logf("The pool has updated")
+			E2ELogf(t, "The pool has updated")
 			return true, nil
 		}
 
-		t.Logf("The pool has not updated yet. Gen: %d, expected %d updated %d/%d unavailable %d",
+		E2ELogf(t, "The pool has not updated yet. Gen: %d, expected %d updated %d/%d unavailable %d",
 			pool.Status.ObservedGeneration, poolPre.Status.ObservedGeneration,
 			pool.Status.UpdatedMachineCount, pool.Status.MachineCount,
 			pool.Status.UnavailableMachineCount)
@@ -647,7 +655,7 @@ func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
 
 		f.Client.List(goctx.TODO(), &nodes, &client.ListOptions{})
 		for _, node := range nodes.Items {
-			t.Logf("Node %s has config %s, desired config %s state %s",
+			E2ELogf(t, "Node %s has config %s, desired config %s state %s",
 				node.Name,
 				node.Annotations["machineconfiguration.openshift.io/currentConfig"],
 				node.Annotations["machineconfiguration.openshift.io/desiredConfig"],
@@ -655,13 +663,13 @@ func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
 
 			if (node.Annotations["machineconfiguration.openshift.io/currentConfig"] != node.Annotations["machineconfiguration.openshift.io/desiredConfig"]) ||
 				(node.Annotations["machineconfiguration.openshift.io/state"] != "Done") {
-				t.Logf("Node %s still updating", node.Name)
+				E2ELogf(t, "Node %s still updating", node.Name)
 				return false, nil
 			}
-			t.Logf("Node %s was updated", node.Name)
+			E2ELogf(t, "Node %s was updated", node.Name)
 		}
 
-		t.Logf("All machines updated")
+		E2ELogf(t, "All machines updated")
 		return true, nil
 	})
 
@@ -685,7 +693,7 @@ func waitForNodesToHaveARenderedPool(t *testing.T, f *framework.Framework, nodes
 		return err
 	}
 
-	t.Logf("We'll wait for the nodes to reach %s\n", pool.Spec.Configuration.Name)
+	E2ELogf(t, "We'll wait for the nodes to reach %s\n", pool.Spec.Configuration.Name)
 	return wait.PollImmediate(10*time.Second, timeout, func() (bool, error) {
 		for _, loopNode := range nodes {
 			node := &corev1.Node{}
@@ -694,7 +702,7 @@ func waitForNodesToHaveARenderedPool(t *testing.T, f *framework.Framework, nodes
 				return false, err
 			}
 
-			t.Logf("Node %s has config %s, desired config %s state %s",
+			E2ELogf(t, "Node %s has config %s, desired config %s state %s",
 				node.Name,
 				node.Annotations["machineconfiguration.openshift.io/currentConfig"],
 				node.Annotations["machineconfiguration.openshift.io/desiredConfig"],
@@ -702,13 +710,13 @@ func waitForNodesToHaveARenderedPool(t *testing.T, f *framework.Framework, nodes
 
 			if node.Annotations["machineconfiguration.openshift.io/desiredConfig"] != pool.Spec.Configuration.Name ||
 				node.Annotations["machineconfiguration.openshift.io/currentConfig"] != node.Annotations["machineconfiguration.openshift.io/desiredConfig"] {
-				t.Logf("Node %s still updating", node.Name)
+				E2ELogf(t, "Node %s still updating", node.Name)
 				return false, nil
 			}
-			t.Logf("Node %s was updated", node.Name)
+			E2ELogf(t, "Node %s was updated", node.Name)
 		}
 
-		t.Logf("All machines updated")
+		E2ELogf(t, "All machines updated")
 		return true, nil
 	})
 }
@@ -719,7 +727,7 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, n
 	if err != nil {
 		return err
 	}
-	t.Logf("Remediation %s found", name)
+	E2ELogf(t, "Remediation %s found", name)
 
 	applyRemediation := func() error {
 		rem.Spec.Apply = true
@@ -728,7 +736,7 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, n
 			t.Errorf("Cannot apply remediation")
 			return err
 		}
-		t.Logf("Remediation applied")
+		E2ELogf(t, "Remediation applied")
 		return nil
 	}
 
@@ -743,12 +751,12 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, n
 		for _, mc := range source {
 			if mc.Name == rem.GetMcName() {
 				// When applying a remediation, check that the MC *is* in the pool
-				t.Logf("Remediation %s present in pool %s, returning true", mc.Name, pool.Name)
+				E2ELogf(t, "Remediation %s present in pool %s, returning true", mc.Name, pool.Name)
 				return true, nil
 			}
 		}
 
-		t.Logf("Remediation %s not present in pool %s, returning false", rem.GetMcName(), pool.Name)
+		E2ELogf(t, "Remediation %s not present in pool %s, returning false", rem.GetMcName(), pool.Name)
 		return false, nil
 	}
 
@@ -758,7 +766,7 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, n
 		return err
 	}
 
-	t.Logf("Machines updated with remediation")
+	E2ELogf(t, "Machines updated with remediation")
 	return nil
 }
 
@@ -768,7 +776,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 	if err != nil {
 		return err
 	}
-	t.Logf("Remediation found")
+	E2ELogf(t, "Remediation found")
 
 	applyRemediation := func() error {
 		rem.Spec.Apply = false
@@ -777,7 +785,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 			t.Errorf("Cannot apply remediation")
 			return err
 		}
-		t.Logf("Remediation applied")
+		E2ELogf(t, "Remediation applied")
 		return nil
 	}
 
@@ -793,12 +801,12 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 		// poll the pool until we no longer see the remediation in the status
 		for _, mc := range pool.Status.Configuration.Source {
 			if mc.Name == rem.GetMcName() {
-				t.Logf("Remediation %s present in pool %s, returning false", mc.Name, pool.Name)
+				E2ELogf(t, "Remediation %s present in pool %s, returning false", mc.Name, pool.Name)
 				return false, nil
 			}
 		}
 
-		t.Logf("Remediation %s not present in pool %s, returning true", rem.GetMcName(), pool.Name)
+		E2ELogf(t, "Remediation %s not present in pool %s, returning true", rem.GetMcName(), pool.Name)
 		return true, nil
 	}
 
@@ -808,7 +816,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 		return err
 	}
 
-	t.Logf("Machines updated with remediation")
+	E2ELogf(t, "Machines updated with remediation")
 	return nil
 }
 
@@ -818,14 +826,14 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
 		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: remName, Namespace: remNamespace}, rem)
 		if apierrors.IsNotFound(lastErr) {
-			t.Logf("Waiting for availability of %s remediation\n", remName)
+			E2ELogf(t, "Waiting for availability of %s remediation\n", remName)
 			return false, nil
 		}
 		if lastErr != nil {
-			t.Logf("Retrying. Got error: %v\n", lastErr)
+			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
 			return false, nil
 		}
-		t.Logf("Found remediation: %s\n", remName)
+		E2ELogf(t, "Found remediation: %s\n", remName)
 		return true, nil
 	})
 	// Error in function call
@@ -852,12 +860,12 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 		for _, mc := range source {
 			if mc.Name == rem.GetMcName() {
 				// When applying a remediation, check that the MC *is* in the pool
-				t.Logf("Remediation %s present in pool %s, returning true", mc.Name, pool.Name)
+				E2ELogf(t, "Remediation %s present in pool %s, returning true", mc.Name, pool.Name)
 				return true, nil
 			}
 		}
 
-		t.Logf("Remediation %s not present in pool %s, returning false", rem.GetMcName(), pool.Name)
+		E2ELogf(t, "Remediation %s not present in pool %s, returning false", rem.GetMcName(), pool.Name)
 		return false, nil
 	}
 
@@ -867,14 +875,14 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 		return err
 	}
 
-	t.Logf("Machines updated with remediation")
+	E2ELogf(t, "Machines updated with remediation")
 	err = waitForNodesToBeReady(t, f)
 	if err != nil {
 		t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
 		return err
 	}
 
-	t.Logf("Remediation applied to machines and machines rebooted")
+	E2ELogf(t, "Remediation applied to machines and machines rebooted")
 	return nil
 }
 
@@ -896,17 +904,17 @@ func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName st
 			return false, err
 		}
 
-		t.Logf("Will check for update, updated %d/%d unavailable %d",
+		E2ELogf(t, "Will check for update, updated %d/%d unavailable %d",
 			pool.Status.UpdatedMachineCount, pool.Status.MachineCount,
 			pool.Status.UnavailableMachineCount)
 
 		if pool.Status.UpdatedMachineCount == pool.Status.MachineCount &&
 			pool.Status.UnavailableMachineCount == 0 {
-			t.Logf("The pool has updated")
+			E2ELogf(t, "The pool has updated")
 			return true, nil
 		}
 
-		t.Logf("The pool has not updated yet. updated %d/%d unavailable %d",
+		E2ELogf(t, "The pool has not updated yet. updated %d/%d unavailable %d",
 			pool.Status.UpdatedMachineCount, pool.Status.MachineCount,
 			pool.Status.UnavailableMachineCount)
 		return false, nil
@@ -993,10 +1001,10 @@ func labelNodes(t *testing.T, f *framework.Framework, newPoolNodeLabel string, n
 		nodeCopy := node.DeepCopy()
 		nodeCopy.Labels[newPoolNodeLabel] = ""
 
-		t.Logf("Adding label %s to node %s\n", newPoolNodeLabel, nodeCopy.Name)
+		E2ELogf(t, "Adding label %s to node %s\n", newPoolNodeLabel, nodeCopy.Name)
 		err := f.Client.Update(goctx.TODO(), nodeCopy)
 		if err != nil {
-			t.Logf("Could not label node %s with %s\n", nodeCopy.Name, newPoolNodeLabel)
+			E2ELogf(t, "Could not label node %s with %s\n", nodeCopy.Name, newPoolNodeLabel)
 			return err
 		}
 	}
@@ -1009,10 +1017,10 @@ func unLabelNodes(t *testing.T, f *framework.Framework, rmPoolNodeLabel string, 
 		nodeCopy := node.DeepCopy()
 		delete(nodeCopy.Labels, rmPoolNodeLabel)
 
-		t.Logf("Removing label %s from node %s\n", rmPoolNodeLabel, nodeCopy.Name)
+		E2ELogf(t, "Removing label %s from node %s\n", rmPoolNodeLabel, nodeCopy.Name)
 		err := f.Client.Update(goctx.TODO(), nodeCopy)
 		if err != nil {
-			t.Logf("Could not label node %s with %s\n", nodeCopy.Name, rmPoolNodeLabel)
+			E2ELogf(t, "Could not label node %s with %s\n", nodeCopy.Name, rmPoolNodeLabel)
 			return err
 		}
 	}
@@ -1061,7 +1069,7 @@ func waitForPoolCondition(t *testing.T, f *framework.Framework, conditionType mc
 			return true, nil
 		}
 
-		t.Logf("The pool has not updated yet\n")
+		E2ELogf(t, "The pool has not updated yet\n")
 		return false, nil
 	})
 }
