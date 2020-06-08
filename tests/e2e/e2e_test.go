@@ -931,6 +931,7 @@ func TestE2E(t *testing.T) {
 		testExecution{
 			Name: "TestPlatformAndNodeSuiteScan",
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
+				t.Skip("Skipping this test temporarily as we fix the OCP4 content")
 				suiteName := "test-suite-two-scans-with-platform"
 
 				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
