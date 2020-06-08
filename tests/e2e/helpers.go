@@ -27,8 +27,10 @@ import (
 )
 
 const (
-	workerPoolName = "worker"
-	testPoolName   = "e2e"
+	workerPoolName   = "worker"
+	testPoolName     = "e2e"
+	rhcosContentFile = "ssg-rhcos4-ds.xml"
+	ocpContentFile   = "ssg-ocp4-ds.xml"
 )
 
 type testExecution struct {
