@@ -54,11 +54,19 @@ func stateCompare(lowPhase ComplianceScanStatusPhase, scanPhase ComplianceScanSt
 // Represents the result of the compliance scan
 type ComplianceScanStatusResult string
 
+// CmScanResultAnnotation holds the processed scanner result
+const CmScanResultAnnotation = "compliance.openshift.io/scan-result"
+
+// CmScanResultErrMsg holds the processed scanner error message
+const CmScanResultErrMsg = "compliance.openshift.io/scan-error-msg"
+
 const (
-	// ResultCompliant represents the compliance scan having succeeded
+	// ResultNot available represents the compliance scan not having finished yet
 	ResultNotAvailable ComplianceScanStatusResult = "NOT-AVAILABLE"
 	// ResultCompliant represents the compliance scan having succeeded
 	ResultCompliant ComplianceScanStatusResult = "COMPLIANT"
+	// ResultNotApplicable represents the compliance scan having no useful results after finished
+	ResultNotApplicable ComplianceScanStatusResult = "NOT-APPLICABLE"
 	// ResultError represents a compliance scan pod having failed to run the scan or encountered an error
 	ResultError ComplianceScanStatusResult = "ERROR"
 	// ResultNonCompliant represents the compliance scan having found a gap
@@ -72,7 +80,8 @@ func resultCompare(lowResult ComplianceScanStatusResult, scanResult ComplianceSc
 	orderedResults[ResultNotAvailable] = 0
 	orderedResults[ResultError] = 1
 	orderedResults[ResultNonCompliant] = 2
-	orderedResults[ResultCompliant] = 3
+	orderedResults[ResultNotApplicable] = 3
+	orderedResults[ResultCompliant] = 4
 
 	if orderedResults[lowResult] > orderedResults[scanResult] {
 		return scanResult
