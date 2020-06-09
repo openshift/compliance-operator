@@ -253,6 +253,9 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 	suite.Status.ScanStatuses[idx] = modScanStatus
 	suite.Status.AggregatedPhase = suite.LowestCommonState()
 	suite.Status.AggregatedResult = suite.LowestCommonResult()
+	if suite.Status.AggregatedResult == compv1alpha1.ResultNotApplicable {
+		suite.Status.ErrorMessage = "The suite result is not applicable, please check if you're using the correct platform"
+	}
 	logger.Info("Updating scan status", "ComplianceScan.Name", modScanStatus.Name, "ComplianceScan.Phase", modScanStatus.Phase)
 
 	return r.client.Status().Update(context.TODO(), suite)
@@ -268,6 +271,12 @@ func (r *ReconcileComplianceSuite) generateEventsForSuite(suite *compv1alpha1.Co
 		"ResultAvailable",
 		fmt.Sprintf("ComplianceSuite's result is: %s", suite.Status.AggregatedResult),
 	)
+
+	if suite.Status.AggregatedResult == compv1alpha1.ResultNotApplicable {
+		r.recorder.Eventf(
+			suite, corev1.EventTypeNormal, "SuiteNotApplicable",
+			"The suite result is not applicable, please check if you're using the correct platform")
+	}
 
 	ownerRefs := suite.GetOwnerReferences()
 	if len(ownerRefs) == 0 {
