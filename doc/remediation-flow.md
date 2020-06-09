@@ -59,12 +59,12 @@ metadata:
 spec:
   autoApplyRemediations: false
   scans:
-  - content: ssg-ocp4-ds.xml
+  - content: ssg-rhcos4-ds.xml
     name: workers-scan
     nodeSelector:
       node-role.kubernetes.io/worker: ""
     profile: xccdf_org.ssgproject.content_profile_coreos-ncp
-  - content: ssg-ocp4-ds.xml
+  - content: ssg-rhcos4-ds.xml
     name: masters-scan
     nodeSelector:
       node-role.kubernetes.io/master: ""

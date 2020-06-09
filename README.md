@@ -35,7 +35,7 @@ spec:
     - name: workers-scan
       scanType: Node
       profile: xccdf_org.ssgproject.content_profile_moderate
-      content: ssg-ocp4-ds.xml
+      content: ssg-rhcos4-ds.xml
       contentImage: quay.io/complianceascode/ocp4:latest
       rule: "xccdf_org.ssgproject.content_rule_no_netrc_files"
       nodeSelector:
