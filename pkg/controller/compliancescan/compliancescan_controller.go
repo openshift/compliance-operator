@@ -370,6 +370,7 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 
 	// We need to remove resources before doing a re-scan
 	if !instance.Spec.Debug || instance.NeedsRescan() {
+		logger.Info("Cleaning up scan's resources")
 		switch instance.Spec.ScanType {
 		case compv1alpha1.ScanTypePlatform:
 			if err := r.deletePlatformScanPod(instance, logger); err != nil {
@@ -444,6 +445,7 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 
 func (r *ReconcileComplianceScan) scanDeleteHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
 	if common.ContainsFinalizer(instance.ObjectMeta.Finalizers, compv1alpha1.ScanFinalizer) {
+		logger.Info("The scan is being deleted")
 		scanToBeDeleted := instance.DeepCopy()
 
 		// Force remove rescan annotation since we're deleting the scan
