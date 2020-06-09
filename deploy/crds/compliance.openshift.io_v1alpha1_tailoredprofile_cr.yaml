@@ -1,0 +1,28 @@
+apiVersion: compliance.openshift.io/v1alpha1
+kind: TailoredProfile
+metadata:
+  name: example-tailoredprofile
+spec:
+  extends: ocp4-moderate
+  title: My little profile
+  disableRules:
+    - name: ocp4-file-permissions-node-config
+      rationale: This breaks X application.
+    - name: ocp4-account-disable-post-pw-expiration
+      rationale: testing this
+    - name: ocp4-accounts-no-uid-except-zero
+      rationale: testing this
+    - name: ocp4-audit-rules-dac-modification-chmod
+      rationale: testing this
+    - name: ocp4-audit-rules-dac-modification-chown
+      rationale: testing this
+    - name: ocp4-audit-rules-dac-modification-fchmod
+      rationale: testing this
+    - name: ocp4-audit-rules-dac-modification-fchmodat
+      rationale: testing this
+    - name: ocp4-audit-rules-dac-modification-fchown
+      rationale: testing this
+  setValues:
+    - name: ocp4-var-selinux-state
+      rationale: trolling dwalsh
+      value: permissive

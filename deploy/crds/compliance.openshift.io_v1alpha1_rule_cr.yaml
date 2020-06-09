@@ -1,0 +1,7 @@
+apiVersion: compliance.openshift.io/v1alpha1
+kind: Rule
+metadata:
+  name: example-rule
+spec:
+  # Add fields here
+  size: 3

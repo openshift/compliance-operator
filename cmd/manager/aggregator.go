@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	backoff "github.com/cenkalti/backoff/v3"
@@ -306,14 +305,6 @@ func getObjectIfFound(crClient *complianceCrClient, key types.NamespacedName, ob
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 
 	return found, err
-}
-
-func readContent(filename string) (*os.File, error) {
-	// gosec complains that the file is passed through an evironment variable. But
-	// this is not a security issue because none of the files are user-provided
-	cleanFileName := filepath.Clean(filename)
-	// #nosec G304
-	return os.Open(cleanFileName)
 }
 
 func aggregator(cmd *cobra.Command, args []string) {
