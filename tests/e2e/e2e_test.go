@@ -28,7 +28,7 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
-						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
+						Profile: "xccdf_org.ssgproject.content_profile_moderate",
 						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						Debug:   true,
@@ -115,7 +115,7 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
-						Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+						Profile: "xccdf_org.ssgproject.content_profile_moderate",
 						Content:      rhcosContentFile,
 						Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						NodeSelector: selectWorkers,
@@ -150,7 +150,7 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
-						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
+						Profile: "xccdf_org.ssgproject.content_profile_moderate",
 						Content: "ssg-ocp4-non-existent.xml",
 						Debug:   true,
 					},
@@ -259,7 +259,7 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
-						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
+						Profile: "xccdf_org.ssgproject.content_profile_moderate",
 						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
@@ -288,7 +288,7 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
-						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
+						Profile: "xccdf_org.ssgproject.content_profile_moderate",
 						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						Debug:   true,
@@ -318,7 +318,7 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
-						Profile: "xccdf_org.ssgproject.content_profile_coreos-ncp",
+						Profile: "xccdf_org.ssgproject.content_profile_moderate",
 						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						Debug:   true,
@@ -462,7 +462,7 @@ func TestE2E(t *testing.T) {
 								Name: fmt.Sprintf("%s-workers-scan", suiteName),
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
-									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									NodeSelector: map[string]string{
 										"node-role.kubernetes.io/worker": "",
@@ -512,7 +512,7 @@ func TestE2E(t *testing.T) {
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
-									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									NodeSelector: selectWorkers,
 									Debug:        true,
@@ -522,7 +522,7 @@ func TestE2E(t *testing.T) {
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
-									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									NodeSelector: selectMasters,
 									Debug:        true,
@@ -614,7 +614,7 @@ func TestE2E(t *testing.T) {
 								Name: workerScanName,
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
-									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
 									NodeSelector: selectWorkers,
@@ -669,7 +669,7 @@ func TestE2E(t *testing.T) {
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
-									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 									Content:      rhcosContentFile,
 									NodeSelector: getPoolNodeRoleSelector(),
@@ -832,7 +832,7 @@ func TestE2E(t *testing.T) {
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
-									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									NodeSelector: getPoolNodeRoleSelector(),
 									Debug:        true,
@@ -952,7 +952,7 @@ func TestE2E(t *testing.T) {
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
-									Profile:      "xccdf_org.ssgproject.content_profile_coreos-ncp",
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      ocpContentFile,
 									NodeSelector: selectWorkers,
 								},
