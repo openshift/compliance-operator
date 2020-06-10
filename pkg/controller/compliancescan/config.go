@@ -41,7 +41,7 @@ const (
 	PlatformScanName                  = "api-checks"
 	PlatformScanResourceCollectorName = "api-resource-collector"
 	// This coincides with the default ocp_data_root var in CaC.
-	PlatformScanDataRoot = "/tmp"
+	PlatformScanDataRoot = "/scan_data"
 )
 
 var defaultOpenScapScriptContents = `#!/bin/bash
