@@ -961,7 +961,7 @@ func TestE2E(t *testing.T) {
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ScanType:     compv1alpha1.ScanTypePlatform,
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
-									Profile:      "xccdf_org.ssgproject.content_profile_platform-moderate",
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      ocpContentFile,
 								},
 								Name: platformScanName,
