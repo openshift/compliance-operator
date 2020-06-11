@@ -952,7 +952,7 @@ func TestE2E(t *testing.T) {
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
-									Content:      ocpContentFile,
+									Content:      rhcosContentFile,
 									NodeSelector: selectWorkers,
 								},
 								Name: workerScanName,
