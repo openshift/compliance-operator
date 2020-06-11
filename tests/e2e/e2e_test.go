@@ -115,7 +115,7 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
-						Profile: "xccdf_org.ssgproject.content_profile_moderate",
+						Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 						Content:      rhcosContentFile,
 						Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						NodeSelector: selectWorkers,
@@ -931,7 +931,6 @@ func TestE2E(t *testing.T) {
 		testExecution{
 			Name: "TestPlatformAndNodeSuiteScan",
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
-				t.Skip("Skipping this test temporarily as we fix the OCP4 content")
 				suiteName := "test-suite-two-scans-with-platform"
 
 				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
@@ -953,7 +952,7 @@ func TestE2E(t *testing.T) {
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
-									Content:      ocpContentFile,
+									Content:      rhcosContentFile,
 									NodeSelector: selectWorkers,
 								},
 								Name: workerScanName,
@@ -961,8 +960,8 @@ func TestE2E(t *testing.T) {
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ScanType:     compv1alpha1.ScanTypePlatform,
-									ContentImage: "quay.io/compliance-operator/ocp4-openscap-content:platform_test",
-									Profile:      "xccdf_org.ssgproject.content_profile_platform-moderate",
+									ContentImage: "quay.io/complianceascode/ocp4:latest",
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      ocpContentFile,
 								},
 								Name: platformScanName,
