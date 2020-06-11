@@ -260,6 +260,23 @@ namespace:
 	@echo "Creating '$(NAMESPACE)' namespace/project"
 	@oc apply -f deploy/ns.yaml
 
+.PHONY: deploy
+deploy: namespace deploy-crds ## Deploy the operator from the manifests in the deploy/ directory
+	@oc apply -n $(NAMESPACE) -f deploy/
+
+.PHONY: deploy-local
+deploy-local: namespace image-to-cluster deploy-crds ## Deploy the operator from the manifests in the deploy/ directory and the images from a local build
+	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH)%' deploy/operator.yaml
+	@oc apply -n $(NAMESPACE) -f deploy/
+	@sed -i 's%$(OPERATOR_IMAGE_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
+
+.PHONY: deploy-local
+deploy-crds:
+	@for crd in $(shell ls -1 deploy/crds/*crd.yaml) ; do \
+		oc apply -f $$crd ; \
+	done
+
+
 .PHONY: openshift-user
 openshift-user:
 ifeq ($(shell oc whoami 2> /dev/null),kube:admin)
