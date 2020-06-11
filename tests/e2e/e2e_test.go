@@ -115,7 +115,7 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
-						Profile: "xccdf_org.ssgproject.content_profile_moderate",
+						Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 						Content:      rhcosContentFile,
 						Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						NodeSelector: selectWorkers,
@@ -960,7 +960,7 @@ func TestE2E(t *testing.T) {
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ScanType:     compv1alpha1.ScanTypePlatform,
-									ContentImage: "quay.io/compliance-operator/ocp4-openscap-content:platform_test",
+									ContentImage: "quay.io/complianceascode/ocp4:latest",
 									Profile:      "xccdf_org.ssgproject.content_profile_platform-moderate",
 									Content:      ocpContentFile,
 								},
