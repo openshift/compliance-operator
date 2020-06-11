@@ -35,7 +35,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, nil)
 				if err != nil {
 					return err
 				}
@@ -50,7 +50,6 @@ func TestE2E(t *testing.T) {
 		testExecution{
 			Name: "TestSingleTailoredScanSucceeds",
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
-				defaultCleanupOpts := &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval}
 				tailoringCM := &corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-single-tailored-scan-succeeds-cm",
@@ -70,7 +69,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				err := f.Client.Create(goctx.TODO(), tailoringCM, defaultCleanupOpts)
+				err := f.Client.Create(goctx.TODO(), tailoringCM, nil)
 				if err != nil {
 					return err
 				}
@@ -91,7 +90,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err = f.Client.Create(goctx.TODO(), exampleComplianceScan, defaultCleanupOpts)
+				err = f.Client.Create(goctx.TODO(), exampleComplianceScan, nil)
 				if err != nil {
 					return err
 				}
@@ -123,7 +122,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err := f.Client.Create(goctx.TODO(), testComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err := f.Client.Create(goctx.TODO(), testComplianceScan, nil)
 				if err != nil {
 					return err
 				}
@@ -156,7 +155,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, nil)
 				if err != nil {
 					return err
 				}
@@ -182,7 +181,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, nil)
 				if err != nil {
 					return err
 				}
@@ -196,7 +195,6 @@ func TestE2E(t *testing.T) {
 		testExecution{
 			Name: "TestMalformedTailoredScanFails",
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
-				defaultCleanupOpts := &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval}
 				tailoringCM := &corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-malformed-tailored-scan-fails-cm",
@@ -218,7 +216,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				err := f.Client.Create(goctx.TODO(), tailoringCM, defaultCleanupOpts)
+				err := f.Client.Create(goctx.TODO(), tailoringCM, nil)
 				if err != nil {
 					return err
 				}
@@ -239,7 +237,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err = f.Client.Create(goctx.TODO(), exampleComplianceScan, defaultCleanupOpts)
+				err = f.Client.Create(goctx.TODO(), exampleComplianceScan, nil)
 				if err != nil {
 					return err
 				}
@@ -268,7 +266,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, nil)
 				if err != nil {
 					return err
 				}
@@ -298,7 +296,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, nil)
 				if err != nil {
 					return err
 				}
@@ -325,7 +323,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, nil)
 				if err != nil {
 					return err
 				}
@@ -384,7 +382,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err := f.Client.Create(goctx.TODO(), genericRem, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err := f.Client.Create(goctx.TODO(), genericRem, nil)
 				if err != nil {
 					return err
 				}
@@ -434,7 +432,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err := f.Client.Create(goctx.TODO(), genericRem, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err := f.Client.Create(goctx.TODO(), genericRem, nil)
 				if err != nil {
 					return err
 				}
@@ -474,7 +472,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err := f.Client.Create(goctx.TODO(), testSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err := f.Client.Create(goctx.TODO(), testSuite, nil)
 				if err != nil {
 					return err
 				}
@@ -533,7 +531,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				err := f.Client.Create(goctx.TODO(), exampleComplianceSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err := f.Client.Create(goctx.TODO(), exampleComplianceSuite, nil)
 				if err != nil {
 					return err
 				}
@@ -625,7 +623,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				err := f.Client.Create(goctx.TODO(), testSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err := f.Client.Create(goctx.TODO(), testSuite, nil)
 				if err != nil {
 					return err
 				}
@@ -687,7 +685,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err = f.Client.Create(goctx.TODO(), exampleComplianceSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err = f.Client.Create(goctx.TODO(), exampleComplianceSuite, nil)
 				if err != nil {
 					return err
 				}
@@ -849,7 +847,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err = f.Client.Create(goctx.TODO(), exampleComplianceSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err = f.Client.Create(goctx.TODO(), exampleComplianceSuite, nil)
 				if err != nil {
 					return err
 				}
@@ -970,7 +968,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				err := f.Client.Create(goctx.TODO(), exampleComplianceSuite, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+				err := f.Client.Create(goctx.TODO(), exampleComplianceSuite, nil)
 				if err != nil {
 					return err
 				}
