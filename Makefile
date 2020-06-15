@@ -48,7 +48,7 @@ export OPERATOR_NAMESPACE?=openshift-compliance
 
 # Operator-sdk variables
 # ======================
-SDK_VERSION?=v0.16.0
+SDK_VERSION?=v0.17.1
 OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-x86_64-linux-gnu
 
 # Test variables
@@ -119,7 +119,7 @@ run: operator-sdk ## Run the compliance-operator locally
 	WATCH_NAMESPACE=$(NAMESPACE) \
 	KUBERNETES_CONFIG=$(KUBECONFIG) \
 	OPERATOR_NAME=compliance-operator \
-	$(GOPATH)/bin/operator-sdk run --local --namespace $(NAMESPACE) --operator-flags operator
+	$(GOPATH)/bin/operator-sdk run --local --watch-namespace $(NAMESPACE) --operator-flags operator
 
 .PHONY: clean
 clean: clean-modcache clean-cache clean-output ## Clean the golang environment
