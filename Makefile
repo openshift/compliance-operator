@@ -48,7 +48,7 @@ export OPERATOR_NAMESPACE?=openshift-compliance
 
 # Operator-sdk variables
 # ======================
-SDK_VERSION?=v0.17.1
+SDK_VERSION?=v0.18.1
 OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-x86_64-linux-gnu
 
 # Test variables
