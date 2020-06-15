@@ -17,6 +17,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -227,7 +228,7 @@ func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, e
 		err := func() error {
 			LOG("Fetching URI: '%s'", uri)
 			req := client.RESTClient().Get().RequestURI(uri)
-			stream, err := req.Stream()
+			stream, err := req.Stream(context.TODO())
 			if err != nil {
 				return err
 			}
