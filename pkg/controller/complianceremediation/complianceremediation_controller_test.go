@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/clarketm/json"
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -41,6 +42,12 @@ func getMockedRemediation(name string, labels map[string]string, applied bool, s
 		},
 	}
 
+	ign := igntypes.Config{
+		Storage: igntypes.Storage{
+			Files: files,
+		},
+	}
+	rawIgn, _ := json.Marshal(ign)
 	mc := &mcfgv1.MachineConfig{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "MachineConfig",
@@ -48,13 +55,8 @@ func getMockedRemediation(name string, labels map[string]string, applied bool, s
 		},
 		ObjectMeta: metav1.ObjectMeta{},
 		Spec: mcfgv1.MachineConfigSpec{
-			Config: igntypes.Config{
-				Ignition: igntypes.Ignition{
-					Version: igntypes.MaxVersion.String(),
-				},
-				Storage: igntypes.Storage{
-					Files: files,
-				},
+			Config: runtime.RawExtension{
+				Raw: rawIgn,
 			},
 		},
 	}
