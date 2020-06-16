@@ -2,17 +2,19 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 
 	backoff "github.com/cenkalti/backoff/v3"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 const maxScanUpdateRetries = 5
@@ -37,6 +39,13 @@ type rerunnerconfig struct {
 func defineRerunnerFlags(cmd *cobra.Command) {
 	cmd.Flags().String("name", "", "The name of the ComplianceSuite to be re-run")
 	cmd.Flags().String("namespace", "", "The namespace of the ComplianceSuite to be re-run")
+
+	flags := cmd.Flags()
+	flags.AddFlagSet(zap.FlagSet())
+
+	// Add flags registered by imported packages (e.g. glog and
+	// controller-runtime)
+	flags.AddGoFlagSet(flag.CommandLine)
 }
 
 func getRerunnerConfig(cmd *cobra.Command) *rerunnerconfig {
@@ -44,13 +53,13 @@ func getRerunnerConfig(cmd *cobra.Command) *rerunnerconfig {
 	conf.Name = getValidStringArg(cmd, "name")
 	conf.Namespace = getValidStringArg(cmd, "namespace")
 
-	config, err := rest.InClusterConfig()
+	cfg, err := config.GetConfig()
 	if err != nil {
-		fmt.Printf("Can't create incluster config: %v\n", err)
+		log.Error(err, "")
 		os.Exit(1)
 	}
 
-	crclient, err := createCrClient(config)
+	crclient, err := createCrClient(cfg)
 	if err != nil {
 		fmt.Printf("Cannot create client for our types: %v\n", err)
 		os.Exit(1)

@@ -16,14 +16,14 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
-	"os"
+	"flag"
 
+	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 var apiResourceCollectorCmd = &cobra.Command{
@@ -54,15 +54,20 @@ type fetcherConfig struct {
 	Content   string
 	ResultDir string
 	Profile   string
-	Local     bool
 }
 
 func defineAPIResourceCollectorFlags(cmd *cobra.Command) {
 	cmd.Flags().String("content", "", "The path to the OpenSCAP content file.")
 	cmd.Flags().String("resultdir", "", "The directory to write the collected object files to.")
 	cmd.Flags().String("profile", "", "The scan profile.")
-	cmd.Flags().Bool("local", false, "Uses KUBECONFIG instead of the in-cluster config, for running the program locally.")
 	cmd.Flags().Bool("debug", false, "Print debug messages.")
+
+	flags := cmd.Flags()
+	flags.AddFlagSet(zap.FlagSet())
+
+	// Add flags registered by imported packages (e.g. glog and
+	// controller-runtime)
+	flags.AddGoFlagSet(flag.CommandLine)
 }
 
 func parseAPIResourceCollectorConfig(cmd *cobra.Command) *fetcherConfig {
@@ -70,44 +75,21 @@ func parseAPIResourceCollectorConfig(cmd *cobra.Command) *fetcherConfig {
 	conf.Content = getValidStringArg(cmd, "content")
 	conf.ResultDir = getValidStringArg(cmd, "resultdir")
 	conf.Profile = getValidStringArg(cmd, "profile")
-	local, err := cmd.Flags().GetBool("local")
-	if err != nil {
-		fmt.Printf("error fetching local flag")
-		os.Exit(1)
-	}
-	conf.Local = local
 	debugLog, _ = cmd.Flags().GetBool("debug")
 	return &conf
 }
 
-// getConfig returns the rest config, from KUBECONFIG if local or in-cluster if !local
-func getConfig(local bool) *rest.Config {
-	if local {
-		DBG("Running locally from KUBECONFIG")
-
-		kubeConfigFile := os.Getenv("KUBECONFIG")
-		if len(kubeConfigFile) == 0 {
-			FATAL("Set KUBECONFIG when running locally")
-		}
-
-		conf, err := clientcmd.BuildConfigFromFlags("", kubeConfigFile)
-		if err != nil {
-			FATAL("Error building config: %v", err)
-		}
-		return conf
-	}
-
-	DBG("Running in-cluster")
-	conf, err := rest.InClusterConfig()
+func getConfig() *rest.Config {
+	cfg, err := config.GetConfig()
 	if err != nil {
-		FATAL("Error getting in-cluster config: %v", err)
+		FATAL("Error getting kube cfg: %v", err)
 	}
-	return conf
+	return cfg
 }
 
 func runAPIResourceCollector(cmd *cobra.Command, args []string) {
 	fetcherConf := parseAPIResourceCollectorConfig(cmd)
-	kubeClient, err := kubernetes.NewForConfig(getConfig(fetcherConf.Local))
+	kubeClient, err := kubernetes.NewForConfig(getConfig())
 	if err != nil {
 		FATAL("Error building kubeClient: %v", err)
 	}

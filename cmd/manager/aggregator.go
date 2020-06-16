@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -27,14 +28,15 @@ import (
 
 	backoff "github.com/cenkalti/backoff/v3"
 	"github.com/dsnet/compress/bzip2"
+	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -69,6 +71,13 @@ func defineAggregatorFlags(cmd *cobra.Command) {
 	cmd.Flags().String("content", "", "The path to the OpenScap content")
 	cmd.Flags().String("scan", "", "The compliance scan that owns the configMap objects.")
 	cmd.Flags().String("namespace", "openshift-compliance", "Running pod namespace.")
+
+	flags := cmd.Flags()
+	flags.AddFlagSet(zap.FlagSet())
+
+	// Add flags registered by imported packages (e.g. glog and
+	// controller-runtime)
+	flags.AddGoFlagSet(flag.CommandLine)
 }
 
 func parseAggregatorConfig(cmd *cobra.Command) *aggregatorConfig {
@@ -312,13 +321,13 @@ func aggregator(cmd *cobra.Command, args []string) {
 
 	aggregatorConf := parseAggregatorConfig(cmd)
 
-	config, err := rest.InClusterConfig()
+	cfg, err := config.GetConfig()
 	if err != nil {
-		fmt.Printf("Can't create incluster config: %v\n", err)
+		log.Error(err, "")
 		os.Exit(1)
 	}
 
-	crclient, err := createCrClient(config)
+	crclient, err := createCrClient(cfg)
 	if err != nil {
 		fmt.Printf("Cannot create client for our types: %v\n", err)
 		os.Exit(1)
