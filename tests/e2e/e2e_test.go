@@ -278,20 +278,21 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestScanWithUnexistentTailoringCMFails",
+			Name: "TestScanWithMissingTailoringCMFailsAndRecovers",
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				scanName := "test-scan-w-missing-tailoring-cm"
 				exampleComplianceScan := &compv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-scan-w-unexistent-tailoring-cm",
+						Name:      scanName,
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
-						Profile: "xccdf_org.ssgproject.content_profile_moderate",
+						Profile: "xccdf_compliance.openshift.io_profile_test-tailoredprofile",
 						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						Debug:   true,
 						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
-							Name: "unexistent-tailoring-file",
+							Name: "missing-tailoring-file",
 						},
 					},
 				}
@@ -300,11 +301,44 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-scan-w-unexistent-tailoring-cm", compv1alpha1.PhaseDone)
+				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseLaunching)
 				if err != nil {
 					return err
 				}
-				return scanResultIsExpected(f, namespace, "test-scan-w-unexistent-tailoring-cm", compv1alpha1.ResultError)
+				err = scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultError)
+				if err != nil {
+					return err
+				}
+
+				tailoringCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "missing-tailoring-file",
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						"tailoring.xml": `<?xml version="1.0" encoding="UTF-8"?>
+<xccdf-1.2:Tailoring xmlns:xccdf-1.2="http://checklists.nist.gov/xccdf/1.2" id="xccdf_compliance.openshift.io_tailoring_test-tailoredprofile">
+	<xccdf-1.2:benchmark href="/content/ssg-rhcos4-ds.xml"></xccdf-1.2:benchmark>
+	<xccdf-1.2:version time="2020-04-28T07:04:13Z">1</xccdf-1.2:version>
+	<xccdf-1.2:Profile id="xccdf_compliance.openshift.io_profile_test-tailoredprofile">
+		<xccdf-1.2:title>Test Tailored Profile</xccdf-1.2:title>
+		<xccdf-1.2:description>Test Tailored Profile</xccdf-1.2:description>
+		<xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_no_netrc_files" selected="true"></xccdf-1.2:select>
+	</xccdf-1.2:Profile>
+</xccdf-1.2:Tailoring>`,
+					},
+				}
+				err = f.Client.Create(goctx.TODO(), tailoringCM, nil)
+				if err != nil {
+					return err
+				}
+
+				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+
+				return scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultCompliant)
 			},
 		},
 		testExecution{

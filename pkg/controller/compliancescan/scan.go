@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
@@ -460,7 +461,7 @@ func (r *ReconcileComplianceScan) reconcileTailoring(instance *compv1alpha1.Comp
 
 	tailoringCMName := getReplicatedTailoringCMName(instance.Name)
 	tailoringCMNamespace := common.GetComplianceOperatorNamespace()
-	if err := r.reconcileReplicatedTailoringConfigMap(name, ns, tailoringCMName, tailoringCMNamespace, instance.Name, logger); err != nil {
+	if err := r.reconcileReplicatedTailoringConfigMap(instance, name, ns, tailoringCMName, tailoringCMNamespace, instance.Name, logger); err != nil {
 		return err
 	}
 
@@ -518,14 +519,32 @@ func (r *ReconcileComplianceScan) deletePlatformScanPod(instance *compv1alpha1.C
 }
 
 // Creates a private configmap that'll only be used by this operator.
-func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(origName, origNs, privName, privNs, scanName string, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *compv1alpha1.ComplianceScan, origName, origNs, privName, privNs, scanName string, logger logr.Logger) error {
 	logger.Info("Reconciling Tailoring ConfigMap", "ConfigMap.Name", origName, "ConfigMap.Namespace", origNs)
 
 	origCM := &corev1.ConfigMap{}
 	origKey := types.NamespacedName{Name: origName, Namespace: origNs}
 	err := r.client.Get(context.TODO(), origKey, origCM)
 	if err != nil && errors.IsNotFound(err) {
-		return common.NewNonRetriableCtrlError("Tailoring ConfigMap not found")
+		return common.NewRetriableCtrlErrorWithCustomHandler(func() (reconcile.Result, error) {
+			// A ConfigMap not being found might be a temporary issue
+			if r.recorder != nil {
+				r.recorder.Eventf(
+					scan, corev1.EventTypeWarning, "TailoringError",
+					"Tailoring ConfigMap '%s' not found", origKey,
+				)
+			}
+
+			log.Info("Updating scan status due to missing Tailoring ConfigMap")
+			scanCopy := scan.DeepCopy()
+			scanCopy.Status.ErrorMessage = err.Error()
+			scanCopy.Status.Result = compv1alpha1.ResultError
+			if updateerr := r.client.Status().Update(context.TODO(), scanCopy); updateerr != nil {
+				log.Error(updateerr, "Failed to update a scan")
+				return reconcile.Result{}, updateerr
+			}
+			return reconcile.Result{RequeueAfter: requeueAfterDefault, Requeue: true}, nil
+		}, "Tailoring ConfigMap not found")
 	} else if err != nil {
 		log.Error(err, "Failed to get spec tailoring ConfigMap", "ConfigMap.Name", origName, "ConfigMap.Namespace", origNs)
 		return err
