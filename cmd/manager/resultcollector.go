@@ -58,6 +58,7 @@ var resultcollectorCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.AddCommand(resultcollectorCmd)
 	defineResultcollectorFlags(resultcollectorCmd)
 }
 

@@ -34,6 +34,7 @@ var apiResourceCollectorCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.AddCommand(apiResourceCollectorCmd)
 	defineAPIResourceCollectorFlags(apiResourceCollectorCmd)
 }
 
