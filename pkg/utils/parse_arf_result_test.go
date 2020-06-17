@@ -10,8 +10,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 
+	ign2types "github.com/coreos/ignition/config/v2_2/types"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	mcfgcommon "github.com/openshift/machine-config-operator/pkg/controller/common"
 )
 
 func countResultItems(resultList []*ParseResult) (int, int) {
@@ -153,7 +155,9 @@ var _ = Describe("XCCDF parser", func() {
 
 				BeforeEach(func() {
 					mcfg, _ := ParseMachineConfig(rem, rem.Spec.Object)
-					mcFiles = mcfg.Spec.Config.Storage.Files
+					ignRaw, _ := mcfgcommon.IgnParseWrapper(mcfg.Spec.Config.Raw)
+					parsedIgn := ignRaw.(ign2types.Config)
+					mcFiles = parsedIgn.Storage.Files
 				})
 
 				It("Should define one file", func() {

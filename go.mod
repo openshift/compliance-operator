@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/ajeddeloh/go-json v0.0.0-20200220154158-5ae607161559 // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2
+	github.com/clarketm/json v1.14.1
 	github.com/coreos/ignition v0.35.0
 	github.com/dsnet/compress v0.0.1
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
@@ -12,7 +13,7 @@ require (
 	github.com/go-logr/zapr v0.1.1
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
-	github.com/openshift/library-go v0.0.0-20200303185131-81598fff9efa
+	github.com/openshift/library-go v0.0.0-20200320155611-2a351bebf158
 	github.com/openshift/machine-config-operator v4.2.0-alpha.0.0.20190917115525-033375cbe820+incompatible
 	github.com/operator-framework/operator-sdk v0.18.1
 	github.com/robfig/cron v1.1.0
@@ -21,7 +22,6 @@ require (
 	github.com/subchen/go-xmldom v1.1.2
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	go.uber.org/zap v1.14.1
-	go4.org v0.0.0-20200104003542-c7e774b10ea0 // indirect
 	k8s.io/api v0.18.2
 	k8s.io/apimachinery v0.18.2
 	k8s.io/apiserver v0.18.0
@@ -32,7 +32,8 @@ require (
 // Pinned to kubernetes-1.16.2
 replace (
 	github.com/go-log/log => github.com/go-log/log v0.1.1-0.20181211034820-a514cf01a3eb
-	github.com/openshift/machine-config-operator => github.com/openshift/machine-config-operator v0.0.1-0.20200305103412-b9fa5093eb95
+	github.com/openshift/api => github.com/openshift/api v0.0.0-20200323095748-e7041f8762a3
+	github.com/openshift/machine-config-operator => github.com/openshift/machine-config-operator v0.0.1-0.20200612125844-01bfc14d61f3
 	k8s.io/api => k8s.io/api v0.18.0
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.18.0
 	k8s.io/apimachinery => k8s.io/apimachinery v0.18.0
@@ -60,5 +61,3 @@ replace (
 replace github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.3.2+incompatible // Required by OLM
 
 replace github.com/docker/docker => github.com/moby/moby v0.7.3-0.20190826074503-38ab9da00309 // Required by Helm
-
-replace github.com/openshift/api => github.com/openshift/api v0.0.0-20190924102528-32369d4db2ad // Required until https://github.com/operator-framework/operator-lifecycle-manager/pull/1241 is resolved

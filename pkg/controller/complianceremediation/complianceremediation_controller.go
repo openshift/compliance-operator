@@ -5,7 +5,11 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	mcfgcommon "github.com/openshift/machine-config-operator/pkg/controller/common"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,10 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var log = logf.Log.WithName("remediationctrl")
@@ -336,15 +336,15 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compv1alph
 //
 // taken from MachineConfigOperator
 func mergeMachineConfigs(configs []*mcfgv1.MachineConfig, name string, roleLabel string) *mcfgv1.MachineConfig {
-	mergedMc := mcfgv1.MergeMachineConfigs(configs, "")
+	mergedMc, err := mcfgcommon.MergeMachineConfigs(configs, "")
 
-	if mergedMc == nil {
+	// FIXME(jaosorior): Handle errors
+	if err != nil {
 		return nil
 	}
 
-	// NOTE(jaosorior): If no version was set (for some reason) lets just add a default
-	if mergedMc.Spec.Config.Ignition.Version == "" {
-		mergedMc.Spec.Config.Ignition.Version = "2.2.0"
+	if mergedMc == nil {
+		return nil
 	}
 
 	mergedMc.SetName(name)

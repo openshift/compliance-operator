@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"github.com/clarketm/json"
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
@@ -26,6 +27,18 @@ var _ = Describe("Testing parse results diff", func() {
 	)
 
 	BeforeEach(func() {
+		ignConfig := igntypes.Config{
+			Systemd: igntypes.Systemd{
+				Units: []igntypes.Unit{
+					{
+						Contents: "let's pretend this is a service",
+						Enable:   true,
+						Name:     "service",
+					},
+				},
+			},
+		}
+		rawIgnCfg, _ := json.Marshal(ignConfig)
 		mc := &mcfgv1.MachineConfig{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "MachineConfig",
@@ -34,16 +47,8 @@ var _ = Describe("Testing parse results diff", func() {
 			ObjectMeta: metav1.ObjectMeta{},
 			Spec: mcfgv1.MachineConfigSpec{
 				OSImageURL: "",
-				Config: igntypes.Config{
-					Systemd: igntypes.Systemd{
-						Units: []igntypes.Unit{
-							{
-								Contents: "let's pretend this is a service",
-								Enable:   true,
-								Name:     "service",
-							},
-						},
-					},
+				Config: runtime.RawExtension{
+					Raw: rawIgnCfg,
 				},
 				KernelArguments: nil,
 			},
@@ -98,17 +103,12 @@ var _ = Describe("Testing parse results diff", func() {
 
 	Context("Different remediation parse results", func() {
 		BeforeEach(func() {
-			obj := remService2.Spec.Object
-			mcfg := &mcfgv1.MachineConfig{}
-			// Get object
-			unstruct := obj.UnstructuredContent()
-			runtime.DefaultUnstructuredConverter.FromUnstructured(unstruct, mcfg)
-			// Change object
-			mcfg.Spec.Config.Systemd.Units[0].Enable = false
-			// persist object
-			unstructuredobj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(mcfg)
-			newobj := &unstructured.Unstructured{Object: unstructuredobj}
-			remService2.Spec.Object = newobj
+			spec := remService2.Spec.Object.Object["spec"].(map[string]interface{})
+			config := spec["config"].(map[string]interface{})
+			systemd := config["systemd"].(map[string]interface{})
+			units := systemd["units"].([]interface{})
+			unitInfo := units[0].(map[string]interface{})
+			unitInfo["enable"] = interface{}(false)
 		})
 
 		It("fail when the parse results are different", func() {
