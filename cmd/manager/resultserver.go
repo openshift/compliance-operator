@@ -18,6 +18,7 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,6 +27,7 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
 
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
@@ -53,6 +55,13 @@ func defineResultServerFlags(cmd *cobra.Command) {
 	cmd.Flags().String("tls-server-cert", "", "Path to the server cert")
 	cmd.Flags().String("tls-server-key", "", "Path to the server key")
 	cmd.Flags().String("tls-ca", "", "Path to the CA certificate")
+
+	flags := cmd.Flags()
+	flags.AddFlagSet(zap.FlagSet())
+
+	// Add flags registered by imported packages (e.g. glog and
+	// controller-runtime)
+	flags.AddGoFlagSet(flag.CommandLine)
 }
 
 type resultServerConfig struct {

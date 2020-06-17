@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -33,12 +34,13 @@ import (
 	backoff "github.com/cenkalti/backoff/v3"
 	"github.com/dsnet/compress/bzip2"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
+	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
@@ -89,6 +91,13 @@ func defineResultcollectorFlags(cmd *cobra.Command) {
 	cmd.Flags().String("tls-client-cert", "", "The path to the client and CA PEM cert bundle.")
 	cmd.Flags().String("tls-client-key", "", "The path to the client PEM key.")
 	cmd.Flags().String("tls-ca", "", "The path to the CA certificate.")
+
+	flags := cmd.Flags()
+	flags.AddFlagSet(zap.FlagSet())
+
+	// Add flags registered by imported packages (e.g. glog and
+	// controller-runtime)
+	flags.AddGoFlagSet(flag.CommandLine)
 }
 
 func parseConfig(cmd *cobra.Command) *scapresultsConfig {
@@ -409,13 +418,13 @@ func exitCodeIsError(exitcode string) bool {
 func resultCollectorMain(cmd *cobra.Command, args []string) {
 	scapresultsconf := parseConfig(cmd)
 
-	config, err := rest.InClusterConfig()
+	cfg, err := config.GetConfig()
 	if err != nil {
-		fmt.Printf("Can't create incluster config: %v\n", err)
+		log.Error(err, "")
 		os.Exit(1)
 	}
 
-	crclient, err := createCrClient(config)
+	crclient, err := createCrClient(cfg)
 	if err != nil {
 		fmt.Printf("Cannot create client for our types: %v\n", err)
 		os.Exit(1)
