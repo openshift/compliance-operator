@@ -105,7 +105,7 @@ openscap-image:
 build: fmt manager ## Build the compliance-operator binary
 
 manager:
-	$(GO) build -o $(TARGET) github.com/openshift/compliance-operator/cmd/manager
+	$(GO) build -race -o $(TARGET) github.com/openshift/compliance-operator/cmd/manager
 
 .PHONY: operator-sdk
 operator-sdk: $(GOPATH)/bin/operator-sdk
