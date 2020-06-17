@@ -8,6 +8,10 @@ import (
 // added by the ProfileBundle controller in order to delete resources.
 const ProfileBundleFinalizer = "profilebundle.finalizers.compliance.openshift.io"
 
+// ProfileBundleOwnerLabel marks a profile or rule as owned by a profile bundle
+// and helps users filter such objects
+const ProfileBundleOwnerLabel = "compliance.openshift.io/profile-bundle"
+
 // DataStreamStatusType is the type for the data stream status
 type DataStreamStatusType string
 
