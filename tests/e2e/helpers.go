@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,6 +51,27 @@ func E2ELogf(t *testing.T, format string, args ...interface{}) {
 
 func E2ELog(t *testing.T, format string) {
 	t.Log(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), format))
+}
+
+func getObjNameFromTest(t *testing.T) string {
+	fullTestName := t.Name()
+	regexForCapitals := regexp.MustCompile(`[A-Z]`)
+
+	testNameInitIndex := strings.LastIndex(fullTestName, "/") + 1
+
+	// Remove test prefix
+	testName := fullTestName[testNameInitIndex:]
+
+	// convert capitals to lower case letters with hyphens prepended
+	hyphenedTestName := regexForCapitals.ReplaceAllStringFunc(
+		testName,
+		func(currentMatch string) string {
+			return "-" + strings.ToLower(currentMatch)
+		})
+	// remove double hyphens
+	testNameNoDoubleHyphens := strings.ReplaceAll(hyphenedTestName, "--", "-")
+	// Remove leading and trailing hyphens
+	return strings.Trim(testNameNoDoubleHyphens, "-")
 }
 
 func newMcTestCtx(f *framework.Framework, t *testing.T) (*mcTestCtx, error) {
@@ -193,6 +215,41 @@ func setupComplianceOperatorCluster(t *testing.T, ctx *framework.Context) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// waitForProfileBundleStatus will poll until the compliancescan that we're lookingfor reaches a certain status, or until
+// a timeout is reached.
+func waitForProfileBundleStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus compv1alpha1.DataStreamStatusType) error {
+	pb := &compv1alpha1.ProfileBundle{}
+	var lastErr error
+	// retry and ignore errors until timeout
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, pb)
+		if lastErr != nil {
+			if apierrors.IsNotFound(lastErr) {
+				E2ELogf(t, "Waiting for availability of %s ProfileBundle\n", name)
+				return false, nil
+			}
+			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
+			return false, nil
+		}
+
+		if pb.Status.DataStreamStatus == targetStatus {
+			return true, nil
+		}
+		E2ELogf(t, "Waiting for run of %s ProfileBundle (%s)\n", name, pb.Status.DataStreamStatus)
+		return false, nil
+	})
+	// Error in function call
+	if lastErr != nil {
+		return lastErr
+	}
+	// Timeout
+	if timeouterr != nil {
+		return timeouterr
+	}
+	E2ELogf(t, "ProfileBundle ready (%s)\n", pb.Status.DataStreamStatus)
+	return nil
 }
 
 // waitForScanStatus will poll until the compliancescan that we're lookingfor reaches a certain status, or until
@@ -1093,4 +1150,36 @@ func IsMachineConfigPoolConditionPresentAndEqual(conditions []mcfgv1.MachineConf
 
 func getPoolNodeRoleSelector() map[string]string {
 	return utils.GetNodeRoleSelector(testPoolName)
+}
+
+func assertMustHaveParsedProfiles(t *testing.T, f *framework.Framework, namespace, name string) error {
+	var pl compv1alpha1.ProfileList
+	lo := &client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			compv1alpha1.ProfileBundleOwnerLabel: name,
+		}),
+	}
+	if err := f.Client.List(goctx.TODO(), &pl, lo); err != nil {
+		return err
+	}
+	if len(pl.Items) <= 0 {
+		return fmt.Errorf("Profiles weren't parsed from the ProfileBundle. Expected more than one, got %d", len(pl.Items))
+	}
+	return nil
+}
+
+func assertMustHaveParsedRules(t *testing.T, f *framework.Framework, namespace, name string) error {
+	var rl compv1alpha1.RuleList
+	lo := &client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			compv1alpha1.ProfileBundleOwnerLabel: name,
+		}),
+	}
+	if err := f.Client.List(goctx.TODO(), &rl, lo); err != nil {
+		return err
+	}
+	if len(rl.Items) <= 0 {
+		return fmt.Errorf("Rules weren't parsed from the ProfileBundle. Expected more than one, got %d", len(rl.Items))
+	}
+	return nil
 }

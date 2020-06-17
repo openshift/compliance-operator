@@ -225,6 +225,12 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 	err = parseProfilesAndDo(contentDom, pcfg, func(p *cmpv1alpha1.Profile) error {
 		pCopy := p.DeepCopy()
 		profileName := pCopy.Name
+
+		if pCopy.Labels == nil {
+			pCopy.Labels = make(map[string]string)
+		}
+		pCopy.Labels[cmpv1alpha1.ProfileBundleOwnerLabel] = pb.Name
+
 		// overwrite name
 		pCopy.SetName(getPrefixedName(pb.Name, profileName))
 
@@ -254,6 +260,12 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 		ruleName := r.Name
 		// overwrite name
 		r.SetName(getPrefixedName(pb.Name, ruleName))
+
+		if r.Labels == nil {
+			r.Labels = make(map[string]string)
+		}
+		r.Labels[cmpv1alpha1.ProfileBundleOwnerLabel] = pb.Name
+
 		if r.Annotations == nil {
 			r.Annotations = make(map[string]string)
 		}
@@ -285,6 +297,11 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 		varName := v.Name
 		// overwrite name
 		v.SetName(getPrefixedName(pb.Name, varName))
+
+		if v.Labels == nil {
+			v.Labels = make(map[string]string)
+		}
+		v.Labels[cmpv1alpha1.ProfileBundleOwnerLabel] = pb.Name
 
 		if err := controllerutil.SetControllerReference(pb, v, pcfg.Scheme); err != nil {
 			return err

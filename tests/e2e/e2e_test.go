@@ -20,6 +20,36 @@ import (
 func TestE2E(t *testing.T) {
 	executeTests(t,
 		testExecution{
+			Name: "TestProfileParsingWorks",
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				pbName := getObjNameFromTest(t)
+				testPB := &compv1alpha1.ProfileBundle{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      pbName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ProfileBundleSpec{
+						ContentImage: "quay.io/complianceascode/ocp4:latest",
+						ContentFile:  rhcosContentFile,
+					},
+				}
+				if err := f.Client.Create(goctx.TODO(), testPB, nil); err != nil {
+					return err
+				}
+				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamValid); err != nil {
+					return err
+				}
+				if err := assertMustHaveParsedProfiles(t, f, namespace, pbName); err != nil {
+					return err
+				}
+
+				if err := assertMustHaveParsedRules(t, f, namespace, pbName); err != nil {
+					return err
+				}
+				return nil
+			},
+		},
+		testExecution{
 			Name: "TestSingleScanSucceeds",
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &compv1alpha1.ComplianceScan{
