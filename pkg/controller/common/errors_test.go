@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 var _ = Describe("NonRetriable error wrapper", func() {
@@ -49,6 +50,36 @@ var _ = Describe("NonRetriable error wrapper", func() {
 		It("Should not return the error", func() {
 			_, retriableErr := ReturnWithRetriableError(logger, err)
 			Expect(retriableErr).To(BeNil())
+		})
+	})
+
+	Context("With a custom error handler", func() {
+		var err error
+		var foo string
+		BeforeEach(func() {
+			foo = "old value"
+			err = NewRetriableCtrlErrorWithCustomHandler(func() (reconcile.Result, error) {
+				foo = "new value"
+				return reconcile.Result{}, nil
+			}, "Some error")
+		})
+
+		It("Should output the same wrapped error", func() {
+			Expect(err.Error()).To(Equal("Some error"))
+		})
+
+		It("Should be considered retriable", func() {
+			Expect(IsRetriable(err)).To(BeTrue())
+		})
+
+		It("Should not return the error", func() {
+			_, retriableErr := ReturnWithRetriableError(logger, err)
+			Expect(retriableErr).To(BeNil())
+		})
+
+		It("Should execute the custom handler", func() {
+			ReturnWithRetriableError(logger, err)
+			Expect(foo).To(Equal("new value"))
 		})
 	})
 })
