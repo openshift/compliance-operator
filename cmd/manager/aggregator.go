@@ -397,11 +397,6 @@ func aggregator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	if scan.Status.Result == compv1alpha1.ResultError {
-		fmt.Println("Not gathering results from a scan that resulted in an error")
-		os.Exit(0)
-	}
-
 	// Find all the configmaps for a scan
 	configMaps, err := getScanConfigMaps(crclient, aggregatorConf.ScanName, common.GetComplianceOperatorNamespace())
 	if err != nil {
