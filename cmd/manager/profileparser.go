@@ -31,6 +31,7 @@ var profileparserCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.AddCommand(profileparserCmd)
 	defineProfileParserFlags(profileparserCmd)
 }
 

@@ -43,6 +43,7 @@ var resultServerCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.AddCommand(resultServerCmd)
 	defineResultServerFlags(resultServerCmd)
 }
 

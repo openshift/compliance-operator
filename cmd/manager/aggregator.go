@@ -58,6 +58,7 @@ var aggregatorCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.AddCommand(aggregatorCmd)
 	defineAggregatorFlags(aggregatorCmd)
 }
 

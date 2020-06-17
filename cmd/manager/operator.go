@@ -39,6 +39,10 @@ var operatorCmd = &cobra.Command{
 	Run:   RunOperator,
 }
 
+func init() {
+	rootCmd.AddCommand(operatorCmd)
+}
+
 // Change below variables to serve metrics on different host or port.
 var (
 	metricsHost               = "0.0.0.0"

@@ -27,6 +27,7 @@ var rerunnerCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.AddCommand(rerunnerCmd)
 	defineRerunnerFlags(rerunnerCmd)
 }
 

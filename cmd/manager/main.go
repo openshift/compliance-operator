@@ -30,16 +30,6 @@ var rootCmd = &cobra.Command{
 	Run:   func(cmd *cobra.Command, args []string) {},
 }
 
-func init() {
-	rootCmd.AddCommand(operatorCmd)
-	rootCmd.AddCommand(rerunnerCmd)
-	rootCmd.AddCommand(resultServerCmd)
-	rootCmd.AddCommand(aggregatorCmd)
-	rootCmd.AddCommand(resultcollectorCmd)
-	rootCmd.AddCommand(apiResourceCollectorCmd)
-	rootCmd.AddCommand(profileparserCmd)
-}
-
 func main() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
