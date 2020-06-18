@@ -231,6 +231,8 @@ image-to-cluster:
 	@echo "We're in a CI environment, skipping image-to-cluster target."
 	$(eval component = $(APP_NAME))
 	$(eval OPERATOR_IMAGE_PATH = $(IMAGE_FORMAT))
+	$(eval component = testcontent)
+	$(eval E2E_CONTENT_IMAGE_PATH = $(IMAGE_FORMAT))
 else ifeq ($(E2E_USE_DEFAULT_IMAGES), true)
 image-to-cluster:
 	@echo "E2E_USE_DEFAULT_IMAGES variable detected. Using default images."
