@@ -29,7 +29,7 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ProfileBundleSpec{
-						ContentImage: "quay.io/complianceascode/ocp4:latest",
+						ContentImage: contentImagePath,
 						ContentFile:  rhcosContentFile,
 					},
 				}
@@ -523,7 +523,7 @@ func TestE2E(t *testing.T) {
 							{
 								Name: fmt.Sprintf("%s-workers-scan", suiteName),
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/complianceascode/ocp4:latest",
+									ContentImage: contentImagePath,
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									NodeSelector: map[string]string{
@@ -573,7 +573,7 @@ func TestE2E(t *testing.T) {
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/complianceascode/ocp4:latest",
+									ContentImage: contentImagePath,
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									NodeSelector: selectWorkers,
@@ -583,7 +583,7 @@ func TestE2E(t *testing.T) {
 							},
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/complianceascode/ocp4:latest",
+									ContentImage: contentImagePath,
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									NodeSelector: selectMasters,
@@ -675,7 +675,7 @@ func TestE2E(t *testing.T) {
 							{
 								Name: workerScanName,
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/complianceascode/ocp4:latest",
+									ContentImage: contentImagePath,
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
@@ -730,7 +730,7 @@ func TestE2E(t *testing.T) {
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/complianceascode/ocp4:latest",
+									ContentImage: contentImagePath,
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 									Content:      rhcosContentFile,
@@ -893,7 +893,7 @@ func TestE2E(t *testing.T) {
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/complianceascode/ocp4:latest",
+									ContentImage: contentImagePath,
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									NodeSelector: getPoolNodeRoleSelector(),
@@ -1012,7 +1012,7 @@ func TestE2E(t *testing.T) {
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/complianceascode/ocp4:latest",
+									ContentImage: contentImagePath,
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									NodeSelector: selectWorkers,
@@ -1023,7 +1023,7 @@ func TestE2E(t *testing.T) {
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
 									ScanType:     compv1alpha1.ScanTypePlatform,
-									ContentImage: "quay.io/complianceascode/ocp4:latest",
+									ContentImage: contentImagePath,
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      ocpContentFile,
 									Debug:        true,

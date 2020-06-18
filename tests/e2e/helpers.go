@@ -4,6 +4,7 @@ import (
 	goctx "context"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -33,6 +34,17 @@ const (
 	rhcosContentFile = "ssg-rhcos4-ds.xml"
 	ocpContentFile   = "ssg-ocp4-ds.xml"
 )
+
+var contentImagePath string
+
+func init() {
+	contentImagePath = os.Getenv("CONTENT_IMAGE")
+
+	if contentImagePath == "" {
+		fmt.Println("Please set the 'CONTENT_IMAGE' environment variable")
+		os.Exit(1)
+	}
+}
 
 type testExecution struct {
 	Name   string
