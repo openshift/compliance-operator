@@ -262,6 +262,8 @@ func (c *scapContentDataStream) SaveResources(to string) error {
 func saveResources(rootDir string, data map[string][]byte) error {
 	for apiPath, fileContents := range data {
 		saveDir, saveFile, err := getSaveDirectoryAndFileName(rootDir, apiPath)
+		savePath := path.Join(saveDir, saveFile)
+		LOG("Saving fetched resource to: '%s'", savePath)
 		if err != nil {
 			return err
 		}
@@ -269,7 +271,7 @@ func saveResources(rootDir string, data map[string][]byte) error {
 		if err != nil {
 			return err
 		}
-		err = ioutil.WriteFile(path.Join(saveDir, saveFile), fileContents, 0600)
+		err = ioutil.WriteFile(savePath, fileContents, 0600)
 		if err != nil {
 			return err
 		}
