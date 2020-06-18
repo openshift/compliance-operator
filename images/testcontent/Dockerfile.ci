@@ -1,0 +1,4 @@
+FROM quay.io/complianceascode/ocp4:latest
+
+# Force matching any version
+RUN sed -i 's%pattern match">4.\.\.\*%pattern match">.*%' /ssg-ocp4-ds.xml
