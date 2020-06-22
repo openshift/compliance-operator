@@ -606,23 +606,52 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 	return nil
 }
 
-func getScanResult(cm *corev1.ConfigMap) (compv1alpha1.ComplianceScanStatusResult, error) {
+func checkScanError(cm *corev1.ConfigMap) error {
 	exitcode, ok := cm.Data["exit-code"]
-	if ok {
-		switch exitcode {
-		case "0":
-			return compv1alpha1.ResultCompliant, nil
-		case "2":
-			return compv1alpha1.ResultNonCompliant, nil
-		default:
-			errorMsg, ok := cm.Data["error-msg"]
-			if ok {
-				return compv1alpha1.ResultError, fmt.Errorf(errorMsg)
-			}
-			return compv1alpha1.ResultError, fmt.Errorf("The ConfigMap '%s' was missing 'error-msg'", cm.Name)
-		}
+	if !ok {
+		return fmt.Errorf("the ConfigMap '%s' was missing 'exit-code'", cm.Name)
 	}
-	return compv1alpha1.ResultError, fmt.Errorf("The ConfigMap '%s' was missing 'exit-code'", cm.Name)
+
+	// 0: compliant
+	// 2: non-compliant
+	// anything else is treated as an error
+	if exitcode != "0" && exitcode != "2" {
+		errorMsg, ok := cm.Data["error-msg"]
+		if ok {
+			return fmt.Errorf(errorMsg)
+		}
+		return fmt.Errorf("the ConfigMap '%s' was missing 'error-msg' despite exitcode %s", cm.Name, exitcode)
+	}
+
+	return nil
+}
+
+func getScanResult(cm *corev1.ConfigMap) (compv1alpha1.ComplianceScanStatusResult, error) {
+	if cm.Annotations == nil {
+		return compv1alpha1.ResultError, fmt.Errorf("the ConfigMap '%s' was missing annotations", cm.Name)
+	}
+
+	strResult, ok := cm.Annotations[compv1alpha1.CmScanResultAnnotation]
+	if !ok {
+		return compv1alpha1.ResultError, fmt.Errorf("the ConfigMap '%s' annotation was missing the result key", cm.Name)
+	}
+
+	switch strResult {
+	case string(compv1alpha1.ResultCompliant):
+		return compv1alpha1.ResultCompliant, nil
+	case string(compv1alpha1.ResultNonCompliant):
+		return compv1alpha1.ResultNonCompliant, nil
+	case string(compv1alpha1.ResultNotApplicable):
+		return compv1alpha1.ResultNotApplicable, nil
+	default:
+		break
+	}
+
+	errMsg, ok := cm.Annotations[compv1alpha1.CmScanResultErrMsg]
+	if !ok {
+		errMsg = fmt.Sprintf("Undefined error in ConfigMap %s", cm.Name)
+	}
+	return compv1alpha1.ResultError, fmt.Errorf(errMsg)
 }
 
 func getReplicatedTailoringCMName(instanceName string) string {

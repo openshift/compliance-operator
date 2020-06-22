@@ -152,7 +152,60 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string,
 	return utils.ParseResultsFromContentAndXccdf(scheme, scanName, namespace, content, scanReader)
 }
 
-func annotateParsedConfigMap(crClient *complianceCrClient, cm *v1.ConfigMap) error {
+func getScanResult(cm *v1.ConfigMap) (compv1alpha1.ComplianceScanStatusResult, string) {
+	exitcode, ok := cm.Data["exit-code"]
+	if ok {
+		switch exitcode {
+		case "0":
+			return compv1alpha1.ResultCompliant, ""
+		case "2":
+			return compv1alpha1.ResultNonCompliant, ""
+		default:
+			errorMsg, ok := cm.Data["error-msg"]
+			if ok {
+				return compv1alpha1.ResultError, errorMsg
+			}
+			return compv1alpha1.ResultError, fmt.Sprintf("The ConfigMap '%s' was missing 'error-msg'", cm.Name)
+		}
+	}
+	return compv1alpha1.ResultError, fmt.Sprintf("The ConfigMap '%s' was missing 'exit-code'", cm.Name)
+}
+
+func annotateCMWithScanResult(cm *v1.ConfigMap, cmParsedResults []*utils.ParseResult) *v1.ConfigMap {
+	scanResult, errMsg := getScanResult(cm)
+	if scanResult == compv1alpha1.ResultCompliant {
+		// Special case: If the OS didn't match at all and SCAP skipped all the tests,
+		// then we would have gotten COMPLIANT. Let's make sure that at least one
+		// rule passed in this case
+		gotPass := false
+		for i := range cmParsedResults {
+			if cmParsedResults[i] == nil || cmParsedResults[i].CheckResult == nil {
+				continue
+			}
+
+			if cmParsedResults[i].CheckResult.Status == compv1alpha1.CheckResultPass {
+				gotPass = true
+				break
+			}
+		}
+
+		if gotPass == false {
+			scanResult = compv1alpha1.ResultNotApplicable
+			errMsg = "The scan did not produce any results, maybe an OS/platform mismatch?"
+		}
+	}
+
+	// Finally annotate the CM with the result. The CM will be deep-copied prior to the
+	// update anyway
+	if cm.Annotations == nil {
+		cm.Annotations = make(map[string]string)
+	}
+	cm.Annotations[compv1alpha1.CmScanResultAnnotation] = string(scanResult)
+	cm.Annotations[compv1alpha1.CmScanResultErrMsg] = errMsg
+	return cm.DeepCopy()
+}
+
+func markConfigMapAsProcessed(crClient *complianceCrClient, cm *v1.ConfigMap) error {
 	cmCopy := cm.DeepCopy()
 
 	if cmCopy.Annotations == nil {
@@ -344,11 +397,6 @@ func aggregator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	if scan.Status.Result == compv1alpha1.ResultError {
-		fmt.Println("Not gathering results from a scan that resulted in an error")
-		os.Exit(0)
-	}
-
 	// Find all the configmaps for a scan
 	configMaps, err := getScanConfigMaps(crclient, aggregatorConf.ScanName, common.GetComplianceOperatorNamespace())
 	if err != nil {
@@ -371,10 +419,11 @@ func aggregator(cmd *cobra.Command, args []string) {
 	}
 
 	// For each configmap, create a list of remediations
-	for _, cm := range configMaps {
+	for i := range configMaps {
+		cm := &configMaps[i]
 		fmt.Printf("processing CM: %s\n", cm.Name)
 
-		cmParsedResults, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, &cm)
+		cmParsedResults, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, cm)
 		if err != nil {
 			fmt.Printf("Cannot parse CM %s into remediations, err: %v\n", cm.Name, err)
 		} else if cmParsedResults == nil {
@@ -397,6 +446,9 @@ func aggregator(cmd *cobra.Command, args []string) {
 				os.Exit(1)
 			}
 		}
+
+		// If the CM was processed, annotate it with the result
+		annotateCMWithScanResult(&configMaps[i], cmParsedResults)
 	}
 
 	// At this point either scanRemediations is nil or contains a list
@@ -411,7 +463,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 	// Annotate configMaps, so we don't need to re-parse them
 	fmt.Println("Annotating ConfigMaps")
 	for _, cm := range configMaps {
-		err = annotateParsedConfigMap(crclient, &cm)
+		err = markConfigMapAsProcessed(crclient, &cm)
 		if err != nil {
 			fmt.Printf("Cannot annotate the CM: %v\n", err)
 			os.Exit(1)
