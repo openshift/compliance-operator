@@ -471,6 +471,19 @@ func TestE2E(t *testing.T) {
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				remName := "test-apply-generic-remediation"
+				unstruct := &unstructured.Unstructured{}
+				unstruct.SetUnstructuredContent(map[string]interface{}{
+					"kind":       "ConfigMap",
+					"apiVersion": "v1",
+					"metadata": map[string]interface{}{
+						"name":      "generic-rem-cm",
+						"namespace": namespace,
+					},
+					"data": map[string]interface{}{
+						"key": "value",
+					},
+				})
+
 				genericRem := &compv1alpha1.ComplianceRemediation{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      remName,
@@ -480,19 +493,7 @@ func TestE2E(t *testing.T) {
 						ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
 							Apply: true,
 						},
-						Object: &unstructured.Unstructured{
-							Object: map[string]interface{}{
-								"kind":       "ConfigMap",
-								"apiVersion": "v1",
-								"metadata": map[string]interface{}{
-									"name":      "generic-rem-cm",
-									"namespace": namespace,
-								},
-								"data": map[string]interface{}{
-									"key": "value",
-								},
-							},
-						},
+						Object: unstruct,
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
