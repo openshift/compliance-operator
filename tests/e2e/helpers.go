@@ -39,6 +39,9 @@ import (
 
 var contentImagePath string
 
+var rhcosPb *compv1alpha1.ProfileBundle
+var ocp4Pb *compv1alpha1.ProfileBundle
+
 func init() {
 	contentImagePath = os.Getenv("CONTENT_IMAGE")
 
@@ -171,6 +174,20 @@ func executeTests(t *testing.T, tests ...testExecution) {
 		t.Fatalf("could not create the MC test context: %v", err)
 	}
 	defer mcTctx.cleanupTrackedPools()
+
+	rhcosPb, err = getReadyProfileBundle(t, f, "rhcos4", ns)
+	if err != nil {
+		t.Error(err)
+	}
+	// defer deleting the profiles or else the test namespace get stuck in Terminating
+	defer f.Client.Delete(goctx.TODO(), rhcosPb)
+
+	ocp4Pb, err = getReadyProfileBundle(t, f, "ocp4", ns)
+	if err != nil {
+		t.Error(err)
+	}
+	// defer deleting the profiles or else the test namespace get stuck in Terminating
+	defer f.Client.Delete(goctx.TODO(), ocp4Pb)
 
 	t.Run("Parallel tests", func(t *testing.T) {
 		for _, test := range tests {
@@ -1605,4 +1622,17 @@ func removeNodeTaint(t *testing.T, f *framework.Framework, nodeName, taintKey st
 
 	E2ELogf(t, "Removing taint from node: %s", nodeName)
 	return f.Client.Update(goctx.TODO(), untaintedNode)
+}
+
+func getReadyProfileBundle(t *testing.T, f *framework.Framework, name, namespace string) (*compv1alpha1.ProfileBundle, error) {
+	if err := waitForProfileBundleStatus(t, f, namespace, name, compv1alpha1.DataStreamValid); err != nil {
+		return nil, err
+	}
+
+	pb := &compv1alpha1.ProfileBundle{}
+	if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, pb); err != nil {
+		return nil, err
+	}
+
+	return pb, nil
 }

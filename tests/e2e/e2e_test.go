@@ -1202,6 +1202,90 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
+			Name:       "TestScanSettingBinding",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				objName := getObjNameFromTest(t)
+
+				rhcos4e8profile := &compv1alpha1.Profile{}
+				key := types.NamespacedName{Namespace:namespace, Name: rhcosPb.Name + "-e8"}
+				if err := f.Client.Get(goctx.TODO(), key, rhcos4e8profile); err != nil {
+					return err
+				}
+
+				scanSettingName := objName + "-setting"
+				scanSetting := compv1alpha1.ScanSetting{
+					ObjectMeta:            metav1.ObjectMeta{
+						Name:      scanSettingName,
+						Namespace: namespace,
+					},
+					ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+						AutoApplyRemediations: false,
+					},
+					ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+						Debug: true,
+					},
+					Roles:                 []string{"master", "worker"},
+				}
+
+				if err := f.Client.Create(goctx.TODO(), &scanSetting, getCleanupOpts(ctx)); err != nil {
+					return err
+				}
+
+				scanSettingBindingName := "generated-suite"
+				scanSettingBinding := compv1alpha1.ScanSettingBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      scanSettingBindingName,
+						Namespace: namespace,
+					},
+					Profiles:   []compv1alpha1.NamedObjectReference{
+						// TODO: test also OCP profile when it works completely
+						{
+							Name:     rhcos4e8profile.Name,
+							Kind:     "Profile",
+							APIGroup: "compliance.openshift.io/v1alpha1",
+						},
+					},
+					SettingsRef: &compv1alpha1.NamedObjectReference{
+						Name:     scanSetting.Name,
+						Kind:     "ScanSetting",
+						APIGroup: "compliance.openshift.io/v1alpha1",
+					},
+				}
+
+				if err := f.Client.Create(goctx.TODO(), &scanSettingBinding, getCleanupOpts(ctx)); err != nil {
+					return err
+				}
+
+				// Wait until the suite finishes, thus verifying the suite exists
+				if err := waitForSuiteScansStatus(t, f, namespace, scanSettingBindingName, compv1alpha1.PhaseDone, compv1alpha1.ResultNonCompliant); err != nil {
+					return err
+				}
+
+				masterScanKey := types.NamespacedName{ Namespace: namespace, Name: rhcos4e8profile.Name + "-master" }
+				masterScan := &compv1alpha1.ComplianceScan{}
+				if err := f.Client.Get(goctx.TODO(), masterScanKey, masterScan); err != nil {
+					return err
+				}
+
+				if masterScan.Spec.Debug != true {
+					t.Errorf("Expected that the settings set debug to true in master scan")
+				}
+
+				workerScanKey := types.NamespacedName{ Namespace: namespace, Name: rhcos4e8profile.Name + "-worker" }
+				workerScan := &compv1alpha1.ComplianceScan{}
+				if err := f.Client.Get(goctx.TODO(), workerScanKey, workerScan); err != nil {
+					return err
+				}
+
+				if workerScan.Spec.Debug != true {
+					t.Errorf("Expected that the settings set debug to true in workers scan")
+				}
+
+				return nil
+			},
+		},
+		testExecution{
 			Name:       "TestAutoRemediate",
 			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
