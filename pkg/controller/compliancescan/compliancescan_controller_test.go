@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -80,17 +81,44 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 	})
 
 	Context("On the LAUNCHING phase", func() {
-		It("should update the compliancescan instance to phase RUNNING", func() {
+		BeforeEach(func() {
+			// Set state to RUNNING
+			compliancescaninstance.Status.Phase = compv1alpha1.PhaseLaunching
+			reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+		})
+		It("should create PVC and stay on the same phase", func() {
 			result, err := reconciler.phaseLaunchingHandler(compliancescaninstance, logger)
 			Expect(result).ToNot(BeNil())
 			Expect(err).To(BeNil())
-			Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseRunning))
+			Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseLaunching))
 
 			// We should have scheduled a pod per node
-			nodes, _ := getTargetNodes(&reconciler, compliancescaninstance)
-			var pods corev1.PodList
-			reconciler.client.List(context.TODO(), &pods)
-			Expect(len(pods.Items)).To(Equal(len(nodes.Items)))
+			scan := &compv1alpha1.ComplianceScan{}
+			key := types.NamespacedName{
+				Name:      compliancescaninstance.Name,
+				Namespace: compliancescaninstance.Namespace,
+			}
+			reconciler.client.Get(context.TODO(), key, scan)
+			Expect(scan.Status.ResultsStorage.Name).To(Equal(getPVCForScanName(key.Name)))
+		})
+		Context("with the PVC set", func() {
+			BeforeEach(func() {
+				compliancescaninstance.Status.ResultsStorage.Name = getPVCForScanName(compliancescaninstance.Name)
+				compliancescaninstance.Status.ResultsStorage.Namespace = common.GetComplianceOperatorNamespace()
+				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+			})
+			It("should update the compliancescan instance to phase RUNNING", func() {
+				result, err := reconciler.phaseLaunchingHandler(compliancescaninstance, logger)
+				Expect(result).ToNot(BeNil())
+				Expect(err).To(BeNil())
+				Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseRunning))
+
+				// We should have scheduled a pod per node
+				nodes, _ := getTargetNodes(&reconciler, compliancescaninstance)
+				var pods corev1.PodList
+				reconciler.client.List(context.TODO(), &pods)
+				Expect(len(pods.Items)).To(Equal(len(nodes.Items)))
+			})
 		})
 	})
 

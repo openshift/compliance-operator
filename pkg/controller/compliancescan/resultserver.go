@@ -21,12 +21,6 @@ const resultserverSA = "default"
 // stores them in a PVC.
 // It's comprised of the PVC for the scan, the pod and a service that fronts it
 func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	err := r.createPVCForScan(instance)
-	if err != nil {
-		logger.Error(err, "Cannot create the PersistentVolumeClaims")
-		return err
-	}
-
 	resultServerLabels := map[string]string{
 		"complianceScan": instance.Name,
 		"app":            "resultserver",
@@ -34,7 +28,7 @@ func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.Comp
 
 	logger.Info("Creating scan result server pod")
 	deployment := resultServer(instance, resultServerLabels, logger)
-	err = r.client.Create(context.TODO(), deployment)
+	err := r.client.Create(context.TODO(), deployment)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logger.Error(err, "Cannot create deployment", "deployment", deployment)
 		return err
@@ -133,7 +127,7 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 							Name: "arfreports",
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: getPVCForScanName(scanInstance),
+									ClaimName: getPVCForScanName(scanInstance.Name),
 								},
 							},
 						},

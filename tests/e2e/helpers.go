@@ -1227,3 +1227,15 @@ func assertMustHaveParsedRules(t *testing.T, f *framework.Framework, namespace, 
 	}
 	return nil
 }
+
+func scanHasValidPVCReference(f *framework.Framework, namespace, scanName string) error {
+	scan := &compv1alpha1.ComplianceScan{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: scanName, Namespace: namespace}, scan)
+	if err != nil {
+		return err
+	}
+	pvc := &corev1.PersistentVolumeClaim{}
+	pvcName := scan.Status.ResultsStorage.Name
+	pvcNamespace := scan.Status.ResultsStorage.Namespace
+	return f.Client.Get(goctx.TODO(), types.NamespacedName{Name: pvcName, Namespace: pvcNamespace}, pvc)
+}
