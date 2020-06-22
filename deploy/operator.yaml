@@ -15,7 +15,7 @@ spec:
       serviceAccountName: compliance-operator
       containers:
         - name: compliance-operator
-          image: "quay.io/compliance-operator/compliance-operator:latest"
+          image: "image-registry.openshift-image-registry.svc:5000/openshift-compliance/compliance-operator:latest"
           command:
           - compliance-operator
           - operator
@@ -35,7 +35,7 @@ spec:
               # Hardcoding this temporarily until its propagated to CI
               value: "quay.io/compliance-operator/openscap-ocp:1.3.3"
             - name: OPERATOR_IMAGE
-              value: "quay.io/compliance-operator/compliance-operator:latest"
+              value: "image-registry.openshift-image-registry.svc:5000/openshift-compliance/compliance-operator:latest"
       nodeSelector:
         node-role.kubernetes.io/master: ""
       tolerations:
