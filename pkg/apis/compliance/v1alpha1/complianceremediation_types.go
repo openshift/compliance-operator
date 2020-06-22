@@ -38,10 +38,16 @@ type ComplianceRemediationSpecMeta struct {
 // +k8s:openapi-gen=true
 type ComplianceRemediationSpec struct {
 	ComplianceRemediationSpecMeta `json:",inline"`
-	// The actual MachineConfig remediation payload
+	// (deprecated) The actual MachineConfig remediation payload
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:EmbeddedResource
+	// +kubebuilder:validation:nullable
 	MachineConfigContents *unstructured.Unstructured `json:"machineConfigContents,omitempty"`
 	// The remediation payload. This would normally be a full Kubernetes
 	// object.
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:EmbeddedResource
+	// +kubebuilder:validation:nullable
 	Object *unstructured.Unstructured `json:"object,omitempty"`
 }
 

@@ -46,6 +46,9 @@ type FixDefinition struct {
 	// degradation that this fix will impose in the target system
 	Disruption string `json:"disruption,omitempty"`
 	// an object that should bring the rule into compliance
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:EmbeddedResource
+	// +kubebuilder:validation:nullable
 	FixObject *unstructured.Unstructured `json:"fixObject,omitempty"`
 }
 
