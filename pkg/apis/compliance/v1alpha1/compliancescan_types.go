@@ -150,6 +150,27 @@ type ComplianceScanStatus struct {
 	// Specifies the current index of the scan. Given multiple scans, this marks the
 	// amount that have been executed.
 	CurrentIndex int64 `json:"currentIndex,omitempty"`
+	// Specifies the object that's storing the raw results for the scan.
+	ResultsStorage StorageReference `json:"resultsStorage,omitempty"`
+}
+
+// StorageReference stores a reference to where certain objects are being stored
+type StorageReference struct {
+	// Kind of the referent.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+	// +optional
+	Kind string `json:"kind,omitempty"`
+	// Namespace of the referent.
+	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+	// Name of the referent.
+	// More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+	// +optional
+	Name string `json:"name,omitempty"`
+	// API version of the referent.
+	// +optional
+	APIVersion string `json:"apiVersion,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

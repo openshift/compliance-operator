@@ -8,8 +8,6 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -202,6 +200,13 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *compv1alpha1.C
 
 	if err = r.handleResultClientSecret(instance, logger); err != nil {
 		log.Error(err, "Cannot create result client cert secret")
+		return reconcile.Result{}, err
+	}
+
+	if resume, err := r.handleRawResultsForScan(instance, logger); err != nil || !resume {
+		if err != nil {
+			logger.Error(err, "Cannot create the PersistentVolumeClaims")
+		}
 		return reconcile.Result{}, err
 	}
 
@@ -485,8 +490,8 @@ func (r *ReconcileComplianceScan) scanDeleteHandler(instance *compv1alpha1.Compl
 			return reconcile.Result{}, err
 		}
 
-		if err := r.deletePVCForScan(scanToBeDeleted); err != nil {
-			log.Error(err, "Cannot delete result PVC")
+		if err := r.deleteRawResultsForScan(scanToBeDeleted); err != nil {
+			log.Error(err, "Cannot delete raw results")
 			return reconcile.Result{}, err
 		}
 
@@ -545,22 +550,6 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *compv1alpha1.Complianc
 	}
 
 	return nodes, nil
-}
-
-func (r *ReconcileComplianceScan) createPVCForScan(instance *compv1alpha1.ComplianceScan) error {
-	pvc := getPVCForScan(instance)
-	if err := r.client.Create(context.TODO(), pvc); err != nil && !errors.IsAlreadyExists(err) {
-		return err
-	}
-	return nil
-}
-
-func (r *ReconcileComplianceScan) deletePVCForScan(instance *compv1alpha1.ComplianceScan) error {
-	pvc := getPVCForScan(instance)
-	if err := r.client.Delete(context.TODO(), pvc); err != nil && !errors.IsNotFound(err) {
-		return err
-	}
-	return nil
 }
 
 func (r *ReconcileComplianceScan) deleteScriptConfigMaps(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
@@ -743,33 +732,6 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 	return result, isReady, nil
 }
 
-func getPVCForScan(instance *compv1alpha1.ComplianceScan) *corev1.PersistentVolumeClaim {
-	return &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      getPVCForScanName(instance),
-			Namespace: common.GetComplianceOperatorNamespace(),
-			Labels: map[string]string{
-				"complianceScan": instance.Name,
-			},
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			// NOTE(jaosorior): Currently we don't set a StorageClass
-			// so the default will be taken into use.
-			// TODO(jaosorior): Make StorageClass configurable
-			StorageClassName: nil,
-			AccessModes: []corev1.PersistentVolumeAccessMode{
-				"ReadWriteOnce",
-			},
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					// TODO(jaosorior): Make this configurable
-					corev1.ResourceStorage: resource.MustParse("1Gi"),
-				},
-			},
-		},
-	}
-}
-
 // pod names are limited to 63 chars, inclusive. Try to use a friendly name, if that can't be done,
 // just use a hash. Either way, the node would be present in a label of the pod.
 func getPodForNodeName(scanName, nodeName string) string {
@@ -778,10 +740,6 @@ func getPodForNodeName(scanName, nodeName string) string {
 
 func getConfigMapForNodeName(scanName, nodeName string) string {
 	return utils.DNSLengthName("openscap-pod-", "%s-%s-pod", scanName, nodeName)
-}
-
-func getPVCForScanName(instance *compv1alpha1.ComplianceScan) string {
-	return instance.Name
 }
 
 func getInitContainerImage(scanSpec *compv1alpha1.ComplianceScanSpec, logger logr.Logger) string {

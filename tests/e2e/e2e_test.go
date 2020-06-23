@@ -79,9 +79,10 @@ func TestE2E(t *testing.T) {
 			Name:       "TestSingleScanSucceeds",
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
-				exampleComplianceScan := &compv1alpha1.ComplianceScan{
+				scanName := getObjNameFromTest(t)
+				testScan := &compv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-single-scan",
+						Name:      scanName,
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
@@ -92,16 +93,20 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err := f.Client.Create(goctx.TODO(), exampleComplianceScan, nil)
+				err := f.Client.Create(goctx.TODO(), testScan, nil)
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-single-scan", compv1alpha1.PhaseDone)
+				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 				if err != nil {
 					return err
 				}
 
-				return scanResultIsExpected(f, namespace, "test-single-scan", compv1alpha1.ResultCompliant)
+				err = scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultCompliant)
+				if err != nil {
+					return err
+				}
+				return scanHasValidPVCReference(f, namespace, scanName)
 			},
 		},
 		testExecution{
