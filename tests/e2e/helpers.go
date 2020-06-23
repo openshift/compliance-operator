@@ -16,6 +16,7 @@ import (
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1275,5 +1276,27 @@ func waitForCronJobWithSchedule(t *testing.T, f *framework.Framework, namespace,
 		return timeouterr
 	}
 	E2ELogf(t, "Found %s CronJob\n", jobName)
+	return nil
+}
+
+func scanHasValidPVCReferenceWithSize(f *framework.Framework, namespace, scanName, size string) error {
+	scan := &compv1alpha1.ComplianceScan{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: scanName, Namespace: namespace}, scan)
+	if err != nil {
+		return err
+	}
+	pvc := &corev1.PersistentVolumeClaim{}
+	pvcName := scan.Status.ResultsStorage.Name
+	pvcNamespace := scan.Status.ResultsStorage.Namespace
+	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: pvcName, Namespace: pvcNamespace}, pvc)
+	if err != nil {
+		return err
+	}
+	qty := resource.MustParse(size)
+	if qty.Cmp(*pvc.Status.Capacity.Storage()) != 0 {
+		expected := qty.String()
+		current := pvc.Status.Capacity.Storage().String()
+		return fmt.Errorf("Error: PVC '%s' storage doesn't match expected value. Has '%s', Expected '%s'", pvc.Name, current, expected)
+	}
 	return nil
 }

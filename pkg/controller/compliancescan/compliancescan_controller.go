@@ -2,12 +2,14 @@ package compliancescan
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -160,6 +162,24 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 		instanceCopy := instance.DeepCopy()
 		delete(instanceCopy.Annotations, compv1alpha1.ComplianceScanRescanAnnotation)
 		err := r.client.Update(context.TODO(), instanceCopy)
+		return reconcile.Result{}, err
+	}
+
+	// Set default storage if missing
+	if instance.Spec.RawResultStorageSize == "" {
+		instanceCopy := instance.DeepCopy()
+		instanceCopy.Spec.RawResultStorageSize = compv1alpha1.DefaultRawStorageSize
+		err := r.client.Update(context.TODO(), instanceCopy)
+		return reconcile.Result{}, err
+	}
+
+	//validate raw storage size
+	if _, err := resource.ParseQuantity(instance.Spec.RawResultStorageSize); err != nil {
+		instanceCopy := instance.DeepCopy()
+		instanceCopy.Status.ErrorMessage = fmt.Sprintf("Error parsing RawResultsStorageSize: %s", err)
+		instanceCopy.Status.Result = compv1alpha1.ResultError
+		instanceCopy.Status.Phase = compv1alpha1.PhaseDone
+		err := r.client.Status().Update(context.TODO(), instanceCopy)
 		return reconcile.Result{}, err
 	}
 

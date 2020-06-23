@@ -64,6 +64,11 @@ spec:
                 description: Is the profile in the data stream to be used. This is
                   the collection of rules that will be checked for.
                 type: string
+              rawResultStorageSize:
+                description: Specifies the amount of storage to ask for storing the
+                  raw results. Note that if re-scans happen, the new results will
+                  also need to be stored.
+                type: string
               rule:
                 description: A Rule can be specified if the scan should check only
                   for a specific rule. Note that when leaving this empty, the scan
