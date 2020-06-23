@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -368,9 +369,18 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultError)
-				if err != nil {
-					return err
+
+				var resultErr error
+				// The status might still be NOT-AVAILABLE... we can wait a bit
+				// for the reconciliation to update it.
+				_ = wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
+					if resultErr = scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultError); resultErr != nil {
+						return false, nil
+					}
+					return true, nil
+				})
+				if resultErr != nil {
+					return resultErr
 				}
 
 				tailoringCM := &corev1.ConfigMap{
