@@ -190,7 +190,7 @@ e2e: namespace operator-sdk image-to-cluster openshift-user ## Run the end-to-en
 	@sed -i 's%$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%$(OPENSCAP_IMAGE_PATH):$(OPENSCAP_IMAGE_TAG)%' deploy/operator.yaml
 	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH)%' deploy/operator.yaml
 	@echo "Running e2e tests"
-	unset GOFLAGS && CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --skip-cleanup-error --image "$(OPERATOR_IMAGE_PATH)" --operator-namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
+	unset GOFLAGS && CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --skip-cleanup-error --image "$(OPERATOR_IMAGE_PATH)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 	@echo "Restoring image references in deploy/operator.yaml"
 	@sed -i 's%$(OPENSCAP_IMAGE_PATH):$(OPENSCAP_IMAGE_TAG)%$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%' deploy/operator.yaml
 	@sed -i 's%$(OPERATOR_IMAGE_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
@@ -199,7 +199,7 @@ e2e-local: operator-sdk ## Run the end-to-end tests on a locally running operato
 	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
 	@echo "Replacing workload references in deploy/operator.yaml"
 	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH)%' deploy/operator.yaml
-	unset GOFLAGS && CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --up-local --skip-cleanup-error --image "$(OPERATOR_IMAGE_PATH)" --operator-namespace "$(NAMESPACE)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
+	unset GOFLAGS && CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --up-local --skip-cleanup-error --image "$(OPERATOR_IMAGE_PATH)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 	@echo "Restoring image references in deploy/operator.yaml"
 	@sed -i 's%$(OPERATOR_IMAGE_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 
@@ -239,7 +239,7 @@ image-to-cluster:
 else ifeq ($(E2E_SKIP_CONTAINER_PUSH), true)
 image-to-cluster:
 	@echo "E2E_SKIP_CONTAINER_PUSH variable detected. Using previously pushed images."
-	$(eval OPERATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(APP_NAME):$(TAG))
+	$(eval OPERATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/openshift/$(APP_NAME):$(TAG))
 else ifeq ($(E2E_SKIP_CONTAINER_BUILD), true)
 image-to-cluster: namespace cluster-image-push
 	@echo "E2E_SKIP_CONTAINER_BUILD variable detected. Using previously built local images."
@@ -255,10 +255,10 @@ cluster-image-push: namespace openshift-user
 	@echo "Pushing image $(OPERATOR_IMAGE_PATH):$(TAG) to the image registry"
 	IMAGE_REGISTRY_HOST=$$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}'); \
 		$(RUNTIME) login --tls-verify=false -u $(OPENSHIFT_USER) -p $(shell oc whoami -t) $${IMAGE_REGISTRY_HOST}; \
-		$(RUNTIME) push --tls-verify=false $(OPERATOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/$(NAMESPACE)/$(APP_NAME):$(TAG)
+		$(RUNTIME) push --tls-verify=false $(OPERATOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/openshift/$(APP_NAME):$(TAG)
 	@echo "Removing the route from the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
-	$(eval OPERATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/$(NAMESPACE)/$(APP_NAME):$(TAG))
+	$(eval OPERATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/openshift/$(APP_NAME):$(TAG))
 
 .PHONY: namespace
 namespace:
