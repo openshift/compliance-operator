@@ -4,6 +4,7 @@ import (
 	goctx "context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
@@ -28,13 +29,6 @@ import (
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
-const (
-	workerPoolName   = "worker"
-	testPoolName     = "e2e"
-	rhcosContentFile = "ssg-rhcos4-ds.xml"
-	ocpContentFile   = "ssg-ocp4-ds.xml"
-)
-
 var contentImagePath string
 
 func init() {
@@ -47,8 +41,9 @@ func init() {
 }
 
 type testExecution struct {
-	Name   string
-	TestFn func(*testing.T, *framework.Framework, *framework.Context, *mcTestCtx, string) error
+	Name       string
+	IsParallel bool
+	TestFn     func(*testing.T, *framework.Framework, *framework.Context, *mcTestCtx, string) error
 }
 
 type mcTestCtx struct {
@@ -152,15 +147,16 @@ func executeTests(t *testing.T, tests ...testExecution) {
 	ctx := setupTestRequirements(t)
 	defer ctx.Cleanup()
 
-	setupComplianceOperatorCluster(t, ctx)
-
 	// get global framework variables
 	f := framework.Global
 
-	ns, err := ctx.GetNamespace()
+	ns, err := ctx.GetOperatorNamespace()
 	if err != nil {
 		t.Fatalf("could not get namespace: %v", err)
 	}
+	E2ELogf(t, "Running e2e test on Namespace %s\n", ns)
+
+	setupComplianceOperatorCluster(t, ctx, f, ns)
 
 	mcTctx, err := newMcTestCtx(f, t)
 	if err != nil {
@@ -168,14 +164,34 @@ func executeTests(t *testing.T, tests ...testExecution) {
 	}
 	defer mcTctx.cleanupTrackedPools()
 
-	for _, test := range tests {
-		t.Run(test.Name, func(t *testing.T) {
-			if err := test.TestFn(t, f, ctx, mcTctx, ns); err != nil {
-				t.Error(err)
-			}
-		})
+	t.Run("Parallel tests", func(t *testing.T) {
+		for _, test := range tests {
+			// Don't loose test reference
+			test := test
+			t.Run(test.Name, func(tt *testing.T) {
+				if test.IsParallel {
+					tt.Parallel()
+					if err := test.TestFn(tt, f, ctx, mcTctx, ns); err != nil {
+						tt.Error(err)
+					}
+				}
+			})
+		}
+	})
 
-	}
+	t.Run("Serial tests", func(t *testing.T) {
+		for _, test := range tests {
+			// Don't loose test reference
+			test := test
+			t.Run(test.Name, func(t *testing.T) {
+				if !test.IsParallel {
+					if err := test.TestFn(t, f, ctx, mcTctx, ns); err != nil {
+						t.Error(err)
+					}
+				}
+			})
+		}
+	})
 }
 
 // setupTestRequirements Adds the items to the client's schema (So we can use our objects in the client)
@@ -210,22 +226,38 @@ func setupTestRequirements(t *testing.T) *framework.Context {
 
 // setupComplianceOperatorCluster creates a compliance-operator cluster and the resources it needs to operate
 // such as the namespace, permissions, etc.
-func setupComplianceOperatorCluster(t *testing.T, ctx *framework.Context) {
+func setupComplianceOperatorCluster(t *testing.T, ctx *framework.Context, f *framework.Framework, namespace string) {
+	replaceNamespaceFromManifest(t, namespace, f.NamespacedManPath)
+
 	err := ctx.InitializeClusterResources(&framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 	if err != nil {
 		t.Fatalf("failed to initialize cluster resources: %v", err)
 	}
 	E2ELog(t, "Initialized cluster resources")
-	namespace, err := ctx.GetNamespace()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// get global framework variables
-	f := framework.Global
 	// wait for compliance-operator to be ready
 	err = e2eutil.WaitForOperatorDeployment(t, f.KubeClient, namespace, "compliance-operator", 1, retryInterval, timeout)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func replaceNamespaceFromManifest(t *testing.T, namespace string, namespacedManPath *string) {
+	if namespacedManPath == nil {
+		t.Fatal("Error: no namespaced manifest given as test argument. operator-sdk might have changed.")
+	}
+	path := *namespacedManPath
+	// #nosec
+	read, err := ioutil.ReadFile(path)
+	if err != nil {
+		t.Fatalf("Error reading namespaced manifest file: %s", err)
+	}
+
+	newContents := strings.Replace(string(read), "openshift-compliance", namespace, -1)
+
+	// #nosec
+	err = ioutil.WriteFile(path, []byte(newContents), 644)
+	if err != nil {
+		t.Fatalf("Error writing namespaced manifest file: %s", err)
 	}
 }
 

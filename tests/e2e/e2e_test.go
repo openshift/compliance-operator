@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -20,7 +21,8 @@ import (
 func TestE2E(t *testing.T) {
 	executeTests(t,
 		testExecution{
-			Name: "TestProfileParsingWorks",
+			Name:       "TestProfileParsingWorks",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				pbName := getObjNameFromTest(t)
 				testPB := &compv1alpha1.ProfileBundle{
@@ -50,7 +52,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestPBWithWrongFile",
+			Name:       "TestPBWithWrongFile",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				pbName := getObjNameFromTest(t)
 				testPB := &compv1alpha1.ProfileBundle{
@@ -73,7 +76,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestSingleScanSucceeds",
+			Name:       "TestSingleScanSucceeds",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &compv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
@@ -101,7 +105,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestSingleTailoredScanSucceeds",
+			Name:       "TestSingleTailoredScanSucceeds",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				tailoringCM := &corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
@@ -156,7 +161,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestScanWithNodeSelectorFiltersCorrectly",
+			Name:       "TestScanWithNodeSelectorFiltersCorrectly",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				selectWorkers := map[string]string{
 					"node-role.kubernetes.io/worker": "",
@@ -194,7 +200,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestScanWithInvalidContentFails",
+			Name:       "TestScanWithInvalidContentFails",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &compv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
@@ -220,7 +227,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestScanWithInvalidProfileFails",
+			Name:       "TestScanWithInvalidProfileFails",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &compv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
@@ -246,7 +254,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestMalformedTailoredScanFails",
+			Name:       "TestMalformedTailoredScanFails",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				tailoringCM := &corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
@@ -302,7 +311,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestScanWithEmptyTailoringCMNameFails",
+			Name:       "TestScanWithEmptyTailoringCMNameFails",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &compv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
@@ -331,7 +341,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestScanWithMissingTailoringCMFailsAndRecovers",
+			Name:       "TestScanWithMissingTailoringCMFailsAndRecovers",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				scanName := "test-scan-w-missing-tailoring-cm"
 				exampleComplianceScan := &compv1alpha1.ComplianceScan{
@@ -358,9 +369,18 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultError)
-				if err != nil {
-					return err
+
+				var resultErr error
+				// The status might still be NOT-AVAILABLE... we can wait a bit
+				// for the reconciliation to update it.
+				_ = wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
+					if resultErr = scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultError); resultErr != nil {
+						return false, nil
+					}
+					return true, nil
+				})
+				if resultErr != nil {
+					return resultErr
 				}
 
 				tailoringCM := &corev1.ConfigMap{
@@ -395,7 +415,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestMissingPodInRunningState",
+			Name:       "TestMissingPodInRunningState",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				exampleComplianceScan := &compv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
@@ -441,7 +462,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestApplyGenericRemediation",
+			Name:       "TestApplyGenericRemediation",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				remName := "test-apply-generic-remediation"
 				genericRem := &compv1alpha1.ComplianceRemediation{
@@ -491,7 +513,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestGenericRemediationFailsWithUnkownType",
+			Name:       "TestGenericRemediationFailsWithUnkownType",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				remName := "test-generic-remediation-fails-unkown"
 				genericRem := &compv1alpha1.ComplianceRemediation{
@@ -531,7 +554,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestSuiteWithInvalidScheduleShowsError",
+			Name:       "TestSuiteWithInvalidScheduleShowsError",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				suiteName := "test-suite-with-invalid-schedule"
 				testSuite := &compv1alpha1.ComplianceSuite{
@@ -572,7 +596,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestSuiteScan",
+			Name:       "TestSuiteScan",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				suiteName := "test-suite-two-scans"
 
@@ -677,7 +702,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestScheduledSuite",
+			Name:       "TestScheduledSuite",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				suiteName := "test-scheduled-suite"
 
@@ -737,7 +763,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestSuiteWithContentThatDoesNotMatch",
+			Name:       "TestSuiteWithContentThatDoesNotMatch",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				suiteName := "test-suite-with-non-matching-content"
 				testSuite := &compv1alpha1.ComplianceSuite{
@@ -777,7 +804,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestAutoRemediate",
+			Name:       "TestAutoRemediate",
+			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				// FIXME, maybe have a func that returns a struct with suite name and scan names?
 				suiteName := "test-remediate"
@@ -939,7 +967,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestUnapplyRemediation",
+			Name:       "TestUnapplyRemediation",
+			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				// FIXME, maybe have a func that returns a struct with suite name and scan names?
 				suiteName := "test-unapply-remediation"
@@ -1054,7 +1083,8 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestPlatformAndNodeSuiteScan",
+			Name:       "TestPlatformAndNodeSuiteScan",
+			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
 				suiteName := "test-suite-two-scans-with-platform"
 
