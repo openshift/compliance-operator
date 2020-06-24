@@ -168,14 +168,14 @@ func executeTests(t *testing.T, tests ...testExecution) {
 		for _, test := range tests {
 			// Don't loose test reference
 			test := test
-			t.Run(test.Name, func(tt *testing.T) {
-				if test.IsParallel {
+			if test.IsParallel {
+				t.Run(test.Name, func(tt *testing.T) {
 					tt.Parallel()
 					if err := test.TestFn(tt, f, ctx, mcTctx, ns); err != nil {
 						tt.Error(err)
 					}
-				}
-			})
+				})
+			}
 		}
 	})
 
@@ -183,13 +183,13 @@ func executeTests(t *testing.T, tests ...testExecution) {
 		for _, test := range tests {
 			// Don't loose test reference
 			test := test
-			t.Run(test.Name, func(t *testing.T) {
-				if !test.IsParallel {
+			if !test.IsParallel {
+				t.Run(test.Name, func(t *testing.T) {
 					if err := test.TestFn(t, f, ctx, mcTctx, ns); err != nil {
 						t.Error(err)
 					}
-				}
-			})
+				})
+			}
 		}
 	})
 }
