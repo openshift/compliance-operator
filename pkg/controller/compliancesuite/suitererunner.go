@@ -24,7 +24,7 @@ func (r *ReconcileComplianceSuite) reconcileScanRerunnerCronJob(suite *compv1alp
 	if suite.Spec.Schedule == "" {
 		return r.handleDelete(rerunner, logger)
 	}
-	return r.handleCreate(rerunner, logger)
+	return r.handleCreate(suite, rerunner, logger)
 }
 
 // validates that the provided schedule is correctly set. Else it returns false (not valid) and an
@@ -41,7 +41,7 @@ func (r *ReconcileComplianceSuite) validateSchedule(suite *compv1alpha1.Complian
 	return true, ""
 }
 
-func (r *ReconcileComplianceSuite) handleCreate(rerunner *batchv1beta1.CronJob, logger logr.Logger) error {
+func (r *ReconcileComplianceSuite) handleCreate(suite *compv1alpha1.ComplianceSuite, rerunner *batchv1beta1.CronJob, logger logr.Logger) error {
 	key := types.NamespacedName{Name: rerunner.GetName(), Namespace: rerunner.GetNamespace()}
 	found := &batchv1beta1.CronJob{}
 	err := r.client.Get(context.TODO(), key, found)
@@ -52,7 +52,12 @@ func (r *ReconcileComplianceSuite) handleCreate(rerunner *batchv1beta1.CronJob, 
 	} else if err != nil {
 		return err
 	}
-	// re-runner found, we're good
+	if found.Spec.Schedule != suite.Spec.Schedule {
+		cronJobCopy := found.DeepCopy()
+		cronJobCopy.Spec.Schedule = suite.Spec.Schedule
+		logger.Info("Updating rerunner", "CronJob.Name", rerunner.GetName())
+		return r.client.Update(context.TODO(), cronJobCopy)
+	}
 	return nil
 }
 
@@ -70,14 +75,15 @@ func (r *ReconcileComplianceSuite) handleDelete(rerunner *batchv1beta1.CronJob, 
 	return r.client.Delete(context.TODO(), rerunner)
 }
 
-func getRerunnerName(suite *compv1alpha1.ComplianceSuite) string {
-	return suite.Name + "-rerunner"
+// GetRerunnerName gets the name of the rerunner workload based on the suite name
+func GetRerunnerName(suiteName string) string {
+	return suiteName + "-rerunner"
 }
 
 func getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
 	return &batchv1beta1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      getRerunnerName(suite),
+			Name:      GetRerunnerName(suite.Name),
 			Namespace: common.GetComplianceOperatorNamespace(),
 		},
 		Spec: batchv1beta1.CronJobSpec{

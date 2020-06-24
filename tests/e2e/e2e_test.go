@@ -764,6 +764,109 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
+				// clean up
+				// Get new reference of suite
+				foundSuite := &compv1alpha1.ComplianceSuite{}
+				key := types.NamespacedName{Name: testSuite.Name, Namespace: testSuite.Namespace}
+				if err = f.Client.Get(goctx.TODO(), key, foundSuite); err != nil {
+					return err
+				}
+
+				// Remove cronjob so it doesn't keep running while other tests are running
+				testSuiteCopy := foundSuite.DeepCopy()
+				updatedSchedule := ""
+				testSuiteCopy.Spec.Schedule = updatedSchedule
+				if err = f.Client.Update(goctx.TODO(), testSuiteCopy); err != nil {
+					return err
+				}
+
+				return nil
+			},
+		},
+		testExecution{
+			Name:       "TestScheduledSuiteUpdate",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				suiteName := getObjNameFromTest(t)
+				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
+				selectWorkers := map[string]string{
+					"node-role.kubernetes.io/worker": "",
+				}
+
+				initialSchedule := "0 * * * *"
+				testSuite := &compv1alpha1.ComplianceSuite{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceSuiteSpec{
+						AutoApplyRemediations: false,
+						Schedule:              initialSchedule,
+						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
+							{
+								Name: workerScanName,
+								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+									ContentImage: contentImagePath,
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
+									Content:      rhcosContentFile,
+									Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
+									NodeSelector: selectWorkers,
+									Debug:        true,
+								},
+							},
+						},
+					},
+				}
+
+				err := f.Client.Create(goctx.TODO(), testSuite, nil)
+				if err != nil {
+					return err
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
+				if err != nil {
+					return err
+				}
+
+				err = waitForCronJobWithSchedule(t, f, namespace, suiteName, initialSchedule)
+				if err != nil {
+					return err
+				}
+
+				// Get new reference of suite
+				foundSuite := &compv1alpha1.ComplianceSuite{}
+				key := types.NamespacedName{Name: testSuite.Name, Namespace: testSuite.Namespace}
+				if err = f.Client.Get(goctx.TODO(), key, foundSuite); err != nil {
+					return err
+				}
+
+				// Update schedule
+				testSuiteCopy := foundSuite.DeepCopy()
+				updatedSchedule := "*/2 * * * *"
+				testSuiteCopy.Spec.Schedule = updatedSchedule
+				if err = f.Client.Update(goctx.TODO(), testSuiteCopy); err != nil {
+					return err
+				}
+
+				if err = waitForCronJobWithSchedule(t, f, namespace, suiteName, updatedSchedule); err != nil {
+					return err
+				}
+
+				// Clean up
+				// Get new reference of suite
+				foundSuite = &compv1alpha1.ComplianceSuite{}
+				if err = f.Client.Get(goctx.TODO(), key, foundSuite); err != nil {
+					return err
+				}
+
+				// Remove cronjob so it doesn't keep running while other tests are running
+				testSuiteCopy = foundSuite.DeepCopy()
+				updatedSchedule = ""
+				testSuiteCopy.Spec.Schedule = updatedSchedule
+				if err = f.Client.Update(goctx.TODO(), testSuiteCopy); err != nil {
+					return err
+				}
 				return nil
 			},
 		},

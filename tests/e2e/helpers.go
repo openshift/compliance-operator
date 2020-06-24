@@ -13,6 +13,7 @@ import (
 
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
+	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/openshift/compliance-operator/pkg/apis"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	compsuitectrl "github.com/openshift/compliance-operator/pkg/controller/compliancesuite"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
@@ -1238,4 +1240,40 @@ func scanHasValidPVCReference(f *framework.Framework, namespace, scanName string
 	pvcName := scan.Status.ResultsStorage.Name
 	pvcNamespace := scan.Status.ResultsStorage.Namespace
 	return f.Client.Get(goctx.TODO(), types.NamespacedName{Name: pvcName, Namespace: pvcNamespace}, pvc)
+}
+
+func waitForCronJobWithSchedule(t *testing.T, f *framework.Framework, namespace, suiteName, schedule string) error {
+	job := &batchv1beta1.CronJob{}
+	jobName := compsuitectrl.GetRerunnerName(suiteName)
+	var lastErr error
+	// retry and ignore errors until timeout
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: jobName, Namespace: namespace}, job)
+		if lastErr != nil {
+			if apierrors.IsNotFound(lastErr) {
+				E2ELogf(t, "Waiting for availability of %s CronJob\n", jobName)
+				return false, nil
+			}
+			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
+			return false, nil
+		}
+
+		if job.Spec.Schedule != schedule {
+			E2ELogf(t, "Retrying. Schedule in found job (%s) doesn't match excpeted schedule: %s\n",
+				job.Spec.Schedule, schedule)
+			return false, nil
+		}
+
+		return true, nil
+	})
+	// Error in function call
+	if lastErr != nil {
+		return lastErr
+	}
+	// Timeout
+	if timeouterr != nil {
+		return timeouterr
+	}
+	E2ELogf(t, "Found %s CronJob\n", jobName)
+	return nil
 }
