@@ -129,7 +129,7 @@ type ComplianceScanSpec struct {
 	// tailoring file. It assumes a key called `tailoring.xml` which will
 	// have the tailoring contents.
 	TailoringConfigMap *TailoringConfigMapRef `json:"tailoringConfigMap,omitempty"`
-	// Disables cleaning up resources in the DONE phase, this might be useful for debugging.
+	// Enable debug logging of workloads and OpenSCAP
 	Debug bool `json:"debug,omitempty"`
 }
 

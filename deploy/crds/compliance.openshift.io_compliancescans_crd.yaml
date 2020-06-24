@@ -50,8 +50,7 @@ spec:
                   be used to run OpenSCAP.
                 type: string
               debug:
-                description: Disables cleaning up resources in the DONE phase, this
-                  might be useful for debugging.
+                description: Enable debug logging of workloads and OpenSCAP
                 type: boolean
               nodeSelector:
                 additionalProperties:
