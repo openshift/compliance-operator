@@ -35,6 +35,13 @@ var (
 )
 
 const (
+	// flag that indicates that deletion should be done
+	doDelete = true
+	// flag that indicates that no deletion should take place
+	dontDelete = false
+)
+
+const (
 	// OpenSCAPScanContainerName defines the name of the contianer that will run OpenSCAP
 	OpenSCAPScanContainerName = "openscap-ocp"
 	// The default time we should wait before requeuing
@@ -138,7 +145,7 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 	case compv1alpha1.PhaseAggregating:
 		return r.phaseAggregatingHandler(scanToBeUpdated, reqLogger)
 	case compv1alpha1.PhaseDone:
-		return r.phaseDoneHandler(scanToBeUpdated, reqLogger)
+		return r.phaseDoneHandler(scanToBeUpdated, reqLogger, dontDelete)
 	}
 
 	// the default catch-all, just remove the request from the queue
@@ -382,13 +389,13 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1
 	return reconcile.Result{}, err
 }
 
-func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger, delete bool) (reconcile.Result, error) {
 	var nodes corev1.NodeList
 	var err error
 	logger.Info("Phase: Done")
 
 	// We need to remove resources before doing a re-scan
-	if !instance.Spec.Debug || instance.NeedsRescan() {
+	if delete || instance.NeedsRescan() {
 		logger.Info("Cleaning up scan's resources")
 		switch instance.Spec.ScanType {
 		case compv1alpha1.ScanTypePlatform:
@@ -471,15 +478,9 @@ func (r *ReconcileComplianceScan) scanDeleteHandler(instance *compv1alpha1.Compl
 		if scanToBeDeleted.NeedsRescan() {
 			delete(scanToBeDeleted.Annotations, compv1alpha1.ComplianceScanRescanAnnotation)
 		}
-		// Force debug to be false so we actually remove dependent objects
-		// NOTE(jaosorior): When we're in debug mode, objects don't get deleted
-		// to aide in debugging. if we're actually going through a deletion as
-		// is the case in this code-path, then we REALLY want to make sure everything
-		// gets deleted.
-		scanToBeDeleted.Spec.Debug = false
 
 		// remove objects by forcing handling of phase DONE
-		if _, err := r.phaseDoneHandler(scanToBeDeleted, logger); err != nil {
+		if _, err := r.phaseDoneHandler(scanToBeDeleted, logger, doDelete); err != nil {
 			// if fail to delete the external dependency here, return with error
 			// so that it can be retried
 			return reconcile.Result{}, err

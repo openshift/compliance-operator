@@ -213,35 +213,69 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 	})
 
 	Context("On the DONE phase", func() {
-		BeforeEach(func() {
-			// Create the pods for the test
-			podName1 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name)
-			reconciler.client.Create(context.TODO(), &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      podName1,
-					Namespace: common.GetComplianceOperatorNamespace(),
-				},
-			})
+		Context("with delete flag off", func() {
+			BeforeEach(func() {
+				// Create the pods for the test
+				podName1 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name)
+				reconciler.client.Create(context.TODO(), &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      podName1,
+						Namespace: common.GetComplianceOperatorNamespace(),
+					},
+				})
 
-			podName2 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name)
-			reconciler.client.Create(context.TODO(), &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      podName2,
-					Namespace: common.GetComplianceOperatorNamespace(),
-				},
-			})
+				podName2 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name)
+				reconciler.client.Create(context.TODO(), &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      podName2,
+						Namespace: common.GetComplianceOperatorNamespace(),
+					},
+				})
 
-			// Set state to DONE
-			compliancescaninstance.Status.Phase = compv1alpha1.PhaseDone
-			reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+				// Set state to DONE
+				compliancescaninstance.Status.Phase = compv1alpha1.PhaseDone
+				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+			})
+			It("Should return success & preserve resources", func() {
+				var pods corev1.PodList
+				result, err := reconciler.phaseDoneHandler(compliancescaninstance, logger, dontDelete)
+				reconciler.client.List(context.TODO(), &pods)
+				Expect(result).ToNot(BeNil())
+				Expect(err).To(BeNil())
+				Expect(pods.Items).ToNot(BeEmpty())
+			})
 		})
-		It("Should return success & clean up resources", func() {
-			var pods corev1.PodList
-			result, err := reconciler.phaseDoneHandler(compliancescaninstance, logger)
-			reconciler.client.List(context.TODO(), &pods)
-			Expect(result).ToNot(BeNil())
-			Expect(err).To(BeNil())
-			Expect(pods.Items).To(BeEmpty())
+		Context("with delete flag on", func() {
+			BeforeEach(func() {
+				// Create the pods for the test
+				podName1 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name)
+				reconciler.client.Create(context.TODO(), &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      podName1,
+						Namespace: common.GetComplianceOperatorNamespace(),
+					},
+				})
+
+				podName2 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name)
+				reconciler.client.Create(context.TODO(), &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      podName2,
+						Namespace: common.GetComplianceOperatorNamespace(),
+					},
+				})
+
+				// Set state to DONE
+				compliancescaninstance.Status.Phase = compv1alpha1.PhaseDone
+				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+			})
+			It("Should return success & clean up resources", func() {
+				var pods corev1.PodList
+				result, err := reconciler.phaseDoneHandler(compliancescaninstance, logger, doDelete)
+				reconciler.client.List(context.TODO(), &pods)
+				Expect(result).ToNot(BeNil())
+				Expect(err).To(BeNil())
+				Expect(pods.Items).To(BeEmpty())
+			})
 		})
 	})
 })
