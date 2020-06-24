@@ -8,6 +8,7 @@ import (
 
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -142,6 +143,123 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 				return scanHasValidPVCReferenceWithSize(f, namespace, scanName, "2Gi")
+			},
+		},
+		testExecution{
+			Name:       "TestScanStorageOutOfLimitRangeFails",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				// Create LimitRange
+				lr := &corev1.LimitRange{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "pvc-limitrange",
+						Namespace: namespace,
+					},
+					Spec: corev1.LimitRangeSpec{
+						Limits: []corev1.LimitRangeItem{
+							{
+								Type: corev1.LimitTypePersistentVolumeClaim,
+								Max: corev1.ResourceList{
+									corev1.ResourceStorage: resource.MustParse("5Gi"),
+								},
+							},
+						},
+					},
+				}
+				if err := f.Client.Create(goctx.TODO(), lr, nil); err != nil {
+					return err
+				}
+
+				scanName := getObjNameFromTest(t)
+				testScan := &compv1alpha1.ComplianceScan{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      scanName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceScanSpec{
+						Profile:              "xccdf_org.ssgproject.content_profile_moderate",
+						Content:              rhcosContentFile,
+						Rule:                 "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						RawResultStorageSize: "6Gi",
+						Debug:                true,
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), testScan, nil)
+				if err != nil {
+					return err
+				}
+				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+
+				err = scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultError)
+				if err != nil {
+					return err
+				}
+
+				// Clean up limitrange
+				if err := f.Client.Delete(goctx.TODO(), lr); err != nil {
+					return err
+				}
+				return nil
+			},
+		},
+		testExecution{
+			Name: "TestScanStorageOutOfQuotaRangeFails",
+			// This can't be parallel since it's a global quota for the namespace
+			IsParallel: false,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				// Create ResourceQuota
+				rq := &corev1.ResourceQuota{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "pvc-resourcequota",
+						Namespace: namespace,
+					},
+					Spec: corev1.ResourceQuotaSpec{
+						Hard: corev1.ResourceList{
+							corev1.ResourceRequestsStorage: resource.MustParse("5Gi"),
+						},
+					},
+				}
+				if err := f.Client.Create(goctx.TODO(), rq, nil); err != nil {
+					return err
+				}
+
+				scanName := getObjNameFromTest(t)
+				testScan := &compv1alpha1.ComplianceScan{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      scanName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceScanSpec{
+						Profile:              "xccdf_org.ssgproject.content_profile_moderate",
+						Content:              rhcosContentFile,
+						Rule:                 "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						RawResultStorageSize: "6Gi",
+						Debug:                true,
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), testScan, nil)
+				if err != nil {
+					return err
+				}
+				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+
+				err = scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultError)
+				if err != nil {
+					return err
+				}
+				// delete resource quota
+				if err := f.Client.Delete(goctx.TODO(), rq); err != nil {
+					return err
+				}
+				return nil
 			},
 		},
 		testExecution{
