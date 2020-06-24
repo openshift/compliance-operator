@@ -764,6 +764,22 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
+				// clean up
+				// Get new reference of suite
+				foundSuite := &compv1alpha1.ComplianceSuite{}
+				key := types.NamespacedName{Name: testSuite.Name, Namespace: testSuite.Namespace}
+				if err = f.Client.Get(goctx.TODO(), key, foundSuite); err != nil {
+					return err
+				}
+
+				// Remove cronjob so it doesn't keep running while other tests are running
+				testSuiteCopy := foundSuite.DeepCopy()
+				updatedSchedule := ""
+				testSuiteCopy.Spec.Schedule = updatedSchedule
+				if err = f.Client.Update(goctx.TODO(), testSuiteCopy); err != nil {
+					return err
+				}
+
 				return nil
 			},
 		},
@@ -833,7 +849,25 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				return waitForCronJobWithSchedule(t, f, namespace, suiteName, updatedSchedule)
+				if err = waitForCronJobWithSchedule(t, f, namespace, suiteName, updatedSchedule); err != nil {
+					return err
+				}
+
+				// Clean up
+				// Get new reference of suite
+				foundSuite = &compv1alpha1.ComplianceSuite{}
+				if err = f.Client.Get(goctx.TODO(), key, foundSuite); err != nil {
+					return err
+				}
+
+				// Remove cronjob so it doesn't keep running while other tests are running
+				testSuiteCopy = foundSuite.DeepCopy()
+				updatedSchedule = ""
+				testSuiteCopy.Spec.Schedule = updatedSchedule
+				if err = f.Client.Update(goctx.TODO(), testSuiteCopy); err != nil {
+					return err
+				}
+				return nil
 			},
 		},
 		testExecution{
