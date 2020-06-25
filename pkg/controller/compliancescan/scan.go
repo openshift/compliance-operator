@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"strings"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -18,9 +19,10 @@ import (
 )
 
 const (
-	resultscollectorSA     = "resultscollector"
-	apiResourceCollectorSA = "api-resource-collector"
-	tailoringCMVolumeName  = "tailoring"
+	resultscollectorSA      = "resultscollector"
+	apiResourceCollectorSA  = "api-resource-collector"
+	tailoringCMVolumeName   = "tailoring"
+	tailoringNotFoundPrefix = "Tailoring ConfigMap not found: "
 )
 
 func (r *ReconcileComplianceScan) createScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
@@ -525,9 +527,24 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 	origCM := &corev1.ConfigMap{}
 	origKey := types.NamespacedName{Name: origName, Namespace: origNs}
 	err := r.client.Get(context.TODO(), origKey, origCM)
+	// Tailoring ConfigMap not found
 	if err != nil && errors.IsNotFound(err) {
+		// We previously had dealt with this issue, just requeue
+		if strings.HasPrefix(scan.Status.ErrorMessage, tailoringNotFoundPrefix) {
+			return common.NewRetriableCtrlErrorWithCustomHandler(func() (reconcile.Result, error) {
+				// A ConfigMap not being found might be a temporary issue
+				if r.recorder != nil {
+					r.recorder.Eventf(
+						scan, corev1.EventTypeWarning, "TailoringError",
+						"Tailoring ConfigMap '%s' not found", origKey,
+					)
+				}
+
+				return reconcile.Result{RequeueAfter: requeueAfterDefault, Requeue: true}, nil
+			}, "Tailoring ConfigMap not found")
+		}
+		// A ConfigMap not being found might be a temporary issue (update and let the reconcile loop requeue)
 		return common.NewRetriableCtrlErrorWithCustomHandler(func() (reconcile.Result, error) {
-			// A ConfigMap not being found might be a temporary issue
 			if r.recorder != nil {
 				r.recorder.Eventf(
 					scan, corev1.EventTypeWarning, "TailoringError",
@@ -537,7 +554,7 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 
 			log.Info("Updating scan status due to missing Tailoring ConfigMap")
 			scanCopy := scan.DeepCopy()
-			scanCopy.Status.ErrorMessage = err.Error()
+			scanCopy.Status.ErrorMessage = tailoringNotFoundPrefix + err.Error()
 			scanCopy.Status.Result = compv1alpha1.ResultError
 			if updateerr := r.client.Status().Update(context.TODO(), scanCopy); updateerr != nil {
 				log.Error(updateerr, "Failed to update a scan")
@@ -548,6 +565,21 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 	} else if err != nil {
 		log.Error(err, "Failed to get spec tailoring ConfigMap", "ConfigMap.Name", origName, "ConfigMap.Namespace", origNs)
 		return err
+	} else if err == nil && scan.Status.Result == compv1alpha1.ResultError {
+		// We had an error caused by a previously not found configmap. Let's remove it
+		if strings.HasPrefix(scan.Status.ErrorMessage, tailoringNotFoundPrefix) {
+			return common.NewRetriableCtrlErrorWithCustomHandler(func() (reconcile.Result, error) {
+				log.Info("Updating scan status since Tailoring ConfigMap was now found")
+				scanCopy := scan.DeepCopy()
+				scanCopy.Status.ErrorMessage = ""
+				scanCopy.Status.Result = compv1alpha1.ResultNotAvailable
+				if updateerr := r.client.Status().Update(context.TODO(), scanCopy); updateerr != nil {
+					log.Error(updateerr, "Failed to update a scan")
+					return reconcile.Result{}, updateerr
+				}
+				return reconcile.Result{RequeueAfter: requeueAfterDefault, Requeue: true}, nil
+			}, "Tailoring ConfigMap previously not found, was now found")
+		}
 	}
 
 	origData, ok := origCM.Data["tailoring.xml"]
