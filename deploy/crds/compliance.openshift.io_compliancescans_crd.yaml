@@ -65,9 +65,10 @@ spec:
                   the collection of rules that will be checked for.
                 type: string
               rawResultStorageSize:
+                default: 1Gi
                 description: Specifies the amount of storage to ask for storing the
                   raw results. Note that if re-scans happen, the new results will
-                  also need to be stored.
+                  also need to be stored. Defaults to 1Gi.
                 type: string
               rule:
                 description: A Rule can be specified if the scan should check only

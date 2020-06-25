@@ -138,6 +138,7 @@ type ComplianceScanSpec struct {
 	// Specifies the amount of storage to ask for storing the raw results. Note that
 	// if re-scans happen, the new results will also need to be stored. Defaults to 1Gi.
 	// +kubebuilder:validation:Default=1Gi
+	// +kubebuilder:default="1Gi"
 	RawResultStorageSize string `json:"rawResultStorageSize,omitempty"`
 }
 
