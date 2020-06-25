@@ -49,8 +49,8 @@ var _ = Describe("Testing SCAP parsing and storage", func() {
 		})
 	})
 
-	Context("Storing files in their appropriate directories", func() {
-		It("Stores the file in the right place with the root being '/tmp'", func() {
+	Context("Parses the save path appropriately", func() {
+		It("Parses correctly with the root being '/tmp'", func() {
 			root := "/tmp"
 			path := "/apis/foo"
 			expectedDir := "/tmp/apis"
@@ -62,7 +62,7 @@ var _ = Describe("Testing SCAP parsing and storage", func() {
 			Expect(file).To(Equal(expectedFile))
 		})
 
-		It("Stores the file in the right place with the root being '/'", func() {
+		It("Parses correctly with the root being '/'", func() {
 			root := "/"
 			path := "/apis/foo/bar"
 			expectedDir := "/apis/foo"
@@ -74,7 +74,7 @@ var _ = Describe("Testing SCAP parsing and storage", func() {
 			Expect(file).To(Equal(expectedFile))
 		})
 
-		It("Stores the file in the right place with the root being '/tmp/foo'", func() {
+		It("Parses correctly with the root being '/tmp/foo'", func() {
 			root := "/tmp/foo"
 			path := "/apis/foo/bar/baz"
 			expectedDir := "/tmp/foo/apis/foo/bar"
