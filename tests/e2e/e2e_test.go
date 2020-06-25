@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	configv1 "github.com/openshift/api/config/v1"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
@@ -1241,7 +1242,8 @@ func TestE2E(t *testing.T) {
 				}
 
 				// Ensure that all the scans in the suite have finished and are marked as Done
-				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultNonCompliant)
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone,
+					compv1alpha1.ResultNonCompliant)
 				if err != nil {
 					return err
 				}
@@ -1277,6 +1279,120 @@ func TestE2E(t *testing.T) {
 				//if err != nil {
 				//	return err
 				//}
+
+				// Test a fail result from the platform scan. This fails the HTPasswd IDP check.
+				if _, err := f.KubeClient.CoreV1().Secrets("openshift-config").Create(goctx.TODO(), &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "htpass",
+						Namespace: "openshift-config",
+					},
+					Type: corev1.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"htpasswd": []byte("bob:$2y$05$OyjQO7M2so4hRJW0aS9yie9KJ0wXv80XFWyEsApUZFURqE37aVR/a"),
+					},
+				}, metav1.CreateOptions{}); err != nil {
+					return err
+				}
+
+				defer func() {
+					err := f.KubeClient.CoreV1().Secrets("openshift-config").Delete(goctx.TODO(), "htpass", metav1.DeleteOptions{})
+					if err != nil {
+						t.Logf("could not clean up openshift-config/htpass test secret: %v", err)
+					}
+				}()
+
+				fetchedOauth := &configv1.OAuth{}
+				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: "cluster"}, fetchedOauth)
+				if err != nil {
+					return err
+				}
+
+				oauthUpdate := fetchedOauth.DeepCopy()
+				oauthUpdate.Spec = configv1.OAuthSpec{
+					IdentityProviders: []configv1.IdentityProvider{
+						{
+							Name:          "my_htpasswd_provider",
+							MappingMethod: "claim",
+							IdentityProviderConfig: configv1.IdentityProviderConfig{
+								Type: "HTPasswd",
+								HTPasswd: &configv1.HTPasswdIdentityProvider{
+									FileData: configv1.SecretNameReference{
+										Name: "htpass",
+									},
+								},
+							},
+						},
+					},
+				}
+
+				err = f.Client.Update(goctx.TODO(), oauthUpdate)
+				if err != nil {
+					t.Logf("error updating idp: %v", err)
+					return err
+				}
+
+				defer func() {
+					fetchedOauth := &configv1.OAuth{}
+					err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: "cluster"}, fetchedOauth)
+					if err != nil {
+						t.Logf("error restoring idp: %v", err)
+					} else {
+						oauth := fetchedOauth.DeepCopy()
+						// Make sure it's cleared out
+						oauth.Spec = configv1.OAuthSpec{
+							IdentityProviders: nil,
+						}
+						err = f.Client.Update(goctx.TODO(), oauth)
+						if err != nil {
+							t.Logf("error restoring idp: %v", err)
+						}
+					}
+				}()
+
+				suiteName = "test-suite-two-scans-with-platform-2"
+				platformScanName = fmt.Sprintf("%s-platform-scan-2", suiteName)
+				exampleComplianceSuite = &compv1alpha1.ComplianceSuite{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceSuiteSpec{
+						AutoApplyRemediations: false,
+						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
+							{
+								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+									ScanType:     compv1alpha1.ScanTypePlatform,
+									ContentImage: contentImagePath,
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
+									Content:      ocpContentFile,
+								},
+								Name: platformScanName,
+							},
+						},
+					},
+				}
+
+				err = f.Client.Create(goctx.TODO(), exampleComplianceSuite, &framework.CleanupOptions{
+					TestContext:   ctx,
+					Timeout:       cleanupTimeout,
+					RetryInterval: cleanupRetryInterval,
+				})
+				if err != nil {
+					return err
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone,
+					compv1alpha1.ResultNonCompliant)
+				if err != nil {
+					return err
+				}
+
+				err = scanResultIsExpected(f, namespace, platformScanName, compv1alpha1.ResultNonCompliant)
+				if err != nil {
+					return err
+				}
+
 				return nil
 			},
 		},
