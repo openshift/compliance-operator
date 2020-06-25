@@ -103,7 +103,7 @@ var _ = Describe("Testing parse profiles", func() {
 				profHaveId(e8Id),
 				profHaveId(moderateId),
 				profHaveId(ncpId),
-				))
+			))
 		})
 	})
 
@@ -132,9 +132,14 @@ var _ = Describe("Testing parse profiles", func() {
 				cmpv1alpha1.NewProfileRule("test-profile-audit-rules-time-stime"),
 				cmpv1alpha1.NewProfileRule("test-profile-sysctl-net-core-bpf-jit-harden"),
 				cmpv1alpha1.NewProfileRule("test-profile-wireless-disable-in-bios"),
-				))
+			))
 		})
 
+		It("Has the platform annotations", func() {
+			Expect(moderateProfile.Annotations).ToNot(BeNil())
+			Expect(moderateProfile.Annotations).To(HaveKeyWithValue(cmpv1alpha1.ProductTypeAnnotation, string(cmpv1alpha1.ScanTypePlatform)))
+			Expect(moderateProfile.Annotations).To(HaveKeyWithValue(cmpv1alpha1.ProductAnnotation, "redhat_openshift_container_platform_4.1"))
+		})
 	})
 })
 

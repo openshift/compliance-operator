@@ -75,8 +75,21 @@ func getVariableType(varNode *xmldom.Node) cmpv1alpha1.VariableType {
 }
 
 func ParseProfilesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action func(p *cmpv1alpha1.Profile) error) error {
-	profileObjs := contentDom.Root.Query("//Profile")
+	benchmarks := contentDom.Root.Query("//Benchmark")
+	for _, bench := range benchmarks {
+		productType, productName := getProductTypeAndName(bench, cmpv1alpha1.ScanTypeNode, "")
+		if err := parseProfileFromNode(bench, pcfg, productType, productName, action); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func parseProfileFromNode(profileRoot *xmldom.Node, pcfg *ParserConfig, defType cmpv1alpha1.ComplianceScanType, defName string, action func(p *cmpv1alpha1.Profile) error) error {
+	profileObjs := profileRoot.Query("//Profile")
 	for _, profileObj := range profileObjs {
+
 		id := profileObj.GetAttributeValue("id")
 		if id == "" {
 			return LogAndReturnError("no id in profile")
@@ -90,6 +103,10 @@ func ParseProfilesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action 
 			return LogAndReturnError("no description in profile")
 		}
 		log.Info("Found profile", "id", id)
+
+		// In case the profile sets its own CPE string
+		productType, productName := getProductTypeAndName(profileObj, defType, defName)
+		log.Info("Platform info", "type", productType, "name", productName)
 
 		ruleObjs := profileObj.FindByName("select")
 		selectedrules := []cmpv1alpha1.ProfileRule{}
@@ -125,6 +142,10 @@ func ParseProfilesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action 
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      xccdf.GetProfileNameFromID(id),
 				Namespace: pcfg.ProfileBundleKey.Namespace,
+				Annotations: map[string]string{
+					cmpv1alpha1.ProductAnnotation:     productName,
+					cmpv1alpha1.ProductTypeAnnotation: string(productType),
+				},
 			},
 			ID:          id,
 			Title:       title.Text,
@@ -140,6 +161,52 @@ func ParseProfilesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action 
 	}
 
 	return nil
+}
+
+func getProductTypeAndName(root *xmldom.Node, defaultType cmpv1alpha1.ComplianceScanType, defaultName string) (cmpv1alpha1.ComplianceScanType, string) {
+	// Loop ourselves b/c we are only interested in direct children
+	for _, child := range root.Children {
+		if child.Name == "platform" {
+			return parseProductTypeAndName(child.GetAttributeValue("idref"), defaultType, defaultName)
+		}
+	}
+
+	return defaultType, defaultName
+}
+
+func parseProductTypeAndName(idref string, defaultType cmpv1alpha1.ComplianceScanType, defaultName string) (cmpv1alpha1.ComplianceScanType, string) {
+	const partIdx = 0
+	const cpePrefix = "cpe:/"
+
+	var productType cmpv1alpha1.ComplianceScanType
+	log.Info("Parsing CPE", "cpe ID", idref)
+
+	// example: cpe:/a:redhat:enterprise_linux_coreos:4
+	if strings.HasPrefix(idref, "#") || !strings.HasPrefix(idref, cpePrefix) {
+		log.Info("references are not supported or an unsupported format")
+		return defaultType, defaultName
+	}
+
+	// Now we know it begins with cpePrefix
+	idref = strings.TrimPrefix(idref, cpePrefix)
+	cpePieces := strings.Split(idref, ":")
+	if len(cpePieces) == 0 {
+		log.Info("The CPE ID is too short")
+		return defaultType, defaultName
+	}
+	log.Info("exploded CPE", "cpePieces", cpePieces)
+
+	log.Info("CPE part", "part", cpePieces[partIdx])
+	switch cpePieces[partIdx] {
+	case "o":
+		productType = cmpv1alpha1.ScanTypeNode
+	default:
+		// We assume anything we don't know is a platform...
+		productType = cmpv1alpha1.ScanTypePlatform
+	}
+
+	productName := strings.Join(cpePieces[1:], "_")
+	return productType, productName
 }
 
 func ParseVariablesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action func(v *cmpv1alpha1.Variable) error) error {

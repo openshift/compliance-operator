@@ -4,6 +4,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// ProductTypeAnnotation specifies what kind of platform (node,platform)
+// this Profile or a TailoredProfile targets
+const ProductTypeAnnotation = "compliance.openshift.io/product-type"
+
+// ProductAnnotation specifies the name of the platform this Profile
+// or TailoredProfile is targetting. Example: ocp4, rhcos4, ...
+const ProductAnnotation = "compliance.openshift.io/product"
+
 // ProfileRule defines the name of a specific rule in the profile
 type ProfileRule string
 

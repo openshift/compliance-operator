@@ -1223,7 +1223,7 @@ func getPoolNodeRoleSelector() map[string]string {
 	return utils.GetNodeRoleSelector(testPoolName)
 }
 
-func assertMustHaveParsedProfiles(t *testing.T, f *framework.Framework, namespace, name string) error {
+func assertMustHaveParsedProfiles(f *framework.Framework, name string, productType, productName string) error {
 	var pl compv1alpha1.ProfileList
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(map[string]string{
@@ -1236,6 +1236,17 @@ func assertMustHaveParsedProfiles(t *testing.T, f *framework.Framework, namespac
 	if len(pl.Items) <= 0 {
 		return fmt.Errorf("Profiles weren't parsed from the ProfileBundle. Expected more than one, got %d", len(pl.Items))
 	}
+
+	for _, prof := range pl.Items {
+		if prof.Annotations[compv1alpha1.ProductTypeAnnotation] != productType {
+			return fmt.Errorf("expected %s to be %s, got %s instead", compv1alpha1.ProductTypeAnnotation, productType, prof.Annotations[compv1alpha1.ProductTypeAnnotation])
+		}
+
+		if prof.Annotations[compv1alpha1.ProductAnnotation] != productName {
+			return fmt.Errorf("expected %s to be %s, got %s instead", compv1alpha1.ProductAnnotation, productName, prof.Annotations[compv1alpha1.ProductAnnotation])
+		}
+	}
+
 	return nil
 }
 
