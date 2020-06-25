@@ -52,6 +52,10 @@ func LogAndReturnError(errormsg string) error {
 	return fmt.Errorf(errormsg)
 }
 
+func GetPrefixedName(pbName, objName string) string {
+	return pbName + "-" + objName
+}
+
 func getVariableType(varNode *xmldom.Node) cmpv1alpha1.VariableType {
 	typeAttr := varNode.GetAttribute("type")
 	if typeAttr == nil {
@@ -68,6 +72,74 @@ func getVariableType(varNode *xmldom.Node) cmpv1alpha1.VariableType {
 	}
 
 	return cmpv1alpha1.VarTypeString
+}
+
+func ParseProfilesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action func(p *cmpv1alpha1.Profile) error) error {
+	profileObjs := contentDom.Root.Query("//Profile")
+	for _, profileObj := range profileObjs {
+		id := profileObj.GetAttributeValue("id")
+		if id == "" {
+			return LogAndReturnError("no id in profile")
+		}
+		title := profileObj.FindOneByName("title")
+		if title == nil {
+			return LogAndReturnError("no title in profile")
+		}
+		description := profileObj.FindOneByName("description")
+		if description == nil {
+			return LogAndReturnError("no description in profile")
+		}
+		log.Info("Found profile", "id", id)
+
+		ruleObjs := profileObj.FindByName("select")
+		selectedrules := []cmpv1alpha1.ProfileRule{}
+		for _, ruleObj := range ruleObjs {
+			idref := ruleObj.GetAttributeValue("idref")
+			if idref == "" {
+				log.Info("no idref in rule")
+				continue
+			}
+			selected := ruleObj.GetAttributeValue("selected")
+			if selected == "true" {
+				ruleName := GetPrefixedName(pcfg.ProfileBundleKey.Name, xccdf.GetRuleNameFromID(idref))
+				selectedrules = append(selectedrules, cmpv1alpha1.NewProfileRule(ruleName))
+			}
+		}
+
+		selectedvalues := []cmpv1alpha1.ProfileValue{}
+		valueObjs := profileObj.FindByName("set-value")
+		for _, valueObj := range valueObjs {
+			idref := valueObj.GetAttributeValue("idref")
+			if idref == "" {
+				log.Info("no idref in rule")
+				continue
+			}
+			selectedvalues = append(selectedvalues, cmpv1alpha1.ProfileValue(idref))
+		}
+
+		p := cmpv1alpha1.Profile{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Profile",
+				APIVersion: cmpv1alpha1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      xccdf.GetProfileNameFromID(id),
+				Namespace: pcfg.ProfileBundleKey.Namespace,
+			},
+			ID:          id,
+			Title:       title.Text,
+			Description: description.Text,
+			Rules:       selectedrules,
+			Values:      selectedvalues,
+		}
+		err := action(&p)
+		if err != nil {
+			log.Error(err, "couldn't execute action")
+			return err
+		}
+	}
+
+	return nil
 }
 
 func ParseVariablesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action func(v *cmpv1alpha1.Variable) error) error {
