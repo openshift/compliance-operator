@@ -12,6 +12,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	rawStorageAllocationErrorPrefix = "Couldn't allocate raw storage: "
+)
+
 // handles the necessary things to store and expose the raw results from the scan. This implies
 // that the PVC gets created, and, if necessary, the scan instance will get updated too.
 // Returns whether the reconcile loop should continue or not, and an error if encountered.
@@ -20,6 +24,14 @@ func (r *ReconcileComplianceScan) handleRawResultsForScan(instance *compv1alpha1
 	pvc := getPVCForScan(instance)
 	logger.Info("Creating PVC for scan", "PersistentVolumeClaim.Name", pvc.Name, "PersistentVolumeClaim.Namespace", pvc.Namespace)
 	if err := r.client.Create(context.TODO(), pvc); err != nil && !errors.IsAlreadyExists(err) {
+		// Handle resource limit issues
+		if errors.IsForbidden(err) {
+			scanCopy := instance.DeepCopy()
+			scanCopy.Status.Phase = compv1alpha1.PhaseDone
+			scanCopy.Status.Result = compv1alpha1.ResultError
+			scanCopy.Status.ErrorMessage = rawStorageAllocationErrorPrefix + err.Error()
+			return false, r.client.Status().Update(context.TODO(), scanCopy)
+		}
 		return false, err
 	}
 	if instanceNeedsResultStorageReference(instance, pvc) {
@@ -61,8 +73,7 @@ func getPVCForScan(instance *compv1alpha1.ComplianceScan) *corev1.PersistentVolu
 			},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					// TODO(jaosorior): Make this configurable
-					corev1.ResourceStorage: resource.MustParse("1Gi"),
+					corev1.ResourceStorage: resource.MustParse(instance.Spec.RawResultStorageSize),
 				},
 			},
 		},

@@ -131,6 +131,8 @@ In the `spec`:
   remediation will be created for. Note that if this parameter is not
   specified or doesn't match a `MachineConfigPool`, a scan will still be run,
   but remediations won't be created.
+* **rawResultStorageSize**: Specifies the size of storage that should be asked
+  for in order for the scan to store the raw results. (Defaults to 1Gi)
 
 Regarding the `status`:
 

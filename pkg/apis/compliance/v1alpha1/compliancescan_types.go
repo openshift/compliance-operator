@@ -21,6 +21,10 @@ const ScriptLabel = "complianceoperator.openshift.io/scan-script"
 // added by the ComplianceScan controller in order to delete resources.
 const ScanFinalizer = "scan.finalizers.compliance.openshift.io"
 
+// DefaultRawStorageSize specifies the default storage size where the raw
+// results will be stored at
+const DefaultRawStorageSize = "1Gi"
+
 // Represents the status of the compliance scan run.
 type ComplianceScanStatusPhase string
 
@@ -131,6 +135,11 @@ type ComplianceScanSpec struct {
 	TailoringConfigMap *TailoringConfigMapRef `json:"tailoringConfigMap,omitempty"`
 	// Enable debug logging of workloads and OpenSCAP
 	Debug bool `json:"debug,omitempty"`
+	// Specifies the amount of storage to ask for storing the raw results. Note that
+	// if re-scans happen, the new results will also need to be stored. Defaults to 1Gi.
+	// +kubebuilder:validation:Default=1Gi
+	// +kubebuilder:default="1Gi"
+	RawResultStorageSize string `json:"rawResultStorageSize,omitempty"`
 }
 
 // ComplianceScanStatus defines the observed state of ComplianceScan

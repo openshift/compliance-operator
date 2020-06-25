@@ -42,7 +42,9 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test",
 			},
-			Spec: compv1alpha1.ComplianceScanSpec{},
+			Spec: compv1alpha1.ComplianceScanSpec{
+				RawResultStorageSize: compv1alpha1.DefaultRawStorageSize,
+			},
 		}
 		objs = append(objs, compliancescaninstance)
 
@@ -77,6 +79,52 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			Expect(err).To(BeNil())
 			Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseLaunching))
 			Expect(compliancescaninstance.Status.Result).To(Equal(compv1alpha1.ResultNotAvailable))
+		})
+
+		Context("With correct custom RawResultStorageSize", func() {
+			It("should update the compliancescan instance to phase LAUNCHING", func() {
+				compliancescaninstance.Spec.RawResultStorageSize = "2Gi"
+				result, err := reconciler.phasePendingHandler(compliancescaninstance, logger)
+				Expect(result).NotTo(BeNil())
+				Expect(err).To(BeNil())
+				Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseLaunching))
+				Expect(compliancescaninstance.Status.Result).To(Equal(compv1alpha1.ResultNotAvailable))
+			})
+		})
+
+		Context("With missing RawResultStorageSize", func() {
+			It("should update the compliancescan instance with the default size", func() {
+				compliancescaninstance.Spec.RawResultStorageSize = ""
+				result, err := reconciler.phasePendingHandler(compliancescaninstance, logger)
+				Expect(result).NotTo(BeNil())
+				Expect(err).To(BeNil())
+
+				scan := &compv1alpha1.ComplianceScan{}
+				key := types.NamespacedName{
+					Name:      compliancescaninstance.Name,
+					Namespace: compliancescaninstance.Namespace,
+				}
+				reconciler.client.Get(context.TODO(), key, scan)
+				Expect(scan.Spec.RawResultStorageSize).To(Equal(compv1alpha1.DefaultRawStorageSize))
+			})
+		})
+
+		Context("With invalid RawResultStorageSize", func() {
+			It("report an error and move to phase DONE", func() {
+				compliancescaninstance.Spec.RawResultStorageSize = "invalid"
+				result, err := reconciler.phasePendingHandler(compliancescaninstance, logger)
+				Expect(result).NotTo(BeNil())
+				Expect(err).To(BeNil())
+
+				scan := &compv1alpha1.ComplianceScan{}
+				key := types.NamespacedName{
+					Name:      compliancescaninstance.Name,
+					Namespace: compliancescaninstance.Namespace,
+				}
+				reconciler.client.Get(context.TODO(), key, scan)
+				Expect(scan.Status.Phase).To(Equal(compv1alpha1.PhaseDone))
+				Expect(scan.Status.Result).To(Equal(compv1alpha1.ResultError))
+			})
 		})
 	})
 
