@@ -56,6 +56,10 @@ func (r *ReconcileComplianceScan) deleteRawResultsForScan(instance *compv1alpha1
 
 func getPVCForScan(instance *compv1alpha1.ComplianceScan) *corev1.PersistentVolumeClaim {
 	return &corev1.PersistentVolumeClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "PersistentVolumeClaim",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getPVCForScanName(instance.Name),
 			Namespace: common.GetComplianceOperatorNamespace(),
