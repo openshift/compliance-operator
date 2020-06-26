@@ -184,7 +184,7 @@ test-benchmark: ## Run the benchmark tests -- Note that this can only be ran for
 # push the operator image to the cluster's registry. This behavior can be
 # avoided with the E2E_SKIP_CONTAINER_PUSH environment variable.
 .PHONY: e2e
-e2e: namespace tear-down operator-sdk image-to-cluster openshift-user ## Run the end-to-end tests
+e2e: namespace tear-down operator-sdk image-to-cluster openshift-user deploy-crds ## Run the end-to-end tests
 	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
 	@echo "Replacing workload references in deploy/operator.yaml"
 	@sed -i 's%$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%$(OPENSCAP_IMAGE_PATH):$(OPENSCAP_IMAGE_TAG)%' deploy/operator.yaml
@@ -195,7 +195,7 @@ e2e: namespace tear-down operator-sdk image-to-cluster openshift-user ## Run the
 	@sed -i 's%$(OPENSCAP_IMAGE_PATH):$(OPENSCAP_IMAGE_TAG)%$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%' deploy/operator.yaml
 	@sed -i 's%$(OPERATOR_IMAGE_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 
-e2e-local: operator-sdk tear-down ## Run the end-to-end tests on a locally running operator (e.g. using make run)
+e2e-local: operator-sdk tear-down deploy-crds ## Run the end-to-end tests on a locally running operator (e.g. using make run)
 	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
 	@echo "Replacing workload references in deploy/operator.yaml"
 	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH)%' deploy/operator.yaml
