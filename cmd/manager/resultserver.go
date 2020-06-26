@@ -19,16 +19,20 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
+	"strings"
+	"syscall"
+	"time"
 
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 )
@@ -56,6 +60,7 @@ func defineResultServerFlags(cmd *cobra.Command) {
 	cmd.Flags().String("tls-server-cert", "", "Path to the server cert")
 	cmd.Flags().String("tls-server-key", "", "Path to the server key")
 	cmd.Flags().String("tls-ca", "", "Path to the CA certificate")
+	cmd.Flags().Uint16("rotation", 3, "Amount of raw result directories to keep")
 
 	flags := cmd.Flags()
 	flags.AddFlagSet(zap.FlagSet())
@@ -66,25 +71,33 @@ func defineResultServerFlags(cmd *cobra.Command) {
 }
 
 type resultServerConfig struct {
-	Address string
-	Port    string
-	Path    string
-	Cert    string
-	Key     string
-	CA      string
+	Address  string
+	Port     string
+	BasePath string
+	Path     string
+	Cert     string
+	Key      string
+	CA       string
+	Rotation uint16
 }
 
 func parseResultServerConfig(cmd *cobra.Command) *resultServerConfig {
 	basePath := getValidStringArg(cmd, "path")
 	index := getValidStringArg(cmd, "scan-index")
+	rotation, _ := cmd.Flags().GetUint16("rotation")
 	conf := &resultServerConfig{
-		Address: getValidStringArg(cmd, "address"),
-		Port:    getValidStringArg(cmd, "port"),
-		Path:    filepath.Join(basePath, index),
-		Cert:    getValidStringArg(cmd, "tls-server-cert"),
-		Key:     getValidStringArg(cmd, "tls-server-key"),
-		CA:      getValidStringArg(cmd, "tls-ca"),
+		Address:  getValidStringArg(cmd, "address"),
+		Port:     getValidStringArg(cmd, "port"),
+		BasePath: basePath,
+		Path:     filepath.Join(basePath, index),
+		Cert:     getValidStringArg(cmd, "tls-server-cert"),
+		Key:      getValidStringArg(cmd, "tls-server-key"),
+		CA:       getValidStringArg(cmd, "tls-ca"),
+		Rotation: rotation,
 	}
+
+	logf.SetLogger(zap.Logger())
+
 	return conf
 }
 
@@ -98,16 +111,79 @@ func ensureDir(path string) error {
 	return nil
 }
 
+// Directory is a holding struct used to sort directories by time
+type Directory struct {
+	CreationTime time.Time
+	Path         string
+}
+
+func timespecToTime(ts syscall.Timespec) time.Time {
+	return time.Unix(int64(ts.Sec), int64(ts.Nsec))
+}
+
+func rotateResultDirectories(rootPath string, rotation uint16) error {
+	// If rotation is a negative number, we don't rotate
+	if rotation == 0 {
+		log.Info("Rotation policy set to '0'. No need to rotate.")
+		return nil
+	}
+	dirs := []Directory{}
+	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Error(err, "Error accessing directory. Prevent panic by handling failure accessing a path", "filepath", path)
+			return err
+		}
+		if path == rootPath {
+			// Do nothing on base directory
+			return nil
+		}
+		if strings.Contains(path, "lost+found") {
+			// Do nothing on base directory
+			log.Info("Rotation: Skipping 'lost+found' directory")
+			return filepath.SkipDir
+		}
+		if info.IsDir() {
+			statinfo := info.Sys().(*syscall.Stat_t)
+			dirs = append(dirs, Directory{
+				CreationTime: timespecToTime(statinfo.Ctim),
+				Path:         path,
+			})
+			return filepath.SkipDir
+		}
+		return nil
+	})
+	if err != nil {
+		log.Error(err, "Couldn't rotate directories")
+		return err
+	}
+	sort.Slice(dirs, func(i, j int) bool { return dirs[i].CreationTime.After(dirs[j].CreationTime) })
+	var lastError error
+	// No need to rotate, we're whithin the policy
+	if len(dirs) <= int(rotation) {
+		return nil
+	}
+	for _, dir := range dirs[rotation:] {
+		log.Info("Removing directory because of rotation policy", "directory", dir.Path)
+		err := os.RemoveAll(dir.Path)
+		if err != nil {
+			lastError = err
+		}
+	}
+	return lastError
+}
+
 func server(c *resultServerConfig) {
 	err := ensureDir(c.Path)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err, "Error ensuring result path: %s", c.Path)
 		os.Exit(1)
 	}
 
+	rotateResultDirectories(c.BasePath, c.Rotation)
+
 	caCert, err := ioutil.ReadFile(c.CA)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err, "Error reading CA file")
 		os.Exit(1)
 	}
 	caCertPool := x509.NewCertPool()
