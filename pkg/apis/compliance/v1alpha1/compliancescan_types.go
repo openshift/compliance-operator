@@ -140,6 +140,12 @@ type ComplianceScanSpec struct {
 	// +kubebuilder:validation:Default=1Gi
 	// +kubebuilder:default="1Gi"
 	RawResultStorageSize string `json:"rawResultStorageSize,omitempty"`
+	// Specifies the amount of scans for which the raw results will be stored.
+	// Older results will get rotated, and it's the responsibility of administrators
+	// to store these results elsewhere before rotation happens. Note that a rotation
+	// policy of '0' disables rotation entirely. Defaults to 3.
+	// +kubebuilder:default=3
+	RawResultStorageRotation uint16 `json:"rawResultStorageRotation,omitempty"`
 }
 
 // ComplianceScanStatus defines the observed state of ComplianceScan

@@ -884,19 +884,20 @@ func TestE2E(t *testing.T) {
 							{
 								Name: workerScanName,
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: contentImagePath,
-									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
-									Content:      rhcosContentFile,
-									Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
-									NodeSelector: selectWorkers,
-									Debug:        true,
+									ContentImage:             contentImagePath,
+									Profile:                  "xccdf_org.ssgproject.content_profile_moderate",
+									Content:                  rhcosContentFile,
+									Rule:                     "xccdf_org.ssgproject.content_rule_no_netrc_files",
+									NodeSelector:             selectWorkers,
+									Debug:                    true,
+									RawResultStorageRotation: 1,
 								},
 							},
 						},
 					},
 				}
 
-				err := f.Client.Create(goctx.TODO(), testSuite, nil)
+				err := f.Client.Create(goctx.TODO(), testSuite, getCleanupOpts(ctx))
 				if err != nil {
 					return err
 				}
@@ -935,7 +936,17 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				return nil
+				rawResultClaimName, err := getRawResultClaimNameFromScan(t, f, namespace, workerScanName)
+				if err != nil {
+					return err
+				}
+
+				rotationCheckerPod := getRotationCheckerWorkload(namespace, rawResultClaimName)
+				if err = f.Client.Create(goctx.TODO(), rotationCheckerPod, getCleanupOpts(ctx)); err != nil {
+					return err
+				}
+
+				return assertResultStorageHasExpectedItemsAfterRotation(t, f, 1, namespace, rotationCheckerPod.Name)
 			},
 		},
 		testExecution{

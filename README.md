@@ -133,6 +133,11 @@ In the `spec`:
   but remediations won't be created.
 * **rawResultStorageSize**: Specifies the size of storage that should be asked
   for in order for the scan to store the raw results. (Defaults to 1Gi)
+* **rawResultStorageRotation**: Specifies the amount of scans for which the raw
+  results will be stored. Older results will get rotated, and it's the
+  responsibility of administrators to store these results elsewhere before
+  rotation happens. Note that a rotation policy of '0' disables rotation
+  entirely. Defaults to 3.
 
 Regarding the `status`:
 

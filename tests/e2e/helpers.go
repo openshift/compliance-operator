@@ -1,9 +1,11 @@
 package e2e
 
 import (
+	"bytes"
 	goctx "context"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"regexp"
@@ -254,6 +256,14 @@ func setupComplianceOperatorCluster(t *testing.T, ctx *framework.Context, f *fra
 	err = e2eutil.WaitForOperatorDeployment(t, f.KubeClient, namespace, "compliance-operator", 1, retryInterval, timeout)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func getCleanupOpts(ctx *framework.Context) *framework.CleanupOptions {
+	return &framework.CleanupOptions{
+		TestContext:   ctx,
+		Timeout:       cleanupTimeout,
+		RetryInterval: cleanupRetryInterval,
 	}
 }
 
@@ -1311,5 +1321,106 @@ func scanHasValidPVCReferenceWithSize(f *framework.Framework, namespace, scanNam
 		current := pvc.Status.Capacity.Storage().String()
 		return fmt.Errorf("Error: PVC '%s' storage doesn't match expected value. Has '%s', Expected '%s'", pvc.Name, current, expected)
 	}
+	return nil
+}
+
+func getRawResultClaimNameFromScan(t *testing.T, f *framework.Framework, namespace, scanName string) (string, error) {
+	scan := &compv1alpha1.ComplianceScan{}
+	key := types.NamespacedName{Name: scanName, Namespace: namespace}
+	E2ELogf(t, "Getting scan to fetch raw storage reference from it: %s/%s", namespace, scanName)
+	err := f.Client.Get(goctx.TODO(), key, scan)
+	if err != nil {
+		return "", err
+	}
+
+	referenceName := scan.Status.ResultsStorage.Name
+	if referenceName == "" {
+		return "", fmt.Errorf("ResultStorage reference in scan '%s' was empty", scanName)
+	}
+	return referenceName, nil
+}
+
+func getRotationCheckerWorkload(namespace, rawResultName string) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "rotation-checker",
+			Namespace: namespace,
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyOnFailure,
+			Containers: []corev1.Container{
+				{
+					Name:    "checker",
+					Image:   "registry.access.redhat.com/ubi8/ubi-minimal",
+					Command: []string{"/bin/bash", "-c", "ls /raw-results | grep -v 'lost+found'"},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "raw-results",
+							MountPath: "/raw-results",
+							ReadOnly:  true,
+						},
+					},
+				},
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "raw-results",
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: rawResultName,
+							ReadOnly:  true,
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func assertResultStorageHasExpectedItemsAfterRotation(t *testing.T, f *framework.Framework, expected int, namespace, checkerPodName string) error {
+	// wait for pod to be ready
+	pod := &corev1.Pod{}
+	key := types.NamespacedName{Name: checkerPodName, Namespace: namespace}
+	E2ELogf(t, "Waiting until the raw result checker workload is done: %s/%s", namespace, checkerPodName)
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		err := f.Client.Get(goctx.TODO(), key, pod)
+		if err != nil {
+			E2ELogf(t, "Got an error while fetching the result checker workload. retrying: %s", err)
+			return false, nil
+		}
+		if pod.Status.Phase == corev1.PodSucceeded {
+			return true, nil
+		} else if pod.Status.Phase == corev1.PodFailed {
+			E2ELogf(t, "Pod failed!")
+			return true, fmt.Errorf("status checker pod failed unexpectedly: %s", pod.Status.Message)
+		}
+		E2ELogf(t, "Pod not done. retrying: %s", err)
+		return false, nil
+	})
+	if timeouterr != nil {
+		return timeouterr
+	}
+	logopts := &corev1.PodLogOptions{
+		Container: "checker",
+	}
+	E2ELogf(t, "raw result checker workload is done. Getting logs.")
+	req := f.KubeClient.CoreV1().Pods(namespace).GetLogs(checkerPodName, logopts)
+	podLogs, err := req.Stream(goctx.Background())
+	if err != nil {
+		return err
+	}
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, podLogs)
+	if err != nil {
+		return fmt.Errorf("error in copy information from podLogs to buffer")
+	}
+	logs := buf.String()
+	got := len(strings.Split(strings.Trim(logs, "\n"), "\n"))
+	if got != expected {
+		return fmt.Errorf(
+			"Unexpected number of directories came from the result checker.\n"+
+				" Expected: %d. Got: %d. Output:\n%s", expected, got, logs)
+	}
+	E2ELogf(t, "raw result checker's output matches rotation policy.")
 	return nil
 }
