@@ -150,7 +150,7 @@ func (r *ReconcileComplianceRemediation) reconcileGenericRemediation(instance *c
 			return r.client.Create(context.TODO(), obj)
 		} else if meta.IsNoMatchError(err) {
 			// If the kind is not available in the cluster, we can't retry
-			return common.NewNonRetriableCtrlError("Unable to create ComplianceRemediation. Make the CRD is installed: %s", err)
+			return common.NewNonRetriableCtrlError("Unable to create ComplianceRemediation. Make sure the CRD is installed: %s", err)
 		}
 		// TODO(jaosorior): If the object is found, should we update it?
 		return err
@@ -162,7 +162,7 @@ func (r *ReconcileComplianceRemediation) reconcileGenericRemediation(instance *c
 		return nil
 	} else if meta.IsNoMatchError(err) {
 		// If the kind is not available in the cluster, we can't retry
-		return common.NewNonRetriableCtrlError("Unable to use ComplianceRemediation. Make the CRD is installed: %s", err)
+		return common.NewNonRetriableCtrlError("Unable to use ComplianceRemediation. Make sure the CRD is installed: %s", err)
 	}
 	return err
 }
