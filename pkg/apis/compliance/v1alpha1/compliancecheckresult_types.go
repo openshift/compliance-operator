@@ -14,9 +14,17 @@ type ComplianceCheckStatus string
 const ComplianceCheckResultStatusLabel = "compliance.openshift.io/check-status"
 const ComplianceCheckResultSeverityLabel = "compliance.openshift.io/check-severity"
 
+// ComplianceCheckInconsistentLabel signifies that the check's results were not consistent
+// across the target nodes
+const ComplianceCheckInconsistentLabel = "compliance.openshift.io/inconsistent-check"
+
 // ComplianceCheckResultRuleAnnotation exposes the DNS-friendly name of a rule as a label.
 // This provides a way to link a result to a Rule object.
 const ComplianceCheckResultRuleAnnotation = "compliance.openshift.io/rule"
+
+const ComplianceCheckResultInconsistentSourceAnnotation = "compliance.openshift.io/inconsistent-source"
+const ComplianceCheckResultMostCommonAnnotation = "compliance.openshift.io/most-common-status"
+const ComplianceCheckResultErrorAnnotation = "compliance.openshift.io/error-msg"
 
 const (
 	// The check ran to completion and passed
@@ -29,6 +37,8 @@ const (
 	CheckResultError ComplianceCheckStatus = "ERROR"
 	// The check didn't run because it is not applicable or not selected
 	CheckResultSkipped ComplianceCheckStatus = "SKIP"
+	// The check reports different results from different sources, typically cluster nodes
+	CheckResultInconsistent ComplianceCheckStatus = "INCONSISTENT"
 	// The check didn't yield a usable result
 	CheckResultNoResult ComplianceCheckStatus = ""
 )

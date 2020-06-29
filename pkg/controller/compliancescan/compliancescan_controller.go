@@ -302,7 +302,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 		}
 
 		if len(nodes.Items) == 0 {
-			log.Info("Warning: No eligible nodes. CheckResult the nodeSelector.")
+			log.Info("Warning: No eligible nodes. Check the nodeSelector.")
 		}
 
 		// On each eligible node..
@@ -551,6 +551,11 @@ func (r *ReconcileComplianceScan) generateResultEventForScan(scan *compv1alpha1.
 		r.recorder.Eventf(
 			scan, corev1.EventTypeNormal, "ScanNotApplicable",
 			"The scan result is not applicable, please check if you're using the correct platform")
+	} else if scan.Status.Result == compv1alpha1.ResultInconsistent {
+		r.recorder.Eventf(
+			scan, corev1.EventTypeNormal, "ScanNotConsistent",
+			"The scan result is not consistent, please check for scan results labeled with %s",
+			compv1alpha1.ComplianceCheckInconsistentLabel)
 	}
 }
 
@@ -747,6 +752,22 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 				compliant = false
 			}
 		}
+	}
+
+	// If there are any inconsistent results, always just return
+	// the state as inconsistent unless there was an error earlier
+	var checkList compv1alpha1.ComplianceCheckResultList
+	checkListOpts := client.MatchingLabels{
+		compv1alpha1.ComplianceCheckInconsistentLabel: "",
+		compv1alpha1.ScanLabel:                        instance.Name,
+	}
+	if err := r.client.List(context.TODO(), &checkList, &checkListOpts); err != nil {
+		isReady = false
+	}
+	if len(checkList.Items) > 0 {
+		return compv1alpha1.ResultInconsistent, isReady,
+			fmt.Errorf("results were not consistent, search for compliancecheckresults labeled with %s",
+				compv1alpha1.ComplianceCheckInconsistentLabel)
 	}
 
 	if !compliant {

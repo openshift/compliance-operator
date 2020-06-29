@@ -253,11 +253,15 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 	suite.Status.ScanStatuses[idx] = modScanStatus
 	suite.Status.AggregatedPhase = suite.LowestCommonState()
 	suite.Status.AggregatedResult = suite.LowestCommonResult()
+
 	if suite.Status.AggregatedResult == compv1alpha1.ResultNotApplicable {
 		suite.Status.ErrorMessage = "The suite result is not applicable, please check if you're using the correct platform"
+	} else if suite.Status.AggregatedResult == compv1alpha1.ResultInconsistent {
+		suite.Status.ErrorMessage = fmt.Sprintf("results were not consistent, search for compliancecheckresults labeled with %s",
+			compv1alpha1.ComplianceCheckInconsistentLabel)
 	}
-	logger.Info("Updating scan status", "ComplianceScan.Name", modScanStatus.Name, "ComplianceScan.Phase", modScanStatus.Phase)
 
+	logger.Info("Updating scan status", "ComplianceScan.Name", modScanStatus.Name, "ComplianceScan.Phase", modScanStatus.Phase)
 	return r.client.Status().Update(context.TODO(), suite)
 }
 
@@ -276,6 +280,11 @@ func (r *ReconcileComplianceSuite) generateEventsForSuite(suite *compv1alpha1.Co
 		r.recorder.Eventf(
 			suite, corev1.EventTypeNormal, "SuiteNotApplicable",
 			"The suite result is not applicable, please check if you're using the correct platform")
+	} else if suite.Status.AggregatedResult == compv1alpha1.ResultInconsistent {
+		r.recorder.Eventf(
+			suite, corev1.EventTypeNormal, "SuiteNotConsistent",
+			"The suite result is not consistent, please check for scan results labeled with %s",
+			compv1alpha1.ComplianceCheckInconsistentLabel)
 	}
 
 	ownerRefs := suite.GetOwnerReferences()
