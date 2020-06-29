@@ -391,7 +391,7 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1
 
 	log.Info("Moving on to the Done phase")
 
-	result, isReady, err := gatherResults(r, instance, nodes)
+	result, isReady, err := gatherResults(r, instance, nodes, log)
 
 	// We only wait if there are no errors.
 	if err == nil && !isReady {
@@ -692,7 +692,7 @@ func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.C
 // for the OpenSCAP check. If the results haven't yet been persisted in
 // the relevant ConfigMap, the a requeue will be requested since the
 // results are not ready.
-func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList) (compv1alpha1.ComplianceScanStatusResult, bool, error) {
+func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) (compv1alpha1.ComplianceScanStatusResult, bool, error) {
 	var lastNonCompliance compv1alpha1.ComplianceScanStatusResult
 	var result compv1alpha1.ComplianceScanStatusResult
 	compliant := true
@@ -713,6 +713,7 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 
 		// we output the last result if it was an error
 		if result == compv1alpha1.ResultError {
+			logger.Info("Platform scan error", "errMsg", err)
 			return result, true, err
 		}
 		// Store the last non-compliance, so we can output that if
@@ -736,6 +737,7 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 
 			// we output the last result if it was an error
 			if result == compv1alpha1.ResultError {
+				logger.Info("Node scan error", "node.Name", node.Name, "errMsg", err)
 				return result, true, err
 			}
 			// Store the last non-compliance, so we can output that if
