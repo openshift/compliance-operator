@@ -191,7 +191,11 @@ func compressResults(contents []byte) ([]byte, error) {
 	}
 	w.Write([]byte(contents))
 	w.Close()
-	return []byte(base64.StdEncoding.EncodeToString(buffer.Bytes())), nil
+	return buffer.Bytes(), nil
+}
+
+func encodetoBase64(str []byte) string {
+	return base64.StdEncoding.EncodeToString(str)
 }
 
 type resultFileContents struct {
@@ -227,11 +231,15 @@ func readResultsFile(filename string, timeout int64) (*resultFileContents, error
 }
 
 func getConfigMap(owner metav1.Object, configMapName, filename string, contents []byte, compressed bool, exitcode string) *corev1.ConfigMap {
+	var strcontents string
 	annotations := map[string]string{}
 	if compressed {
 		annotations = map[string]string{
 			"openscap-scan-result/compressed": "",
 		}
+		strcontents = encodetoBase64(contents)
+	} else {
+		strcontents = string(contents)
 	}
 
 	return &corev1.ConfigMap{
@@ -249,7 +257,7 @@ func getConfigMap(owner metav1.Object, configMapName, filename string, contents 
 		},
 		Data: map[string]string{
 			"exit-code": exitcode,
-			filename:    string(contents),
+			filename:    strcontents,
 		},
 	}
 }
