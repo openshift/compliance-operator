@@ -460,13 +460,13 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 			return reconcile.Result{}, err
 		}
 
-		if err = r.deleteScriptConfigMaps(instance, logger); err != nil {
+		if err = r.deleteScriptConfigMaps(instance); err != nil {
 			log.Error(err, "Cannot delete script ConfigMaps")
 			return reconcile.Result{}, err
 		}
 
 		if instance.NeedsRescan() {
-			if err = r.deleteResultConfigMaps(instance, logger); err != nil {
+			if err = r.deleteResultConfigMaps(instance); err != nil {
 				log.Error(err, "Cannot delete result ConfigMaps")
 				return reconcile.Result{}, err
 			}
@@ -506,7 +506,7 @@ func (r *ReconcileComplianceScan) scanDeleteHandler(instance *compv1alpha1.Compl
 			return reconcile.Result{}, err
 		}
 
-		if err := r.deleteResultConfigMaps(scanToBeDeleted, logger); err != nil {
+		if err := r.deleteResultConfigMaps(scanToBeDeleted); err != nil {
 			log.Error(err, "Cannot delete result ConfigMaps")
 			return reconcile.Result{}, err
 		}
@@ -573,7 +573,7 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *compv1alpha1.Complianc
 	return nodes, nil
 }
 
-func (r *ReconcileComplianceScan) deleteScriptConfigMaps(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) deleteScriptConfigMaps(instance *compv1alpha1.ComplianceScan) error {
 	inNs := client.InNamespace(common.GetComplianceOperatorNamespace())
 	withLabel := client.MatchingLabels{
 		compv1alpha1.ScanLabel:   instance.Name,
@@ -586,7 +586,7 @@ func (r *ReconcileComplianceScan) deleteScriptConfigMaps(instance *compv1alpha1.
 	return nil
 }
 
-func (r *ReconcileComplianceScan) deleteResultConfigMaps(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) deleteResultConfigMaps(instance *compv1alpha1.ComplianceScan) error {
 	inNs := client.InNamespace(common.GetComplianceOperatorNamespace())
 	withLabel := client.MatchingLabels{compv1alpha1.ComplianceScanIndicatorLabel: instance.Name}
 	err := r.client.DeleteAllOf(context.Background(), &corev1.ConfigMap{}, inNs, withLabel)
