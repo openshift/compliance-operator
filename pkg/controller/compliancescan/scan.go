@@ -566,7 +566,7 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 	} else if err != nil {
 		log.Error(err, "Failed to get spec tailoring ConfigMap", "ConfigMap.Name", origName, "ConfigMap.Namespace", origNs)
 		return err
-	} else if err == nil && scan.Status.Result == compv1alpha1.ResultError {
+	} else if scan.Status.Result == compv1alpha1.ResultError {
 		// We had an error caused by a previously not found configmap. Let's remove it
 		if strings.HasPrefix(scan.Status.ErrorMessage, tailoringNotFoundPrefix) {
 			return common.NewRetriableCtrlErrorWithCustomHandler(func() (reconcile.Result, error) {
