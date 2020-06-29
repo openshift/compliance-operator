@@ -1395,7 +1395,7 @@ func assertResultStorageHasExpectedItemsAfterRotation(t *testing.T, f *framework
 			E2ELogf(t, "Pod failed!")
 			return true, fmt.Errorf("status checker pod failed unexpectedly: %s", pod.Status.Message)
 		}
-		E2ELogf(t, "Pod not done. retrying: %s", err)
+		E2ELogf(t, "Pod not done. retrying.")
 		return false, nil
 	})
 	if timeouterr != nil {
