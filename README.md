@@ -138,6 +138,10 @@ In the `spec`:
   responsibility of administrators to store these results elsewhere before
   rotation happens. Note that a rotation policy of '0' disables rotation
   entirely. Defaults to 3.
+* **scanTolerations**: Specifies tolerations that will be set in the scan Pods
+  for scheduling. Defaults to allowing the scan to run on master nodes. For
+  details on tolerations, see the
+  [Kubernetes documentation on this](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/).
 
 Regarding the `status`:
 

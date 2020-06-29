@@ -3,9 +3,10 @@ package e2e
 import (
 	goctx "context"
 	"fmt"
-	appsv1 "k8s.io/api/apps/v1"
 	"math/rand"
 	"testing"
+
+	appsv1 "k8s.io/api/apps/v1"
 
 	configv1 "github.com/openshift/api/config/v1"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -1091,6 +1092,71 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
+			Name:       "TestTolerations",
+			IsParallel: false,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				workerNodes := getNodesWithSelector(f, map[string]string{
+					"node-role.kubernetes.io/worker": "",
+				})
+
+				taintedNode := &workerNodes[0]
+				taintKey := "co-e2e"
+				taintVal := "val"
+				taint := corev1.Taint{
+					Key:    taintKey,
+					Value:  taintVal,
+					Effect: corev1.TaintEffectNoSchedule,
+				}
+				if err := taintNode(t, f, taintedNode, taint); err != nil {
+					E2ELog(t, "Tainting node failed")
+					return err
+				}
+				suiteName := getObjNameFromTest(t)
+				scanName := suiteName
+				suite := &compv1alpha1.ComplianceSuite{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceSuiteSpec{
+						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
+							{
+								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+									ContentImage: contentImagePath,
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
+									Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
+									Content:      rhcosContentFile,
+									NodeSelector: map[string]string{
+										// Schedule scan in this specific host
+										corev1.LabelHostname: taintedNode.Labels[corev1.LabelHostname],
+									},
+									Debug: true,
+									ScanTolerations: []corev1.Toleration{
+										{
+											Key:      taintKey,
+											Operator: corev1.TolerationOpExists,
+											Effect:   corev1.TaintEffectNoSchedule,
+										},
+									},
+								},
+								Name: scanName,
+							},
+						},
+					},
+				}
+				if err := f.Client.Create(goctx.TODO(), suite, getCleanupOpts(ctx)); err != nil {
+					return err
+				}
+
+				err := waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
+				if err != nil {
+					return err
+				}
+
+				return removeNodeTaint(t, f, taintedNode.Name, taintKey)
+			},
+		},
+		testExecution{
 			Name:       "TestAutoRemediate",
 			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
@@ -1656,7 +1722,6 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-
 
 				err = scanResultIsExpected(f, namespace, platformScanName, compv1alpha1.ResultNonCompliant)
 				if err != nil {
