@@ -41,6 +41,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
@@ -119,6 +120,9 @@ func parseConfig(cmd *cobra.Command) *scapresultsConfig {
 	if conf.ResultServerURI == "" {
 		conf.ResultServerURI = "http://" + conf.ScanName + "-rs:8080/"
 	}
+
+	logf.SetLogger(zap.Logger())
+
 	return &conf
 }
 
@@ -127,7 +131,7 @@ func getOpenSCAPScanInstance(name, namespace string, client *complianceCrClient)
 	scan := &compv1alpha1.ComplianceScan{}
 	err := client.client.Get(context.TODO(), key, scan)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err, "Error getting scan instance", "ComplianceScan.Name", scan.Name, "ComplianceScan.Namespace", scan.Namespace)
 		return nil, err
 	}
 
@@ -153,7 +157,7 @@ func waitForResultsFile(filename string, timeout int64) *os.File {
 					readFileTimeoutChan <- file
 				}
 			} else if !os.IsNotExist(err) {
-				fmt.Println(err)
+				log.Error(err, "Couldn't open results file")
 				os.Exit(1)
 			}
 			time.Sleep(1 * time.Second)
@@ -162,10 +166,10 @@ func waitForResultsFile(filename string, timeout int64) *os.File {
 
 	select {
 	case file := <-readFileTimeoutChan:
-		fmt.Printf("File '%s' found, will upload it.\n", filename)
+		log.Info("Results file found, will upload it.", "resuts-file", filename)
 		return file
 	case <-time.After(time.Duration(timeout) * time.Second):
-		fmt.Println("Timeout. Aborting.")
+		log.Error(fmt.Errorf("Timed out waiting for results file"), "Timeout. Aborting.")
 		os.Exit(1)
 	}
 
@@ -187,7 +191,11 @@ func compressResults(contents []byte) ([]byte, error) {
 	}
 	w.Write([]byte(contents))
 	w.Close()
-	return []byte(base64.StdEncoding.EncodeToString(buffer.Bytes())), nil
+	return buffer.Bytes(), nil
+}
+
+func encodetoBase64(str []byte) string {
+	return base64.StdEncoding.EncodeToString(str)
 }
 
 type resultFileContents struct {
@@ -210,24 +218,28 @@ func readResultsFile(filename string, timeout int64) (*resultFileContents, error
 
 	if resultNeedsCompression(rfContents.contents) {
 		rfContents.contents, err = compressResults(rfContents.contents)
-		fmt.Printf("%s Needs compression\n", filename)
+		log.Info("File needs compression", "results-file", filename)
 		if err != nil {
-			fmt.Println("Error: Compression failed")
+			log.Error(err, "Error: Compression failed")
 			return nil, err
 		}
 		rfContents.compressed = true
-		fmt.Printf("Compressed results are %d bytes in size\n", len(rfContents.contents))
+		log.Info("Compressed results bytes size", "bytes", len(rfContents.contents))
 	}
 
 	return &rfContents, nil
 }
 
 func getConfigMap(owner metav1.Object, configMapName, filename string, contents []byte, compressed bool, exitcode string) *corev1.ConfigMap {
+	var strcontents string
 	annotations := map[string]string{}
 	if compressed {
 		annotations = map[string]string{
 			"openscap-scan-result/compressed": "",
 		}
+		strcontents = encodetoBase64(contents)
+	} else {
+		strcontents = string(contents)
 	}
 
 	return &corev1.ConfigMap{
@@ -245,7 +257,7 @@ func getConfigMap(owner metav1.Object, configMapName, filename string, contents 
 		},
 		Data: map[string]string{
 			"exit-code": exitcode,
-			filename:    string(contents),
+			filename:    strcontents,
 		},
 	}
 }
@@ -253,11 +265,11 @@ func getConfigMap(owner metav1.Object, configMapName, filename string, contents 
 func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scapresultsConfig) error {
 	return backoff.Retry(func() error {
 		url := scapresultsconf.ResultServerURI
-		fmt.Printf("Trying to upload to resultserver: %s\n", url)
+		log.Info("Trying to upload to resultserver", "url", url)
 		reader := bytes.NewReader(arfContents.contents)
 		transport, err := getMutualHttpsTransport(scapresultsconf)
 		if err != nil {
-			fmt.Println(err)
+			log.Error(err, "Failed to get https transport")
 			return err
 		}
 		client := &http.Client{Transport: transport}
@@ -269,16 +281,16 @@ func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scap
 		}
 		resp, err := client.Do(req)
 		if err != nil {
-			fmt.Println(err)
+			log.Error(err, "Failed to upload results to server")
 			return err
 		}
 		defer resp.Body.Close()
 		bytesresp, err := httputil.DumpResponse(resp, true)
 		if err != nil {
-			fmt.Println(err)
+			log.Error(err, "Failed to parse response")
 			return err
 		}
-		fmt.Println(string(bytesresp))
+		log.Info(string(bytesresp))
 		return nil
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 }
@@ -286,7 +298,7 @@ func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scap
 func uploadResultConfigMap(xccdfContents *resultFileContents, exitcode string,
 	scapresultsconf *scapresultsConfig, client *complianceCrClient) error {
 	return backoff.Retry(func() error {
-		fmt.Println("Trying to upload results ConfigMap")
+		log.Info("Trying to upload results ConfigMap")
 		openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, client)
 		if err != nil {
 			return err
@@ -304,7 +316,7 @@ func uploadResultConfigMap(xccdfContents *resultFileContents, exitcode string,
 func uploadErrorConfigMap(errorMsg *resultFileContents, exitcode string,
 	scapresultsconf *scapresultsConfig, client *complianceCrClient) error {
 	return backoff.Retry(func() error {
-		fmt.Println("Trying to upload error ConfigMap")
+		log.Info("Trying to upload error ConfigMap")
 		openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, client)
 		if err != nil {
 			return err
@@ -322,13 +334,13 @@ func uploadErrorConfigMap(errorMsg *resultFileContents, exitcode string,
 func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConfig, client *complianceCrClient) {
 	arfContents, err := readResultsFile(scapresultsconf.ArfFile, scapresultsconf.Timeout)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err, "Failed to read ARF file")
 		os.Exit(1)
 	}
 
 	xccdfContents, err := readResultsFile(scapresultsconf.XccdfFile, scapresultsconf.Timeout)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err, "Failed to read XCCDF file")
 		os.Exit(1)
 	}
 
@@ -337,20 +349,20 @@ func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConf
 	go func() {
 		err = uploadToResultServer(arfContents, scapresultsconf)
 		if err != nil {
-			fmt.Println(err)
+			log.Error(err, "Failed to upload results to server")
 			os.Exit(1)
 		}
-		fmt.Println("Uploaded to resultserver")
+		log.Info("Uploaded to resultserver")
 		wg.Done()
 	}()
 
 	go func() {
 		err = uploadResultConfigMap(xccdfContents, exitcode, scapresultsconf, client)
 		if err != nil {
-			fmt.Println(err)
+			log.Error(err, "Failed to upload ConfigMap")
 			os.Exit(1)
 		}
-		fmt.Println("Uploaded ConfigMap")
+		log.Info("Uploaded ConfigMap")
 		wg.Done()
 	}()
 	wg.Wait()
@@ -359,27 +371,27 @@ func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConf
 func handleErrorInOscapRun(exitcode string, scapresultsconf *scapresultsConfig, client *complianceCrClient) {
 	errorMsg, err := readResultsFile(scapresultsconf.CmdOutputFile, scapresultsconf.Timeout)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err, "Failed to read error message output from oscap run")
 		os.Exit(1)
 	}
 
 	err = uploadErrorConfigMap(errorMsg, exitcode, scapresultsconf, client)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err, "Failed to upload error ConfigMap")
 		os.Exit(1)
 	}
-	fmt.Println("Uploaded ConfigMap")
+	log.Info("Uploaded ConfigMap")
 }
 
 func getOscapExitCode(scapresultsconf *scapresultsConfig) string {
 	exitcodeContent, err := readResultsFile(scapresultsconf.ExitCodeFile, scapresultsconf.Timeout)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err, "Failed to read oscap error code")
 		os.Exit(1)
 	}
 
 	if len(exitcodeContent.contents) < 1 {
-		fmt.Println("exitcode file was empty")
+		log.Error(fmt.Errorf("error code file can't be empty"), "exitcode file was empty")
 		os.Exit(1)
 	}
 
@@ -427,12 +439,12 @@ func resultCollectorMain(cmd *cobra.Command, args []string) {
 
 	crclient, err := createCrClient(cfg)
 	if err != nil {
-		fmt.Printf("Cannot create client for our types: %v\n", err)
+		log.Error(err, "Cannot create kube client for our types\n")
 		os.Exit(1)
 	}
 
 	exitcode := getOscapExitCode(scapresultsconf)
-	fmt.Printf("Got exit-code \"%s\" from file.\n", exitcode)
+	log.Info("Got exit-code from file", "exit-code", exitcode)
 
 	if exitCodeIsError(exitcode) {
 		handleErrorInOscapRun(exitcode, scapresultsconf, crclient)

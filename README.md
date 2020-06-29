@@ -396,9 +396,9 @@ $ oc get nodes
 Once the nodes reboot, you might want to run another Suite to ensure that
 the remediation that you applied previously was no longer found.
 
-## Extracting results
+## Extracting raw results
 
-The scans provide two kinds of results: the full report in the ARF format
+The scans provide two kinds of raw results: the full report in the ARF format
 and just the list of scan results in the XCCDF format. The ARF reports are,
 due to their large size, copied into persistent volumes:
 ```
@@ -409,10 +409,7 @@ pvc-ef68c834-bb6e-4644-926a-8b7a4a180999   1Gi       openshift-compliance/master
 
 ```
 
-To view the results at the moment, you'd have to start a pod manually, mount
-the PV into the pod and e.g. serve the results over HTTP. We're working on
-a better solution in the meantime. An example of extracting ARF results from
-a scan called `workers-scan` follows:
+An example of extracting ARF results from a scan called `workers-scan` follows:
 
 Once the scan had finished, you'll note that there is a `PersistentVolume` named
 after the scan:
@@ -444,16 +441,16 @@ spec:
 You can inspect the files by listing the `/workers-scan-results` directory and copy the
 files locally:
 ```
-$ oc exec pods/pv-extract ls /workers-scan-results
+$ oc exec pods/pv-extract ls /workers-scan-results/0
 lost+found
-workers-scan-ip-10-0-129-252.ec2.internal-pod.xml.bzip2.base64
-workers-scan-ip-10-0-149-70.ec2.internal-pod.xml.bzip2.base64
-workers-scan-ip-10-0-172-30.ec2.internal-pod.xml.bzip2.base64
+workers-scan-ip-10-0-129-252.ec2.internal-pod.xml.bzip2
+workers-scan-ip-10-0-149-70.ec2.internal-pod.xml.bzip2
+workers-scan-ip-10-0-172-30.ec2.internal-pod.xml.bzip2
 $ oc cp pv-extract:/workers-scan-results .
 ```
-The files are bzipped and then base64 encoded. To get the raw ARF file:
+The files are bzipped. To get the raw ARF file:
 ```
-$ base64 -d workers-scan-ip-10-0-129-252.ec2.internal-pod.xml.bzip2.base64 | bunzip2 > workers-scan-ip-10-0-129-252.ec2.internal-pod.xml
+$ bunzip2 -c workers-scan-ip-10-0-129-252.ec2.internal-pod.xml.bzip2 > workers-scan-ip-10-0-129-252.ec2.internal-pod.xml
 ```
 
 The XCCDF results are much smaller and can be stored in a configmap, from
@@ -471,3 +468,6 @@ To extract the results, use:
 ```
 $ oc extract cm/masters-scan-ip-10-0-174-253.ec2.internal-pod
 ```
+
+Note that if the results are too big for the ConfigMap, they'll be bzipped and
+base64 encoded.

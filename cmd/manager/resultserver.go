@@ -214,8 +214,7 @@ func server(c *resultServerConfig) {
 			http.Error(w, "invalid content encoding header", 400)
 			return
 		} else if encoding == "bzip2" {
-			// if the results are compressed, they are also base64-encoded, let's make this clear to the user
-			extraExtension = "." + extraExtension + ".base64"
+			extraExtension = "." + extraExtension
 		}
 		// TODO(jaosorior): Check that content-type is application/xml
 		filePath := path.Join(c.Path, filename+".xml"+extraExtension)
