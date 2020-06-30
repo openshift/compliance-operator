@@ -409,13 +409,13 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1
 	return reconcile.Result{}, err
 }
 
-func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger, delete bool) (reconcile.Result, error) {
+func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger, doDelete bool) (reconcile.Result, error) {
 	var nodes corev1.NodeList
 	var err error
 	logger.Info("Phase: Done")
 
 	// We need to remove resources before doing a re-scan
-	if delete || instance.NeedsRescan() {
+	if doDelete || instance.NeedsRescan() {
 		logger.Info("Cleaning up scan's resources")
 		switch instance.Spec.ScanType {
 		case compv1alpha1.ScanTypePlatform:
