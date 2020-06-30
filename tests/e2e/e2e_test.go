@@ -3,6 +3,7 @@ package e2e
 import (
 	goctx "context"
 	"fmt"
+	appsv1 "k8s.io/api/apps/v1"
 	"math/rand"
 	"testing"
 
@@ -933,6 +934,18 @@ func TestE2E(t *testing.T) {
 				updatedSchedule := ""
 				testSuiteCopy.Spec.Schedule = updatedSchedule
 				if err = f.Client.Update(goctx.TODO(), testSuiteCopy); err != nil {
+					return err
+				}
+
+				// Hack: Remove the DS deployment so that we can remount the PVC. It might be better
+				// to schedule the checker pod on the same node as the pod coming from the deployment...
+				rsDeployment := &appsv1.Deployment{}
+				dsName := workerScanName + "-rs"
+				key = types.NamespacedName{Name: dsName, Namespace: testSuite.Namespace}
+				if err = f.Client.Get(goctx.TODO(), key, rsDeployment); err != nil {
+					return err
+				}
+				if err = f.Client.Delete(goctx.TODO(), rsDeployment); err != nil {
 					return err
 				}
 
