@@ -17,6 +17,9 @@ import (
 
 const resultserverSA = "default"
 
+// ReportsMount is the path where the reports will be mounted
+const ReportsMount = "/reports"
+
 // The result-server is a pod that listens for results from other pods and
 // stores them in a PVC.
 // It's comprised of the PVC for the scan, the pod and a service that fronts it
@@ -101,7 +104,7 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 							ImagePullPolicy: corev1.PullAlways,
 							Command: []string{
 								"compliance-operator", "resultserver",
-								"--path=/reports/",
+								fmt.Sprintf("--path=%s/", ReportsMount),
 								"--address=0.0.0.0",
 								fmt.Sprintf("--port=%d", ResultServerPort),
 								fmt.Sprintf("--scan-index=%d", scanInstance.Status.CurrentIndex),
@@ -113,7 +116,7 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "arfreports",
-									MountPath: "/reports",
+									MountPath: ReportsMount,
 								},
 								{
 									Name:      "tls",

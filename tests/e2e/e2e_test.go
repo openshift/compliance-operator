@@ -936,17 +936,11 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				rawResultClaimName, err := getRawResultClaimNameFromScan(t, f, namespace, workerScanName)
-				if err != nil {
+				if err := assertRawResultClaimNameInScan(t, f, namespace, workerScanName); err != nil {
 					return err
 				}
 
-				rotationCheckerPod := getRotationCheckerWorkload(namespace, rawResultClaimName)
-				if err = f.Client.Create(goctx.TODO(), rotationCheckerPod, getCleanupOpts(ctx)); err != nil {
-					return err
-				}
-
-				return assertResultStorageHasExpectedItemsAfterRotation(t, f, 1, namespace, rotationCheckerPod.Name)
+				return assertResultStorageHasExpectedItemsAfterRotation(t, f, 1, namespace, workerScanName)
 			},
 		},
 		testExecution{
@@ -1643,7 +1637,6 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-
 
 				err = scanResultIsExpected(f, namespace, platformScanName, compv1alpha1.ResultNonCompliant)
 				if err != nil {

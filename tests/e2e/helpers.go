@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"k8s.io/client-go/kubernetes"
 	"os"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/kubectl/pkg/scheme"
 
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
@@ -26,10 +29,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	dynclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/compliance-operator/pkg/apis"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	compscanctrl "github.com/openshift/compliance-operator/pkg/controller/compliancescan"
 	compsuitectrl "github.com/openshift/compliance-operator/pkg/controller/compliancesuite"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
@@ -1325,97 +1330,108 @@ func scanHasValidPVCReferenceWithSize(f *framework.Framework, namespace, scanNam
 	return nil
 }
 
-func getRawResultClaimNameFromScan(t *testing.T, f *framework.Framework, namespace, scanName string) (string, error) {
+func assertRawResultClaimNameInScan(t *testing.T, f *framework.Framework, namespace, scanName string) error {
 	scan := &compv1alpha1.ComplianceScan{}
 	key := types.NamespacedName{Name: scanName, Namespace: namespace}
 	E2ELogf(t, "Getting scan to fetch raw storage reference from it: %s/%s", namespace, scanName)
 	err := f.Client.Get(goctx.TODO(), key, scan)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	referenceName := scan.Status.ResultsStorage.Name
 	if referenceName == "" {
-		return "", fmt.Errorf("ResultStorage reference in scan '%s' was empty", scanName)
+		return fmt.Errorf("ResultStorage reference in scan '%s' was empty", scanName)
 	}
-	return referenceName, nil
+	return nil
 }
 
-func getRotationCheckerWorkload(namespace, rawResultName string) *corev1.Pod {
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rotation-checker",
-			Namespace: namespace,
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyOnFailure,
-			Containers: []corev1.Container{
-				{
-					Name:    "checker",
-					Image:   "registry.access.redhat.com/ubi8/ubi-minimal",
-					Command: []string{"/bin/bash", "-c", "ls /raw-results | grep -v 'lost+found'"},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "raw-results",
-							MountPath: "/raw-results",
-							ReadOnly:  true,
-						},
-					},
-				},
-			},
-			Volumes: []corev1.Volume{
-				{
-					Name: "raw-results",
-					VolumeSource: corev1.VolumeSource{
-						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: rawResultName,
-							ReadOnly:  true,
-						},
-					},
-				},
-			},
-		},
+func execCmd(f *framework.Framework, namespace, podName string,
+	command string, stdout io.Writer) error {
+	cmd := []string{
+		"sh",
+		"-c",
+		command,
 	}
+	req := f.KubeClient.CoreV1().RESTClient().Post().Resource("pods").Name(podName).
+		Namespace(namespace).SubResource("exec")
+	option := &corev1.PodExecOptions{
+		Command: cmd,
+		Stdin:   false,
+		Stdout:  true,
+		Stderr:  false,
+		TTY:     true,
+	}
+	req.VersionedParams(
+		option,
+		scheme.ParameterCodec,
+	)
+	exec, err := remotecommand.NewSPDYExecutor(f.KubeConfig, "POST", req.URL())
+	if err != nil {
+		return err
+	}
+	err = exec.Stream(remotecommand.StreamOptions{
+		Stdout: stdout,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func assertResultStorageHasExpectedItemsAfterRotation(t *testing.T, f *framework.Framework, expected int, namespace, checkerPodName string) error {
-	// wait for pod to be ready
-	pod := &corev1.Pod{}
-	key := types.NamespacedName{Name: checkerPodName, Namespace: namespace}
-	E2ELogf(t, "Waiting until the raw result checker workload is done: %s/%s", namespace, checkerPodName)
-	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
-		err := f.Client.Get(goctx.TODO(), key, pod)
-		if err != nil {
-			E2ELogf(t, "Got an error while fetching the result checker workload. retrying: %s", err)
+func getResultServerName(t *testing.T, f *framework.Framework, namespace, scanName string) (string, error) {
+	var podName string
+	podList := &corev1.PodList{}
+	resultServerLabels := dynclient.MatchingLabels(map[string]string{
+		"complianceScan": scanName,
+		"app":            "resultserver",
+	})
+	pollerr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		if err := f.Client.List(goctx.TODO(), podList, resultServerLabels); err != nil {
+			E2ELogf(t, "Couldn't get ResultServer: %s. Retrying...", err)
 			return false, nil
 		}
-		if pod.Status.Phase == corev1.PodSucceeded {
-			return true, nil
-		} else if pod.Status.Phase == corev1.PodFailed {
-			E2ELogf(t, "Pod failed!")
-			return true, fmt.Errorf("status checker pod failed unexpectedly: %s", pod.Status.Message)
+		if len(podList.Items) == 0 {
+			err := fmt.Errorf("The ResultServer is missing from the scan '%s'. Aborting", scanName)
+			E2ELogf(t, err.Error())
+			return false, err
 		}
-		E2ELogf(t, "Pod not done. retrying.")
-		return false, nil
+		podName = podList.Items[0].Name
+		return true, nil
+	})
+	if pollerr != nil {
+		return "", pollerr
+	}
+	return podName, nil
+}
+
+func assertResultStorageHasExpectedItemsAfterRotation(t *testing.T, f *framework.Framework, expected int, namespace, scanName string) error {
+	// wait for pod to be ready
+	E2ELogf(t, "Getting scan results from scan: %s/%s", namespace, scanName)
+	podName, err := getResultServerName(t, f, namespace, scanName)
+	if err != nil {
+		return err
+	}
+
+	var outputBuffer bytes.Buffer
+
+	getScanDirsCmd := fmt.Sprintf("ls %s | grep -v 'lost+found'", compscanctrl.ReportsMount)
+
+	E2ELogf(t, "Getting scan results directories from scan: %s/%s", namespace, scanName)
+
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		if err := execCmd(f, namespace, podName, getScanDirsCmd, &outputBuffer); err != nil {
+			E2ELogf(t, "Got error while getting scan directories. Retrying: %s", err)
+			return false, nil
+		}
+		return true, nil
 	})
 	if timeouterr != nil {
 		return timeouterr
 	}
-	logopts := &corev1.PodLogOptions{
-		Container: "checker",
-	}
-	E2ELogf(t, "raw result checker workload is done. Getting logs.")
-	req := f.KubeClient.CoreV1().Pods(namespace).GetLogs(checkerPodName, logopts)
-	podLogs, err := req.Stream(goctx.Background())
-	if err != nil {
-		return err
-	}
-	buf := new(bytes.Buffer)
-	_, err = io.Copy(buf, podLogs)
-	if err != nil {
-		return fmt.Errorf("error in copy information from podLogs to buffer")
-	}
-	logs := buf.String()
+	E2ELogf(t, "Got output from resultscanner check execution.")
+	logs := outputBuffer.String()
 	got := len(strings.Split(strings.Trim(logs, "\n"), "\n"))
 	if got != expected {
 		return fmt.Errorf(
@@ -1438,16 +1454,16 @@ func privCommandTuplePodOnHost(namespace, name, nodeName, commandPre string, com
 			Namespace: namespace,
 		},
 		Spec: corev1.PodSpec{
-			InitContainers:[]corev1.Container{
+			InitContainers: []corev1.Container{
 				{
-					Name:            name + "-init",
-					Image:           "busybox",
-					Command:         []string{"/bin/sh"},
-					Args:            []string{"-c", commandPre},
-					VolumeMounts:    []corev1.VolumeMount{
+					Name:    name + "-init",
+					Image:   "busybox",
+					Command: []string{"/bin/sh"},
+					Args:    []string{"-c", commandPre},
+					VolumeMounts: []corev1.VolumeMount{
 						{
-							Name: "hostroot",
-							MountPath:"/hostroot",
+							Name:      "hostroot",
+							MountPath: "/hostroot",
 						},
 					},
 					SecurityContext: &corev1.SecurityContext{
@@ -1458,28 +1474,28 @@ func privCommandTuplePodOnHost(namespace, name, nodeName, commandPre string, com
 			},
 			Containers: []corev1.Container{
 				{
-					Name:            name,
-					Image:           "busybox",
-					Command:         []string{"/bin/sh"},
-					Args:            []string{"-c", "sleep 3600"},
-					VolumeMounts:    []corev1.VolumeMount{
+					Name:    name,
+					Image:   "busybox",
+					Command: []string{"/bin/sh"},
+					Args:    []string{"-c", "sleep 3600"},
+					VolumeMounts: []corev1.VolumeMount{
 						{
-							Name: "hostroot",
-							MountPath:"/hostroot",
+							Name:      "hostroot",
+							MountPath: "/hostroot",
 						},
 					},
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &priv,
 						RunAsUser:  &runAs,
 					},
-					Lifecycle : &corev1.Lifecycle{
-						PreStop:   &corev1.Handler{
-							Exec:      &corev1.ExecAction{Command:commandPost},
+					Lifecycle: &corev1.Lifecycle{
+						PreStop: &corev1.Handler{
+							Exec: &corev1.ExecAction{Command: commandPost},
 						},
 					},
 				},
 			},
-			Volumes:            []corev1.Volume{
+			Volumes: []corev1.Volume{
 				{
 					Name: "hostroot",
 					VolumeSource: corev1.VolumeSource{
@@ -1489,7 +1505,7 @@ func privCommandTuplePodOnHost(namespace, name, nodeName, commandPre string, com
 					},
 				},
 			},
-			RestartPolicy:      "Never",
+			RestartPolicy: "Never",
 			NodeSelector: map[string]string{
 				corev1.LabelHostname: nodeName,
 			},
