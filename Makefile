@@ -282,7 +282,7 @@ deploy-crds:
 	done
 
 .PHONY: tear-down
-tear-down: tear-down-operator tear-down-crds ## Tears down all objects required for the operator except the namespace
+tear-down: tear-down-crds tear-down-operator ## Tears down all objects required for the operator except the namespace
 
 
 .PHONY: tear-down-crds
