@@ -3,9 +3,10 @@ package e2e
 import (
 	goctx "context"
 	"fmt"
-	appsv1 "k8s.io/api/apps/v1"
 	"math/rand"
 	"testing"
+
+	appsv1 "k8s.io/api/apps/v1"
 
 	configv1 "github.com/openshift/api/config/v1"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -1496,6 +1497,7 @@ func TestE2E(t *testing.T) {
 									ScanType:     compv1alpha1.ScanTypePlatform,
 									ContentImage: contentImagePath,
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
+									Rule:         "xccdf_org.ssgproject.content_rule_ocp_idp_no_htpasswd",
 									Content:      ocpContentFile,
 									Debug:        true,
 								},
@@ -1633,6 +1635,7 @@ func TestE2E(t *testing.T) {
 									ScanType:     compv1alpha1.ScanTypePlatform,
 									ContentImage: contentImagePath,
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
+									Rule:         "xccdf_org.ssgproject.content_rule_ocp_idp_no_htpasswd",
 									Content:      ocpContentFile,
 								},
 								Name: platformScanName,
@@ -1656,7 +1659,6 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-
 
 				err = scanResultIsExpected(f, namespace, platformScanName, compv1alpha1.ResultNonCompliant)
 				if err != nil {
