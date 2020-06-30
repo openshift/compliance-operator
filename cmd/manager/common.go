@@ -8,8 +8,12 @@ import (
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
@@ -23,8 +27,24 @@ const (
 var log = logf.Log.WithName("cmd")
 
 type complianceCrClient struct {
-	client runtimeclient.Client
-	scheme *runtime.Scheme
+	client   runtimeclient.Client
+	scheme   *runtime.Scheme
+	recorder record.EventRecorder
+}
+
+func (crclient *complianceCrClient) useEventRecorder(source string, config *rest.Config) error {
+	kubeClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartEventWatcher(
+		func(e *corev1.Event) {
+			log.Info(e.Type, "object", e.InvolvedObject, "reason", e.Reason, "message", e.Message)
+		})
+	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
+	crclient.recorder = eventBroadcaster.NewRecorder(crclient.scheme, v1.EventSource{Component: source})
+	return nil
 }
 
 func createCrClient(config *rest.Config) (*complianceCrClient, error) {

@@ -198,6 +198,16 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - events
+  verbs:
+  - get
+  - list
+  - create
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
   - configmaps
   verbs:
   - get

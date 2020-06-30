@@ -273,16 +273,26 @@ func createOrUpdateOneResult(crClient *complianceCrClient, owner metav1.Object, 
 	return nil
 }
 
-func getRemediationLabels(scan *compv1alpha1.ComplianceScan) (map[string]string, error) {
+func canCreateRemediation(scan *compv1alpha1.ComplianceScan, obj runtime.Object) (bool, string) {
+	role := utils.GetFirstNodeRole(scan.Spec.NodeSelector)
+	if role == "" {
+		return false, "ComplianceScan's nodeSelector doesn't have any role. Ideally this needs to match a MachineConfigPool"
+	}
+	return true, ""
+}
+
+func getRemediationLabels(scan *compv1alpha1.ComplianceScan, obj runtime.Object) map[string]string {
 	labels := make(map[string]string)
 	labels[compv1alpha1.ScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels[compv1alpha1.SuiteLabel]
-	labels[mcfgv1.MachineConfigRoleLabelKey] = utils.GetFirstNodeRole(scan.Spec.NodeSelector)
-	if labels[mcfgv1.MachineConfigRoleLabelKey] == "" {
-		return nil, fmt.Errorf("scan %s has no role assignment", scan.Name)
+
+	// FIXME(jaosorior): Figure out a more pluggable way of adding these sorts of special cases
+	if obj.GetObjectKind().GroupVersionKind().Kind == "MachineConfig" {
+		labels[mcfgv1.MachineConfigRoleLabelKey] = utils.GetFirstNodeRole(scan.Spec.NodeSelector)
+		return labels
 	}
 
-	return labels, nil
+	return labels
 }
 
 func getCheckResultLabels(cr *compv1alpha1.ComplianceCheckResult, resultLabels map[string]string, scan *compv1alpha1.ComplianceScan) map[string]string {
@@ -330,7 +340,9 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		foundCheckResult := &compv1alpha1.ComplianceCheckResult{}
 		// Copy type metadata so dynamic client copies data correctly
 		foundCheckResult.TypeMeta = pr.CheckResult.TypeMeta
-		checkResultExists, err := getObjectIfFound(crClient, crkey, foundCheckResult)
+		log.Info("Getting ComplianceCheckResult", "ComplianceCheckResult.Name", crkey.Name,
+			"ComplianceCheckResult.Namespace", crkey.Namespace)
+		checkResultExists := getObjectIfFound(crClient, crkey, foundCheckResult)
 		if checkResultExists {
 			// Copy resource version and other metadata needed for update
 			foundCheckResult.ObjectMeta.DeepCopyInto(&pr.CheckResult.ObjectMeta)
@@ -347,16 +359,22 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			continue
 		}
 
-		remLabels, err := getRemediationLabels(scan)
-		if err != nil {
-			return err
+		remTargetObj := pr.Remediation.Spec.Object
+		if canCreate, why := canCreateRemediation(scan, remTargetObj); !canCreate {
+			log.Info(why)
+			crClient.recorder.Event(scan, v1.EventTypeWarning, "CannotRemediate", why)
+			continue
 		}
+
+		remLabels := getRemediationLabels(scan, remTargetObj)
 
 		remkey := getObjKey(pr.Remediation.GetName(), pr.Remediation.GetNamespace())
 		foundRemediation := &compv1alpha1.ComplianceRemediation{}
 		// Copy type metadata so dynamic client copies data correctly
 		foundRemediation.TypeMeta = pr.Remediation.TypeMeta
-		remExists, err := getObjectIfFound(crClient, remkey, foundRemediation)
+		log.Info("Getting ComplianceRemediation", "ComplianceRemediation.Name", crkey.Name,
+			"ComplianceRemediation.Namespace", crkey.Namespace)
+		remExists := getObjectIfFound(crClient, remkey, foundRemediation)
 		if remExists {
 			// Copy resource version and other metadata needed for update
 			foundRemediation.ObjectMeta.DeepCopyInto(&pr.Remediation.ObjectMeta)
@@ -376,8 +394,7 @@ func getObjKey(name, ns string) types.NamespacedName {
 }
 
 // Returns whether or not an object exists, and updates the data in the obj.
-// If there is an error that is not acceptable, it'll be returned
-func getObjectIfFound(crClient *complianceCrClient, key types.NamespacedName, obj runtime.Object) (bool, error) {
+func getObjectIfFound(crClient *complianceCrClient, key types.NamespacedName, obj runtime.Object) bool {
 	var found bool
 	err := backoff.Retry(func() error {
 		err := crClient.client.Get(context.TODO(), key, obj)
@@ -391,7 +408,10 @@ func getObjectIfFound(crClient *complianceCrClient, key types.NamespacedName, ob
 		return nil
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 
-	return found, err
+	if err != nil {
+		log.Error(err, "Couldn't get object", "Name", key.Name, "Namespace", key.Namespace)
+	}
+	return found
 }
 
 func aggregator(cmd *cobra.Command, args []string) {
@@ -406,6 +426,12 @@ func aggregator(cmd *cobra.Command, args []string) {
 	crclient, err := createCrClient(cfg)
 	if err != nil {
 		log.Error(err, "Cannot create kube client for compliance-operator types")
+		os.Exit(1)
+	}
+
+	err = crclient.useEventRecorder("aggregator", cfg)
+	if err != nil {
+		log.Error(err, "Cannot create event recorder")
 		os.Exit(1)
 	}
 
