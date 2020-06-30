@@ -45,7 +45,7 @@ func TestE2E(t *testing.T) {
 				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamValid); err != nil {
 					return err
 				}
-				if err := assertMustHaveParsedProfiles(t, f, namespace, pbName); err != nil {
+				if err := assertMustHaveParsedProfiles(f, pbName,  string(compv1alpha1.ScanTypeNode), "redhat_enterprise_linux_coreos_4"); err != nil {
 					return err
 				}
 

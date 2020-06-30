@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subchen/go-xmldom"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -20,7 +19,6 @@ import (
 
 	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/profileparser"
-	"github.com/openshift/compliance-operator/pkg/xccdf"
 )
 
 var profileparserCmd = &cobra.Command{
@@ -100,78 +98,6 @@ func getProfileBundle(pcfg *profileparser.ParserConfig) (*cmpv1alpha1.ProfileBun
 	return &pb, nil
 }
 
-func parseProfilesAndDo(contentDom *xmldom.Document, pcfg *profileparser.ParserConfig, action func(p *cmpv1alpha1.Profile) error) error {
-	profileObjs := contentDom.Root.Query("//Profile")
-	for _, profileObj := range profileObjs {
-		id := profileObj.GetAttributeValue("id")
-		if id == "" {
-			return profileparser.LogAndReturnError("no id in profile")
-		}
-		title := profileObj.FindOneByName("title")
-		if title == nil {
-			return profileparser.LogAndReturnError("no title in profile")
-		}
-		description := profileObj.FindOneByName("description")
-		if description == nil {
-			return profileparser.LogAndReturnError("no description in profile")
-		}
-		log.Info("Found profile", "id", id)
-
-		ruleObjs := profileObj.FindByName("select")
-		selectedrules := []cmpv1alpha1.ProfileRule{}
-		for _, ruleObj := range ruleObjs {
-			idref := ruleObj.GetAttributeValue("idref")
-			if idref == "" {
-				log.Info("no idref in rule")
-				continue
-			}
-			selected := ruleObj.GetAttributeValue("selected")
-			if selected == "true" {
-				ruleName := getPrefixedName(pcfg.ProfileBundleKey.Name, xccdf.GetRuleNameFromID(idref))
-				selectedrules = append(selectedrules, cmpv1alpha1.NewProfileRule(ruleName))
-			}
-		}
-
-		selectedvalues := []cmpv1alpha1.ProfileValue{}
-		valueObjs := profileObj.FindByName("set-value")
-		for _, valueObj := range valueObjs {
-			idref := valueObj.GetAttributeValue("idref")
-			if idref == "" {
-				log.Info("no idref in rule")
-				continue
-			}
-			selectedvalues = append(selectedvalues, cmpv1alpha1.ProfileValue(idref))
-		}
-
-		p := cmpv1alpha1.Profile{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Profile",
-				APIVersion: cmpv1alpha1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      xccdf.GetProfileNameFromID(id),
-				Namespace: pcfg.ProfileBundleKey.Namespace,
-			},
-			ID:          id,
-			Title:       title.Text,
-			Description: description.Text,
-			Rules:       selectedrules,
-			Values:      selectedvalues,
-		}
-		err := action(&p)
-		if err != nil {
-			log.Error(err, "couldn't execute action")
-			return err
-		}
-	}
-
-	return nil
-}
-
-func getPrefixedName(pbName, objName string) string {
-	return pbName + "-" + objName
-}
-
 // updateProfileBundleStatus updates the status of the given ProfileBundle. If
 // the given error is nil, the status will be valid, else it'll be invalid
 func updateProfileBundleStatus(pcfg *profileparser.ParserConfig, pb *cmpv1alpha1.ProfileBundle, err error) {
@@ -223,7 +149,7 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	err = parseProfilesAndDo(contentDom, pcfg, func(p *cmpv1alpha1.Profile) error {
+	err = profileparser.ParseProfilesAndDo(contentDom, pcfg, func(p *cmpv1alpha1.Profile) error {
 		pCopy := p.DeepCopy()
 		profileName := pCopy.Name
 
@@ -233,7 +159,7 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 		pCopy.Labels[cmpv1alpha1.ProfileBundleOwnerLabel] = pb.Name
 
 		// overwrite name
-		pCopy.SetName(getPrefixedName(pb.Name, profileName))
+		pCopy.SetName(profileparser.GetPrefixedName(pb.Name, profileName))
 
 		if err := controllerutil.SetControllerReference(pb, pCopy, pcfg.Scheme); err != nil {
 			return err
@@ -260,7 +186,7 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 	err = profileparser.ParseRulesAndDo(contentDom, pcfg, func(r *cmpv1alpha1.Rule) error {
 		ruleName := r.Name
 		// overwrite name
-		r.SetName(getPrefixedName(pb.Name, ruleName))
+		r.SetName(profileparser.GetPrefixedName(pb.Name, ruleName))
 
 		if r.Labels == nil {
 			r.Labels = make(map[string]string)
@@ -297,7 +223,7 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 	err = profileparser.ParseVariablesAndDo(contentDom, pcfg, func(v *cmpv1alpha1.Variable) error {
 		varName := v.Name
 		// overwrite name
-		v.SetName(getPrefixedName(pb.Name, varName))
+		v.SetName(profileparser.GetPrefixedName(pb.Name, varName))
 
 		if v.Labels == nil {
 			v.Labels = make(map[string]string)
