@@ -33,15 +33,21 @@ type ComplianceScanStatusWrapper struct {
 	Name string `json:"name,omitempty"`
 }
 
-// ComplianceSuiteSpec defines the desired state of ComplianceSuite
+// ComplianceSuiteSettings groups together settings of a ComplianceSuite
 // +k8s:openapi-gen=true
-type ComplianceSuiteSpec struct {
+type ComplianceSuiteSettings struct {
 	// Defines whether or not the remediations should be applied automatically
 	AutoApplyRemediations bool `json:"autoApplyRemediations,omitempty"`
 	// Defines a schedule for the scans to run. This is in cronjob format.
 	// Note the scan will still be triggered immediately, and the scheduled
 	// scans will start running only after the initial results are ready.
 	Schedule string `json:"schedule,omitempty"`
+}
+
+// ComplianceSuiteSpec defines the desired state of ComplianceSuite
+// +k8s:openapi-gen=true
+type ComplianceSuiteSpec struct {
+	ComplianceSuiteSettings `json:",inline"`
 	// Contains a list of the scans to execute on the cluster
 	// +listType=atomic
 	Scans []ComplianceScanSpecWrapper `json:"scans"`

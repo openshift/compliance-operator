@@ -93,7 +93,9 @@ func TestE2E(t *testing.T) {
 						Profile: "xccdf_org.ssgproject.content_profile_moderate",
 						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
-						Debug:   true,
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							Debug: true,
+						},
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -127,8 +129,10 @@ func TestE2E(t *testing.T) {
 						Profile:              "xccdf_org.ssgproject.content_profile_moderate",
 						Content:              rhcosContentFile,
 						Rule:                 "xccdf_org.ssgproject.content_rule_no_netrc_files",
-						RawResultStorageSize: "2Gi",
-						Debug:                true,
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							RawResultStorageSize: "2Gi",
+							Debug: true,
+						},
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -183,8 +187,10 @@ func TestE2E(t *testing.T) {
 						Profile:              "xccdf_org.ssgproject.content_profile_moderate",
 						Content:              rhcosContentFile,
 						Rule:                 "xccdf_org.ssgproject.content_rule_no_netrc_files",
-						RawResultStorageSize: "6Gi",
-						Debug:                true,
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							RawResultStorageSize: "6Gi",
+							Debug: true,
+						},
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -240,8 +246,10 @@ func TestE2E(t *testing.T) {
 						Profile:              "xccdf_org.ssgproject.content_profile_moderate",
 						Content:              rhcosContentFile,
 						Rule:                 "xccdf_org.ssgproject.content_rule_no_netrc_files",
-						RawResultStorageSize: "6Gi",
-						Debug:                true,
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							RawResultStorageSize: "6Gi",
+							Debug: true,
+						},
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -302,9 +310,11 @@ func TestE2E(t *testing.T) {
 						Profile: "xccdf_compliance.openshift.io_profile_test-tailoredprofile",
 						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
-						Debug:   true,
 						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
 							Name: tailoringCM.Name,
+						},
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							Debug: true,
 						},
 					},
 				}
@@ -338,7 +348,9 @@ func TestE2E(t *testing.T) {
 						Content:      rhcosContentFile,
 						Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						NodeSelector: selectWorkers,
-						Debug:        true,
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							Debug: true,
+						},
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -372,7 +384,9 @@ func TestE2E(t *testing.T) {
 					Spec: compv1alpha1.ComplianceScanSpec{
 						Profile: "xccdf_org.ssgproject.content_profile_moderate",
 						Content: "ssg-ocp4-non-existent.xml",
-						Debug:   true,
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							Debug: true,
+						},
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -399,7 +413,9 @@ func TestE2E(t *testing.T) {
 					Spec: compv1alpha1.ComplianceScanSpec{
 						Profile: "xccdf_org.ssgproject.content_profile_coreos-unexistent",
 						Content: rhcosContentFile,
-						Debug:   true,
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							Debug: true,
+						},
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -453,7 +469,9 @@ func TestE2E(t *testing.T) {
 						Profile: "xccdf_compliance.openshift.io_profile_test-tailoredprofile",
 						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
-						Debug:   true,
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							Debug: true,
+						},
 						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
 							Name: tailoringCM.Name,
 						},
@@ -515,7 +533,9 @@ func TestE2E(t *testing.T) {
 						Profile: "xccdf_compliance.openshift.io_profile_test-tailoredprofile",
 						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
-						Debug:   true,
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							Debug: true,
+						},
 						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
 							Name: "missing-tailoring-file",
 						},
@@ -588,7 +608,9 @@ func TestE2E(t *testing.T) {
 						Profile: "xccdf_org.ssgproject.content_profile_moderate",
 						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
-						Debug:   true,
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							Debug: true,
+						},
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -726,8 +748,10 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceSuiteSpec{
-						AutoApplyRemediations: false,
-						Schedule:              "This is WRONG",
+						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+							AutoApplyRemediations: false,
+							Schedule:              "This is WRONG",
+						},
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								Name: fmt.Sprintf("%s-workers-scan", suiteName),
@@ -735,10 +759,12 @@ func TestE2E(t *testing.T) {
 									ContentImage: contentImagePath,
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										Debug: true,
+									},
 									NodeSelector: map[string]string{
 										"node-role.kubernetes.io/worker": "",
 									},
-									Debug: true,
 								},
 							},
 						},
@@ -779,7 +805,9 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceSuiteSpec{
-						AutoApplyRemediations: false,
+						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+							AutoApplyRemediations: false,
+						},
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
@@ -787,7 +815,9 @@ func TestE2E(t *testing.T) {
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									NodeSelector: selectWorkers,
-									Debug:        true,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										Debug: true,
+									},
 								},
 								Name: workerScanName,
 							},
@@ -797,7 +827,9 @@ func TestE2E(t *testing.T) {
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									NodeSelector: selectMasters,
-									Debug:        true,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										Debug: true,
+									},
 								},
 								Name: masterScanName,
 							},
@@ -880,8 +912,10 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceSuiteSpec{
-						AutoApplyRemediations: false,
-						Schedule:              "*/2 * * * *",
+						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+							AutoApplyRemediations: false,
+							Schedule:              "*/2 * * * *",
+						},
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								Name: workerScanName,
@@ -891,8 +925,10 @@ func TestE2E(t *testing.T) {
 									Content:                  rhcosContentFile,
 									Rule:                     "xccdf_org.ssgproject.content_rule_no_netrc_files",
 									NodeSelector:             selectWorkers,
-									Debug:                    true,
-									RawResultStorageRotation: 1,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										RawResultStorageRotation: 1,
+										Debug: true,
+									},
 								},
 							},
 						},
@@ -980,8 +1016,10 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceSuiteSpec{
-						AutoApplyRemediations: false,
-						Schedule:              initialSchedule,
+						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+							AutoApplyRemediations: false,
+							Schedule:              initialSchedule,
+						},
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								Name: workerScanName,
@@ -991,7 +1029,9 @@ func TestE2E(t *testing.T) {
 									Content:      rhcosContentFile,
 									Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
 									NodeSelector: selectWorkers,
-									Debug:        true,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										Debug: true,
+									},
 								},
 							},
 						},
@@ -1061,7 +1101,9 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceSuiteSpec{
-						AutoApplyRemediations: false,
+						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+							AutoApplyRemediations: false,
+						},
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								Name: fmt.Sprintf("%s-workers-scan", suiteName),
@@ -1069,10 +1111,12 @@ func TestE2E(t *testing.T) {
 									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:broken_os_detection",
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      "ssg-rhcos4-ds.xml",
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										Debug: true,
+									},
 									NodeSelector: map[string]string{
 										"node-role.kubernetes.io/worker": "",
 									},
-									Debug: true,
 								},
 							},
 						},
@@ -1130,12 +1174,14 @@ func TestE2E(t *testing.T) {
 										// Schedule scan in this specific host
 										corev1.LabelHostname: taintedNode.Labels[corev1.LabelHostname],
 									},
-									Debug: true,
-									ScanTolerations: []corev1.Toleration{
-										{
-											Key:      taintKey,
-											Operator: corev1.TolerationOpExists,
-											Effect:   corev1.TaintEffectNoSchedule,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										Debug: true,
+										ScanTolerations: []corev1.Toleration{
+											{
+												Key:      taintKey,
+												Operator: corev1.TolerationOpExists,
+												Effect:   corev1.TaintEffectNoSchedule,
+											},
 										},
 									},
 								},
@@ -1152,7 +1198,6 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-
 				return removeNodeTaint(t, f, taintedNode.Name, taintKey)
 			},
 		},
@@ -1170,7 +1215,9 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceSuiteSpec{
-						AutoApplyRemediations: true,
+						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+							AutoApplyRemediations: true,
+						},
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
@@ -1179,7 +1226,9 @@ func TestE2E(t *testing.T) {
 									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 									Content:      rhcosContentFile,
 									NodeSelector: getPoolNodeRoleSelector(),
-									Debug:        true,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										Debug: true,
+									},
 								},
 								Name: workerScanName,
 							},
@@ -1334,7 +1383,9 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceSuiteSpec{
-						AutoApplyRemediations: false,
+						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+							AutoApplyRemediations: false,
+						},
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
@@ -1342,7 +1393,9 @@ func TestE2E(t *testing.T) {
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									NodeSelector: getPoolNodeRoleSelector(),
-									Debug:        true,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										Debug: true,
+									},
 								},
 								Name: workerScanName,
 							},
@@ -1451,7 +1504,9 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceSuiteSpec{
-						AutoApplyRemediations: false,
+						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+							AutoApplyRemediations: false,
+						},
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
@@ -1460,7 +1515,9 @@ func TestE2E(t *testing.T) {
 									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 									Content:      rhcosContentFile,
 									NodeSelector: selectWorkers,
-									Debug:        true,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										Debug: true,
+									},
 								},
 								Name: workerScanName,
 							},
@@ -1545,7 +1602,9 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceSuiteSpec{
-						AutoApplyRemediations: false,
+						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+							AutoApplyRemediations: false,
+						},
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
@@ -1553,7 +1612,9 @@ func TestE2E(t *testing.T) {
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      rhcosContentFile,
 									NodeSelector: selectWorkers,
-									Debug:        true,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										Debug: true,
+									},
 								},
 								Name: workerScanName,
 							},
@@ -1564,7 +1625,9 @@ func TestE2E(t *testing.T) {
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Rule:         "xccdf_org.ssgproject.content_rule_ocp_idp_no_htpasswd",
 									Content:      ocpContentFile,
-									Debug:        true,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										Debug: true,
+									},
 								},
 								Name: platformScanName,
 							},
@@ -1693,7 +1756,9 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceSuiteSpec{
-						AutoApplyRemediations: false,
+						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+							AutoApplyRemediations: false,
+						},
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
@@ -1702,6 +1767,9 @@ func TestE2E(t *testing.T) {
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Rule:         "xccdf_org.ssgproject.content_rule_ocp_idp_no_htpasswd",
 									Content:      ocpContentFile,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										Debug: true,
+									},
 								},
 								Name: platformScanName,
 							},
