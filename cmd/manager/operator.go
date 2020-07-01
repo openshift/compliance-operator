@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"
 	"github.com/operator-framework/operator-sdk/pkg/leader"
@@ -17,19 +18,23 @@ import (
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 
 	"github.com/openshift/compliance-operator/pkg/apis"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
-	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
+	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var operatorCmd = &cobra.Command{
@@ -48,6 +53,10 @@ var (
 	metricsHost               = "0.0.0.0"
 	metricsPort         int32 = 8383
 	operatorMetricsPort int32 = 8686
+	defaultProducts           = []string{
+		"rhcos4",
+		"ocp4",
+	}
 )
 
 func printVersion() {
@@ -150,6 +159,10 @@ func RunOperator(cmd *cobra.Command, args []string) {
 	// Add the Metrics Service
 	addMetrics(ctx, cfg)
 
+	if err := ensureDefaultProfileBundles(ctx, mgr.GetClient(), namespace); err != nil {
+		log.Error(err, "Error creating default ProfileBundles. Continuing anyway.")
+	}
+
 	log.Info("Starting the Cmd.")
 
 	// Start the Cmd
@@ -201,6 +214,31 @@ func addMetrics(ctx context.Context, cfg *rest.Config) {
 			log.Info("Install prometheus-operator in your cluster to create ServiceMonitor objects", "error", err.Error())
 		}
 	}
+}
+
+func ensureDefaultProfileBundles(ctx context.Context, crclient client.Client, namespaces string) error {
+	pbimg := utils.GetComponentImage(utils.DEFAULT_PROFILE_BUNDLES)
+	var lastErr error
+	nsList := strings.Split(namespaces, ",")
+	for _, prod := range defaultProducts {
+		for _, ns := range nsList {
+			pb := &compv1alpha1.ProfileBundle{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      prod,
+					Namespace: ns,
+				},
+				Spec: compv1alpha1.ProfileBundleSpec{
+					ContentImage: pbimg,
+					ContentFile:  fmt.Sprintf("ssg-%s-ds.xml", prod),
+				},
+			}
+			err := crclient.Create(ctx, pb)
+			if !k8serrors.IsAlreadyExists(err) {
+				lastErr = err
+			}
+		}
+	}
+	return lastErr
 }
 
 // serveCRMetrics gets the Operator/CustomResource GVKs and generates metrics based on those types.

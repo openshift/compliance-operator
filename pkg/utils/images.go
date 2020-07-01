@@ -7,6 +7,7 @@ type ComplianceComponent uint
 const (
 	OPENSCAP = iota
 	OPERATOR
+	DEFAULT_PROFILE_BUNDLES
 )
 
 var componentDefaults = []struct {
@@ -15,6 +16,7 @@ var componentDefaults = []struct {
 }{
 	{"quay.io/jhrozek/openscap-ocp:latest", "OPENSCAP_IMAGE"},
 	{"quay.io/compliance-operator/compliance-operator:latest", "OPERATOR_IMAGE"},
+	{"quay.io/complianceascode/ocp4:latest", "DEFAULT_PROFILE_BUNDLES_IMAGE"},
 }
 
 // GetComponentImage returns a full image pull spec for a given component
