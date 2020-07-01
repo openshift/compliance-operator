@@ -190,7 +190,7 @@ func parseProductTypeAndName(idref string, defaultType cmpv1alpha1.ComplianceSca
 	// Now we know it begins with cpePrefix
 	idref = strings.TrimPrefix(idref, cpePrefix)
 	cpePieces := strings.Split(idref, ":")
-	if len(cpePieces) == 0 {
+	if len(cpePieces) == 0 || (len(cpePieces) == 1 && cpePieces[0] == idref) {
 		log.Info("The CPE ID is too short")
 		return defaultType, defaultName
 	}
@@ -205,7 +205,10 @@ func parseProductTypeAndName(idref string, defaultType cmpv1alpha1.ComplianceSca
 		productType = cmpv1alpha1.ScanTypePlatform
 	}
 
-	productName := strings.Join(cpePieces[1:], "_")
+	var productName string
+	if len(cpePieces) > 2 {
+		productName = strings.Join(cpePieces[1:], "_")
+	}
 	return productType, productName
 }
 
