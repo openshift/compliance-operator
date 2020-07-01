@@ -260,3 +260,25 @@ var _ = Describe("Testing parse rules", func() {
 		})
 	})
 })
+
+var _ = Describe("Testing CPE string parsing in isolation", func() {
+	Context("Malformed CPE string", func() {
+		It("Returns the defaults if the CPE uri does not start with cpe://", func() {
+			pType, pName := parseProductTypeAndName("xxx:/a:redhat:enterprise_linux_coreos:4", cmpv1alpha1.ScanTypeNode, "default")
+			Expect(pType).To(BeEquivalentTo(cmpv1alpha1.ScanTypeNode))
+			Expect(pName).To(BeEquivalentTo("default"))
+		})
+
+		It("Returns the defaults if the CPE uri is too short", func() {
+			pType, pName := parseProductTypeAndName("cpe:/", cmpv1alpha1.ScanTypeNode, "default")
+			Expect(pType).To(BeEquivalentTo(cmpv1alpha1.ScanTypeNode))
+			Expect(pName).To(BeEquivalentTo("default"))
+		})
+
+		It("Does not crash with with a CPE string without platform information", func() {
+			pType, pName := parseProductTypeAndName("cpe:/a:", cmpv1alpha1.ScanTypeNode, "unusedDefault")
+			Expect(pType).To(BeEquivalentTo(cmpv1alpha1.ScanTypePlatform))
+			Expect(pName).To(BeEquivalentTo(""))
+		})
+	})
+})
