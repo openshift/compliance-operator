@@ -196,13 +196,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 					},
 				},
 			},
-			Tolerations: []corev1.Toleration{
-				{
-					Key:      "node-role.kubernetes.io/master",
-					Operator: "Exists",
-					Effect:   "NoSchedule",
-				},
-			},
+			Tolerations: scanInstance.Spec.ScanTolerations,
 			NodeSelector: map[string]string{
 				corev1.LabelHostname: node.Labels[corev1.LabelHostname],
 			},
@@ -383,13 +377,7 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 			NodeSelector: map[string]string{
 				"node-role.kubernetes.io/master": "",
 			},
-			Tolerations: []corev1.Toleration{
-				{
-					Key:      "node-role.kubernetes.io/master",
-					Operator: "Exists",
-					Effect:   "NoSchedule",
-				},
-			},
+			Tolerations:   scanInstance.Spec.ScanTolerations,
 			RestartPolicy: corev1.RestartPolicyOnFailure,
 			Volumes: []corev1.Volume{
 				{

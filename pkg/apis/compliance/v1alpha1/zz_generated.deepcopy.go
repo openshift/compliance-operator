@@ -5,6 +5,7 @@
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -260,6 +261,13 @@ func (in *ComplianceScanSpec) DeepCopyInto(out *ComplianceScanSpec) {
 		in, out := &in.TailoringConfigMap, &out.TailoringConfigMap
 		*out = new(TailoringConfigMapRef)
 		**out = **in
+	}
+	if in.ScanTolerations != nil {
+		in, out := &in.ScanTolerations, &out.ScanTolerations
+		*out = make([]v1.Toleration, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	return
 }

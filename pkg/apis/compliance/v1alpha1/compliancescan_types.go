@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -149,6 +150,11 @@ type ComplianceScanSpec struct {
 	// policy of '0' disables rotation entirely. Defaults to 3.
 	// +kubebuilder:default=3
 	RawResultStorageRotation uint16 `json:"rawResultStorageRotation,omitempty"`
+	// Specifies tolerations needed for the scan to run on the nodes. This is useful
+	// in case the target set of nodes have custom taints that don't allow certain
+	// workloads to run. Defaults to allowing scheduling on the master nodes.
+	// +kubebuilder:default={{key: "node-role.kubernetes.io/master", operator: "Exists", effect: "NoSchedule"}}
+	ScanTolerations []corev1.Toleration `json:"scanTolerations,omitempty"`
 }
 
 // ComplianceScanStatus defines the observed state of ComplianceScan

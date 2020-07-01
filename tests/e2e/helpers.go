@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"k8s.io/client-go/kubernetes"
 	"os"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"k8s.io/client-go/kubernetes"
 
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
@@ -1449,16 +1450,16 @@ func privCommandTuplePodOnHost(namespace, name, nodeName, commandPre string, com
 			Namespace: namespace,
 		},
 		Spec: corev1.PodSpec{
-			InitContainers:[]corev1.Container{
+			InitContainers: []corev1.Container{
 				{
-					Name:            name + "-init",
-					Image:           "busybox",
-					Command:         []string{"/bin/sh"},
-					Args:            []string{"-c", commandPre},
-					VolumeMounts:    []corev1.VolumeMount{
+					Name:    name + "-init",
+					Image:   "busybox",
+					Command: []string{"/bin/sh"},
+					Args:    []string{"-c", commandPre},
+					VolumeMounts: []corev1.VolumeMount{
 						{
-							Name: "hostroot",
-							MountPath:"/hostroot",
+							Name:      "hostroot",
+							MountPath: "/hostroot",
 						},
 					},
 					SecurityContext: &corev1.SecurityContext{
@@ -1469,28 +1470,28 @@ func privCommandTuplePodOnHost(namespace, name, nodeName, commandPre string, com
 			},
 			Containers: []corev1.Container{
 				{
-					Name:            name,
-					Image:           "busybox",
-					Command:         []string{"/bin/sh"},
-					Args:            []string{"-c", "sleep 3600"},
-					VolumeMounts:    []corev1.VolumeMount{
+					Name:    name,
+					Image:   "busybox",
+					Command: []string{"/bin/sh"},
+					Args:    []string{"-c", "sleep 3600"},
+					VolumeMounts: []corev1.VolumeMount{
 						{
-							Name: "hostroot",
-							MountPath:"/hostroot",
+							Name:      "hostroot",
+							MountPath: "/hostroot",
 						},
 					},
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &priv,
 						RunAsUser:  &runAs,
 					},
-					Lifecycle : &corev1.Lifecycle{
-						PreStop:   &corev1.Handler{
-							Exec:      &corev1.ExecAction{Command:commandPost},
+					Lifecycle: &corev1.Lifecycle{
+						PreStop: &corev1.Handler{
+							Exec: &corev1.ExecAction{Command: commandPost},
 						},
 					},
 				},
 			},
-			Volumes:            []corev1.Volume{
+			Volumes: []corev1.Volume{
 				{
 					Name: "hostroot",
 					VolumeSource: corev1.VolumeSource{
@@ -1500,7 +1501,7 @@ func privCommandTuplePodOnHost(namespace, name, nodeName, commandPre string, com
 					},
 				},
 			},
-			RestartPolicy:      "Never",
+			RestartPolicy: "Never",
 			NodeSelector: map[string]string{
 				corev1.LabelHostname: nodeName,
 			},
@@ -1575,4 +1576,33 @@ func runPod(t *testing.T, f *framework.Framework, namespace string, podToRun *co
 // object for the caller to delete at which point the pod, before exiting, removes the file
 func createAndRemoveEtcSecurettyOnNode(t *testing.T, f *framework.Framework, namespace, name, nodeName string) (*corev1.Pod, error) {
 	return runPod(t, f, namespace, createAndRemoveEtcSecurettyPod(namespace, name, nodeName))
+}
+
+func taintNode(t *testing.T, f *framework.Framework, node *corev1.Node, taint corev1.Taint) error {
+	taintedNode := node.DeepCopy()
+	if taintedNode.Spec.Taints == nil {
+		taintedNode.Spec.Taints = []corev1.Taint{}
+	}
+	taintedNode.Spec.Taints = append(taintedNode.Spec.Taints, taint)
+	E2ELogf(t, "Tainting node: %s", taintedNode.Name)
+	return f.Client.Update(goctx.TODO(), taintedNode)
+}
+
+func removeNodeTaint(t *testing.T, f *framework.Framework, nodeName, taintKey string) error {
+	taintedNode := &corev1.Node{}
+	nodeKey := types.NamespacedName{Name: nodeName}
+	if err := f.Client.Get(goctx.TODO(), nodeKey, taintedNode); err != nil {
+		E2ELogf(t, "Couldn't get node: %s", nodeName)
+		return err
+	}
+	untaintedNode := taintedNode.DeepCopy()
+	untaintedNode.Spec.Taints = []corev1.Taint{}
+	for _, taint := range taintedNode.Spec.Taints {
+		if taint.Key != taintKey {
+			untaintedNode.Spec.Taints = append(untaintedNode.Spec.Taints, taint)
+		}
+	}
+
+	E2ELogf(t, "Removing taint from node: %s", nodeName)
+	return f.Client.Update(goctx.TODO(), untaintedNode)
 }
