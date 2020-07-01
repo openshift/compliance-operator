@@ -327,6 +327,8 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		return nil
 	}
 
+	var remediationNotPossibleEventIssued bool
+
 	for _, pr := range consistentResults {
 		if pr == nil || pr.CheckResult == nil {
 			log.Info("nil result or result.check, this shouldn't happen")
@@ -361,8 +363,12 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 
 		remTargetObj := pr.Remediation.Spec.Object
 		if canCreate, why := canCreateRemediation(scan, remTargetObj); !canCreate {
-			log.Info(why)
-			crClient.recorder.Event(scan, v1.EventTypeWarning, "CannotRemediate", why)
+			// Only issue event once.
+			if !remediationNotPossibleEventIssued {
+				log.Info(why)
+				crClient.recorder.Event(scan, v1.EventTypeWarning, "CannotRemediate", why)
+				remediationNotPossibleEventIssued = true
+			}
 			continue
 		}
 
