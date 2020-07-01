@@ -2,6 +2,7 @@ package profilebundle
 
 import (
 	"context"
+	"time"
 
 	// #nosec G505
 
@@ -12,6 +13,7 @@ import (
 	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +30,8 @@ import (
 )
 
 var log = logf.Log.WithName("controller_profilebundle")
+
+var oneReplica int32 = 1
 
 // Add creates a new ProfileBundle Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -56,7 +60,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 	// TODO(user): Modify this to be the types you create that are owned by the primary resource
 	// Watch for changes to secondary resource Pods and requeue the owner ProfileBundle
-	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
+	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &compliancev1alpha1.ProfileBundle{},
 	})
@@ -119,37 +123,52 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 	}
 
 	// Define a new Pod object
-	pod := newPodForBundle(instance)
+	depl := newWorkloadForBundle(instance)
 
 	// Set ProfileBundle instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(instance, depl, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	// Check if this Pod already exists
-	found := &corev1.Pod{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
+	found := &appsv1.Deployment{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: depl.Name, Namespace: depl.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
-		pbCopy := instance.DeepCopy()
-		pbCopy.Status.DataStreamStatus = compliancev1alpha1.DataStreamPending
-		err = r.client.Status().Update(context.TODO(), pbCopy)
-		if err != nil {
-			reqLogger.Error(err, "Couldn't update ProfileBundle status")
-			return reconcile.Result{}, err
-		}
-		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
-		err = r.client.Create(context.TODO(), pod)
+		reqLogger.Info("Creating a new Workload", "Deployment.Namespace", depl.Namespace, "Deployment.Name", depl.Name)
+		err = r.client.Create(context.TODO(), depl)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
 
-		// Pod created successfully - don't requeue
-		return reconcile.Result{}, nil
+		return reconcile.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	if podStartupError(found) {
+	if workloadNeedsUpdate(instance, found) {
+		// This should have a copy of
+		updatedDepl := found.DeepCopy()
+		updatedDepl.Spec.Template = depl.Spec.Template
+		reqLogger.Info("Updating Workload", "Deployment.Namespace", depl.Namespace, "Deployment.Name", depl.Name)
+		err = r.client.Update(context.TODO(), updatedDepl)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		return reconcile.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
+	}
+
+	labels := getWorkloadLabels(instance)
+	foundPods := &corev1.PodList{}
+	err = r.client.List(context.TODO(), foundPods, client.MatchingLabels(labels))
+
+	if len(foundPods.Items) == 0 {
+		reqLogger.Info("Pod not scheduled yet. Waiting for Deployment to do it.",
+			"Deployment.Namespace", depl.Namespace, "Deployment.Name", depl.Name)
+		return reconcile.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
+	}
+
+	if podStartupError(&foundPods.Items[0]) {
 		// report to status
 		pbCopy := instance.DeepCopy()
 		pbCopy.Status.DataStreamStatus = compliancev1alpha1.DataStreamInvalid
@@ -164,14 +183,14 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 	}
 
 	// Pod already exists and its init container at least ran - don't requeue
-	reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
+	reqLogger.Info("Skip reconcile: Workload already up-to-date", "Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
 	return reconcile.Result{}, nil
 }
 
 func (r *ReconcileProfileBundle) profileBundleDeleteHandler(pb *compliancev1alpha1.ProfileBundle, logger logr.Logger) error {
 	logger.Info("The ProfileBundle is being deleted")
-	pod := newPodForBundle(pb)
-	logger.Info("Deleting profileparser pod", "Pod.Name", pod.Name)
+	pod := newWorkloadForBundle(pb)
+	logger.Info("Deleting profileparser workload", "Pod.Name", pod.Name)
 	err := r.client.Delete(context.TODO(), pod)
 	if err != nil && !errors.IsNotFound(err) {
 		return err
@@ -186,64 +205,77 @@ func (r *ReconcileProfileBundle) profileBundleDeleteHandler(pb *compliancev1alph
 	return nil
 }
 
-// newPodForBundle returns a busybox pod with the same name/namespace as the cr
-func newPodForBundle(pb *compliancev1alpha1.ProfileBundle) *corev1.Pod {
-	labels := map[string]string{
+func getWorkloadLabels(pb *compliancev1alpha1.ProfileBundle) map[string]string {
+	return map[string]string{
 		"profile-bundle": pb.Name,
 	}
-	return &corev1.Pod{
+}
+
+// newPodForBundle returns a busybox pod with the same name/namespace as the cr
+func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle) *appsv1.Deployment {
+	labels := getWorkloadLabels(pb)
+	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pb.Name + "-pp",
 			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels:    labels,
 		},
-
-		Spec: corev1.PodSpec{
-			InitContainers: []corev1.Container{
-				{
-					Name:  "content-container",
-					Image: pb.Spec.ContentImage,
-					Command: []string{
-						"sh",
-						"-c",
-						fmt.Sprintf("cp %s /content | /bin/true", path.Join("/", pb.Spec.ContentFile)),
-					},
-					ImagePullPolicy: corev1.PullAlways,
-					VolumeMounts: []corev1.VolumeMount{
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &oneReplica,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{
 						{
-							Name:      "content-dir",
-							MountPath: "/content",
+							Name:  "content-container",
+							Image: pb.Spec.ContentImage,
+							Command: []string{
+								"sh",
+								"-c",
+								fmt.Sprintf("cp %s /content | /bin/true", path.Join("/", pb.Spec.ContentFile)),
+							},
+							ImagePullPolicy: corev1.PullAlways,
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "content-dir",
+									MountPath: "/content",
+								},
+							},
 						},
 					},
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  "profileparser",
-					Image: utils.GetComponentImage(utils.OPERATOR),
-					Command: []string{
-						"compliance-operator", "profileparser",
-						"--name", pb.Name,
-						"--namespace", pb.Namespace,
-						"--ds-path", path.Join("/content", pb.Spec.ContentFile),
-					},
-					VolumeMounts: []corev1.VolumeMount{
+					Containers: []corev1.Container{
 						{
-							Name:      "content-dir",
-							MountPath: "/content",
-							ReadOnly:  true,
+							Name:  "profileparser",
+							Image: utils.GetComponentImage(utils.OPERATOR),
+							Command: []string{
+								"compliance-operator", "profileparser",
+								"--name", pb.Name,
+								"--namespace", pb.Namespace,
+								"--ds-path", path.Join("/content", pb.Spec.ContentFile),
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "content-dir",
+									MountPath: "/content",
+									ReadOnly:  true,
+								},
+							},
 						},
 					},
-				},
-			},
-			RestartPolicy: corev1.RestartPolicyOnFailure,
-			//ServiceAccountName: "profileparser",
-			ServiceAccountName: "compliance-operator",
-			Volumes: []corev1.Volume{
-				{
-					Name: "content-dir",
-					VolumeSource: corev1.VolumeSource{
-						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					//ServiceAccountName: "profileparser",
+					ServiceAccountName: "compliance-operator",
+					Volumes: []corev1.Volume{
+						{
+							Name: "content-dir",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
 					},
 				},
 			},
@@ -275,4 +307,15 @@ func podStartupError(pod *corev1.Pod) bool {
 	}
 
 	return false
+}
+
+func workloadNeedsUpdate(pb *compliancev1alpha1.ProfileBundle, depl *appsv1.Deployment) bool {
+	initContainers := depl.Spec.Template.Spec.InitContainers
+	if len(initContainers) != 1 {
+		// For some weird reason we don't have the amount of init containers we expect.
+		return true
+	}
+
+	// we need an update if the image reference doesn't match.
+	return pb.Spec.ContentImage != initContainers[0].Image
 }
