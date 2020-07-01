@@ -249,7 +249,7 @@ func setupTestRequirements(t *testing.T) *framework.Context {
 func setupComplianceOperatorCluster(t *testing.T, ctx *framework.Context, f *framework.Framework, namespace string) {
 	replaceNamespaceFromManifest(t, namespace, f.NamespacedManPath)
 
-	err := ctx.InitializeClusterResources(&framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+	err := ctx.InitializeClusterResources(getCleanupOpts(ctx))
 	if err != nil {
 		t.Fatalf("failed to initialize cluster resources: %v", err)
 	}
