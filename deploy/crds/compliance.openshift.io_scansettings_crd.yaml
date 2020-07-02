@@ -1,0 +1,113 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: scansettings.compliance.openshift.io
+spec:
+  group: compliance.openshift.io
+  names:
+    kind: ScanSetting
+    listKind: ScanSettingList
+    plural: scansettings
+    singular: scansetting
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ScanSetting is the Schema for the scansettings API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          autoApplyRemediations:
+            description: Defines whether or not the remediations should be applied
+              automatically
+            type: boolean
+          debug:
+            description: Enable debug logging of workloads and OpenSCAP
+            type: boolean
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          rawResultStorageRotation:
+            default: 3
+            description: Specifies the amount of scans for which the raw results will
+              be stored. Older results will get rotated, and it's the responsibility
+              of administrators to store these results elsewhere before rotation happens.
+              Note that a rotation policy of '0' disables rotation entirely. Defaults
+              to 3.
+            type: integer
+          rawResultStorageSize:
+            default: 1Gi
+            description: Specifies the amount of storage to ask for storing the raw
+              results. Note that if re-scans happen, the new results will also need
+              to be stored. Defaults to 1Gi.
+            type: string
+          roles:
+            description: The list of roles to apply node-specific checks to
+            items:
+              type: string
+            type: array
+          scanTolerations:
+            default:
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/master
+              operator: Exists
+            description: Specifies tolerations needed for the scan to run on the nodes.
+              This is useful in case the target set of nodes have custom taints that
+              don't allow certain workloads to run. Defaults to allowing scheduling
+              on the master nodes.
+            items:
+              description: The pod this Toleration is attached to tolerates any taint
+                that matches the triple <key,value,effect> using the matching operator
+                <operator>.
+              properties:
+                effect:
+                  description: Effect indicates the taint effect to match. Empty means
+                    match all taint effects. When specified, allowed values are NoSchedule,
+                    PreferNoSchedule and NoExecute.
+                  type: string
+                key:
+                  description: Key is the taint key that the toleration applies to.
+                    Empty means match all taint keys. If the key is empty, operator
+                    must be Exists; this combination means to match all values and
+                    all keys.
+                  type: string
+                operator:
+                  description: Operator represents a key's relationship to the value.
+                    Valid operators are Exists and Equal. Defaults to Equal. Exists
+                    is equivalent to wildcard for value, so that a pod can tolerate
+                    all taints of a particular category.
+                  type: string
+                tolerationSeconds:
+                  description: TolerationSeconds represents the period of time the
+                    toleration (which must be of effect NoExecute, otherwise this
+                    field is ignored) tolerates the taint. By default, it is not set,
+                    which means tolerate the taint forever (do not evict). Zero and
+                    negative values will be treated as 0 (evict immediately) by the
+                    system.
+                  format: int64
+                  type: integer
+                value:
+                  description: Value is the taint value the toleration matches to.
+                    If the operator is Exists, the value should be empty, otherwise
+                    just a regular string.
+                  type: string
+              type: object
+            type: array
+          schedule:
+            description: Defines a schedule for the scans to run. This is in cronjob
+              format. Note the scan will still be triggered immediately, and the scheduled
+              scans will start running only after the initial results are ready.
+            type: string
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

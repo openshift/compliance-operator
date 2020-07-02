@@ -43,7 +43,9 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				Name: "test",
 			},
 			Spec: compv1alpha1.ComplianceScanSpec{
-				RawResultStorageSize: compv1alpha1.DefaultRawStorageSize,
+				ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+					RawResultStorageSize: compv1alpha1.DefaultRawStorageSize,
+				},
 			},
 		}
 		objs = append(objs, compliancescaninstance)
