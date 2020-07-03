@@ -126,7 +126,7 @@ func updateProfileBundleStatus(pcfg *profileparser.ParserConfig, pb *cmpv1alpha1
 }
 
 func runProfileParser(cmd *cobra.Command, args []string) {
-	exitSignal := make(chan os.Signal)
+	exitSignal := make(chan os.Signal, 1)
 	signal.Notify(exitSignal, syscall.SIGINT, syscall.SIGTERM)
 	pcfg := newParserConfig(cmd)
 
