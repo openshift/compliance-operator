@@ -36,6 +36,7 @@ type ProfileBundleSpec struct {
 // Defines the observed state of ProfileBundle
 type ProfileBundleStatus struct {
 	// Presents the current status for the datastream for this bundle
+	// +kubebuilder:default=PENDING
 	DataStreamStatus DataStreamStatusType `json:"dataStreamStatus,omitempty"`
 	// If there's an error in the datastream, it'll be presented here
 	ErrorMessage string `json:"errorMessage,omitempty"`

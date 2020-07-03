@@ -54,6 +54,7 @@ spec:
             description: Defines the observed state of ProfileBundle
             properties:
               dataStreamStatus:
+                default: PENDING
                 description: Presents the current status for the datastream for this
                   bundle
                 type: string
