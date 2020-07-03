@@ -484,6 +484,14 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 			err = r.client.Status().Update(context.TODO(), instanceCopy)
 			return reconcile.Result{}, err
 		}
+	} else {
+		// If we're done with the scan but we're not cleaning up just yet.
+
+		// scale down resultserver so it's not still listening for requests.
+		if err := r.scaleDownResultServer(instance, logger); err != nil {
+			log.Error(err, "Cannot scale down result server")
+			return reconcile.Result{}, err
+		}
 	}
 
 	return reconcile.Result{}, nil
