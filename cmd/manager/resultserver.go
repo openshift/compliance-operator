@@ -16,6 +16,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
@@ -23,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"sort"
@@ -173,6 +175,9 @@ func rotateResultDirectories(rootPath string, rotation uint16) error {
 }
 
 func server(c *resultServerConfig) {
+	exit := make(chan os.Signal, 1)
+	signal.Notify(exit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
 	err := ensureDir(c.Path)
 	if err != nil {
 		log.Error(err, "Error ensuring result path: %s", c.Path)
@@ -235,6 +240,25 @@ func server(c *resultServerConfig) {
 		}
 		log.Info("Received file", "file-path", filePath)
 	})
+
 	log.Info("Listening...")
-	log.Error(server.ListenAndServeTLS(c.Cert, c.Key), "Error in server")
+
+	go func() {
+		err := server.ListenAndServeTLS(c.Cert, c.Key)
+		if err != nil && err != http.ErrServerClosed {
+			log.Error(err, "Error in result server")
+		}
+	}()
+
+	<-exit
+	log.Info("Server stopped.")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Error(err, "Server shutdown failed")
+	}
+
+	log.Info("Server exited gracefully")
 }
