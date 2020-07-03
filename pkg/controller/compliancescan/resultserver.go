@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
@@ -21,10 +22,7 @@ const resultserverSA = "default"
 // stores them in a PVC.
 // It's comprised of the PVC for the scan, the pod and a service that fronts it
 func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	resultServerLabels := map[string]string{
-		"complianceScan": instance.Name,
-		"app":            "resultserver",
-	}
+	resultServerLabels := getResultServerLabels(instance)
 
 	logger.Info("Creating scan result server pod")
 	deployment := resultServer(instance, resultServerLabels, logger)
@@ -45,11 +43,41 @@ func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.Comp
 	return nil
 }
 
-func (r *ReconcileComplianceScan) deleteResultServer(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	resultServerLabels := map[string]string{
-		"complianceScan": instance.Name,
-		"app":            "resultserver",
+func (r *ReconcileComplianceScan) scaleDownResultServer(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
+	ctx := context.TODO()
+	key := types.NamespacedName{
+		Name:      getResultServerName(instance),
+		Namespace: common.GetComplianceOperatorNamespace(),
 	}
+
+	rslog := logger.WithValues(
+		"Deployment.Name", key.Name,
+		"Deployment.Namespace", key.Namespace)
+
+	rslog.Info("Scaling down result server")
+
+	found := &appsv1.Deployment{}
+	err := r.client.Get(ctx, key, found)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			rslog.Info("result server doesn't exist. " +
+				"This is a non-issue since we were scaling down anyway")
+			return nil
+		}
+		rslog.Error(err, "Error getting result server in preparation of scale-down")
+		return err
+	}
+
+	// scale down
+	var zeroRepls int32 = 0
+	rs := found.DeepCopy()
+	rs.Spec.Replicas = &zeroRepls
+	rslog.Info("Updating result server for scale-down")
+	return r.client.Update(ctx, rs)
+}
+
+func (r *ReconcileComplianceScan) deleteResultServer(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
+	resultServerLabels := getResultServerLabels(instance)
 
 	logger.Info("Deleting scan result server pod")
 
@@ -71,6 +99,13 @@ func (r *ReconcileComplianceScan) deleteResultServer(instance *compv1alpha1.Comp
 	}
 	logger.Info("ResultServer Service deleted", "Service.Name", service.Name)
 	return nil
+}
+
+func getResultServerLabels(instance *compv1alpha1.ComplianceScan) map[string]string {
+	return map[string]string{
+		"complianceScan": instance.Name,
+		"app":            "resultserver",
+	}
 }
 
 // Serve up arf reports for a compliance scan with a web service protected by openshift auth (oauth-proxy sidecar).

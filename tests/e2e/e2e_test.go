@@ -6,8 +6,6 @@ import (
 	"math/rand"
 	"testing"
 
-	appsv1 "k8s.io/api/apps/v1"
-
 	configv1 "github.com/openshift/api/config/v1"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
@@ -126,12 +124,12 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
-						Profile:              "xccdf_org.ssgproject.content_profile_moderate",
-						Content:              rhcosContentFile,
-						Rule:                 "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						Profile: "xccdf_org.ssgproject.content_profile_moderate",
+						Content: rhcosContentFile,
+						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
 							RawResultStorageSize: "2Gi",
-							Debug: true,
+							Debug:                true,
 						},
 					},
 				}
@@ -184,12 +182,12 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
-						Profile:              "xccdf_org.ssgproject.content_profile_moderate",
-						Content:              rhcosContentFile,
-						Rule:                 "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						Profile: "xccdf_org.ssgproject.content_profile_moderate",
+						Content: rhcosContentFile,
+						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
 							RawResultStorageSize: "6Gi",
-							Debug: true,
+							Debug:                true,
 						},
 					},
 				}
@@ -243,12 +241,12 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ComplianceScanSpec{
-						Profile:              "xccdf_org.ssgproject.content_profile_moderate",
-						Content:              rhcosContentFile,
-						Rule:                 "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						Profile: "xccdf_org.ssgproject.content_profile_moderate",
+						Content: rhcosContentFile,
+						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
 							RawResultStorageSize: "6Gi",
-							Debug: true,
+							Debug:                true,
 						},
 					},
 				}
@@ -920,14 +918,14 @@ func TestE2E(t *testing.T) {
 							{
 								Name: workerScanName,
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage:             contentImagePath,
-									Profile:                  "xccdf_org.ssgproject.content_profile_moderate",
-									Content:                  rhcosContentFile,
-									Rule:                     "xccdf_org.ssgproject.content_rule_no_netrc_files",
-									NodeSelector:             selectWorkers,
+									ContentImage: contentImagePath,
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
+									Content:      rhcosContentFile,
+									Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
+									NodeSelector: selectWorkers,
 									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
 										RawResultStorageRotation: 1,
-										Debug: true,
+										Debug:                    true,
 									},
 								},
 							},
@@ -971,18 +969,6 @@ func TestE2E(t *testing.T) {
 				updatedSchedule := ""
 				testSuiteCopy.Spec.Schedule = updatedSchedule
 				if err = f.Client.Update(goctx.TODO(), testSuiteCopy); err != nil {
-					return err
-				}
-
-				// Hack: Remove the DS deployment so that we can remount the PVC. It might be better
-				// to schedule the checker pod on the same node as the pod coming from the deployment...
-				rsDeployment := &appsv1.Deployment{}
-				dsName := workerScanName + "-rs"
-				key = types.NamespacedName{Name: dsName, Namespace: testSuite.Namespace}
-				if err = f.Client.Get(goctx.TODO(), key, rsDeployment); err != nil {
-					return err
-				}
-				if err = f.Client.Delete(goctx.TODO(), rsDeployment); err != nil {
 					return err
 				}
 
@@ -1208,14 +1194,14 @@ func TestE2E(t *testing.T) {
 				objName := getObjNameFromTest(t)
 
 				rhcos4e8profile := &compv1alpha1.Profile{}
-				key := types.NamespacedName{Namespace:namespace, Name: rhcosPb.Name + "-e8"}
+				key := types.NamespacedName{Namespace: namespace, Name: rhcosPb.Name + "-e8"}
 				if err := f.Client.Get(goctx.TODO(), key, rhcos4e8profile); err != nil {
 					return err
 				}
 
 				scanSettingName := objName + "-setting"
 				scanSetting := compv1alpha1.ScanSetting{
-					ObjectMeta:            metav1.ObjectMeta{
+					ObjectMeta: metav1.ObjectMeta{
 						Name:      scanSettingName,
 						Namespace: namespace,
 					},
@@ -1225,7 +1211,7 @@ func TestE2E(t *testing.T) {
 					ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
 						Debug: true,
 					},
-					Roles:                 []string{"master", "worker"},
+					Roles: []string{"master", "worker"},
 				}
 
 				if err := f.Client.Create(goctx.TODO(), &scanSetting, getCleanupOpts(ctx)); err != nil {
@@ -1238,7 +1224,7 @@ func TestE2E(t *testing.T) {
 						Name:      scanSettingBindingName,
 						Namespace: namespace,
 					},
-					Profiles:   []compv1alpha1.NamedObjectReference{
+					Profiles: []compv1alpha1.NamedObjectReference{
 						// TODO: test also OCP profile when it works completely
 						{
 							Name:     rhcos4e8profile.Name,
@@ -1262,7 +1248,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				masterScanKey := types.NamespacedName{ Namespace: namespace, Name: rhcos4e8profile.Name + "-master" }
+				masterScanKey := types.NamespacedName{Namespace: namespace, Name: rhcos4e8profile.Name + "-master"}
 				masterScan := &compv1alpha1.ComplianceScan{}
 				if err := f.Client.Get(goctx.TODO(), masterScanKey, masterScan); err != nil {
 					return err
@@ -1272,7 +1258,7 @@ func TestE2E(t *testing.T) {
 					t.Errorf("Expected that the settings set debug to true in master scan")
 				}
 
-				workerScanKey := types.NamespacedName{ Namespace: namespace, Name: rhcos4e8profile.Name + "-worker" }
+				workerScanKey := types.NamespacedName{Namespace: namespace, Name: rhcos4e8profile.Name + "-worker"}
 				workerScan := &compv1alpha1.ComplianceScan{}
 				if err := f.Client.Get(goctx.TODO(), workerScanKey, workerScan); err != nil {
 					return err
