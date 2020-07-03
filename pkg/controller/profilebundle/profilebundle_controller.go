@@ -21,7 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -54,16 +53,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 	// Watch for changes to primary resource ProfileBundle
 	err = c.Watch(&source.Kind{Type: &compliancev1alpha1.ProfileBundle{}}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return err
-	}
-
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
-	// Watch for changes to secondary resource Pods and requeue the owner ProfileBundle
-	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &compliancev1alpha1.ProfileBundle{},
-	})
 	if err != nil {
 		return err
 	}
@@ -124,11 +113,6 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 
 	// Define a new Pod object
 	depl := newWorkloadForBundle(instance)
-
-	// Set ProfileBundle instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, depl, r.scheme); err != nil {
-		return reconcile.Result{}, err
-	}
 
 	// Check if this Pod already exists
 	found := &appsv1.Deployment{}
