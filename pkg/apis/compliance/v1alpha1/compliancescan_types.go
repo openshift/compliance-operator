@@ -109,22 +109,27 @@ type TailoringConfigMapRef struct {
 // +k8s:openapi-gen=true
 type ComplianceScanType string
 
-// ComplianceScanSettings groups together settings of a ComplianceScan
-// +k8s:openapi-gen=true
-type ComplianceScanSettings struct {
-	// Enable debug logging of workloads and OpenSCAP
-	Debug bool `json:"debug,omitempty"`
+type RawResultStorageSettings struct {
 	// Specifies the amount of storage to ask for storing the raw results. Note that
 	// if re-scans happen, the new results will also need to be stored. Defaults to 1Gi.
 	// +kubebuilder:validation:Default=1Gi
 	// +kubebuilder:default="1Gi"
-	RawResultStorageSize string `json:"rawResultStorageSize,omitempty"`
+	Size string `json:"size,omitempty"`
 	// Specifies the amount of scans for which the raw results will be stored.
 	// Older results will get rotated, and it's the responsibility of administrators
 	// to store these results elsewhere before rotation happens. Note that a rotation
 	// policy of '0' disables rotation entirely. Defaults to 3.
 	// +kubebuilder:default=3
-	RawResultStorageRotation uint16 `json:"rawResultStorageRotation,omitempty"`
+	Rotation uint16 `json:"rotation,omitempty"`
+}
+
+// ComplianceScanSettings groups together settings of a ComplianceScan
+// +k8s:openapi-gen=true
+type ComplianceScanSettings struct {
+	// Enable debug logging of workloads and OpenSCAP
+	Debug bool `json:"debug,omitempty"`
+	// Specifies settings that pertain to raw result storage.
+	RawResultStorage RawResultStorageSettings `json:"rawResultStorage,omitempty"`
 	// Specifies tolerations needed for the scan to run on the nodes. This is useful
 	// in case the target set of nodes have custom taints that don't allow certain
 	// workloads to run. Defaults to allowing scheduling on the master nodes.

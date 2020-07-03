@@ -79,20 +79,26 @@ spec:
                       description: Is the profile in the data stream to be used. This
                         is the collection of rules that will be checked for.
                       type: string
-                    rawResultStorageRotation:
-                      default: 3
-                      description: Specifies the amount of scans for which the raw
-                        results will be stored. Older results will get rotated, and
-                        it's the responsibility of administrators to store these results
-                        elsewhere before rotation happens. Note that a rotation policy
-                        of '0' disables rotation entirely. Defaults to 3.
-                      type: integer
-                    rawResultStorageSize:
-                      default: 1Gi
-                      description: Specifies the amount of storage to ask for storing
-                        the raw results. Note that if re-scans happen, the new results
-                        will also need to be stored. Defaults to 1Gi.
-                      type: string
+                    rawResultStorage:
+                      description: Specifies settings that pertain to raw result storage.
+                      properties:
+                        rotation:
+                          default: 3
+                          description: Specifies the amount of scans for which the
+                            raw results will be stored. Older results will get rotated,
+                            and it's the responsibility of administrators to store
+                            these results elsewhere before rotation happens. Note
+                            that a rotation policy of '0' disables rotation entirely.
+                            Defaults to 3.
+                          type: integer
+                        size:
+                          default: 1Gi
+                          description: Specifies the amount of storage to ask for
+                            storing the raw results. Note that if re-scans happen,
+                            the new results will also need to be stored. Defaults
+                            to 1Gi.
+                          type: string
+                      type: object
                     rule:
                       description: A Rule can be specified if the scan should check
                         only for a specific rule. Note that when leaving this empty,

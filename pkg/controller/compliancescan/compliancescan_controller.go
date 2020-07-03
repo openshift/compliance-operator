@@ -166,15 +166,15 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 	}
 
 	// Set default storage if missing
-	if instance.Spec.RawResultStorageSize == "" {
+	if instance.Spec.RawResultStorage.Size == "" {
 		instanceCopy := instance.DeepCopy()
-		instanceCopy.Spec.RawResultStorageSize = compv1alpha1.DefaultRawStorageSize
+		instanceCopy.Spec.RawResultStorage.Size = compv1alpha1.DefaultRawStorageSize
 		err := r.client.Update(context.TODO(), instanceCopy)
 		return reconcile.Result{}, err
 	}
 
 	//validate raw storage size
-	if _, err := resource.ParseQuantity(instance.Spec.RawResultStorageSize); err != nil {
+	if _, err := resource.ParseQuantity(instance.Spec.RawResultStorage.Size); err != nil {
 		instanceCopy := instance.DeepCopy()
 		instanceCopy.Status.ErrorMessage = fmt.Sprintf("Error parsing RawResultsStorageSize: %s", err)
 		instanceCopy.Status.Result = compv1alpha1.ResultError

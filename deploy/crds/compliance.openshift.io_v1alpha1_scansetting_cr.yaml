@@ -7,8 +7,9 @@ autoApplyRemediations: false
 schedule: "0 1 * * *"
 debug: true
 # Scan-specific settings
-rawResultStorageSize: "2Gi"
-rawResultStorageRotation: 10
+rawResultStorage:
+  size: "2Gi"
+  rotation: 10
 # For each role, a separate scan will be created pointing
 # to a node-role specified in roles
 roles:

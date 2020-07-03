@@ -140,7 +140,7 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 								"--address=0.0.0.0",
 								fmt.Sprintf("--port=%d", ResultServerPort),
 								fmt.Sprintf("--scan-index=%d", scanInstance.Status.CurrentIndex),
-								fmt.Sprintf("--rotation=%d", scanInstance.Spec.RawResultStorageRotation),
+								fmt.Sprintf("--rotation=%d", scanInstance.Spec.RawResultStorage.Rotation),
 								"--tls-server-cert=/etc/pki/tls/tls.crt",
 								"--tls-server-key=/etc/pki/tls/tls.key",
 								"--tls-ca=/etc/pki/tls/ca.crt",

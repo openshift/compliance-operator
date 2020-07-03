@@ -77,7 +77,7 @@ func getPVCForScan(instance *compv1alpha1.ComplianceScan) *corev1.PersistentVolu
 			},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse(instance.Spec.RawResultStorageSize),
+					corev1.ResourceStorage: resource.MustParse(instance.Spec.RawResultStorage.Size),
 				},
 			},
 		},
