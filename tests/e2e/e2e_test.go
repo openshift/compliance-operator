@@ -128,8 +128,10 @@ func TestE2E(t *testing.T) {
 						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
-							RawResultStorageSize: "2Gi",
-							Debug:                true,
+							RawResultStorage: compv1alpha1.RawResultStorageSettings{
+								Size: "2Gi",
+							},
+							Debug: true,
 						},
 					},
 				}
@@ -186,8 +188,10 @@ func TestE2E(t *testing.T) {
 						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
-							RawResultStorageSize: "6Gi",
-							Debug:                true,
+							RawResultStorage: compv1alpha1.RawResultStorageSettings{
+								Size: "6Gi",
+							},
+							Debug: true,
 						},
 					},
 				}
@@ -245,8 +249,10 @@ func TestE2E(t *testing.T) {
 						Content: rhcosContentFile,
 						Rule:    "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
-							RawResultStorageSize: "6Gi",
-							Debug:                true,
+							RawResultStorage: compv1alpha1.RawResultStorageSettings{
+								Size: "6Gi",
+							},
+							Debug: true,
 						},
 					},
 				}
@@ -924,8 +930,10 @@ func TestE2E(t *testing.T) {
 									Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
 									NodeSelector: selectWorkers,
 									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
-										RawResultStorageRotation: 1,
-										Debug:                    true,
+										RawResultStorage: compv1alpha1.RawResultStorageSettings{
+											Rotation: 1,
+										},
+										Debug: true,
 									},
 								},
 							},

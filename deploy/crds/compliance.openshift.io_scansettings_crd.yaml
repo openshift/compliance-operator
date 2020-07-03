@@ -35,20 +35,24 @@ spec:
             type: string
           metadata:
             type: object
-          rawResultStorageRotation:
-            default: 3
-            description: Specifies the amount of scans for which the raw results will
-              be stored. Older results will get rotated, and it's the responsibility
-              of administrators to store these results elsewhere before rotation happens.
-              Note that a rotation policy of '0' disables rotation entirely. Defaults
-              to 3.
-            type: integer
-          rawResultStorageSize:
-            default: 1Gi
-            description: Specifies the amount of storage to ask for storing the raw
-              results. Note that if re-scans happen, the new results will also need
-              to be stored. Defaults to 1Gi.
-            type: string
+          rawResultStorage:
+            description: Specifies settings that pertain to raw result storage.
+            properties:
+              rotation:
+                default: 3
+                description: Specifies the amount of scans for which the raw results
+                  will be stored. Older results will get rotated, and it's the responsibility
+                  of administrators to store these results elsewhere before rotation
+                  happens. Note that a rotation policy of '0' disables rotation entirely.
+                  Defaults to 3.
+                type: integer
+              size:
+                default: 1Gi
+                description: Specifies the amount of storage to ask for storing the
+                  raw results. Note that if re-scans happen, the new results will
+                  also need to be stored. Defaults to 1Gi.
+                type: string
+            type: object
           roles:
             description: The list of roles to apply node-specific checks to
             items:
