@@ -189,7 +189,7 @@ e2e: namespace tear-down operator-sdk image-to-cluster openshift-user deploy-crd
 	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
 	@echo "Replacing workload references in deploy/operator.yaml"
 	@sed -i 's%$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%$(OPENSCAP_IMAGE_PATH):$(OPENSCAP_IMAGE_TAG)%' deploy/operator.yaml
-	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%registry-proxy.engineering.redhat.com/rh-osbs/openshift-compliance-operator:rhaos-4.6-rhel-7-containers-candidate-47470-20200706190101%' deploy/operator.yaml
 	@sed -i 's%$(DEFAULT_CONTENT_IMAGE_PATH)%$(E2E_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 	@echo "Running e2e tests"
 	unset GOFLAGS && CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --skip-cleanup-error --image "$(OPERATOR_IMAGE_PATH)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
@@ -235,7 +235,7 @@ image-to-cluster:
 	@echo "IMAGE_FORMAT variable detected. We're in a CI enviornment."
 	@echo "We're in a CI environment, skipping image-to-cluster target."
 	$(eval component = $(APP_NAME))
-	$(eval OPERATOR_IMAGE_PATH = $(IMAGE_FORMAT))
+	$(eval OPERATOR_IMAGE_PATH = registry-proxy.engineering.redhat.com/rh-osbs/openshift-compliance-operator:rhaos-4.6-rhel-7-containers-candidate-47470-20200706190101)
 	$(eval component = testcontent)
 	$(eval E2E_CONTENT_IMAGE_PATH = $(IMAGE_FORMAT))
 else ifeq ($(E2E_USE_DEFAULT_IMAGES), true)
