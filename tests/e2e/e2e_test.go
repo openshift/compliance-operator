@@ -106,7 +106,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err = scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultCompliant)
+				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultCompliant)
 				if err != nil {
 					return err
 				}
@@ -145,7 +145,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err = scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultCompliant)
+				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultCompliant)
 				if err != nil {
 					return err
 				}
@@ -205,7 +205,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err = scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultError)
+				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultError)
 				if err != nil {
 					return err
 				}
@@ -266,7 +266,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err = scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultError)
+				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultError)
 				if err != nil {
 					return err
 				}
@@ -332,7 +332,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				return scanResultIsExpected(f, namespace, "test-single-tailored-scan-succeeds", compv1alpha1.ResultCompliant)
+				return scanResultIsExpected(t, f, namespace, "test-single-tailored-scan-succeeds", compv1alpha1.ResultCompliant)
 			},
 		},
 		testExecution{
@@ -373,7 +373,7 @@ func TestE2E(t *testing.T) {
 						"The number of reports doesn't match the number of selected nodes: "+
 							"%d reports / %d nodes", len(configmaps), len(nodes))
 				}
-				return scanResultIsExpected(f, namespace, "test-filtered-scan", compv1alpha1.ResultCompliant)
+				return scanResultIsExpected(t, f, namespace, "test-filtered-scan", compv1alpha1.ResultCompliant)
 			},
 		},
 		testExecution{
@@ -402,7 +402,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return scanResultIsExpected(f, namespace, "test-scan-w-invalid-content", compv1alpha1.ResultError)
+				return scanResultIsExpected(t, f, namespace, "test-scan-w-invalid-content", compv1alpha1.ResultError)
 			},
 		},
 		testExecution{
@@ -431,7 +431,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return scanResultIsExpected(f, namespace, "test-scan-w-invalid-profile", compv1alpha1.ResultError)
+				return scanResultIsExpected(t, f, namespace, "test-scan-w-invalid-profile", compv1alpha1.ResultError)
 			},
 		},
 		testExecution{
@@ -490,7 +490,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return scanResultIsExpected(f, namespace, "test-malformed-tailored-scan-fails", compv1alpha1.ResultError)
+				return scanResultIsExpected(t, f, namespace, "test-malformed-tailored-scan-fails", compv1alpha1.ResultError)
 			},
 		},
 		testExecution{
@@ -520,7 +520,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return scanResultIsExpected(f, namespace, "test-scan-w-empty-tailoring-cm", compv1alpha1.ResultError)
+				return scanResultIsExpected(t, f, namespace, "test-scan-w-empty-tailoring-cm", compv1alpha1.ResultError)
 			},
 		},
 		testExecution{
@@ -559,7 +559,7 @@ func TestE2E(t *testing.T) {
 				// The status might still be NOT-AVAILABLE... we can wait a bit
 				// for the reconciliation to update it.
 				_ = wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
-					if resultErr = scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultError); resultErr != nil {
+					if resultErr = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultError); resultErr != nil {
 						return false, nil
 					}
 					return true, nil
@@ -596,7 +596,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				return scanResultIsExpected(f, namespace, scanName, compv1alpha1.ResultCompliant)
+				return scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultCompliant)
 			},
 		},
 		testExecution{
@@ -645,7 +645,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return scanResultIsExpected(f, namespace, "test-missing-pod-scan", compv1alpha1.ResultCompliant)
+				return scanResultIsExpected(t, f, namespace, "test-missing-pod-scan", compv1alpha1.ResultCompliant)
 			},
 		},
 		testExecution{
@@ -853,11 +853,11 @@ func TestE2E(t *testing.T) {
 				}
 
 				// At this point, both scans should be non-compliant given our current content
-				err = scanResultIsExpected(f, namespace, workerScanName, compv1alpha1.ResultNonCompliant)
+				err = scanResultIsExpected(t, f, namespace, workerScanName, compv1alpha1.ResultNonCompliant)
 				if err != nil {
 					return err
 				}
-				err = scanResultIsExpected(f, namespace, masterScanName, compv1alpha1.ResultNonCompliant)
+				err = scanResultIsExpected(t, f, namespace, masterScanName, compv1alpha1.ResultNonCompliant)
 				if err != nil {
 					return err
 				}
@@ -1726,13 +1726,13 @@ func TestE2E(t *testing.T) {
 				}
 
 				// At this point, both scans should be non-compliant given our current content
-				err = scanResultIsExpected(f, namespace, workerScanName, compv1alpha1.ResultNonCompliant)
+				err = scanResultIsExpected(t, f, namespace, workerScanName, compv1alpha1.ResultNonCompliant)
 				if err != nil {
 					return err
 				}
 
 				// The profile should find one check for an htpasswd IDP, so we should be compliant.
-				err = scanResultIsExpected(f, namespace, platformScanName, compv1alpha1.ResultCompliant)
+				err = scanResultIsExpected(t, f, namespace, platformScanName, compv1alpha1.ResultCompliant)
 				if err != nil {
 					return err
 				}
@@ -1867,7 +1867,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err = scanResultIsExpected(f, namespace, platformScanName, compv1alpha1.ResultNonCompliant)
+				err = scanResultIsExpected(t, f, namespace, platformScanName, compv1alpha1.ResultNonCompliant)
 				if err != nil {
 					return err
 				}

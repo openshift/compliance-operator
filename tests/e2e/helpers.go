@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"regexp"
 	"strings"
 	"testing"
@@ -346,6 +347,7 @@ func waitForProfileBundleStatus(t *testing.T, f *framework.Framework, namespace,
 func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus compv1alpha1.ComplianceScanStatusPhase) error {
 	exampleComplianceScan := &compv1alpha1.ComplianceScan{}
 	var lastErr error
+	defer logContainerOutput(t, f, namespace, name)
 	// retry and ignore errors until timeout
 	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
 		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, exampleComplianceScan)
@@ -492,6 +494,7 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 	suite := &compv1alpha1.ComplianceSuite{}
 	var lastErr error
 	// retry and ignore errors until timeout
+	defer logContainerOutput(t, f, namespace, name)
 	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
 		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, suite)
 		if lastErr != nil {
@@ -558,8 +561,9 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 	return nil
 }
 
-func scanResultIsExpected(f *framework.Framework, namespace, name string, expectedResult compv1alpha1.ComplianceScanStatusResult) error {
+func scanResultIsExpected(t *testing.T, f *framework.Framework, namespace, name string, expectedResult compv1alpha1.ComplianceScanStatusResult) error {
 	cs := &compv1alpha1.ComplianceScan{}
+	defer logContainerOutput(t, f, namespace, name)
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, cs)
 	if err != nil {
 		return err
@@ -1635,4 +1639,68 @@ func getReadyProfileBundle(t *testing.T, f *framework.Framework, name, namespace
 	}
 
 	return pb, nil
+}
+
+func writeToArtifactsDir(t *testing.T, f *framework.Framework, dir, scan, pod, container, log string) error {
+	logPath := path.Join(dir, fmt.Sprintf("%s_%s_%s.log", scan, pod, container))
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		return err
+	}
+	// #nosec G307
+	defer logFile.Close()
+	_, err = io.WriteString(logFile, log)
+	if err != nil {
+		return err
+	}
+	logFile.Sync()
+	return nil
+}
+
+func logContainerOutput(t *testing.T, f *framework.Framework, namespace, name string) {
+	// Try all container/init variants for each pod and the pod itself (self), log nothing if the container is not applicable.
+	containers := []string{"self", "api-resource-collector", "log-collector", "openscap-ocp", "content-container"}
+	artifacts := os.Getenv("ARTIFACT_DIR")
+	if artifacts == "" {
+		return
+	}
+	pods, err := getPodsForScan(f, name)
+	if err != nil {
+		E2ELogf(t, "Warning: Error getting pods for container logging: %s", err)
+	} else {
+		for _, pod := range pods {
+			for _, con := range containers {
+				logOpts := &corev1.PodLogOptions{}
+				if con != "self" {
+					logOpts.Container = con
+				}
+				req := f.KubeClient.CoreV1().Pods(namespace).GetLogs(pod.Name, logOpts)
+				podLogs, err := req.Stream(goctx.TODO())
+				if err != nil {
+					// Silence this error if the container is not valid for the pod
+					if !apierrors.IsBadRequest(err) {
+						E2ELogf(t, "error getting logs for %s/%s: reason: %v, err: %v", pod.Name, con, apierrors.ReasonForError(err), err)
+					}
+					continue
+				}
+				buf := new(bytes.Buffer)
+				_, err = io.Copy(buf, podLogs)
+				if err != nil {
+					E2ELogf(t, "error copying logs for %s/%s: %v", pod.Name, con, err)
+					continue
+				}
+				logs := buf.String()
+				if len(logs) == 0 {
+					E2ELogf(t, "no logs for %s/%s", pod.Name, con)
+				} else {
+					err := writeToArtifactsDir(t, f, artifacts, name, pod.Name, con, logs)
+					if err != nil {
+						E2ELogf(t, "error writing logs for %s/%s: %v", pod.Name, con, err)
+					} else {
+						E2ELogf(t, "wrote logs for %s/%s", pod.Name, con)
+					}
+				}
+			}
+		}
+	}
 }
