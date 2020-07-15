@@ -732,21 +732,25 @@ The scans provide two kinds of raw results: the full report in the ARF format
 and just the list of scan results in the XCCDF format. The ARF reports are,
 due to their large size, copied into persistent volumes:
 ```
-oc get pv
+$ oc get pv
 NAME                                       CAPACITY  CLAIM
 pvc-5d49c852-03a6-4bcd-838b-c7225307c4bb   1Gi       openshift-compliance/workers-scan
 pvc-ef68c834-bb6e-4644-926a-8b7a4a180999   1Gi       openshift-compliance/masters-scan
-
+$ oc get pvc
+NAME                     STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+ocp4-moderate            Bound    pvc-01b7bd30-0d19-4fbc-8989-bad61d9384d9   1Gi        RWO            gp2            37m
+rhcos4-with-usb-master   Bound    pvc-f3f35712-6c3f-42f0-a89a-af9e6f54a0d4   1Gi        RWO            gp2            37m
+rhcos4-with-usb-worker   Bound    pvc-7837e9ba-db13-40c4-8eee-a2d1beb0ada7   1Gi        RWO            gp2            37m
 ```
 
 An example of extracting ARF results from a scan called `workers-scan` follows:
 
-Once the scan had finished, you'll note that there is a `PersistentVolume` named
+Once the scan had finished, you'll note that there is a `PersistentVolumeClaim` named
 after the scan:
 ```
-$ oc get pv
-NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                               STORAGECLASS   REASON   AGE
-pvc-577b046a-d791-4b0a-bf03-4dbc5f0f72f1   1Gi        RWO            Delete           Bound    openshift-compliance/workers-scan   gp2                     19m
+oc get pvc/workers-scan
+NAME            STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+workers-scan    Bound    pvc-01b7bd30-0d19-4fbc-8989-bad61d9384d9   1Gi        RWO            gp2            38m
 ```
 You'll want to start a pod that mounts the PV, for example:
 ```yaml
