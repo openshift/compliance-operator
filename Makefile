@@ -329,7 +329,7 @@ endif
 csv: deploy/olm-catalog/compliance-operator/$(COURIER_PACKAGE_VERSION) check-package-version operator-sdk ## Generate the CSV and packaging for the specific version (NOTE: Gotta specify the version with the COURIER_PACKAGE_VERSION environment variable)
 
 deploy/olm-catalog/compliance-operator/$(COURIER_PACKAGE_VERSION):
-	$(GOPATH)/bin/operator-sdk generate csv --csv-channel $(PACKAGE_CHANNEL) --csv-version "$(COURIER_PACKAGE_VERSION)" --from-version "$(OLD_COURIER_PACKAGE_VERSION)" --update-crds
+	$(GOPATH)/bin/operator-sdk generate csv --make-manifests=false --csv-channel $(PACKAGE_CHANNEL) --csv-version "$(COURIER_PACKAGE_VERSION)" --from-version "$(OLD_COURIER_PACKAGE_VERSION)" --update-crds
 
 .PHONY: publish-bundle
 publish-bundle: check-package-version
