@@ -333,6 +333,9 @@ deploy/olm-catalog/compliance-operator/$(COURIER_PACKAGE_VERSION):
 
 .PHONY: publish-bundle
 publish-bundle: check-package-version
+	# If the validation fails, make sure you are running operator-courier
+	# 2.1.8, but also make sure the patches from https://github.com/operator-framework/operator-courier/pull/189
+	# are included. On Fedora, feel free to use https://copr.fedorainfracloud.org/coprs/jhrozek/python-operator-courier/
 	$(COURIER_CMD) push "$(COURIER_OPERATOR_DIR)" "$(COURIER_QUAY_NAMESPACE)" "$(COURIER_PACKAGE_NAME)" "$(COURIER_PACKAGE_VERSION)" "basic $(COURIER_QUAY_TOKEN)"
 
 .PHONY: package-version-to-tag
