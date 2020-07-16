@@ -78,7 +78,6 @@ COURIER_PACKAGE_NAME=compliance-operator-bundle
 COURIER_OPERATOR_DIR=deploy/olm-catalog/compliance-operator
 COURIER_QUAY_NAMESPACE=compliance-operator
 COURIER_PACKAGE_VERSION?=
-OLD_COURIER_PACKAGE_VERSION=$(shell find deploy/olm-catalog/compliance-operator/ -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -r | head -1)
 COURIER_QUAY_TOKEN?= $(shell cat ~/.quay)
 PACKAGE_CHANNEL?=alpha
 
@@ -329,6 +328,7 @@ endif
 csv: deploy/olm-catalog/compliance-operator/$(COURIER_PACKAGE_VERSION) check-package-version operator-sdk ## Generate the CSV and packaging for the specific version (NOTE: Gotta specify the version with the COURIER_PACKAGE_VERSION environment variable)
 
 deploy/olm-catalog/compliance-operator/$(COURIER_PACKAGE_VERSION):
+	$(eval OLD_COURIER_PACKAGE_VERSION = $(shell python3 find_previous_version.py ./deploy/olm-catalog/compliance-operator))
 	$(GOPATH)/bin/operator-sdk generate csv --make-manifests=false --csv-channel $(PACKAGE_CHANNEL) --csv-version "$(COURIER_PACKAGE_VERSION)" --from-version "$(OLD_COURIER_PACKAGE_VERSION)" --update-crds
 
 .PHONY: publish-bundle
