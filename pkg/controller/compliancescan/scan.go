@@ -26,12 +26,11 @@ const (
 )
 
 func (r *ReconcileComplianceScan) createScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
-	switch t := instance.Spec.ScanType; t {
-	case compv1alpha1.ScanTypePlatform:
+	if isPlatformScan(instance) {
 		return r.createPlatformScanPod(instance, logger)
-	default: // ScanTypeNode
-		return r.createNodeScanPods(instance, nodes, logger)
 	}
+	// ScanTypeNode
+	return r.createNodeScanPods(instance, nodes, logger)
 }
 
 func (r *ReconcileComplianceScan) createNodeScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {

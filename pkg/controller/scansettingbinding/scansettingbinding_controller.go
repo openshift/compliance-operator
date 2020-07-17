@@ -3,6 +3,10 @@ package scansettingbinding
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
+	"time"
+
 	"github.com/go-logr/logr"
 	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
@@ -14,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -23,8 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"strings"
-	"time"
 )
 
 const (
@@ -229,7 +230,7 @@ func createScansWithSelector(suite *compliancev1alpha1.ComplianceSuite, v1settin
 	scansWithSelector := make([]compliancev1alpha1.ComplianceScanSpecWrapper, 0)
 	for _, scan := range suite.Spec.Scans {
 		logger.Info("Processing original scan", "scan.Name", scan.Name)
-		if scan.ScanType == compliancev1alpha1.ScanTypeNode {
+		if strings.ToLower(string(scan.ScanType)) == "node" {
 			for _, role := range v1setting.Roles {
 				scanCopy := scan.DeepCopy()
 				scanCopy.Name = scan.Name + "-" + role
