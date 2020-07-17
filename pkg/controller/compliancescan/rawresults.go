@@ -55,6 +55,11 @@ func (r *ReconcileComplianceScan) deleteRawResultsForScan(instance *compv1alpha1
 }
 
 func getPVCForScan(instance *compv1alpha1.ComplianceScan) *corev1.PersistentVolumeClaim {
+	storageSize := instance.Spec.RawResultStorage.Size
+	if storageSize == "" {
+		storageSize = compv1alpha1.DefaultRawStorageSize
+	}
+
 	return &corev1.PersistentVolumeClaim{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -77,7 +82,7 @@ func getPVCForScan(instance *compv1alpha1.ComplianceScan) *corev1.PersistentVolu
 			},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse(instance.Spec.RawResultStorage.Size),
+					corev1.ResourceStorage: resource.MustParse(storageSize),
 				},
 			},
 		},
