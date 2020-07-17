@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -274,8 +275,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 
 	logger.Info("Phase: Running")
 
-	switch instance.Spec.ScanType {
-	case compv1alpha1.ScanTypePlatform:
+	if isPlatformScan(instance) {
 		running, err := isPlatformScanPodRunning(r, instance, logger)
 		if errors.IsNotFound(err) {
 			// Let's go back to the previous state and make sure all the nodes are covered.
@@ -295,7 +295,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 			// The platform scan pod is still running, go back to queue.
 			return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, err
 		}
-	default: // ScanTypeNode
+	} else { // ScanTypeNode
 		if nodes, err = getTargetNodes(r, instance); err != nil {
 			log.Error(err, "Cannot get nodes")
 			return reconcile.Result{}, err
@@ -417,13 +417,12 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 	// We need to remove resources before doing a re-scan
 	if doDelete || instance.NeedsRescan() {
 		logger.Info("Cleaning up scan's resources")
-		switch instance.Spec.ScanType {
-		case compv1alpha1.ScanTypePlatform:
+		if isPlatformScan(instance) {
 			if err := r.deletePlatformScanPod(instance, logger); err != nil {
 				log.Error(err, "Cannot delete platform scan pod")
 				return reconcile.Result{}, err
 			}
-		default: // ScanTypeNode
+		} else { // ScanTypeNode
 			if nodes, err = getTargetNodes(r, instance); err != nil {
 				log.Error(err, "Cannot get nodes")
 				return reconcile.Result{}, err
@@ -570,10 +569,9 @@ func (r *ReconcileComplianceScan) generateResultEventForScan(scan *compv1alpha1.
 func getTargetNodes(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan) (corev1.NodeList, error) {
 	var nodes corev1.NodeList
 
-	switch instance.Spec.ScanType {
-	case compv1alpha1.ScanTypePlatform:
+	if isPlatformScan(instance) {
 		return nodes, nil // Nodes are only relevant to the node scan type. Return the empty node list otherwise.
-	default:
+	} else {
 		listOpts := client.ListOptions{
 			LabelSelector: labels.SelectorFromSet(instance.Spec.NodeSelector),
 		}
@@ -665,8 +663,7 @@ func getNodeScanCM(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 // hard in which case there might not be a reason to launch the aggregator pod, e.g.
 // in cases the content cannot be loaded at all
 func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList) (bool, error) {
-	switch instance.Spec.ScanType {
-	case compv1alpha1.ScanTypePlatform:
+	if isPlatformScan(instance) {
 		foundCM, err := getPlatformScanCM(r, instance)
 
 		// Could be a transient error, so we requeue if there's any
@@ -680,7 +677,7 @@ func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.C
 		if err != nil {
 			return true, err
 		}
-	default: // ScanTypeNode
+	} else { // ScanTypeNode
 		for _, node := range nodes.Items {
 			foundCM, err := getNodeScanCM(r, instance, node.Name)
 
@@ -711,8 +708,7 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 	compliant := true
 	isReady := true
 
-	switch instance.Spec.ScanType {
-	case compv1alpha1.ScanTypePlatform:
+	if isPlatformScan(instance) {
 		foundCM, err := getPlatformScanCM(r, instance)
 
 		// Could be a transient error, so we requeue if there's any
@@ -735,7 +731,7 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 			lastNonCompliance = result
 			compliant = false
 		}
-	default: // ScanTypeNode
+	} else {
 		for _, node := range nodes.Items {
 			foundCM, err := getNodeScanCM(r, instance, node.Name)
 
@@ -803,4 +799,8 @@ func getInitContainerImage(scanSpec *compv1alpha1.ComplianceScanSpec, logger log
 
 	logger.Info("Content image", "image", image)
 	return image
+}
+
+func isPlatformScan(instance *compv1alpha1.ComplianceScan) bool {
+	return strings.ToLower(string(instance.Spec.ScanType)) == "platform"
 }
