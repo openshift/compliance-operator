@@ -313,7 +313,7 @@ func ParseRulesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action fun
 		description := ruleObj.FindOneByName("description")
 		rationale := ruleObj.FindOneByName("rationale")
 		warning := ruleObj.FindOneByName("warning")
-		severity := ruleObj.FindOneByName("severity")
+		severity := ruleObj.GetAttributeValue("severity")
 
 		fixes := []cmpv1alpha1.FixDefinition{}
 		foundPlatformMap := make(map[string]bool)
@@ -391,8 +391,8 @@ func ParseRulesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action fun
 			}
 			p.Warning = warn
 		}
-		if severity != nil {
-			p.Severity = severity.Text
+		if severity != "" {
+			p.Severity = severity
 		}
 		if len(fixes) > 0 {
 			p.AvailableFixes = fixes

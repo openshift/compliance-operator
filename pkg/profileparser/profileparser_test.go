@@ -249,6 +249,10 @@ var _ = Describe("Testing parse rules", func() {
 			Expect(pwMinLenRule.Annotations).ToNot(BeNil())
 		})
 
+		It("Has the expected severity", func() {
+			Expect(pwMinLenRule.Severity).To(BeEquivalentTo("medium"))
+		})
+
 		It("Has the expected control NIST annotations in profile operator format", func() {
 			nistKey := controlAnnotationBase + "NIST-800-53"
 			Expect(pwMinLenRule.Annotations).To(HaveKeyWithValue(nistKey, "IA-5(f);IA-5(1)(a);CM-6(a)"))
