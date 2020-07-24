@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	libgoimg "github.com/openshift/library-go/pkg/image/reference"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -11,6 +12,9 @@ const ProfileBundleFinalizer = "profilebundle.finalizers.compliance.openshift.io
 // ProfileBundleOwnerLabel marks a profile or rule as owned by a profile bundle
 // and helps users filter such objects
 const ProfileBundleOwnerLabel = "compliance.openshift.io/profile-bundle"
+
+// ProfileImageDigestAnnotation is the parsed out digest of the content image
+const ProfileImageDigestAnnotation = "compliance.openshift.io/image-digest"
 
 // DataStreamStatusType is the type for the data stream status
 type DataStreamStatusType string
@@ -55,6 +59,14 @@ type ProfileBundle struct {
 
 	Spec   ProfileBundleSpec   `json:"spec,omitempty"`
 	Status ProfileBundleStatus `json:"status,omitempty"`
+}
+
+func (pb *ProfileBundle) GetImageDigest() string {
+	dockerRef, err := libgoimg.Parse(pb.Spec.ContentImage)
+	if err != nil {
+		return ""
+	}
+	return dockerRef.ID
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
