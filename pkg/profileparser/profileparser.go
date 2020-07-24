@@ -147,11 +147,13 @@ func parseProfileFromNode(profileRoot *xmldom.Node, pcfg *ParserConfig, defType 
 					cmpv1alpha1.ProductTypeAnnotation: string(productType),
 				},
 			},
-			ID:          id,
-			Title:       title.Text,
-			Description: description.Text,
-			Rules:       selectedrules,
-			Values:      selectedvalues,
+			ProfilePayload: cmpv1alpha1.ProfilePayload{
+				ID:          id,
+				Title:       title.Text,
+				Description: description.Text,
+				Rules:       selectedrules,
+				Values:      selectedvalues,
+			},
 		}
 		err := action(&p)
 		if err != nil {
@@ -241,8 +243,10 @@ func ParseVariablesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action
 				Name:      xccdf.GetVariableNameFromID(id),
 				Namespace: pcfg.ProfileBundleKey.Namespace,
 			},
-			ID:    id,
-			Title: title.Text,
+			VariablePayload: cmpv1alpha1.VariablePayload{
+				ID:    id,
+				Title: title.Text,
+			},
 		}
 
 		description := varObj.FindOneByName("description")
@@ -363,9 +367,11 @@ func ParseRulesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action fun
 				Namespace:   pcfg.ProfileBundleKey.Namespace,
 				Annotations: annotations,
 			},
-			ID:             id,
-			Title:          title.Text,
-			AvailableFixes: nil,
+			RulePayload: cmpv1alpha1.RulePayload{
+				ID:             id,
+				Title:          title.Text,
+				AvailableFixes: nil,
+			},
 		}
 		if description != nil {
 			desc, err := xccdf.GetDescriptionFromXMLString(description.XML())

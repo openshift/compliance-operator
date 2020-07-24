@@ -43,7 +43,11 @@ var _ = Describe("Testing parse variables", func() {
 	)
 
 	BeforeEach(func() {
-		p = &cmpv1alpha1.Profile{ID: "profile_id"}
+		p = &cmpv1alpha1.Profile{
+			ProfilePayload: cmpv1alpha1.ProfilePayload{
+				ID: "profile_id",
+			},
+		}
 
 		pb = &cmpv1alpha1.ProfileBundle{Spec: cmpv1alpha1.ProfileBundleSpec{ContentFile: "/path/to/a/file/"}}
 
@@ -66,19 +70,25 @@ var _ = Describe("Testing parse variables", func() {
 		BeforeEach(func() {
 			variables = []*cmpv1alpha1.Variable{
 				{
-					ID:    "foo_id",
-					Type:  "string",
-					Value: "fooval",
+					VariablePayload: cmpv1alpha1.VariablePayload{
+						ID:    "foo_id",
+						Type:  "string",
+						Value: "fooval",
+					},
 				},
 				{
-					ID:    "bar_id",
-					Type:  "int",
-					Value: "3",
+					VariablePayload: cmpv1alpha1.VariablePayload{
+						ID:    "bar_id",
+						Type:  "int",
+						Value: "3",
+					},
 				},
 				{
-					ID:    "baz_id",
-					Type:  "bool",
-					Value: "true",
+					VariablePayload: cmpv1alpha1.VariablePayload{
+						ID:    "baz_id",
+						Type:  "bool",
+						Value: "true",
+					},
 				},
 			}
 		})
