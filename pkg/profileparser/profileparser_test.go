@@ -1,11 +1,20 @@
 package profileparser
 
 import (
+	"context"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	gomegatypes "github.com/onsi/gomega/types"
+	compapis "github.com/openshift/compliance-operator/pkg/apis"
 	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/subchen/go-xmldom"
 )
@@ -49,24 +58,329 @@ func getRuleById(id string, ruleList []cmpv1alpha1.Rule) *cmpv1alpha1.Rule {
 	return nil
 }
 
+func findRuleReference(profile *cmpv1alpha1.Profile, ruleName string) bool {
+	for _, ruleRef := range profile.Rules {
+		if string(ruleRef) == ruleName {
+			return true
+		}
+	}
+
+	return false
+}
+
+func doesRuleExist(cli runtimeclient.Client, namespace, ruleName string) (error, bool) {
+	return doesObjectExist(cli, "Rule", namespace, ruleName)
+}
+
+func doesVariableExist(cli runtimeclient.Client, namespace, variableName string) (error, bool) {
+	return doesObjectExist(cli, "Variable", namespace, variableName)
+}
+
+func doesObjectExist(cli runtimeclient.Client, kind, namespace, name string) (error, bool) {
+	obj := unstructured.Unstructured{}
+	obj.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   cmpv1alpha1.SchemeGroupVersion.Group,
+		Version: cmpv1alpha1.SchemeGroupVersion.Version,
+		Kind:    kind,
+	})
+
+	key := types.NamespacedName{Namespace: namespace, Name: name}
+	err := pcfg.Client.Get(context.TODO(), key, &obj)
+	if errors.IsNotFound(err) {
+		return nil, false
+	} else if err == nil {
+		return nil, true
+	}
+
+	return err, false
+}
+
 var (
 	pcfg       *ParserConfig
 	contentDom *xmldom.Document
+	pb         *cmpv1alpha1.ProfileBundle
+
+	pcfgModified       *ParserConfig
+	contentDomModified *xmldom.Document
+	pbModified         *cmpv1alpha1.ProfileBundle
 )
 
 func init() {
-	pcfg = &ParserConfig{
-		DataStreamPath: "../../tests/data/ssg-ocp4-ds-new.xml",
-		ProfileBundleKey: types.NamespacedName{
+	pb = &cmpv1alpha1.ProfileBundle{
+		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "test-namespace",
 			Name:      "test-profile",
 		},
-		Client: nil, // not needed for a test
-		Scheme: nil, // not needed for a test
+		Spec: cmpv1alpha1.ProfileBundleSpec{
+			ContentImage: "quay.io/jhrozek/ocp4-openscap-content@sha256:a1709f5150b17a9560a5732fe48a89f07bffc72c0832aa8c49ee5504510ae687",
+		},
+	}
+
+	objs := []k8sruntime.Object{}
+	objs = append(objs, pb, &cmpv1alpha1.Profile{}, &cmpv1alpha1.ProfileList{})
+
+	cmpScheme := k8sruntime.NewScheme()
+	_ = compapis.AddToScheme(cmpScheme)
+	client := fake.NewFakeClientWithScheme(cmpScheme, pb)
+
+	_ = client.Get(context.TODO(), types.NamespacedName{
+		Namespace: pb.Namespace,
+		Name:      pb.Name,
+	}, pb)
+
+	pcfg = &ParserConfig{
+		DataStreamPath:   "../../tests/data/ssg-ocp4-ds-new.xml",
+		ProfileBundleKey: types.NamespacedName{},
+		Client:           client,
+		Scheme:           cmpScheme,
 	}
 
 	contentDom, _ = xmldom.ParseFile(pcfg.DataStreamPath)
+
+	pcfgModified = &ParserConfig{
+		DataStreamPath:   "../../tests/data/ssg-ocp4-ds-new-modified.xml",
+		ProfileBundleKey: types.NamespacedName{},
+		Client:           client,
+		Scheme:           cmpScheme,
+	}
+
+	pbModified = &cmpv1alpha1.ProfileBundle{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "test-namespace",
+			Name:      "test-profile",
+		},
+		Spec: cmpv1alpha1.ProfileBundleSpec{
+			ContentImage: "quay.io/jhrozek/ocp4-openscap-content@sha256:7999243c0b005792bd58c6f5e1776ca88cf20adac1519c00ef08b18e77188db7",
+		},
+	}
+
+	contentDomModified, _ = xmldom.ParseFile(pcfgModified.DataStreamPath)
 }
+
+var _ = Describe("Testing ParseBundle", func() {
+	const (
+		moderateProfileName = "test-profile-moderate"
+
+		chronydClientOnlyRuleName = "test-profile-chronyd-client-only"
+		chronydNoNetworkRuleName  = "test-profile-chronyd-no-chronyc-network"
+	)
+
+	var (
+		err   error
+		found bool
+
+		moderateProfilePre  *cmpv1alpha1.Profile
+		moderateProfilePost *cmpv1alpha1.Profile
+	)
+
+	BeforeEach(func() {
+		err = ParseBundle(contentDom, pb, pcfg)
+		Expect(err).To(BeNil())
+
+		moderateProfilePre = &cmpv1alpha1.Profile{}
+		key := types.NamespacedName{Namespace: pb.Namespace, Name: moderateProfileName}
+		err = pcfg.Client.Get(context.TODO(), key, moderateProfilePre)
+		Expect(err).To(BeNil())
+
+		// Check that expected data is found
+		err, found = doesRuleExist(pcfg.Client, pb.Namespace, chronydClientOnlyRuleName)
+		Expect(err).To(BeNil())
+		Expect(found).To(BeTrue())
+
+		found = findRuleReference(moderateProfilePre, chronydNoNetworkRuleName)
+		Expect(found).To(BeTrue())
+	})
+
+	JustBeforeEach(func() {
+		// Parse the modified profile so that tests can be targeted to a single case
+		err = ParseBundle(contentDomModified, pbModified, pcfgModified)
+		Expect(err).To(BeNil())
+
+		moderateProfilePost = &cmpv1alpha1.Profile{}
+		key := types.NamespacedName{Namespace: pb.Namespace, Name: moderateProfileName}
+		err = pcfg.Client.Get(context.TODO(), key, moderateProfilePost)
+		Expect(err).To(BeNil())
+	})
+
+	Context("Profile changes", func() {
+		const (
+			ncpProfileName         = "test-profile-coreos-ncp"
+			ncpModifiedProfileName = "test-profile-coreos-ncp-modified"
+			e8ProfileName          = "test-profile-e8"
+		)
+
+		var (
+			ncpProfile    *cmpv1alpha1.Profile
+			e8ProfilePre  *cmpv1alpha1.Profile
+			e8ProfilePost *cmpv1alpha1.Profile
+		)
+
+		BeforeEach(func() {
+			ncpProfile = &cmpv1alpha1.Profile{}
+			key := types.NamespacedName{Namespace: pb.Namespace, Name: ncpProfileName}
+			err = pcfg.Client.Get(context.TODO(), key, ncpProfile)
+			Expect(err).To(BeNil())
+
+			e8ProfilePre = &cmpv1alpha1.Profile{}
+			key = types.NamespacedName{Namespace: pb.Namespace, Name: e8ProfileName}
+			err = pcfg.Client.Get(context.TODO(), key, e8ProfilePre)
+			Expect(err).To(BeNil())
+
+			err, found = doesRuleExist(pcfg.Client, pb.Namespace, chronydNoNetworkRuleName)
+			Expect(err).To(BeNil())
+			Expect(found).To(BeTrue())
+
+			found = findRuleReference(moderateProfilePre, chronydClientOnlyRuleName)
+			Expect(found).To(BeTrue())
+		})
+
+		JustBeforeEach(func() {
+			e8ProfilePost = &cmpv1alpha1.Profile{}
+			key := types.NamespacedName{Namespace: pb.Namespace, Name: e8ProfileName}
+			err = pcfg.Client.Get(context.TODO(), key, e8ProfilePost)
+			Expect(err).To(BeNil())
+		})
+
+		It("Detects that a profile was removed completely", func() {
+			ncpProfile = &cmpv1alpha1.Profile{}
+			key := types.NamespacedName{Namespace: pb.Namespace, Name: ncpProfileName}
+			err = pcfg.Client.Get(context.TODO(), key, ncpProfile)
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+		})
+
+		It("Detects that a new profile was added", func() {
+			ncpModifiedProfile := &cmpv1alpha1.Profile{}
+			key := types.NamespacedName{Namespace: pb.Namespace, Name: ncpModifiedProfileName}
+			err = pcfg.Client.Get(context.TODO(), key, ncpModifiedProfile)
+			Expect(err).To(BeNil())
+		})
+
+		It("Detects that a rule was unlinked from a profile", func() {
+			// The rule must still exist
+			err, found = doesRuleExist(pcfg.Client, pb.Namespace, chronydClientOnlyRuleName)
+			Expect(err).To(BeNil())
+			Expect(found).To(BeTrue())
+
+			// But not be part of the profile
+			found := findRuleReference(moderateProfilePost, chronydClientOnlyRuleName)
+			Expect(found).To(BeFalse())
+		})
+
+		It("Detects that a rule was linked to a profile", func() {
+			// This rule was not part of the e8 profile before
+			found := findRuleReference(e8ProfilePre, chronydClientOnlyRuleName)
+			Expect(found).To(BeFalse())
+
+			// The updated e8 profile should have the rule
+			found = findRuleReference(e8ProfilePost, chronydClientOnlyRuleName)
+			Expect(found).To(BeTrue())
+		})
+	})
+
+	Context("Rule changes", func() {
+		const (
+			foobarRuleName         = "test-profile-service-foobar-enabled"
+			chronydMaxpollRuleName = "test-profile-chronyd-or-ntpd-set-maxpoll"
+		)
+
+		var (
+			ruleChangedSeverityPre *cmpv1alpha1.Rule
+		)
+
+		BeforeEach(func() {
+			ruleChangedSeverityPre = &cmpv1alpha1.Rule{}
+			key := types.NamespacedName{Namespace: pb.Namespace, Name: chronydMaxpollRuleName}
+			err := pcfg.Client.Get(context.TODO(), key, ruleChangedSeverityPre)
+			Expect(err).To(BeNil())
+
+			// This rule does not exist in the old profile
+			err, found = doesRuleExist(pcfg.Client, pb.Namespace, foobarRuleName)
+			Expect(err).To(BeNil())
+			Expect(found).To(BeFalse())
+		})
+
+		It("Detects that a rule was added", func() {
+			err, found = doesRuleExist(pcfg.Client, pb.Namespace, foobarRuleName)
+			Expect(err).To(BeNil())
+			Expect(found).To(BeTrue())
+		})
+
+		It("Detects that a rule was removed completely", func() {
+			// The rule neither exists
+			err, found = doesRuleExist(pcfg.Client, pb.Namespace, chronydNoNetworkRuleName)
+			Expect(err).To(BeNil())
+			Expect(found).To(BeFalse())
+
+			// Nor is it part of a profile
+			found := findRuleReference(moderateProfilePost, chronydNoNetworkRuleName)
+			Expect(found).To(BeFalse())
+		})
+
+		It("Did not change more than expected", func() {
+			// One rule was unlinked, one was removed
+			Expect(moderateProfilePre.Rules).To(HaveLen(len(moderateProfilePost.Rules) + 2))
+		})
+
+		It("Detects that a rule has changed severity", func() {
+			ruleChangedSeverityPost := &cmpv1alpha1.Rule{}
+			key := types.NamespacedName{Namespace: pb.Namespace, Name: chronydMaxpollRuleName}
+			err := pcfg.Client.Get(context.TODO(), key, ruleChangedSeverityPost)
+			Expect(err).To(BeNil())
+
+			Expect(ruleChangedSeverityPost.Severity).ToNot(BeEquivalentTo(ruleChangedSeverityPre.Severity))
+		})
+	})
+
+	Context("Variable changes", func() {
+		const (
+			accountDisablePwExpiryVarName = "test-profile-var-account-disable-post-pw-expiration"
+			accountsPassMinLenVarName     = "test-profile-var-accounts-password-minlen-login-defs"
+			foobarVariableName            = "test-profile-var-foobar"
+		)
+
+		var (
+			accountsPassMinLenVarPre *cmpv1alpha1.Variable
+		)
+
+		BeforeEach(func() {
+			accountsPassMinLenVarPre = &cmpv1alpha1.Variable{}
+			key := types.NamespacedName{Namespace: pb.Namespace, Name: accountsPassMinLenVarName}
+			err = pcfg.Client.Get(context.TODO(), key, accountsPassMinLenVarPre)
+			Expect(err).To(BeNil())
+
+			// This variable does not exist in the old profile
+			err, found = doesVariableExist(pcfg.Client, pb.Namespace, foobarVariableName)
+			Expect(err).To(BeNil())
+			Expect(found).To(BeFalse())
+
+			err, found = doesVariableExist(pcfg.Client, pb.Namespace, accountDisablePwExpiryVarName)
+			Expect(err).To(BeNil())
+			Expect(found).To(BeTrue())
+		})
+
+		It("Detects that a variable was added", func() {
+			err, found = doesVariableExist(pcfg.Client, pb.Namespace, foobarVariableName)
+			Expect(err).To(BeNil())
+			Expect(found).To(BeTrue())
+		})
+
+		It("Detects that a variable was removed completely", func() {
+			// The rule neither exists
+			err, found = doesVariableExist(pcfg.Client, pb.Namespace, accountDisablePwExpiryVarName)
+			Expect(err).To(BeNil())
+			Expect(found).To(BeFalse())
+		})
+
+		It("Detects that a variable has changed values", func() {
+			accountsPassMinLenVar := &cmpv1alpha1.Variable{}
+			key := types.NamespacedName{Namespace: pb.Namespace, Name: accountsPassMinLenVarName}
+			err := pcfg.Client.Get(context.TODO(), key, accountsPassMinLenVar)
+			Expect(err).To(BeNil())
+
+			Expect(accountsPassMinLenVar.Value).ToNot(BeEquivalentTo(accountsPassMinLenVarPre.Value))
+		})
+	})
+})
 
 var _ = Describe("Testing parse profiles", func() {
 	var (
@@ -83,7 +397,7 @@ var _ = Describe("Testing parse profiles", func() {
 			return nil
 		}
 
-		err := ParseProfilesAndDo(contentDom, pcfg, profileAdder)
+		err := ParseProfilesAndDo(contentDom, pb, profileAdder)
 		Expect(err).To(BeNil())
 	})
 
@@ -158,7 +472,7 @@ var _ = Describe("Testing parse variables", func() {
 			return nil
 		}
 
-		err := ParseVariablesAndDo(contentDom, pcfg, variableAdder)
+		err := ParseVariablesAndDo(contentDom, pb, variableAdder)
 		Expect(err).To(BeNil())
 	})
 
@@ -232,7 +546,7 @@ var _ = Describe("Testing parse rules", func() {
 			return nil
 		}
 
-		err := ParseRulesAndDo(contentDom, pcfg, ruleAdder)
+		err := ParseRulesAndDo(contentDom, pb, ruleAdder)
 		Expect(err).To(BeNil())
 	})
 

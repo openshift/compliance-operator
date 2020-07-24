@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"os"
 	"path"
 	"regexp"
@@ -1270,6 +1272,39 @@ func assertMustHaveParsedProfiles(f *framework.Framework, name string, productTy
 	}
 
 	return nil
+}
+
+func doesRuleExist(f *framework.Framework, namespace, ruleName string) (error, bool) {
+	return doesObjectExist(f, "Rule", namespace, ruleName)
+}
+
+func doesObjectExist(f *framework.Framework, kind, namespace, name string) (error, bool) {
+	obj := unstructured.Unstructured{}
+	obj.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   compv1alpha1.SchemeGroupVersion.Group,
+		Version: compv1alpha1.SchemeGroupVersion.Version,
+		Kind:    kind,
+	})
+
+	key := types.NamespacedName{Namespace: namespace, Name: name}
+	err := f.Client.Get(goctx.TODO(), key, &obj)
+	if apierrors.IsNotFound(err) {
+		return nil, false
+	} else if err == nil {
+		return nil, true
+	}
+
+	return err, false
+}
+
+func findRuleReference(profile *compv1alpha1.Profile, ruleName string) bool {
+	for _, ruleRef := range profile.Rules {
+		if string(ruleRef) == ruleName {
+			return true
+		}
+	}
+
+	return false
 }
 
 func assertMustHaveParsedRules(t *testing.T, f *framework.Framework, namespace, name string) error {

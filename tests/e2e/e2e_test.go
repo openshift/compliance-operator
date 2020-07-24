@@ -23,21 +23,31 @@ import (
 func TestE2E(t *testing.T) {
 	executeTests(t,
 		testExecution{
-			Name:       "TestProfileParsingWorks",
+			Name:       "TestProfileModification",
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				const (
+					baselineImage = "quay.io/jhrozek/ocp4-openscap-content@sha256:a1709f5150b17a9560a5732fe48a89f07bffc72c0832aa8c49ee5504510ae687"
+					modifiedImage = "quay.io/jhrozek/ocp4-openscap-content@sha256:7999243c0b005792bd58c6f5e1776ca88cf20adac1519c00ef08b18e77188db7"
+					removedRule   = "chronyd-no-chronyc-network"
+					unlinkedRule  = "chronyd-client-only"
+					moderateProfileName = "moderate"
+				)
+
+				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
+
 				pbName := getObjNameFromTest(t)
-				testPB := &compv1alpha1.ProfileBundle{
+				origPb := &compv1alpha1.ProfileBundle{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      pbName,
 						Namespace: namespace,
 					},
 					Spec: compv1alpha1.ProfileBundleSpec{
-						ContentImage: contentImagePath,
+						ContentImage: baselineImage,
 						ContentFile:  rhcosContentFile,
 					},
 				}
-				if err := f.Client.Create(goctx.TODO(), testPB, getCleanupOpts(ctx)); err != nil {
+				if err := f.Client.Create(goctx.TODO(), origPb, getCleanupOpts(ctx)); err != nil {
 					return err
 				}
 				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamValid); err != nil {
@@ -47,33 +57,69 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
+				// Check that the rule we removed exists in the original profile
+				err, found := doesRuleExist(f, origPb.Namespace, prefixName(pbName, removedRule))
+				if err != nil {
+					return err
+				} else if found != true {
+					t.Errorf("Expected rule %s not found", prefixName(pbName, removedRule))
+					return err
+				}
+
+				// Check that the rule we unlined in the modified profile is linked in the original
+				profilePreUpdate := &compv1alpha1.Profile{}
+				if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace:origPb.Namespace,Name:prefixName(pbName, moderateProfileName)}, profilePreUpdate); err != nil {
+					return err
+				}
+				found = findRuleReference(profilePreUpdate, prefixName(pbName,unlinkedRule))
+				if found != true {
+					t.Errorf("Expected rule %s not found", prefixName(pbName, unlinkedRule))
+					return err
+				}
+
+				// update the image with a new hash
+				modPb := origPb.DeepCopy()
+				if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace:modPb.Namespace,Name:modPb.Name}, modPb); err != nil {
+					return err
+				}
+
+				modPb.Spec.ContentImage = modifiedImage
+				if err := f.Client.Update(goctx.TODO(), modPb); err != nil {
+					return err
+				}
+
+				// Wait for the update to happen, the PB will flip first to pending, then to valid
+				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamPending); err != nil {
+					return err
+				}
+				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamValid); err != nil {
+					return err
+				}
+
 				if err := assertMustHaveParsedRules(t, f, namespace, pbName); err != nil {
 					return err
 				}
-				return nil
-			},
-		},
-		testExecution{
-			Name:       "TestPBWithWrongFile",
-			IsParallel: true,
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
-				pbName := getObjNameFromTest(t)
-				testPB := &compv1alpha1.ProfileBundle{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      pbName,
-						Namespace: namespace,
-					},
-					Spec: compv1alpha1.ProfileBundleSpec{
-						ContentImage: "quay.io/complianceascode/ocp4:latest",
-						ContentFile:  "bad-file.xml",
-					},
-				}
-				if err := f.Client.Create(goctx.TODO(), testPB, getCleanupOpts(ctx)); err != nil {
+
+				// We removed this rule in the update, is must no longer exist
+				err, found = doesRuleExist(f, origPb.Namespace, prefixName(pbName, removedRule))
+				if err != nil {
+					return err
+				} else if found != false {
+					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, removedRule))
 					return err
 				}
-				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamInvalid); err != nil {
+
+				// This rule was unlinked
+				profilePostUpdate := &compv1alpha1.Profile{}
+				if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace:origPb.Namespace,Name:prefixName(pbName, moderateProfileName)}, profilePostUpdate); err != nil {
 					return err
 				}
+				found = findRuleReference(profilePostUpdate, prefixName(pbName,unlinkedRule))
+				if found != false {
+					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
+					return err
+				}
+
 				return nil
 			},
 		},

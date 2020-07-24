@@ -13,10 +13,8 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
 	"github.com/subchen/go-xmldom"
-	"k8s.io/apimachinery/pkg/api/errors"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -153,103 +151,7 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	err = profileparser.ParseProfilesAndDo(contentDom, pcfg, func(p *cmpv1alpha1.Profile) error {
-		pCopy := p.DeepCopy()
-		profileName := pCopy.Name
-
-		if pCopy.Labels == nil {
-			pCopy.Labels = make(map[string]string)
-		}
-		pCopy.Labels[cmpv1alpha1.ProfileBundleOwnerLabel] = pb.Name
-
-		// overwrite name
-		pCopy.SetName(profileparser.GetPrefixedName(pb.Name, profileName))
-
-		if err := controllerutil.SetControllerReference(pb, pCopy, pcfg.Scheme); err != nil {
-			return err
-		}
-
-		log.Info("Creating Profile", "Profile.name", p.Name)
-		err := pcfg.Client.Create(context.TODO(), pCopy)
-		if err != nil {
-			if errors.IsAlreadyExists(err) {
-				log.Info("Profile already exists.", "Profile.Name", p.Name)
-			} else {
-				log.Error(err, "couldn't create profile")
-				return err
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		updateProfileBundleStatus(pcfg, pb, err)
-		return
-	}
-
-	err = profileparser.ParseRulesAndDo(contentDom, pcfg, func(r *cmpv1alpha1.Rule) error {
-		ruleName := r.Name
-		// overwrite name
-		r.SetName(profileparser.GetPrefixedName(pb.Name, ruleName))
-
-		if r.Labels == nil {
-			r.Labels = make(map[string]string)
-		}
-		r.Labels[cmpv1alpha1.ProfileBundleOwnerLabel] = pb.Name
-
-		if r.Annotations == nil {
-			r.Annotations = make(map[string]string)
-		}
-		r.Annotations[cmpv1alpha1.RuleIDAnnotationKey] = ruleName
-
-		if err := controllerutil.SetControllerReference(pb, r, pcfg.Scheme); err != nil {
-			return err
-		}
-
-		log.Info("Creating rule", "Rule.Name", r.Name)
-		err := pcfg.Client.Create(context.TODO(), r)
-		if err != nil {
-			if errors.IsAlreadyExists(err) {
-				log.Info("Rule already exists.", "Rule.Name", r.Name)
-			} else {
-				log.Error(err, "couldn't create Rule")
-				return err
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		updateProfileBundleStatus(pcfg, pb, err)
-		return
-	}
-
-	err = profileparser.ParseVariablesAndDo(contentDom, pcfg, func(v *cmpv1alpha1.Variable) error {
-		varName := v.Name
-		// overwrite name
-		v.SetName(profileparser.GetPrefixedName(pb.Name, varName))
-
-		if v.Labels == nil {
-			v.Labels = make(map[string]string)
-		}
-		v.Labels[cmpv1alpha1.ProfileBundleOwnerLabel] = pb.Name
-
-		if err := controllerutil.SetControllerReference(pb, v, pcfg.Scheme); err != nil {
-			return err
-		}
-
-		log.Info("Creating variable", "Variable.Name", v.Name)
-		err := pcfg.Client.Create(context.TODO(), v)
-		if err != nil {
-			if errors.IsAlreadyExists(err) {
-				log.Info("Variable already exists.", "Variable.Name", v.Name)
-			} else {
-				log.Error(err, "couldn't create Variable")
-				return err
-			}
-		}
-		return nil
-	})
+	err = profileparser.ParseBundle(contentDom, pb, pcfg)
 
 	// The err variable might be nil, this is fine, it'll just update the status
 	// to valid
