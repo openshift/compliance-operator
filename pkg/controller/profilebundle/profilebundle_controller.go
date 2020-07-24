@@ -130,6 +130,15 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 	}
 
 	if workloadNeedsUpdate(instance, found) {
+		pbCopy := instance.DeepCopy()
+		pbCopy.Status.DataStreamStatus = compliancev1alpha1.DataStreamPending
+		pbCopy.Status.ErrorMessage = ""
+		err = r.client.Status().Update(context.TODO(), pbCopy)
+		if err != nil {
+			reqLogger.Error(err, "Couldn't update ProfileBundle status")
+			return reconcile.Result{}, err
+		}
+
 		// This should have a copy of
 		updatedDepl := found.DeepCopy()
 		updatedDepl.Spec.Template = depl.Spec.Template
