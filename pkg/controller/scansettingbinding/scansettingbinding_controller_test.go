@@ -67,9 +67,11 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 				Namespace:   common.GetComplianceOperatorNamespace(),
 				Annotations: platformProfileAnnotations,
 			},
-			Title:       "rhcos4 profile",
-			Description: "rhcos4 profile description",
-			ID:          "xccdf_org.ssgproject.content_profile_e8",
+			ProfilePayload: compv1alpha1.ProfilePayload{
+				Title:       "rhcos4 profile",
+				Description: "rhcos4 profile description",
+				ID:          "xccdf_org.ssgproject.content_profile_e8",
+			},
 		}
 
 		tpRhcosE8 = &compv1alpha1.TailoredProfile{

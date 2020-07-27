@@ -23,14 +23,7 @@ type ValueSelection struct {
 	Value string `json:"value,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// Variable describes a tunable in the XCCDF profile
-// +kubebuilder:resource:path=variables,scope=Namespaced
-type Variable struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
+type VariablePayload struct {
 	// FIXME: several values are shared with Rule object, maybe create a shared
 	// struct? The shared values are documented in table 5 of the XCCDF spec
 	// The XCCDF ID
@@ -49,6 +42,17 @@ type Variable struct {
 	// +optional
 	// +nullable
 	Selections []ValueSelection `json:"selections,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// Variable describes a tunable in the XCCDF profile
+// +kubebuilder:resource:path=variables,scope=Namespaced
+type Variable struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	VariablePayload `json:",inline"`
 }
 
 func (v *Variable) SetValue(val string) error {

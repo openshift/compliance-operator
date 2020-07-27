@@ -11,9 +11,11 @@ var _ = Describe("Testing variables API", func() {
 	Context("string variable values", func() {
 		BeforeEach(func() {
 			v = &Variable{
-				ID:    "foo_id",
-				Type:  "string",
-				Value: "foo",
+				VariablePayload: VariablePayload{
+					ID:    "foo_id",
+					Type:  "string",
+					Value: "foo",
+				},
 			}
 		})
 
@@ -37,25 +39,27 @@ var _ = Describe("Testing variables API", func() {
 	Context("string variable value selections", func() {
 		BeforeEach(func() {
 			v = &Variable{
-				ID:    "beatles",
-				Type:  "string",
-				Value: "john",
-				Selections: []ValueSelection{
-					{
-						"vocals",
-						"john",
-					},
-					{
-						"bass",
-						"paul",
-					},
-					{
-						"drums",
-						"ringo",
-					},
-					{
-						"guitar",
-						"george",
+				VariablePayload: VariablePayload{
+					ID:    "beatles",
+					Type:  "string",
+					Value: "john",
+					Selections: []ValueSelection{
+						{
+							"vocals",
+							"john",
+						},
+						{
+							"bass",
+							"paul",
+						},
+						{
+							"drums",
+							"ringo",
+						},
+						{
+							"guitar",
+							"george",
+						},
 					},
 				},
 			}
@@ -81,9 +85,11 @@ var _ = Describe("Testing variables API", func() {
 	Context("bool variable values", func() {
 		BeforeEach(func() {
 			v = &Variable{
-				ID:    "bool_test",
-				Type:  "bool",
-				Value: "true",
+				VariablePayload: VariablePayload{
+					ID:    "bool_test",
+					Type:  "bool",
+					Value: "true",
+				},
 			}
 		})
 
@@ -107,17 +113,19 @@ var _ = Describe("Testing variables API", func() {
 	Context("number variable value selections", func() {
 		BeforeEach(func() {
 			v = &Variable{
-				ID:    "number_test",
-				Type:  "number",
-				Value: "42",
-				Selections: []ValueSelection{
-					{
-						"fourty two",
-						"42",
-					},
-					{
-						"fourty two times two",
-						"84",
+				VariablePayload: VariablePayload{
+					ID:    "number_test",
+					Type:  "number",
+					Value: "42",
+					Selections: []ValueSelection{
+						{
+							"fourty two",
+							"42",
+						},
+						{
+							"fourty two times two",
+							"84",
+						},
 					},
 				},
 			}

@@ -1,8 +1,11 @@
 package profileparser
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"regexp"
 	"strings"
 
@@ -15,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -56,6 +60,183 @@ func GetPrefixedName(pbName, objName string) string {
 	return pbName + "-" + objName
 }
 
+func ParseBundle(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, pcfg *ParserConfig) error {
+	err := ParseProfilesAndDo(contentDom, pb, func(p *cmpv1alpha1.Profile) error {
+		err := parseAction(p, "Profile", pb, pcfg, func(found, updated interface{}) error {
+			foundProfile, ok := found.(*cmpv1alpha1.Profile)
+			if !ok {
+				return fmt.Errorf("unexpected type")
+			}
+			updatedProfile, ok := updated.(*cmpv1alpha1.Profile)
+			if !ok {
+				return fmt.Errorf("unexpected type")
+			}
+
+			foundProfile.Annotations = updatedProfile.Annotations
+			foundProfile.ProfilePayload = *updatedProfile.ProfilePayload.DeepCopy()
+			return pcfg.Client.Update(context.TODO(), foundProfile)
+		})
+		return err
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if err := deleteObsoleteItems(pcfg.Client, "Profile", pb.Namespace, pb.GetImageDigest()); err != nil {
+		return err
+	}
+
+	err = ParseRulesAndDo(contentDom, pb, func(r *cmpv1alpha1.Rule) error {
+		if r.Annotations == nil {
+			r.Annotations = make(map[string]string)
+		}
+		r.Annotations[cmpv1alpha1.RuleIDAnnotationKey] = r.Name
+
+		err := parseAction(r, "Rule", pb, pcfg, func(found, updated interface{}) error {
+			foundRule, ok := found.(*cmpv1alpha1.Rule)
+			if !ok {
+				return fmt.Errorf("unexpected type")
+			}
+			updatedRule, ok := updated.(*cmpv1alpha1.Rule)
+			if !ok {
+				return fmt.Errorf("unexpected type")
+			}
+
+			foundRule.Annotations = updatedRule.Annotations
+			foundRule.RulePayload = *updatedRule.RulePayload.DeepCopy()
+			return pcfg.Client.Update(context.TODO(), foundRule)
+		})
+		return err
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if err := deleteObsoleteItems(pcfg.Client, "Rule", pb.Namespace, pb.GetImageDigest()); err != nil {
+		return err
+	}
+
+	err = ParseVariablesAndDo(contentDom, pb, func(v *cmpv1alpha1.Variable) error {
+		err := parseAction(v, "Variable", pb, pcfg, func(found, updated interface{}) error {
+			foundVariable, ok := found.(*cmpv1alpha1.Variable)
+			if !ok {
+				return fmt.Errorf("unexpected type")
+			}
+			updatedVariable, ok := updated.(*cmpv1alpha1.Variable)
+			if !ok {
+				return fmt.Errorf("unexpected type")
+			}
+
+			foundVariable.Annotations = updatedVariable.Annotations
+			foundVariable.VariablePayload = *updatedVariable.VariablePayload.DeepCopy()
+			return pcfg.Client.Update(context.TODO(), foundVariable)
+		})
+		return err
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if err := deleteObsoleteItems(pcfg.Client, "Variable", pb.Namespace, pb.GetImageDigest()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type parsedItemIface interface {
+	metav1.Object
+	k8sruntime.Object
+}
+
+func parseAction(parsedItem parsedItemIface, kind string, pb *cmpv1alpha1.ProfileBundle, pcfg *ParserConfig, updateFn func(found, updated interface{}) error) error {
+	// overwrite name
+	itemName := parsedItem.GetName()
+	parsedItem.SetName(GetPrefixedName(pb.Name, itemName))
+
+	labels := parsedItem.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels[cmpv1alpha1.ProfileBundleOwnerLabel] = pb.Name
+	parsedItem.SetLabels(labels)
+
+	if err := controllerutil.SetControllerReference(pb, parsedItem, pcfg.Scheme); err != nil {
+		return err
+	}
+
+	key := types.NamespacedName{Name: parsedItem.GetName(), Namespace: parsedItem.GetNamespace()}
+	if err := createOrUpdate(pcfg.Client, kind, key, parsedItem, updateFn); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createOrUpdate(cli runtimeclient.Client, kind string, key types.NamespacedName, obj k8sruntime.Object, updateFn func(found, updated interface{}) error) error {
+	log.Info("Creating object", "kind", kind, "key", key)
+	found := obj.DeepCopyObject()
+	err := cli.Get(context.TODO(), key, found)
+	if errors.IsNotFound(err) {
+		err := cli.Create(context.TODO(), obj)
+		if err != nil {
+			log.Error(err, "Failed to create object", "kind", kind, "key", key)
+			return err
+		}
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	// Object exist, call up to update
+	if err := updateFn(found, obj); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func deleteObsoleteItems(cli runtimeclient.Client, kind string, namespace string, imageDigest string) error {
+	list := unstructured.UnstructuredList{}
+	list.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   cmpv1alpha1.SchemeGroupVersion.Group,
+		Version: cmpv1alpha1.SchemeGroupVersion.Version,
+		Kind:    kind + "List",
+	})
+	inNs := runtimeclient.InNamespace(namespace)
+
+	log.Info("Checking for unused object", "kind", kind, "namespace", namespace)
+	if err := cli.List(context.TODO(), &list, inNs); err != nil {
+		return err
+	}
+
+	// TODO: Using the annotations forces us to iterate over all objects of
+	// a type. This might be inefficient with a large number of objects,
+	// if this ever becomes a performance problem, use labels instead
+	// with a short version of the hash
+	for _, item := range list.Items {
+		err := deleteIfNotCurrentDigest(cli, imageDigest, &item)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func deleteIfNotCurrentDigest(client runtimeclient.Client, imageDigest string, item *unstructured.Unstructured) error {
+	itemDigest := item.GetAnnotations()[cmpv1alpha1.ProfileImageDigestAnnotation]
+	if itemDigest == imageDigest {
+		return nil
+	}
+
+	log.Info("Deleting object no longer used by the current profileBundle", "kind", item.GetKind(), "name", item.GetName())
+	return client.Delete(context.TODO(), item)
+}
+
 func getVariableType(varNode *xmldom.Node) cmpv1alpha1.VariableType {
 	typeAttr := varNode.GetAttribute("type")
 	if typeAttr == nil {
@@ -74,11 +255,11 @@ func getVariableType(varNode *xmldom.Node) cmpv1alpha1.VariableType {
 	return cmpv1alpha1.VarTypeString
 }
 
-func ParseProfilesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action func(p *cmpv1alpha1.Profile) error) error {
+func ParseProfilesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, action func(p *cmpv1alpha1.Profile) error) error {
 	benchmarks := contentDom.Root.Query("//Benchmark")
 	for _, bench := range benchmarks {
 		productType, productName := getProductTypeAndName(bench, cmpv1alpha1.ScanTypeNode, "")
-		if err := parseProfileFromNode(bench, pcfg, productType, productName, action); err != nil {
+		if err := parseProfileFromNode(bench, pb, productType, productName, action); err != nil {
 			return err
 		}
 	}
@@ -86,7 +267,7 @@ func ParseProfilesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action 
 	return nil
 }
 
-func parseProfileFromNode(profileRoot *xmldom.Node, pcfg *ParserConfig, defType cmpv1alpha1.ComplianceScanType, defName string, action func(p *cmpv1alpha1.Profile) error) error {
+func parseProfileFromNode(profileRoot *xmldom.Node, pb *cmpv1alpha1.ProfileBundle, defType cmpv1alpha1.ComplianceScanType, defName string, action func(p *cmpv1alpha1.Profile) error) error {
 	profileObjs := profileRoot.Query("//Profile")
 	for _, profileObj := range profileObjs {
 
@@ -118,7 +299,7 @@ func parseProfileFromNode(profileRoot *xmldom.Node, pcfg *ParserConfig, defType 
 			}
 			selected := ruleObj.GetAttributeValue("selected")
 			if selected == "true" {
-				ruleName := GetPrefixedName(pcfg.ProfileBundleKey.Name, xccdf.GetRuleNameFromID(idref))
+				ruleName := GetPrefixedName(pb.Name, xccdf.GetRuleNameFromID(idref))
 				selectedrules = append(selectedrules, cmpv1alpha1.NewProfileRule(ruleName))
 			}
 		}
@@ -141,18 +322,23 @@ func parseProfileFromNode(profileRoot *xmldom.Node, pcfg *ParserConfig, defType 
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      xccdf.GetProfileNameFromID(id),
-				Namespace: pcfg.ProfileBundleKey.Namespace,
+				Namespace: pb.Namespace,
 				Annotations: map[string]string{
 					cmpv1alpha1.ProductAnnotation:     productName,
 					cmpv1alpha1.ProductTypeAnnotation: string(productType),
 				},
 			},
-			ID:          id,
-			Title:       title.Text,
-			Description: description.Text,
-			Rules:       selectedrules,
-			Values:      selectedvalues,
+			ProfilePayload: cmpv1alpha1.ProfilePayload{
+				ID:          id,
+				Title:       title.Text,
+				Description: description.Text,
+				Rules:       selectedrules,
+				Values:      selectedvalues,
+			},
 		}
+
+		annotateWithPbDigest(pb, &p)
+
 		err := action(&p)
 		if err != nil {
 			log.Error(err, "couldn't execute action")
@@ -212,7 +398,7 @@ func parseProductTypeAndName(idref string, defaultType cmpv1alpha1.ComplianceSca
 	return productType, productName
 }
 
-func ParseVariablesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action func(v *cmpv1alpha1.Variable) error) error {
+func ParseVariablesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, action func(v *cmpv1alpha1.Variable) error) error {
 	varObjs := contentDom.Root.Query("//Value")
 	for _, varObj := range varObjs {
 		hidden := varObj.GetAttributeValue("hidden")
@@ -239,10 +425,12 @@ func ParseVariablesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      xccdf.GetVariableNameFromID(id),
-				Namespace: pcfg.ProfileBundleKey.Namespace,
+				Namespace: pb.Namespace,
 			},
-			ID:    id,
-			Title: title.Text,
+			VariablePayload: cmpv1alpha1.VariablePayload{
+				ID:    id,
+				Title: title.Text,
+			},
 		}
 
 		description := varObj.FindOneByName("description")
@@ -264,6 +452,8 @@ func ParseVariablesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action
 			// We continue even if there's an error.
 			continue
 		}
+
+		annotateWithPbDigest(pb, &v)
 
 		err = action(&v)
 		if err != nil {
@@ -297,7 +487,7 @@ func parseVarValues(varNode *xmldom.Node, v *cmpv1alpha1.Variable) error {
 	return nil
 }
 
-func ParseRulesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action func(p *cmpv1alpha1.Rule) error) error {
+func ParseRulesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, action func(p *cmpv1alpha1.Rule) error) error {
 	ruleObjs := contentDom.Root.Query("//Rule")
 	for _, ruleObj := range ruleObjs {
 		id := ruleObj.GetAttributeValue("id")
@@ -360,12 +550,14 @@ func ParseRulesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action fun
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        xccdf.GetRuleNameFromID(id),
-				Namespace:   pcfg.ProfileBundleKey.Namespace,
+				Namespace:   pb.Namespace,
 				Annotations: annotations,
 			},
-			ID:             id,
-			Title:          title.Text,
-			AvailableFixes: nil,
+			RulePayload: cmpv1alpha1.RulePayload{
+				ID:             id,
+				Title:          title.Text,
+				AvailableFixes: nil,
+			},
 		}
 		if description != nil {
 			desc, err := xccdf.GetDescriptionFromXMLString(description.XML())
@@ -397,6 +589,9 @@ func ParseRulesAndDo(contentDom *xmldom.Document, pcfg *ParserConfig, action fun
 		if len(fixes) > 0 {
 			p.AvailableFixes = fixes
 		}
+
+		annotateWithPbDigest(pb, &p)
+
 		err = action(&p)
 		if err != nil {
 			log.Error(err, "couldn't execute action for rule")
@@ -424,6 +619,15 @@ func isRelevantFix(fix *xmldom.Node) bool {
 		return true
 	}
 	return false
+}
+
+func annotateWithPbDigest(pb *cmpv1alpha1.ProfileBundle, o metav1.Object) {
+	annotations := o.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[cmpv1alpha1.ProfileImageDigestAnnotation] = pb.GetImageDigest()
+	o.SetAnnotations(annotations)
 }
 
 type complianceStandard struct {

@@ -11,14 +11,7 @@ import (
 // here or in the compliance-operator?
 const RuleIDAnnotationKey = "compliance.openshift.io/rule"
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// Rule is the Schema for the rules API
-// +kubebuilder:resource:path=rules,scope=Namespaced
-type Rule struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
+type RulePayload struct {
 	// The XCCDF ID
 	ID string `json:"id"`
 	// The title of the Rule
@@ -35,6 +28,17 @@ type Rule struct {
 	// +nullable
 	// +optional
 	AvailableFixes []FixDefinition `json:"availableFixes,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// Rule is the Schema for the rules API
+// +kubebuilder:resource:path=rules,scope=Namespaced
+type Rule struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	RulePayload `json:",inline"`
 }
 
 // FixDefinition Specifies a fix or remediation

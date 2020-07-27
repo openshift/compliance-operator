@@ -23,14 +23,7 @@ func NewProfileRule(rule string) ProfileRule {
 // ProfileValue defines a value for a setting in the profile
 type ProfileValue string
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// Profile is the Schema for the profiles API
-// +kubebuilder:resource:path=profiles,scope=Namespaced
-type Profile struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
+type ProfilePayload struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	ID          string `json:"id"`
@@ -40,6 +33,17 @@ type Profile struct {
 	// +nullable
 	// +optional
 	Values []ProfileValue `json:"values,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// Profile is the Schema for the profiles API
+// +kubebuilder:resource:path=profiles,scope=Namespaced
+type Profile struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	ProfilePayload `json:",inline"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
