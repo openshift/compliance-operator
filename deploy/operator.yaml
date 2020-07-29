@@ -31,12 +31,12 @@ spec:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
               value: "compliance-operator"
-            - name: OPENSCAP_IMAGE
+            - name: RELATED_IMAGE_OPENSCAP
               # Hardcoding this temporarily until its propagated to CI
               value: "quay.io/compliance-operator/openscap-ocp:1.3.3"
-            - name: OPERATOR_IMAGE
+            - name: RELATED_IMAGE_OPERATOR
               value: "quay.io/compliance-operator/compliance-operator:latest"
-            - name: DEFAULT_PROFILE_BUNDLES_IMAGE
+            - name: RELATED_IMAGE_PROFILE
               value: "quay.io/complianceascode/ocp4:latest"
       nodeSelector:
         node-role.kubernetes.io/master: ""
