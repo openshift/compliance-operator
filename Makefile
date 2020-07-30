@@ -1,7 +1,7 @@
 # Operator variables
 # ==================
 export APP_NAME=compliance-operator
-OPENSCAP_IMAGE_NAME=openscap-ocp
+RELATED_IMAGE_OPENSCAP_NAME=openscap-ocp
 
 # Container image variables
 # =========================
@@ -10,13 +10,13 @@ RUNTIME?=podman
 
 # Temporary
 OPENSCAP_DEFAULT_IMAGE_TAG=1.3.3
-OPENSCAP_IMAGE_TAG?=$(OPENSCAP_DEFAULT_IMAGE_TAG)
+RELATED_IMAGE_OPENSCAP_TAG?=$(OPENSCAP_DEFAULT_IMAGE_TAG)
 
 # Image path to use. Set this if you want to use a specific path for building
 # or your e2e tests. This is overwritten if we bulid the image and push it to
 # the cluster or if we're on CI.
-OPERATOR_IMAGE_PATH?=$(IMAGE_REPO)/$(APP_NAME)
-OPENSCAP_IMAGE_PATH=$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME)
+RELATED_IMAGE_OPERATOR_PATH?=$(IMAGE_REPO)/$(APP_NAME)
+RELATED_IMAGE_OPENSCAP_PATH=$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME)
 OPENSCAP_DOCKERFILE_PATH=./images/openscap/Dockerfile
 
 # Image tag to use. Set this if you want to use a specific tag for building
@@ -98,11 +98,11 @@ image: fmt operator-sdk operator-image ## Build the compliance-operator containe
 
 .PHONY: operator-image
 operator-image: operator-sdk
-	$(GOPATH)/bin/operator-sdk build $(OPERATOR_IMAGE_PATH):$(TAG) --image-builder $(RUNTIME)
+	$(GOPATH)/bin/operator-sdk build $(RELATED_IMAGE_OPERATOR_PATH):$(TAG) --image-builder $(RUNTIME)
 
 .PHONY: openscap-image
 openscap-image:
-	$(RUNTIME) build -f $(OPENSCAP_DOCKERFILE_PATH) -t $(OPENSCAP_IMAGE_PATH):$(TAG)
+	$(RUNTIME) build -f $(OPENSCAP_DOCKERFILE_PATH) -t $(RELATED_IMAGE_OPENSCAP_PATH):$(TAG)
 
 .PHONY: build
 build: fmt manager ## Build the compliance-operator binary
@@ -187,24 +187,24 @@ test-benchmark: ## Run the benchmark tests -- Note that this can only be ran for
 e2e: namespace tear-down operator-sdk image-to-cluster openshift-user deploy-crds ## Run the end-to-end tests
 	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
 	@echo "Replacing workload references in deploy/operator.yaml"
-	@sed -i 's%$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%$(OPENSCAP_IMAGE_PATH):$(OPENSCAP_IMAGE_TAG)%' deploy/operator.yaml
-	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%$(RELATED_IMAGE_OPENSCAP_PATH):$(RELATED_IMAGE_OPENSCAP_TAG)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	@sed -i 's%$(DEFAULT_CONTENT_IMAGE_PATH)%$(E2E_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 	@echo "Running e2e tests"
-	unset GOFLAGS && CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --skip-cleanup-error --image "$(OPERATOR_IMAGE_PATH)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
+	unset GOFLAGS && CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --skip-cleanup-error --image "$(RELATED_IMAGE_OPERATOR_PATH)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 	@echo "Restoring image references in deploy/operator.yaml"
-	@sed -i 's%$(OPENSCAP_IMAGE_PATH):$(OPENSCAP_IMAGE_TAG)%$(IMAGE_REPO)/$(OPENSCAP_IMAGE_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%' deploy/operator.yaml
-	@sed -i 's%$(OPERATOR_IMAGE_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
+	@sed -i 's%$(RELATED_IMAGE_OPENSCAP_PATH):$(RELATED_IMAGE_OPENSCAP_TAG)%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%' deploy/operator.yaml
+	@sed -i 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(E2E_CONTENT_IMAGE_PATH)%$(DEFAULT_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 
 e2e-local: operator-sdk tear-down deploy-crds ## Run the end-to-end tests on a locally running operator (e.g. using make run)
 	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
 	@echo "Replacing workload references in deploy/operator.yaml"
-	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	@sed -i 's%$(DEFAULT_CONTENT_IMAGE_PATH)%$(E2E_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
-	unset GOFLAGS && CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --up-local --skip-cleanup-error --image "$(OPERATOR_IMAGE_PATH)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
+	unset GOFLAGS && CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --up-local --skip-cleanup-error --image "$(RELATED_IMAGE_OPERATOR_PATH)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 	@echo "Restoring image references in deploy/operator.yaml"
-	@sed -i 's%$(OPERATOR_IMAGE_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
+	@sed -i 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 	@sed -i 's%$(E2E_CONTENT_IMAGE_PATH)%$(DEFAULT_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 
 # If IMAGE_FORMAT is not defined, it means that we're not running on CI, so we
@@ -215,7 +215,7 @@ e2e-local: operator-sdk tear-down deploy-crds ## Run the end-to-end tests on a l
 # The IMAGE_FORMAT variable comes from CI. It is of the format:
 #     <image path in CI registry>:${component}
 # Here define the `component` variable, so, when we overwrite the
-# OPERATOR_IMAGE_PATH variable, it'll expand to the component we need.
+# RELATED_IMAGE_OPERATOR_PATH variable, it'll expand to the component we need.
 # Note that the `component` names come from the `openshift/release` repo
 # config.
 #
@@ -234,7 +234,7 @@ image-to-cluster:
 	@echo "IMAGE_FORMAT variable detected. We're in a CI enviornment."
 	@echo "We're in a CI environment, skipping image-to-cluster target."
 	$(eval component = $(APP_NAME))
-	$(eval OPERATOR_IMAGE_PATH = $(IMAGE_FORMAT))
+	$(eval RELATED_IMAGE_OPERATOR_PATH = $(IMAGE_FORMAT))
 	$(eval component = testcontent)
 	$(eval E2E_CONTENT_IMAGE_PATH = $(IMAGE_FORMAT))
 else ifeq ($(E2E_USE_DEFAULT_IMAGES), true)
@@ -243,7 +243,7 @@ image-to-cluster:
 else ifeq ($(E2E_SKIP_CONTAINER_PUSH), true)
 image-to-cluster:
 	@echo "E2E_SKIP_CONTAINER_PUSH variable detected. Using previously pushed images."
-	$(eval OPERATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/openshift/$(APP_NAME):$(TAG))
+	$(eval RELATED_IMAGE_OPERATOR_PATH = image-registry.openshift-image-registry.svc:5000/openshift/$(APP_NAME):$(TAG))
 else ifeq ($(E2E_SKIP_CONTAINER_BUILD), true)
 image-to-cluster: namespace cluster-image-push
 	@echo "E2E_SKIP_CONTAINER_BUILD variable detected. Using previously built local images."
@@ -256,13 +256,13 @@ endif
 cluster-image-push: namespace openshift-user
 	@echo "Temporarily exposing the default route to the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
-	@echo "Pushing image $(OPERATOR_IMAGE_PATH):$(TAG) to the image registry"
+	@echo "Pushing image $(RELATED_IMAGE_OPERATOR_PATH):$(TAG) to the image registry"
 	IMAGE_REGISTRY_HOST=$$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}'); \
 		$(RUNTIME) login --tls-verify=false -u $(OPENSHIFT_USER) -p $(shell oc whoami -t) $${IMAGE_REGISTRY_HOST}; \
-		$(RUNTIME) push --tls-verify=false $(OPERATOR_IMAGE_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/openshift/$(APP_NAME):$(TAG)
+		$(RUNTIME) push --tls-verify=false $(RELATED_IMAGE_OPERATOR_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/openshift/$(APP_NAME):$(TAG)
 	@echo "Removing the route from the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
-	$(eval OPERATOR_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/openshift/$(APP_NAME):$(TAG))
+	$(eval RELATED_IMAGE_OPERATOR_PATH = image-registry.openshift-image-registry.svc:5000/openshift/$(APP_NAME):$(TAG))
 
 .PHONY: namespace
 namespace:
@@ -275,9 +275,9 @@ deploy: namespace deploy-crds ## Deploy the operator from the manifests in the d
 
 .PHONY: deploy-local
 deploy-local: namespace image-to-cluster deploy-crds ## Deploy the operator from the manifests in the deploy/ directory and the images from a local build
-	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	@oc apply -n $(NAMESPACE) -f deploy/
-	@sed -i 's%$(OPERATOR_IMAGE_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
+	@sed -i 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 
 .PHONY: deploy-local
 deploy-crds:
@@ -313,7 +313,7 @@ endif
 .PHONY: push
 push: image
 	# compliance-operator manager
-	$(RUNTIME) push $(OPERATOR_IMAGE_PATH):$(TAG)
+	$(RUNTIME) push $(RELATED_IMAGE_OPERATOR_PATH):$(TAG)
 
 .PHONY: publish
 publish: csv publish-bundle
@@ -346,12 +346,12 @@ package-version-to-tag: check-package-version
 .PHONY: release-tag-image
 release-tag-image: package-version-to-tag
 	@echo "Temporarily overriding image tags in deploy/operator.yaml"
-	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(OPERATOR_IMAGE_PATH):$(TAG)%' deploy/operator.yaml
+	@sed -i 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH):$(TAG)%' deploy/operator.yaml
 
 .PHONY: undo-deploy-tag-image
 undo-deploy-tag-image: package-version-to-tag
 	@echo "Restoring image tags in deploy/operator.yaml"
-	@sed -i 's%$(OPERATOR_IMAGE_PATH):$(TAG)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
+	@sed -i 's%$(RELATED_IMAGE_OPERATOR_PATH):$(TAG)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 
 .PHONY: git-release
 git-release: package-version-to-tag

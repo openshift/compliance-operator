@@ -14,9 +14,9 @@ var componentDefaults = []struct {
 	defaultImage string
 	envVar       string
 }{
-	{"quay.io/jhrozek/openscap-ocp:latest", "OPENSCAP_IMAGE"},
-	{"quay.io/compliance-operator/compliance-operator:latest", "OPERATOR_IMAGE"},
-	{"quay.io/complianceascode/ocp4:latest", "DEFAULT_PROFILE_BUNDLES_IMAGE"},
+	{"quay.io/jhrozek/openscap-ocp:latest", "RELATED_IMAGE_OPENSCAP"},
+	{"quay.io/compliance-operator/compliance-operator:latest", "RELATED_IMAGE_OPERATOR"},
+	{"quay.io/complianceascode/ocp4:latest", "RELATED_IMAGE_PROFILE"},
 }
 
 // GetComponentImage returns a full image pull spec for a given component
