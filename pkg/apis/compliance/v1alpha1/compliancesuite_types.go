@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"reflect"
 )
 
 // SuiteLabel indicates that an object (normally the ComplianceScan
@@ -21,6 +22,26 @@ type ComplianceScanSpecWrapper struct {
 	// Contains a human readable name for the scan. This is to identify the
 	// objects that it creates.
 	Name string `json:"name,omitempty"`
+}
+
+func (sw *ComplianceScanSpecWrapper) ScanSpecDiffers(other *ComplianceScan) bool {
+	if sw.Name != other.Name {
+		return true
+	}
+
+	// Avoid returning that the two differ if the other (typically retrieved through
+	// an API call) has the defaults set
+	swCopy := sw.DeepCopy()
+	if swCopy.RawResultStorage.Size == "" {
+		swCopy.RawResultStorage.Size = DefaultRawStorageSize
+	}
+	if swCopy.RawResultStorage.Rotation == 0 && other.Spec.RawResultStorage.Rotation == DefaultStorageRotation {
+		swCopy.RawResultStorage.Rotation = DefaultStorageRotation
+	}
+
+	// In case this ever gets slow, switch to comparing the fields one by
+	// one and fall back by deep equality on the complex types only
+	return !reflect.DeepEqual(swCopy.ComplianceScanSpec, other.Spec)
 }
 
 // ComplianceScanStatusWrapper provides a ComplianceScanStatus and a Name
