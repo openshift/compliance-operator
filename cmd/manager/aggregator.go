@@ -273,7 +273,7 @@ func createOrUpdateOneResult(crClient *complianceCrClient, owner metav1.Object, 
 	return nil
 }
 
-func canCreateRemediation(scan *compv1alpha1.ComplianceScan, obj runtime.Object) (bool, string) {
+func canCreateRemediation(scan *compv1alpha1.ComplianceScan) (bool, string) {
 	role := utils.GetFirstNodeRole(scan.Spec.NodeSelector)
 	if role == "" {
 		return false, "ComplianceScan's nodeSelector doesn't have any role. Ideally this needs to match a MachineConfigPool"
@@ -361,8 +361,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			continue
 		}
 
-		remTargetObj := pr.Remediation.Spec.Object
-		if canCreate, why := canCreateRemediation(scan, remTargetObj); !canCreate {
+		if canCreate, why := canCreateRemediation(scan); !canCreate {
 			// Only issue event once.
 			if !remediationNotPossibleEventIssued {
 				log.Info(why)
@@ -372,6 +371,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			continue
 		}
 
+		remTargetObj := pr.Remediation.Spec.Object
 		remLabels := getRemediationLabels(scan, remTargetObj)
 
 		remkey := getObjKey(pr.Remediation.GetName(), pr.Remediation.GetNamespace())
