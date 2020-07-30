@@ -924,6 +924,89 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, n
 	return nil
 }
 
+func removeObsoleteRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, name, renderedMcName, pool string) error {
+	rem := &compv1alpha1.ComplianceRemediation{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
+	if err != nil {
+		return err
+	}
+	E2ELogf(t, "Remediation %s found", name)
+
+	removeObsoleteContents := func() error {
+		E2ELogf(t, "pre-update %v", rem.Status)
+		remCopy := rem.DeepCopy()
+		remCopy.Spec.Apply = true
+		remCopy.Spec.Outdated.Object = nil
+		err = f.Client.Update(goctx.TODO(), remCopy)
+		if err != nil {
+			t.Errorf("Cannot update remediation")
+			return err
+		}
+		E2ELogf(t, "Obsolete data removed")
+
+		rem2 := &compv1alpha1.ComplianceRemediation{}
+		f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem2)
+		E2ELogf(t, "post-update %v", rem2.Status)
+
+		return nil
+	}
+
+	// Get the MachineConfigPool before the remediation has been made current
+	// This way, we can check that it changed without race-conditions
+	poolBeforeRemediation := &mcfgv1.MachineConfigPool{}
+	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: testPoolName}, poolBeforeRemediation)
+	if err != nil {
+		return err
+	}
+
+	obsoleteMc := &mcfgv1.MachineConfig{}
+	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: renderedMcName}, obsoleteMc)
+	if err != nil {
+		return err
+	}
+
+	predicate := func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error) {
+		// make sure the composite remediation has been re-rendered
+		currentMc := &mcfgv1.MachineConfig{}
+		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: renderedMcName}, currentMc)
+		if err != nil {
+			return false, err
+		}
+
+		if currentMc.Generation == obsoleteMc.Generation {
+			E2ELogf(t, "MC %s still has generation %d, looping", renderedMcName, currentMc.Generation)
+			return false, nil
+		}
+		E2ELogf(t, "MC has been re-rendered from %d to %d", obsoleteMc.Generation, currentMc.Generation)
+		return true, nil
+	}
+
+	err = waitForMachinePoolUpdate(t, f, pool, removeObsoleteContents, predicate, poolBeforeRemediation)
+	if err != nil {
+		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
+		return err
+	}
+
+	E2ELogf(t, "Machines updated with remediation that is no longer obsolete")
+	return nil
+}
+
+func remediationIsObsolete(t *testing.T, f *framework.Framework, namespace, name string) (error, bool) {
+	rem := &compv1alpha1.ComplianceRemediation{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
+	if err != nil {
+		return err, false
+	}
+	E2ELogf(t, "Remediation %s found", name)
+
+	if rem.Status.ApplicationState == compv1alpha1.RemediationOutdated &&
+		rem.Spec.Outdated.Object != nil {
+		return nil, true
+	}
+
+	return nil, false
+}
+
 func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, name, pool string, lastRemediation bool) error {
 	rem := &compv1alpha1.ComplianceRemediation{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
@@ -1738,4 +1821,26 @@ func logContainerOutput(t *testing.T, f *framework.Framework, namespace, name st
 			}
 		}
 	}
+}
+
+func reRunScan(t *testing.T, f *framework.Framework, scanName, namespace string) error {
+	scanKey := types.NamespacedName{Name: scanName, Namespace: namespace}
+	foundScan := &compv1alpha1.ComplianceScan{}
+	err := f.Client.Get(goctx.TODO(), scanKey, foundScan)
+	if err != nil {
+		return err
+	}
+
+	scapCopy := foundScan.DeepCopy()
+	if scapCopy.Annotations == nil {
+		scapCopy.Annotations = make(map[string]string)
+	}
+	scapCopy.Annotations[compv1alpha1.ComplianceScanRescanAnnotation] = ""
+	err = f.Client.Update(goctx.TODO(), scapCopy)
+	if err != nil {
+		return err
+	}
+
+	E2ELogf(t, "Scan re-launched")
+	return nil
 }

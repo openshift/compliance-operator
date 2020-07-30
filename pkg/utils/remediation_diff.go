@@ -302,11 +302,11 @@ func diffRemediations(old, new *compv1alpha1.ComplianceRemediation) bool {
 		return new == nil
 	}
 
-	if old.Spec.Object.GetKind() != new.Spec.Object.GetKind() {
+	if old.Spec.Current.Object.GetKind() != new.Spec.Current.Object.GetKind() {
 		return false
 	}
 
 	// should we be more picky and just compare what can be set with the remediations? e.g. OSImageURL can't
 	// be set with a remediation..
-	return cmp.Equal(old.Spec.Object, new.Spec.Object)
+	return cmp.Equal(old.Spec.Current.Object, new.Spec.Current.Object)
 }

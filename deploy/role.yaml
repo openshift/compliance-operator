@@ -230,6 +230,7 @@ rules:
   - compliance.openshift.io
   resources:
   - complianceremediations
+  - complianceremediations/status
   verbs:
   - create
   - get

@@ -336,6 +336,17 @@ func (r *ReconcileComplianceSuite) generateEventsForSuite(suite *compv1alpha1.Co
 			compv1alpha1.ComplianceCheckInconsistentLabel)
 	}
 
+	err, haveOutdatedRems := utils.HaveOutdatedRemediations(r.client)
+	if err != nil {
+		logger.Info("Could not check if there exist any obsolete remediations", "Suite.Name", suite.Name)
+	}
+	if haveOutdatedRems {
+		r.recorder.Eventf(
+			suite, corev1.EventTypeNormal, "HaveOutdatedRemediations",
+			"One of suite's scans produced outdated remediations, please check for complianceremediation objects labeled with %s",
+			compv1alpha1.OutdatedRemediationLabel)
+	}
+
 	ownerRefs := suite.GetOwnerReferences()
 	if len(ownerRefs) == 0 {
 		return //there is nothing to do, since no owner is set

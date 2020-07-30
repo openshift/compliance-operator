@@ -564,6 +564,17 @@ func (r *ReconcileComplianceScan) generateResultEventForScan(scan *compv1alpha1.
 			"The scan result is not consistent, please check for scan results labeled with %s",
 			compv1alpha1.ComplianceCheckInconsistentLabel)
 	}
+
+	err, haveOutdatedRems := utils.HaveOutdatedRemediations(r.client)
+	if err != nil {
+		logger.Info("Could not check if there exist any obsolete remediations", "Scan.Name", scan.Name)
+	}
+	if haveOutdatedRems {
+		r.recorder.Eventf(
+			scan, corev1.EventTypeNormal, "HaveOutdatedRemediations",
+			"The scan produced outdated remediations, please check for complianceremediation objects labeled with %s",
+			compv1alpha1.OutdatedRemediationLabel)
+	}
 }
 
 func getTargetNodes(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan) (corev1.NodeList, error) {

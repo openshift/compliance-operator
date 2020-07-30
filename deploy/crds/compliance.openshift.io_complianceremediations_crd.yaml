@@ -40,17 +40,36 @@ spec:
                 description: Whether the remediation should be picked up and applied
                   by the operator
                 type: boolean
-              machineConfigContents:
-                description: (deprecated) The actual MachineConfig remediation payload
+              current:
+                properties:
+                  machineConfigContents:
+                    description: (deprecated) The actual MachineConfig remediation
+                      payload
+                    type: object
+                    x-kubernetes-embedded-resource: true
+                    x-kubernetes-preserve-unknown-fields: true
+                  object:
+                    description: The remediation payload. This would normally be a
+                      full Kubernetes object.
+                    type: object
+                    x-kubernetes-embedded-resource: true
+                    x-kubernetes-preserve-unknown-fields: true
                 type: object
-                x-kubernetes-embedded-resource: true
-                x-kubernetes-preserve-unknown-fields: true
-              object:
-                description: The remediation payload. This would normally be a full
-                  Kubernetes object.
+              outdated:
+                properties:
+                  machineConfigContents:
+                    description: (deprecated) The actual MachineConfig remediation
+                      payload
+                    type: object
+                    x-kubernetes-embedded-resource: true
+                    x-kubernetes-preserve-unknown-fields: true
+                  object:
+                    description: The remediation payload. This would normally be a
+                      full Kubernetes object.
+                    type: object
+                    x-kubernetes-embedded-resource: true
+                    x-kubernetes-preserve-unknown-fields: true
                 type: object
-                x-kubernetes-embedded-resource: true
-                x-kubernetes-preserve-unknown-fields: true
               type:
                 description: Remediation type specifies the artifact the remediation
                   is based on. For now, only MachineConfig is supported

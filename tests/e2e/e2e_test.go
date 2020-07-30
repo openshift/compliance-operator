@@ -721,7 +721,9 @@ func TestE2E(t *testing.T) {
 						ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
 							Apply: true,
 						},
-						Object: unstruct,
+						Current:compv1alpha1.ComplianceRemediationPayload{
+							Object: unstruct,
+						},
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
@@ -760,16 +762,18 @@ func TestE2E(t *testing.T) {
 						ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
 							Apply: true,
 						},
-						Object: &unstructured.Unstructured{
-							Object: map[string]interface{}{
-								"kind":       "OopsyDoodle",
-								"apiVersion": "foo.bar/v1",
-								"metadata": map[string]interface{}{
-									"name":      "unkown-remediation",
-									"namespace": namespace,
-								},
-								"data": map[string]interface{}{
-									"key": "value",
+						Current: compv1alpha1.ComplianceRemediationPayload{
+							Object: &unstructured.Unstructured{
+								Object: map[string]interface{}{
+									"kind":       "OopsyDoodle",
+									"apiVersion": "foo.bar/v1",
+									"metadata": map[string]interface{}{
+										"name":      "unkown-remediation",
+										"namespace": namespace,
+									},
+									"data": map[string]interface{}{
+										"key": "value",
+									},
 								},
 							},
 						},
@@ -1396,22 +1400,10 @@ func TestE2E(t *testing.T) {
 
 				// We can re-run the scan at this moment and check that it's now compliant
 				// and it's reflected in a CheckResult
-				workerScanKey := types.NamespacedName{Name: workerScanName, Namespace: namespace}
-				foundWorkerScan := &compv1alpha1.ComplianceScan{}
-				err = f.Client.Get(goctx.TODO(), workerScanKey, foundWorkerScan)
+				err = reRunScan(t, f, workerScanName, namespace)
 				if err != nil {
 					return err
 				}
-				workerScan := foundWorkerScan.DeepCopy()
-				if workerScan.Annotations == nil {
-					workerScan.Annotations = make(map[string]string)
-				}
-				workerScan.Annotations[compv1alpha1.ComplianceScanRescanAnnotation] = ""
-				err = f.Client.Update(goctx.TODO(), workerScan)
-				if err != nil {
-					return err
-				}
-				E2ELogf(t, "Scan re-launched")
 
 				// Scan has been re-started
 				E2ELogf(t, "Scan phase should be reset")
@@ -1452,7 +1444,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				mcfgToBeDeleted := rem.Spec.Object.DeepCopy()
+				mcfgToBeDeleted := rem.Spec.Current.Object.DeepCopy()
 				mcfgToBeDeleted.SetName(rem.GetMcName())
 				err = f.Client.Delete(goctx.TODO(), mcfgToBeDeleted)
 				if err != nil {
@@ -1915,6 +1907,145 @@ func TestE2E(t *testing.T) {
 
 				err = scanResultIsExpected(t, f, namespace, platformScanName, compv1alpha1.ResultNonCompliant)
 				if err != nil {
+					return err
+				}
+
+				return nil
+			},
+		},
+		testExecution{
+			Name:       "TestUpdateRemediation",
+			IsParallel: false,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				origSuiteName := "test-update-remediation"
+				workerScanName := fmt.Sprintf("%s-e2e-scan", origSuiteName)
+
+				const (
+					origImage = "quay.io/jhrozek/ocp4-openscap-content:rem_mod_base"
+					modImage  = "quay.io/jhrozek/ocp4-openscap-content:rem_mod_change"
+				)
+
+				origSuite := &compv1alpha1.ComplianceSuite{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      origSuiteName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceSuiteSpec{
+						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+							AutoApplyRemediations: false,
+						},
+						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
+							{
+								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+									ContentImage: origImage,
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
+									Rule:         "xccdf_org.ssgproject.content_rule_no_empty_passwords",
+									Content:      rhcosContentFile,
+									NodeSelector: getPoolNodeRoleSelector(),
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										Debug: true,
+									},
+								},
+								Name: workerScanName,
+							},
+						},
+					},
+				}
+
+				err := mcTctx.createE2EPool()
+				if err != nil {
+					t.Errorf("Cannot create subpool for this test")
+					return err
+				}
+
+				err = f.Client.Create(goctx.TODO(), origSuite, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				err = waitForSuiteScansStatus(t, f, namespace, origSuiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultNonCompliant)
+				if err != nil {
+					return err
+				}
+
+				workersNoEmptyPassRemName := fmt.Sprintf("%s-no-empty-passwords", workerScanName)
+				err = applyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName)
+				if err != nil {
+					E2ELogf(t, "WARNING: Got an error while applying remediation '%s': %v", workersNoEmptyPassRemName, err)
+				}
+				E2ELogf(t, "Remediation %s applied", workersNoEmptyPassRemName)
+
+				err = waitForNodesToBeReady(t, f)
+				if err != nil {
+					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					return err
+				}
+
+				// Now update the suite with a different image that contains different remediations
+				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: origSuiteName, Namespace:namespace}, origSuite)
+				if err != nil {
+					return err
+				}
+				modSuite := origSuite.DeepCopy()
+				modSuite.Spec.Scans[0].ContentImage = modImage
+				err = f.Client.Update(goctx.TODO(), modSuite)
+				if err != nil {
+					return err
+				}
+				E2ELogf(t, "Suite %s updated with a new image", modSuite.Name)
+
+				err = reRunScan(t, f, workerScanName, namespace)
+				if err != nil {
+					return err
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				err = waitForSuiteScansStatus(t, f, namespace, origSuiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
+				if err != nil {
+					return err
+				}
+
+				err, isObsolete := remediationIsObsolete(t, f, namespace, workersNoEmptyPassRemName)
+				if err != nil {
+					return err
+				}
+				if isObsolete == false {
+					return fmt.Errorf("expected that the remediation is obsolete")
+				}
+
+				E2ELog(t, "Will remove obsolete data from remediation")
+				renderedMcName := fmt.Sprintf("75-%s-%s", workerScanName, origSuiteName)
+				err = removeObsoleteRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, renderedMcName, testPoolName)
+				if err != nil {
+					return err
+				}
+
+				err = waitForNodesToBeReady(t, f)
+				if err != nil {
+					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					return err
+				}
+
+				// Now the remediation is no longer obsolete
+				err, isObsolete = remediationIsObsolete(t, f, namespace, workersNoEmptyPassRemName)
+				if err != nil {
+					return err
+				}
+
+				if isObsolete == true {
+					return fmt.Errorf("expected that the remediation is no longer obsolete")
+				}
+
+				// Finally clean up by removing the remediation and waiting for the nodes to reboot one more time
+				err = unApplyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName, true)
+				if err != nil {
+					return err
+				}
+
+				err = waitForNodesToBeReady(t, f)
+				if err != nil {
+					t.Errorf("Failed to wait for nodes to come back up after unapplying MC: %v", err)
 					return err
 				}
 
