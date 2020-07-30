@@ -47,12 +47,6 @@ import (
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 )
 
-const (
-	crdGroup      = "compliance.openshift.io"
-	crdAPIVersion = "v1alpha1"
-	crdPlurals    = "compliancescans"
-)
-
 var resultcollectorCmd = &cobra.Command{
 	Use:   "resultscollector",
 	Short: "A tool to do an OpenSCAP scan from a pod.",
