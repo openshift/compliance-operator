@@ -1,5 +1,5 @@
 channels:
-- currentCSV: compliance-operator.v0.1.11
+- currentCSV: compliance-operator.v0.1.12
   name: alpha
 defaultChannel: alpha
 packageName: compliance-operator-bundle
