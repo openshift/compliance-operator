@@ -23,7 +23,7 @@ import (
 )
 
 func isRemInList(mcList []*mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) bool {
-	remMc, _ := utils.ParseMachineConfig(rem, rem.Spec.Object)
+	remMc, _ := utils.ParseMachineConfig(rem, rem.Spec.Current.Object)
 	for _, mc := range mcList {
 		if same := reflect.DeepEqual(mc.Spec, remMc.Spec); same == true {
 			return true
@@ -71,7 +71,9 @@ func getMockedRemediation(name string, labels map[string]string, applied bool, s
 			ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
 				Apply: applied,
 			},
-			Object: obj,
+			Current: compv1alpha1.ComplianceRemediationPayload{
+				Object: obj,
+			},
 		},
 		Status: compv1alpha1.ComplianceRemediationStatus{
 			ApplicationState: status,
@@ -102,7 +104,9 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				Labels: testRemLabels,
 			},
 			Spec: compv1alpha1.ComplianceRemediationSpec{
-				Object: nil,
+				Current: compv1alpha1.ComplianceRemediationPayload{
+					Object: nil,
+				},
 			},
 		}
 		objs = append(objs, complianceremediationinstance)

@@ -31,6 +31,11 @@ import (
 
 var log = logf.Log.WithName("suitectrl")
 
+const (
+	// The default time we should wait before requeuing
+	requeueAfterDefault = 10 * time.Second
+)
+
 // Add creates a new ComplianceSuite Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
@@ -125,8 +130,11 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 	}
 
 	suiteCopy := suite.DeepCopy()
-	if err := r.reconcileScans(suiteCopy, reqLogger); err != nil {
+	rescheduleWithDelay, err := r.reconcileScans(suiteCopy, reqLogger)
+	if err != nil {
 		return common.ReturnWithRetriableError(reqLogger, err)
+	} else if rescheduleWithDelay {
+		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, err
 	}
 
 	var res reconcile.Result
@@ -187,7 +195,7 @@ func (r *ReconcileComplianceSuite) issueValidationError(suite *compv1alpha1.Comp
 	return r.client.Status().Update(context.TODO(), suiteCopy)
 }
 
-func (r *ReconcileComplianceSuite) reconcileScans(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) error {
+func (r *ReconcileComplianceSuite) reconcileScans(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) (bool, error) {
 	for _, scanWrap := range suite.Spec.Scans {
 		scan := &compv1alpha1.ComplianceScan{}
 		err := r.client.Get(context.TODO(), types.NamespacedName{Name: scanWrap.Name, Namespace: suite.Namespace}, scan)
@@ -195,23 +203,31 @@ func (r *ReconcileComplianceSuite) reconcileScans(suite *compv1alpha1.Compliance
 			// If the scan was not found, launch it
 			logger.Info("Scan not found, launching..", "ComplianceScan.Name", scanWrap.Name)
 			if err = launchScanForSuite(r, suite, &scanWrap, logger); err != nil {
-				return err
+				return false, err
 			}
 			logger.Info("Scan created", "ComplianceScan.Name", scanWrap.Name)
 			// No point in reconciling status yet
 			continue
 		} else if err != nil {
 			logger.Error(err, "Cannot get the scan for a suite", "ComplianceScan.Name", scanWrap.Name)
-			return err
+			return false, err
 		}
 
-		// The scan already exists, let's just make sure its status is reflected
+		// The scan already exists and is up to date, let's just make sure its status is reflected
 		if err := r.reconcileScanStatus(suite, scan, logger); err != nil {
-			return err
+			return false, err
 		}
+
+		// Update the scan spec (last becuase it's a corner case)
+		rescheduleWithDelay, err := r.reconcileScanSpec(&scanWrap, scan, logger)
+		if rescheduleWithDelay || err != nil {
+			return rescheduleWithDelay, err
+		}
+
+		// FIXME: delete scans that went away
 	}
 
-	return nil
+	return false, nil
 }
 
 func (r *ReconcileComplianceSuite) reconcileScanStatus(suite *compv1alpha1.ComplianceSuite, scan *compv1alpha1.ComplianceScan, logger logr.Logger) error {
@@ -237,6 +253,39 @@ func (r *ReconcileComplianceSuite) reconcileScanStatus(suite *compv1alpha1.Compl
 	}
 
 	return nil
+}
+
+func (r *ReconcileComplianceSuite) reconcileScanSpec(scanWrap *compv1alpha1.ComplianceScanSpecWrapper, origScan *compv1alpha1.ComplianceScan, logger logr.Logger) (bool, error) {
+	// Do we need to update the scan?
+	if scanWrap.ScanSpecDiffers(origScan) == false {
+		logger.Info("Scan is up to date", "ComplianceScan.Name", origScan.Name)
+		return false, nil
+	}
+
+	// Fetch the scan again in case the status is updated. Updating the scan spec
+	// is so rare that the extra API server round-trip shouldn't matter
+	foundScan := &compv1alpha1.ComplianceScan{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: origScan.Name, Namespace: origScan.Namespace}, foundScan)
+	if err != nil {
+		return false, err
+	}
+
+	// We only update scans that are in DONE, because otherwise we might end up
+	// with inconsistencies (scan pods running where they shouldn't run, checks
+	// or remediations might be already created for the old content etc...)
+	if foundScan.Status.Phase != compv1alpha1.PhaseDone {
+		logger.Info("Refusing to update a scan that is not done, retrying later")
+		return true, nil
+	}
+
+	scanWrap.ComplianceScanSpec.DeepCopyInto(&foundScan.Spec)
+	err = r.client.Update(context.TODO(), foundScan)
+	if err != nil {
+		logger.Error(err, "Cannot update scan spec", "ComplianceScan.Name", origScan.Name)
+		return false, err
+	}
+	logger.Info("Scan updated", "ComplianceScan.Name", origScan.Name)
+	return false, nil
 }
 
 // updates the status of a scan in the compliance suite. Note that the suite that this takes is already a copy, so it's safe to modify
@@ -285,6 +334,17 @@ func (r *ReconcileComplianceSuite) generateEventsForSuite(suite *compv1alpha1.Co
 			suite, corev1.EventTypeNormal, "SuiteNotConsistent",
 			"The suite result is not consistent, please check for scan results labeled with %s",
 			compv1alpha1.ComplianceCheckInconsistentLabel)
+	}
+
+	err, haveOutdatedRems := utils.HaveOutdatedRemediations(r.client)
+	if err != nil {
+		logger.Info("Could not check if there exist any obsolete remediations", "Suite.Name", suite.Name)
+	}
+	if haveOutdatedRems {
+		r.recorder.Eventf(
+			suite, corev1.EventTypeNormal, "HaveOutdatedRemediations",
+			"One of suite's scans produced outdated remediations, please check for complianceremediation objects labeled with %s",
+			compv1alpha1.OutdatedRemediationLabel)
 	}
 
 	ownerRefs := suite.GetOwnerReferences()
@@ -389,7 +449,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 			if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
 				return reconcile.Result{}, err
 			}
-			if utils.IsMachineConfig(rem.Spec.Object) {
+			if utils.IsMachineConfig(rem.Spec.Current.Object) {
 				// get affected pool
 				pool, affectedPoolExists := r.getAffectedMcfgPool(scan, mcfgpools)
 				// we only ned to operate on pools that are affected

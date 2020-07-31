@@ -3,7 +3,6 @@ package complianceremediation
 import (
 	"context"
 	"fmt"
-
 	"github.com/go-logr/logr"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
@@ -13,9 +12,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -97,10 +98,10 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 		return reconcile.Result{}, err
 	}
 
-	if remediationInstance.Spec.Object != nil {
+	if remediationInstance.Spec.Current.Object != nil {
 		reqLogger.Info("Reconciling remediation")
 		err = r.reconcileRemediation(remediationInstance, reqLogger)
-	} else if remediationInstance.Spec.MachineConfigContents != nil {
+	} else if remediationInstance.Spec.Current.MachineConfigContents != nil {
 		reqLogger.Info("updating deprecated MachineConfig remediation")
 		err = r.updateDeprecatedMcRemediation(remediationInstance, reqLogger)
 	} else {
@@ -127,13 +128,13 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 
 func (r *ReconcileComplianceRemediation) updateDeprecatedMcRemediation(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
 	remCopy := instance.DeepCopy()
-	remCopy.Spec.Object = remCopy.Spec.MachineConfigContents.DeepCopy()
-	remCopy.Spec.MachineConfigContents = nil
+	remCopy.Spec.Current.Object = remCopy.Spec.Current.MachineConfigContents.DeepCopy()
+	remCopy.Spec.Current.MachineConfigContents = nil
 	return r.client.Update(context.TODO(), remCopy)
 }
 
 func (r *ReconcileComplianceRemediation) reconcileRemediation(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
-	if utils.IsMachineConfig(instance.Spec.Object) {
+	if utils.IsMachineConfig(instance.Spec.Current.Object) {
 		return r.reconcileMcRemediation(instance, logger)
 	}
 	return r.reconcileGenericRemediation(instance, logger)
@@ -142,10 +143,11 @@ func (r *ReconcileComplianceRemediation) reconcileRemediation(instance *compv1al
 // Gets a generic remediation and ensures the object exists in the cluster if the
 // remediation if applicable
 func (r *ReconcileComplianceRemediation) reconcileGenericRemediation(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
-	obj := instance.Spec.Object
+	obj := instance.Spec.Current.Object
 	found := obj.DeepCopy()
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, found)
 	if instance.Spec.Apply {
+		logger.Info("Remediation will be applied", "ComplianceRemediation.Name", instance.Name)
 		if errors.IsNotFound(err) {
 			return r.client.Create(context.TODO(), obj)
 		} else if meta.IsNoMatchError(err) {
@@ -154,7 +156,10 @@ func (r *ReconcileComplianceRemediation) reconcileGenericRemediation(instance *c
 		}
 		// TODO(jaosorior): If the object is found, should we update it?
 		return err
+	} else {
+		logger.Info("Remediation will be unapplied", "ComplianceRemediation.Name", instance.Name)
 	}
+
 	// unapply remediation
 	if err == nil {
 		return r.client.Delete(context.TODO(), obj)
@@ -219,8 +224,13 @@ func (r *ReconcileComplianceRemediation) reconcileRemediationStatus(instance *co
 		instanceCopy.Status.ErrorMessage = errorApplying.Error()
 		logger.Info("Remediation had an error")
 	} else if instance.Spec.Apply {
-		instanceCopy.Status.ApplicationState = compv1alpha1.RemediationApplied
-		logger.Info("Remediation will now be applied")
+		if instanceCopy.Spec.Outdated.Object != nil {
+			instanceCopy.Status.ApplicationState = compv1alpha1.RemediationOutdated
+			logger.Info("Remediation remains outdated")
+		} else {
+			instanceCopy.Status.ApplicationState = compv1alpha1.RemediationApplied
+			logger.Info("Remediation will now be applied")
+		}
 	} else {
 		instanceCopy.Status.ApplicationState = compv1alpha1.RemediationNotApplied
 		logger.Info("Remediation will now be unapplied")
@@ -247,6 +257,7 @@ func getApplicableMcList(r *ReconcileComplianceRemediation, instance *compv1alph
 	// TODO: Print the names of the applied remediations with a very high log level
 
 	// If the one being reconciled is supposed to be applied as well, add it to the list
+
 	if instance.Spec.Apply == true {
 		scan := &compv1alpha1.ComplianceScan{}
 		scanKey := types.NamespacedName{Name: instance.Labels[compv1alpha1.ScanLabel], Namespace: instance.Namespace}
@@ -270,7 +281,15 @@ func getApplicableMcList(r *ReconcileComplianceRemediation, instance *compv1alph
 			return appliedRemediations, nil
 		}
 
-		mc, err := utils.ParseMachineConfig(instance, instance.Spec.Object)
+		var reconciledMcObj *unstructured.Unstructured
+		if instance.Spec.Outdated.Object != nil {
+			logger.Info("Adding the outdated content")
+			reconciledMcObj = instance.Spec.Outdated.Object
+		} else {
+			logger.Info("Adding the current content")
+			reconciledMcObj = instance.Spec.Current.Object
+		}
+		mc, err := utils.ParseMachineConfig(instance, reconciledMcObj)
 		if err != nil {
 			logger.Error(err, "Cannot parse the MachineConfig for the remediation")
 			return appliedRemediations, err
@@ -300,12 +319,25 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compv1alph
 
 	appliedRemediations := make([]*mcfgv1.MachineConfig, 0, len(scanSuiteRemediations.Items))
 	for i := range scanSuiteRemediations.Items {
-		if !utils.IsMachineConfig(scanSuiteRemediations.Items[i].Spec.Object) {
+		if !utils.IsMachineConfig(scanSuiteRemediations.Items[i].Spec.Current.Object) {
 			continue
 		}
+
+		var mcObj *unstructured.Unstructured
+
+		// We'll only merge the one that is being reconciled with those that are already
+		// applied. For remediations that are obsolete, we'll merge the outdated contents
+		// instead of the current ones
+		switch scanSuiteRemediations.Items[i].Status.ApplicationState {
+		case compv1alpha1.RemediationApplied:
+			mcObj = scanSuiteRemediations.Items[i].Spec.Current.Object
+		case compv1alpha1.RemediationOutdated:
+			mcObj = scanSuiteRemediations.Items[i].Spec.Outdated.Object
+		default:
+			continue
+		}
+
 		if scanSuiteRemediations.Items[i].Status.ApplicationState != compv1alpha1.RemediationApplied {
-			// We'll only merge the one that is being reconciled with those that are already
-			// applied
 			// TODO: Add a log line with a very high log level
 			continue
 		}
@@ -318,7 +350,7 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compv1alph
 		}
 
 		// OK, we've got an applied MC, add it to the list
-		mc, err := utils.ParseMachineConfig(&scanSuiteRemediations.Items[i], scanSuiteRemediations.Items[i].Spec.Object)
+		mc, err := utils.ParseMachineConfig(&scanSuiteRemediations.Items[i], mcObj)
 		if err != nil {
 			return nil, err
 		}
@@ -365,11 +397,13 @@ func createOrUpdateMachineConfig(r *ReconcileComplianceRemediation, merged *mcfg
 		return err
 	}
 
-	if rem.Spec.Apply && mcHasRemediation(mc, rem) {
+	if rem.Spec.Apply && mcHasRemediation(mc, rem) && !mcDiffers(mc, merged) {
 		// If we have already applied this there's nothing to do
+		logger.Info("Remediation already applied, doing nothing")
 		return nil
-	} else if !rem.Spec.Apply && !mcHasRemediation(mc, rem) {
+	} else if !rem.Spec.Apply && !mcHasRemediation(mc, rem) && !mcDiffers(mc, merged) {
 		// If we have already un-applied this there's nothing to do
+		logger.Info("Remediation already unapplied, doing nothing")
 		return nil
 	}
 	return updateMachineConfig(r, mc, merged, rem, logger)
@@ -453,4 +487,8 @@ func mcHasRemediation(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceReme
 	}
 	_, ok := mc.Annotations[getRemediationAnnotationKey(rem.Name)]
 	return ok
+}
+
+func mcDiffers(current *mcfgv1.MachineConfig, merged *mcfgv1.MachineConfig) bool {
+	return !reflect.DeepEqual(current, merged)
 }

@@ -2,9 +2,10 @@ package v1alpha1
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"reflect"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 type RemediationApplicationState string
@@ -12,6 +13,7 @@ type RemediationApplicationState string
 const (
 	RemediationNotApplied RemediationApplicationState = "NotApplied"
 	RemediationApplied    RemediationApplicationState = "Applied"
+	RemediationOutdated   RemediationApplicationState = "Outdated"
 	RemediationError      RemediationApplicationState = "Error"
 )
 
@@ -24,7 +26,8 @@ const (
 
 const (
 	// ScanLabel defines the label that associates the Remediation with the scan
-	ScanLabel = "complianceoperator.openshift.io/scan"
+	ScanLabel                = "complianceoperator.openshift.io/scan"
+	OutdatedRemediationLabel = "complianceoperator.openshift.io/outdated-remediation"
 )
 
 type ComplianceRemediationSpecMeta struct {
@@ -34,10 +37,7 @@ type ComplianceRemediationSpecMeta struct {
 	Apply bool `json:"apply"`
 }
 
-// ComplianceRemediationSpec defines the desired state of ComplianceRemediation
-// +k8s:openapi-gen=true
-type ComplianceRemediationSpec struct {
-	ComplianceRemediationSpecMeta `json:",inline"`
+type ComplianceRemediationPayload struct {
 	// (deprecated) The actual MachineConfig remediation payload
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:EmbeddedResource
@@ -49,6 +49,14 @@ type ComplianceRemediationSpec struct {
 	// +kubebuilder:validation:EmbeddedResource
 	// +kubebuilder:validation:nullable
 	Object *unstructured.Unstructured `json:"object,omitempty"`
+}
+
+// ComplianceRemediationSpec defines the desired state of ComplianceRemediation
+// +k8s:openapi-gen=true
+type ComplianceRemediationSpec struct {
+	ComplianceRemediationSpecMeta `json:",inline"`
+	Current                       ComplianceRemediationPayload `json:"current,omitempty"`
+	Outdated                      ComplianceRemediationPayload `json:"outdated,omitempty"`
 }
 
 // ComplianceRemediationStatus defines the observed state of ComplianceRemediation
@@ -75,6 +83,10 @@ type ComplianceRemediation struct {
 	Spec ComplianceRemediationSpec `json:"spec,omitempty"`
 	// Contains information on the remediation (whether it's applied or not)
 	Status ComplianceRemediationStatus `json:"status,omitempty"`
+}
+
+func (r *ComplianceRemediation) RemediationPayloadDiffers(other *ComplianceRemediation) bool {
+	return !reflect.DeepEqual(r.Spec.Current, other.Spec.Current)
 }
 
 func (r *ComplianceRemediation) GetSuite() string {

@@ -259,7 +259,9 @@ func remediationFromString(scheme *runtime.Scheme, name string, namespace string
 				Type:  compv1alpha1.McRemediation,
 				Apply: false,
 			},
-			Object: obj,
+			Current: compv1alpha1.ComplianceRemediationPayload{
+				Object: obj,
+			},
 		},
 		Status: compv1alpha1.ComplianceRemediationStatus{
 			ApplicationState: compv1alpha1.RemediationNotApplied,

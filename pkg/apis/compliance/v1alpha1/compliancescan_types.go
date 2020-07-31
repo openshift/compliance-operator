@@ -25,6 +25,7 @@ const ScanFinalizer = "scan.finalizers.compliance.openshift.io"
 // DefaultRawStorageSize specifies the default storage size where the raw
 // results will be stored at
 const DefaultRawStorageSize = "1Gi"
+const DefaultStorageRotation = 3
 
 // Represents the status of the compliance scan run.
 type ComplianceScanStatusPhase string
@@ -109,6 +110,8 @@ type TailoringConfigMapRef struct {
 // +k8s:openapi-gen=true
 type ComplianceScanType string
 
+// When changing the defaults, remember to change also the DefaultRawStorageSize and
+// DefaultStorageRotation constants
 type RawResultStorageSettings struct {
 	// Specifies the amount of storage to ask for storing the raw results. Note that
 	// if re-scans happen, the new results will also need to be stored. Defaults to 1Gi.

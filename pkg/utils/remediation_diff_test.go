@@ -65,7 +65,9 @@ func getRemediation(serviceName string) *compv1alpha1.ComplianceRemediation {
 				Type:  compv1alpha1.McRemediation,
 				Apply: false,
 			},
-			Object: obj,
+			Current: compv1alpha1.ComplianceRemediationPayload{
+				Object: obj,
+			},
 		},
 	}
 }
