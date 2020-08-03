@@ -157,7 +157,7 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 		if err == nil {
 			log.Info("Suite created", "suite.Name", suite.Name)
 			r.Eventf(
-				instance, corev1.EventTypeWarning, "SuiteCreated",
+				instance, corev1.EventTypeNormal, "SuiteCreated",
 				"ComplianceSuite %s/%s created", suite.Namespace, suite.Name,
 			)
 		} else {
@@ -179,7 +179,7 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 		if err == nil {
 			log.Info("Suite updated", "suite.Name", suite.Name)
 			r.Eventf(
-				instance, corev1.EventTypeWarning, "SuiteUpdated",
+				instance, corev1.EventTypeNormal, "SuiteUpdated",
 				"ComplianceSuite %s/%s updatd", suite.Namespace, suite.Name,
 			)
 		} else {
