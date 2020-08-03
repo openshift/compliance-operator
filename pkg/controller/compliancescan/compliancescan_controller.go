@@ -184,16 +184,10 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 		return reconcile.Result{}, err
 	}
 
-	err := createConfigMaps(r, scriptCmForScan(instance), envCmForScan(instance), envCmForPlatformScan(instance), instance)
-	if err != nil {
-		logger.Error(err, "Cannot create the configmaps")
-		return reconcile.Result{}, err
-	}
-
 	// Update the scan instance, the next phase is running
 	instance.Status.Phase = compv1alpha1.PhaseLaunching
 	instance.Status.Result = compv1alpha1.ResultNotAvailable
-	err = r.client.Status().Update(context.TODO(), instance)
+	err := r.client.Status().Update(context.TODO(), instance)
 	if err != nil {
 		logger.Error(err, "Cannot update the status")
 		return reconcile.Result{}, err
@@ -210,6 +204,12 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *compv1alpha1.C
 	var err error
 
 	logger.Info("Phase: Launching")
+
+	err = createConfigMaps(r, scriptCmForScan(instance), envCmForScan(instance), envCmForPlatformScan(instance), instance)
+	if err != nil {
+		logger.Error(err, "Cannot create the configmaps")
+		return reconcile.Result{}, err
+	}
 
 	if nodes, err = getTargetNodes(r, instance); err != nil {
 		log.Error(err, "Cannot get nodes")
