@@ -22,7 +22,14 @@ const ComplianceCheckInconsistentLabel = "compliance.openshift.io/inconsistent-c
 // This provides a way to link a result to a Rule object.
 const ComplianceCheckResultRuleAnnotation = "compliance.openshift.io/rule"
 
+// ComplianceCheckResultInconsistentSourceAnnotation is only used with an Inconsistent check result
+// It either lists statuses of nodes that differ from ComplianceCheckResultMostCommonAnnotation or,
+// if the most common state does not exist, just lists all sources of all nodes.
 const ComplianceCheckResultInconsistentSourceAnnotation = "compliance.openshift.io/inconsistent-source"
+// ComplianceCheckResultMostCommonAnnotation stores the most common ComplianceCheckStatus value
+// in an inconsistent check. In order for the result to be most common, at least 60% of the nodes
+// must report the same result. The nodes that differ from the most common status are listed using
+// ComplianceCheckResultInconsistentSourceAnnotation
 const ComplianceCheckResultMostCommonAnnotation = "compliance.openshift.io/most-common-status"
 const ComplianceCheckResultErrorAnnotation = "compliance.openshift.io/error-msg"
 

@@ -233,6 +233,8 @@ Where:
 	* **FAIL**: Which indicates that the check ran to completion and failed.
 	* **INFO**: Which indicates that the check ran to completion and found
       something not severe enough to be considered error.
+    * **INCONSISTENT**: Which indicates that different nodes report different
+      results.
 	* **ERROR**: Which indicates that the check ran, but could not complete
       properly.
 	* **SKIP**: Which indicates that the check didn't run because it is not
@@ -245,6 +247,25 @@ If a suite is running continuously (having the `schedule` specified) the
 result will be updated as needed. For instance, an initial scan could have
 determined that a check was failing, the issue was fixed, so a subsequent
 scan would report that the check passes.
+
+The `INCONSISTENT` status is specific to the operator and doesn't come from
+the scanner itself. This state is used when one or several nodes differ
+from the rest, which ideally shouldn't happen because the scans should
+be targeting machine pools that should be identical. If an inconsistent
+check is detected, the operator, apart from using the inconsistent state
+does the following:
+    * Adds the `compliance.openshift.io/inconsistent-check` label so that the
+      inconsistent checks can be found easily
+    * Tries to find the most common state and outliers from the common state and
+      put this information into the `compliance.openshift.io/most-common-status`
+      and `compliance.openshift.io/inconsistent-source` annotations.
+    * Issues events for the Scan or the Suite
+
+Unless the inconsistency is too big (e.g. one node passing and one skipping
+a run), the operator still tries to create a remediation which should
+allow to apply the remediation and move forward to a compliant state. If a
+remediation is not created automatically, the administrator needs to make
+the nodes consistent first before proceeding.
 
 You can get all the check results from a suite by using the label 
 `compliance.openshift.io/suite`
