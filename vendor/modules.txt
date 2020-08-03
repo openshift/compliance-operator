@@ -243,14 +243,14 @@ github.com/openshift/machine-config-operator/pkg/generated/informers/externalver
 github.com/openshift/machine-config-operator/pkg/generated/informers/externalversions/machineconfiguration.openshift.io
 github.com/openshift/machine-config-operator/pkg/generated/informers/externalversions/machineconfiguration.openshift.io/v1
 github.com/openshift/machine-config-operator/pkg/generated/listers/machineconfiguration.openshift.io/v1
-# github.com/operator-framework/api v0.3.7-0.20200602203552-431198de9fc2
+# github.com/operator-framework/api v0.3.8
 github.com/operator-framework/api/pkg/lib/version
 github.com/operator-framework/api/pkg/operators
-# github.com/operator-framework/operator-registry v1.12.6-0.20200605115407-01fa069730e2
+# github.com/operator-framework/operator-registry v1.12.6-0.20200611222234-275301b779f8
 github.com/operator-framework/operator-registry/pkg/api
 github.com/operator-framework/operator-registry/pkg/image
 github.com/operator-framework/operator-registry/pkg/registry
-# github.com/operator-framework/operator-sdk v0.18.1
+# github.com/operator-framework/operator-sdk v0.18.2
 github.com/operator-framework/operator-sdk/internal/scaffold
 github.com/operator-framework/operator-sdk/internal/scaffold/input
 github.com/operator-framework/operator-sdk/internal/scaffold/internal/deps
