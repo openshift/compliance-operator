@@ -150,7 +150,7 @@ metadata:
     createdAt: "2020-01-28T08:00:00Z"
     description: |
       An operator which runs OpenSCAP and allows you to check your cluster for
-      security vulnerabilities and to keep your it compliant with the
+      security vulnerabilities and to keep it compliant with the
       security benchmark you need.
     repository: https://github.com/openshift/compliance-operator
     support: OpenShift Security & Compliance
