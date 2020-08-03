@@ -82,6 +82,7 @@ spec:
               or not)
             properties:
               applicationState:
+                default: NotApplied
                 description: Whether the remediation is already applied or not
                 type: string
               errorMessage:
