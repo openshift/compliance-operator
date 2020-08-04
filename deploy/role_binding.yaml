@@ -84,3 +84,16 @@ roleRef:
   kind: Role
   name: rerunner
   apiGroup: rbac.authorization.k8s.io
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: profileparser
+subjects:
+- kind: ServiceAccount
+  name: profileparser
+  namespace: openshift-compliance
+roleRef:
+  kind: Role
+  name: profileparser
+  apiGroup: rbac.authorization.k8s.io

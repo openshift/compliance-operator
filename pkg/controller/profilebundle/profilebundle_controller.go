@@ -260,8 +260,7 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle) *appsv1.Deployme
 							},
 						},
 					},
-					//ServiceAccountName: "profileparser",
-					ServiceAccountName: "compliance-operator",
+					ServiceAccountName: "profileparser",
 					Volumes: []corev1.Volume{
 						{
 							Name: "content-dir",
