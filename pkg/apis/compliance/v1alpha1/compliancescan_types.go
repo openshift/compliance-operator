@@ -144,6 +144,7 @@ type ComplianceScanSettings struct {
 // +k8s:openapi-gen=true
 type ComplianceScanSpec struct {
 	// The type of Compliance scan.
+	// +kubebuilder:default=Node
 	ScanType ComplianceScanType `json:"scanType,omitempty"`
 	// Is the image with the content (Data Stream), that will be used to run
 	// OpenSCAP.
