@@ -39,6 +39,7 @@ spec:
               type: string
             nullable: true
             type: array
+            x-kubernetes-list-type: atomic
           title:
             type: string
           values:
@@ -47,6 +48,7 @@ spec:
               type: string
             nullable: true
             type: array
+            x-kubernetes-list-type: atomic
         required:
         - description
         - id

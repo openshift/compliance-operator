@@ -29,9 +29,11 @@ type ProfilePayload struct {
 	ID          string `json:"id"`
 	// +nullable
 	// +optional
+	// +listType=atomic
 	Rules []ProfileRule `json:"rules,omitempty"`
 	// +nullable
 	// +optional
+	// +listType=atomic
 	Values []ProfileValue `json:"values,omitempty"`
 }
 

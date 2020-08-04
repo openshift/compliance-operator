@@ -27,6 +27,7 @@ type RulePayload struct {
 	// The Available fixes
 	// +nullable
 	// +optional
+	// +listType=atomic
 	AvailableFixes []FixDefinition `json:"availableFixes,omitempty"`
 }
 
