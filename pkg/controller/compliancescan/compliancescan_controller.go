@@ -574,8 +574,8 @@ func (r *ReconcileComplianceScan) generateResultEventForScan(scan *compv1alpha1.
 
 	if scan.Status.Result == compv1alpha1.ResultNotApplicable {
 		r.recorder.Eventf(
-			scan, corev1.EventTypeNormal, "ScanNotApplicable",
-			"The scan result is not applicable, please check if you're using the correct platform")
+			scan, corev1.EventTypeWarning, "ScanNotApplicable",
+			"The scan result is not applicable, please check if you're using the correct platform or if the nodeSelector matches nodes.")
 	} else if scan.Status.Result == compv1alpha1.ResultInconsistent {
 		r.recorder.Eventf(
 			scan, corev1.EventTypeNormal, "ScanNotConsistent",
