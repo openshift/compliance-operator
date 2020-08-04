@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -182,6 +181,25 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 		instanceCopy.Status.Phase = compv1alpha1.PhaseDone
 		err := r.client.Status().Update(context.TODO(), instanceCopy)
 		return reconcile.Result{}, err
+	}
+
+	if isNodeScan(instance) {
+		var nodes corev1.NodeList
+		var err error
+		if nodes, err = getTargetNodes(r, instance); err != nil {
+			log.Error(err, "Cannot get nodes")
+			return reconcile.Result{}, err
+		}
+		if len(nodes.Items) == 0 {
+			warning := "No nodes matched the nodeSelector"
+			log.Info(warning)
+			r.recorder.Event(instance, corev1.EventTypeWarning, "NoMatchingNodes", warning)
+			instanceCopy := instance.DeepCopy()
+			instanceCopy.Status.Result = compv1alpha1.ResultNotApplicable
+			instanceCopy.Status.Phase = compv1alpha1.PhaseDone
+			err := r.updateStatusWithEvent(instanceCopy, logger)
+			return reconcile.Result{}, err
+		}
 	}
 
 	// Update the scan instance, the next phase is running
@@ -813,5 +831,9 @@ func getInitContainerImage(scanSpec *compv1alpha1.ComplianceScanSpec, logger log
 }
 
 func isPlatformScan(instance *compv1alpha1.ComplianceScan) bool {
-	return strings.ToLower(string(instance.Spec.ScanType)) == "platform"
+	return instance.Spec.ScanType == compv1alpha1.ScanTypePlatform
+}
+
+func isNodeScan(instance *compv1alpha1.ComplianceScan) bool {
+	return instance.Spec.ScanType == compv1alpha1.ScanTypeNode
 }

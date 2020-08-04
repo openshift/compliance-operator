@@ -27,10 +27,10 @@ func TestE2E(t *testing.T) {
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				const (
-					baselineImage = "quay.io/jhrozek/ocp4-openscap-content@sha256:a1709f5150b17a9560a5732fe48a89f07bffc72c0832aa8c49ee5504510ae687"
-					modifiedImage = "quay.io/jhrozek/ocp4-openscap-content@sha256:7999243c0b005792bd58c6f5e1776ca88cf20adac1519c00ef08b18e77188db7"
-					removedRule   = "chronyd-no-chronyc-network"
-					unlinkedRule  = "chronyd-client-only"
+					baselineImage       = "quay.io/jhrozek/ocp4-openscap-content@sha256:a1709f5150b17a9560a5732fe48a89f07bffc72c0832aa8c49ee5504510ae687"
+					modifiedImage       = "quay.io/jhrozek/ocp4-openscap-content@sha256:7999243c0b005792bd58c6f5e1776ca88cf20adac1519c00ef08b18e77188db7"
+					removedRule         = "chronyd-no-chronyc-network"
+					unlinkedRule        = "chronyd-client-only"
 					moderateProfileName = "moderate"
 				)
 
@@ -68,10 +68,10 @@ func TestE2E(t *testing.T) {
 
 				// Check that the rule we unlined in the modified profile is linked in the original
 				profilePreUpdate := &compv1alpha1.Profile{}
-				if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace:origPb.Namespace,Name:prefixName(pbName, moderateProfileName)}, profilePreUpdate); err != nil {
+				if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: origPb.Namespace, Name: prefixName(pbName, moderateProfileName)}, profilePreUpdate); err != nil {
 					return err
 				}
-				found = findRuleReference(profilePreUpdate, prefixName(pbName,unlinkedRule))
+				found = findRuleReference(profilePreUpdate, prefixName(pbName, unlinkedRule))
 				if found != true {
 					t.Errorf("Expected rule %s not found", prefixName(pbName, unlinkedRule))
 					return err
@@ -79,7 +79,7 @@ func TestE2E(t *testing.T) {
 
 				// update the image with a new hash
 				modPb := origPb.DeepCopy()
-				if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace:modPb.Namespace,Name:modPb.Name}, modPb); err != nil {
+				if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: modPb.Namespace, Name: modPb.Name}, modPb); err != nil {
 					return err
 				}
 
@@ -111,10 +111,10 @@ func TestE2E(t *testing.T) {
 
 				// This rule was unlinked
 				profilePostUpdate := &compv1alpha1.Profile{}
-				if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace:origPb.Namespace,Name:prefixName(pbName, moderateProfileName)}, profilePostUpdate); err != nil {
+				if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: origPb.Namespace, Name: prefixName(pbName, moderateProfileName)}, profilePostUpdate); err != nil {
 					return err
 				}
-				found = findRuleReference(profilePostUpdate, prefixName(pbName,unlinkedRule))
+				found = findRuleReference(profilePostUpdate, prefixName(pbName, unlinkedRule))
 				if found != false {
 					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
 					return err
@@ -423,6 +423,41 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
+			Name:       "TestScanWithNodeSelectorNoMatches",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				scanName := getObjNameFromTest(t)
+				selectNone := map[string]string{
+					"node-role.kubernetes.io/no-matches": "",
+				}
+				testComplianceScan := &compv1alpha1.ComplianceScan{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      scanName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceScanSpec{
+						Profile:      "xccdf_org.ssgproject.content_profile_moderate",
+						Content:      rhcosContentFile,
+						Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
+						NodeSelector: selectNone,
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							Debug: true,
+						},
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), testComplianceScan, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+				return scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultNotApplicable)
+			},
+		},
+		testExecution{
 			Name:       "TestScanWithInvalidContentFails",
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
@@ -721,7 +756,7 @@ func TestE2E(t *testing.T) {
 						ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
 							Apply: true,
 						},
-						Current:compv1alpha1.ComplianceRemediationPayload{
+						Current: compv1alpha1.ComplianceRemediationPayload{
 							Object: unstruct,
 						},
 					},
@@ -1983,7 +2018,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				// Now update the suite with a different image that contains different remediations
-				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: origSuiteName, Namespace:namespace}, origSuite)
+				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: origSuiteName, Namespace: namespace}, origSuite)
 				if err != nil {
 					return err
 				}
