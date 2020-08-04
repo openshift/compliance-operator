@@ -458,6 +458,37 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
+			Name:       "TestScanWithInvalidScanTypeFails",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				scanName := getObjNameFromTest(t)
+				testScan := &compv1alpha1.ComplianceScan{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      scanName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceScanSpec{
+						Profile:  "xccdf_org.ssgproject.content_profile_moderate",
+						Content:  "ssg-ocp4-non-existent.xml",
+						ScanType: "BadScanType",
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							Debug: true,
+						},
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), testScan, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+				return scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultError)
+			},
+		},
+		testExecution{
 			Name:       "TestScanWithInvalidContentFails",
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {

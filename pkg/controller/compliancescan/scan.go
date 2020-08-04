@@ -26,7 +26,7 @@ const (
 )
 
 func (r *ReconcileComplianceScan) createScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
-	if isPlatformScan(instance) {
+	if instance.GetScanType() == compv1alpha1.ScanTypePlatform {
 		return r.createPlatformScanPod(instance, logger)
 	}
 	// ScanTypeNode

@@ -1,6 +1,9 @@
 package v1alpha1
 
 import (
+	"fmt"
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -243,6 +246,29 @@ func (cs *ComplianceScan) NeedsRescan() bool {
 	}
 	_, needsRescan := annotations[ComplianceScanRescanAnnotation]
 	return needsRescan
+}
+
+// GetScanTypeIfValid returns scan type if the scan has a valid one, else it returns
+// an error
+func (cs *ComplianceScan) GetScanTypeIfValid() (ComplianceScanType, error) {
+	if strings.ToLower(string(cs.Spec.ScanType)) == strings.ToLower(string(ScanTypePlatform)) {
+		return ScanTypePlatform, nil
+	}
+
+	if strings.ToLower(string(cs.Spec.ScanType)) == strings.ToLower(string(ScanTypeNode)) {
+		return ScanTypeNode, nil
+	}
+	return "", fmt.Errorf("Unknown scan type")
+}
+
+// GetScanType get's the scan type for a scan
+func (cs *ComplianceScan) GetScanType() ComplianceScanType {
+	scantype, err := cs.GetScanTypeIfValid()
+	if err != nil {
+		// This shouldn't happen
+		panic(err)
+	}
+	return scantype
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
