@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var log = logf.Log.WithName("controller_profilebundle")
+var log = logf.Log.WithName("profilebundlectrl")
 
 var oneReplica int32 = 1
 
