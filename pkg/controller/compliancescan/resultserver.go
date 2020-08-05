@@ -8,6 +8,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -144,6 +145,12 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 								"--tls-server-cert=/etc/pki/tls/tls.crt",
 								"--tls-server-key=/etc/pki/tls/tls.key",
 								"--tls-ca=/etc/pki/tls/ca.crt",
+							},
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("100Mi"),
+								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{

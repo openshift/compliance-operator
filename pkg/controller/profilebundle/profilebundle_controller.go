@@ -16,6 +16,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -250,6 +251,12 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle) *appsv1.Deployme
 								"--name", pb.Name,
 								"--namespace", pb.Namespace,
 								"--ds-path", path.Join("/content", pb.Spec.ContentFile),
+							},
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("500Mi"),
+								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{

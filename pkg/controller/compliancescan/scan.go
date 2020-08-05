@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -143,6 +144,12 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 						"--tls-ca=/etc/pki/tls/ca.crt",
 					},
 					ImagePullPolicy: corev1.PullAlways,
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+							corev1.ResourceMemory: resource.MustParse("100Mi"),
+						},
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "report-dir",
@@ -160,6 +167,12 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 					Name:    OpenSCAPScanContainerName,
 					Image:   utils.GetComponentImage(utils.OPENSCAP),
 					Command: []string{OpenScapScriptPath},
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("150m"),
+							corev1.ResourceMemory: resource.MustParse("200Mi"),
+						},
+					},
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &trueVal,
 					},
@@ -294,6 +307,12 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 					Image:           utils.GetComponentImage(utils.OPERATOR),
 					Command:         collectorCmd,
 					ImagePullPolicy: corev1.PullAlways,
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+							corev1.ResourceMemory: resource.MustParse("100Mi"),
+						},
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "content-dir",
@@ -325,6 +344,12 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 						"--tls-ca=/etc/pki/tls/ca.crt",
 					},
 					ImagePullPolicy: corev1.PullAlways,
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+							corev1.ResourceMemory: resource.MustParse("100Mi"),
+						},
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "report-dir",
@@ -342,6 +367,12 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 					Name:    OpenSCAPScanContainerName,
 					Image:   utils.GetComponentImage(utils.OPENSCAP),
 					Command: []string{OpenScapScriptPath},
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("150m"),
+							corev1.ResourceMemory: resource.MustParse("200Mi"),
+						},
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "report-dir",
