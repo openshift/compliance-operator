@@ -313,7 +313,8 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 
 	logger.Info("Phase: Running")
 
-	if instance.GetScanType() == compv1alpha1.ScanTypePlatform {
+	switch instance.GetScanType() {
+	case compv1alpha1.ScanTypePlatform:
 		running, err := isPlatformScanPodRunning(r, instance, logger)
 		if errors.IsNotFound(err) {
 			// Let's go back to the previous state and make sure all the nodes are covered.
@@ -333,7 +334,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 			// The platform scan pod is still running, go back to queue.
 			return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, err
 		}
-	} else { // ScanTypeNode
+	case compv1alpha1.ScanTypeNode:
 		if nodes, err = getTargetNodes(r, instance); err != nil {
 			log.Error(err, "Cannot get nodes")
 			return reconcile.Result{}, err
@@ -455,12 +456,14 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 	// We need to remove resources before doing a re-scan
 	if doDelete || instance.NeedsRescan() {
 		logger.Info("Cleaning up scan's resources")
-		if instance.GetScanType() == compv1alpha1.ScanTypePlatform {
+		scantype, _ := instance.GetScanTypeIfValid()
+		switch scantype {
+		case compv1alpha1.ScanTypePlatform:
 			if err := r.deletePlatformScanPod(instance, logger); err != nil {
 				log.Error(err, "Cannot delete platform scan pod")
 				return reconcile.Result{}, err
 			}
-		} else { // ScanTypeNode
+		case compv1alpha1.ScanTypeNode:
 			if nodes, err = getTargetNodes(r, instance); err != nil {
 				log.Error(err, "Cannot get nodes")
 				return reconcile.Result{}, err
@@ -618,9 +621,10 @@ func (r *ReconcileComplianceScan) generateResultEventForScan(scan *compv1alpha1.
 func getTargetNodes(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan) (corev1.NodeList, error) {
 	var nodes corev1.NodeList
 
-	if instance.GetScanType() == compv1alpha1.ScanTypePlatform {
+	switch instance.GetScanType() {
+	case compv1alpha1.ScanTypePlatform:
 		return nodes, nil // Nodes are only relevant to the node scan type. Return the empty node list otherwise.
-	} else {
+	case compv1alpha1.ScanTypeNode:
 		listOpts := client.ListOptions{
 			LabelSelector: labels.SelectorFromSet(instance.Spec.NodeSelector),
 		}
@@ -712,7 +716,8 @@ func getNodeScanCM(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 // hard in which case there might not be a reason to launch the aggregator pod, e.g.
 // in cases the content cannot be loaded at all
 func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList) (bool, error) {
-	if instance.GetScanType() == compv1alpha1.ScanTypePlatform {
+	switch instance.GetScanType() {
+	case compv1alpha1.ScanTypePlatform:
 		foundCM, err := getPlatformScanCM(r, instance)
 
 		// Could be a transient error, so we requeue if there's any
@@ -726,7 +731,7 @@ func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.C
 		if err != nil {
 			return true, err
 		}
-	} else { // ScanTypeNode
+	case compv1alpha1.ScanTypeNode:
 		for _, node := range nodes.Items {
 			foundCM, err := getNodeScanCM(r, instance, node.Name)
 
@@ -757,7 +762,8 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 	compliant := true
 	isReady := true
 
-	if instance.GetScanType() == compv1alpha1.ScanTypePlatform {
+	switch instance.GetScanType() {
+	case compv1alpha1.ScanTypePlatform:
 		foundCM, err := getPlatformScanCM(r, instance)
 
 		// Could be a transient error, so we requeue if there's any
@@ -780,7 +786,7 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 			lastNonCompliance = result
 			compliant = false
 		}
-	} else {
+	case compv1alpha1.ScanTypeNode:
 		for _, node := range nodes.Items {
 			foundCM, err := getNodeScanCM(r, instance, node.Name)
 
