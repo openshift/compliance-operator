@@ -135,6 +135,7 @@ spec:
                   type: object
                 type: array
               scanType:
+                default: Node
                 description: The type of Compliance scan.
                 type: string
               tailoringConfigMap:

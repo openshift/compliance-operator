@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -166,6 +165,26 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 		return reconcile.Result{}, err
 	}
 
+	// Set default scan type if missing
+	if instance.Spec.ScanType == "" {
+		instanceCopy := instance.DeepCopy()
+		instanceCopy.Spec.ScanType = compv1alpha1.ScanTypeNode
+		err := r.client.Update(context.TODO(), instanceCopy)
+		return reconcile.Result{}, err
+	}
+
+	// validate scan type
+	if _, err := instance.GetScanTypeIfValid(); err != nil {
+		r.recorder.Event(instance, corev1.EventTypeWarning, "InvalidScanType",
+			"The scan type was invalid")
+		instanceCopy := instance.DeepCopy()
+		instanceCopy.Status.Result = compv1alpha1.ResultError
+		instanceCopy.Status.ErrorMessage = fmt.Sprintf("Scan type '%s' is not valid", instance.Spec.ScanType)
+		instanceCopy.Status.Phase = compv1alpha1.PhaseDone
+		updateErr := r.client.Status().Update(context.TODO(), instanceCopy)
+		return reconcile.Result{}, updateErr
+	}
+
 	// Set default storage if missing
 	if instance.Spec.RawResultStorage.Size == "" {
 		instanceCopy := instance.DeepCopy()
@@ -182,6 +201,25 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 		instanceCopy.Status.Phase = compv1alpha1.PhaseDone
 		err := r.client.Status().Update(context.TODO(), instanceCopy)
 		return reconcile.Result{}, err
+	}
+
+	if instance.GetScanType() == compv1alpha1.ScanTypeNode {
+		var nodes corev1.NodeList
+		var err error
+		if nodes, err = getTargetNodes(r, instance); err != nil {
+			log.Error(err, "Cannot get nodes")
+			return reconcile.Result{}, err
+		}
+		if len(nodes.Items) == 0 {
+			warning := "No nodes matched the nodeSelector"
+			log.Info(warning)
+			r.recorder.Event(instance, corev1.EventTypeWarning, "NoMatchingNodes", warning)
+			instanceCopy := instance.DeepCopy()
+			instanceCopy.Status.Result = compv1alpha1.ResultNotApplicable
+			instanceCopy.Status.Phase = compv1alpha1.PhaseDone
+			err := r.updateStatusWithEvent(instanceCopy, logger)
+			return reconcile.Result{}, err
+		}
 	}
 
 	// Update the scan instance, the next phase is running
@@ -275,7 +313,8 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 
 	logger.Info("Phase: Running")
 
-	if isPlatformScan(instance) {
+	switch instance.GetScanType() {
+	case compv1alpha1.ScanTypePlatform:
 		running, err := isPlatformScanPodRunning(r, instance, logger)
 		if errors.IsNotFound(err) {
 			// Let's go back to the previous state and make sure all the nodes are covered.
@@ -295,7 +334,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 			// The platform scan pod is still running, go back to queue.
 			return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, err
 		}
-	} else { // ScanTypeNode
+	case compv1alpha1.ScanTypeNode:
 		if nodes, err = getTargetNodes(r, instance); err != nil {
 			log.Error(err, "Cannot get nodes")
 			return reconcile.Result{}, err
@@ -417,12 +456,14 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 	// We need to remove resources before doing a re-scan
 	if doDelete || instance.NeedsRescan() {
 		logger.Info("Cleaning up scan's resources")
-		if isPlatformScan(instance) {
+		scantype, _ := instance.GetScanTypeIfValid()
+		switch scantype {
+		case compv1alpha1.ScanTypePlatform:
 			if err := r.deletePlatformScanPod(instance, logger); err != nil {
 				log.Error(err, "Cannot delete platform scan pod")
 				return reconcile.Result{}, err
 			}
-		} else { // ScanTypeNode
+		case compv1alpha1.ScanTypeNode:
 			if nodes, err = getTargetNodes(r, instance); err != nil {
 				log.Error(err, "Cannot get nodes")
 				return reconcile.Result{}, err
@@ -556,8 +597,8 @@ func (r *ReconcileComplianceScan) generateResultEventForScan(scan *compv1alpha1.
 
 	if scan.Status.Result == compv1alpha1.ResultNotApplicable {
 		r.recorder.Eventf(
-			scan, corev1.EventTypeNormal, "ScanNotApplicable",
-			"The scan result is not applicable, please check if you're using the correct platform")
+			scan, corev1.EventTypeWarning, "ScanNotApplicable",
+			"The scan result is not applicable, please check if you're using the correct platform or if the nodeSelector matches nodes.")
 	} else if scan.Status.Result == compv1alpha1.ResultInconsistent {
 		r.recorder.Eventf(
 			scan, corev1.EventTypeNormal, "ScanNotConsistent",
@@ -580,9 +621,10 @@ func (r *ReconcileComplianceScan) generateResultEventForScan(scan *compv1alpha1.
 func getTargetNodes(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan) (corev1.NodeList, error) {
 	var nodes corev1.NodeList
 
-	if isPlatformScan(instance) {
+	switch instance.GetScanType() {
+	case compv1alpha1.ScanTypePlatform:
 		return nodes, nil // Nodes are only relevant to the node scan type. Return the empty node list otherwise.
-	} else {
+	case compv1alpha1.ScanTypeNode:
 		listOpts := client.ListOptions{
 			LabelSelector: labels.SelectorFromSet(instance.Spec.NodeSelector),
 		}
@@ -674,7 +716,8 @@ func getNodeScanCM(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 // hard in which case there might not be a reason to launch the aggregator pod, e.g.
 // in cases the content cannot be loaded at all
 func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList) (bool, error) {
-	if isPlatformScan(instance) {
+	switch instance.GetScanType() {
+	case compv1alpha1.ScanTypePlatform:
 		foundCM, err := getPlatformScanCM(r, instance)
 
 		// Could be a transient error, so we requeue if there's any
@@ -688,7 +731,7 @@ func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.C
 		if err != nil {
 			return true, err
 		}
-	} else { // ScanTypeNode
+	case compv1alpha1.ScanTypeNode:
 		for _, node := range nodes.Items {
 			foundCM, err := getNodeScanCM(r, instance, node.Name)
 
@@ -719,7 +762,8 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 	compliant := true
 	isReady := true
 
-	if isPlatformScan(instance) {
+	switch instance.GetScanType() {
+	case compv1alpha1.ScanTypePlatform:
 		foundCM, err := getPlatformScanCM(r, instance)
 
 		// Could be a transient error, so we requeue if there's any
@@ -742,7 +786,7 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 			lastNonCompliance = result
 			compliant = false
 		}
-	} else {
+	case compv1alpha1.ScanTypeNode:
 		for _, node := range nodes.Items {
 			foundCM, err := getNodeScanCM(r, instance, node.Name)
 
@@ -810,8 +854,4 @@ func getInitContainerImage(scanSpec *compv1alpha1.ComplianceScanSpec, logger log
 
 	logger.Info("Content image", "image", image)
 	return image
-}
-
-func isPlatformScan(instance *compv1alpha1.ComplianceScan) bool {
-	return strings.ToLower(string(instance.Spec.ScanType)) == "platform"
 }
