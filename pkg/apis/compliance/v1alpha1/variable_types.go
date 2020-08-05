@@ -3,8 +3,9 @@ package v1alpha1
 import (
 	"errors"
 	"fmt"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strconv"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // +kubebuilder:validation:Enum=number;bool;string
@@ -41,6 +42,7 @@ type VariablePayload struct {
 	// Enumerates what values are allowed for this variable. Can be empty.
 	// +optional
 	// +nullable
+	// +listType=atomic
 	Selections []ValueSelection `json:"selections,omitempty"`
 }
 

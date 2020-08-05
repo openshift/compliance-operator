@@ -26,6 +26,7 @@ const ComplianceCheckResultRuleAnnotation = "compliance.openshift.io/rule"
 // It either lists statuses of nodes that differ from ComplianceCheckResultMostCommonAnnotation or,
 // if the most common state does not exist, just lists all sources of all nodes.
 const ComplianceCheckResultInconsistentSourceAnnotation = "compliance.openshift.io/inconsistent-source"
+
 // ComplianceCheckResultMostCommonAnnotation stores the most common ComplianceCheckStatus value
 // in an inconsistent check. In order for the result to be most common, at least 60% of the nodes
 // must report the same result. The nodes that differ from the most common status are listed using

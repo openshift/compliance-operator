@@ -42,6 +42,7 @@ spec:
               type: object
             nullable: true
             type: array
+            x-kubernetes-list-type: atomic
           description:
             description: The description of the Rule
             type: string
