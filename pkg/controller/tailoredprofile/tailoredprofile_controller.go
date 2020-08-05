@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var log = logf.Log.WithName("controller_tailoredprofile")
+var log = logf.Log.WithName("tailoredprofilectrl")
 
 const (
 	tailoringFile string = "tailoring.xml"

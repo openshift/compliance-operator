@@ -33,7 +33,7 @@ const (
 	requeueAfterDefault = 10 * time.Second
 )
 
-var log = logf.Log.WithName("controller_scansettingbinding")
+var log = logf.Log.WithName("scansettingbindingctrl")
 
 func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
