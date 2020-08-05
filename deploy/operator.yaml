@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: compliance-operator
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       name: compliance-operator
@@ -13,6 +13,7 @@ spec:
         name: compliance-operator
     spec:
       serviceAccountName: compliance-operator
+
       containers:
         - name: compliance-operator
           image: "quay.io/compliance-operator/compliance-operator:latest"
@@ -20,6 +21,10 @@ spec:
           - compliance-operator
           - operator
           imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: 150m
+              memory: 500Mi
           env:
             - name: WATCH_NAMESPACE
               valueFrom:
