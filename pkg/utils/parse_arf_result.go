@@ -256,7 +256,6 @@ func remediationFromString(scheme *runtime.Scheme, name string, namespace string
 		},
 		Spec: compv1alpha1.ComplianceRemediationSpec{
 			ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
-				Type:  compv1alpha1.McRemediation,
 				Apply: false,
 			},
 			Current: compv1alpha1.ComplianceRemediationPayload{
