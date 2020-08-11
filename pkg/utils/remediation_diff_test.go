@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+
 	"github.com/clarketm/json"
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
 	. "github.com/onsi/ginkgo"
@@ -62,7 +63,6 @@ func getRemediation(serviceName string) *compv1alpha1.ComplianceRemediation {
 		},
 		Spec: compv1alpha1.ComplianceRemediationSpec{
 			ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
-				Type:  compv1alpha1.McRemediation,
 				Apply: false,
 			},
 			Current: compv1alpha1.ComplianceRemediationPayload{

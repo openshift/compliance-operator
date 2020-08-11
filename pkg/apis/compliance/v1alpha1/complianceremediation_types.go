@@ -32,8 +32,6 @@ const (
 )
 
 type ComplianceRemediationSpecMeta struct {
-	// Remediation type specifies the artifact the remediation is based on. For now, only MachineConfig is supported
-	Type RemediationType `json:"type,omitempty"`
 	// Whether the remediation should be picked up and applied by the operator
 	Apply bool `json:"apply"`
 }
