@@ -254,7 +254,8 @@ func getConfigMap(owner metav1.Object, configMapName, filename, nodeName string,
 			Namespace:   common.GetComplianceOperatorNamespace(),
 			Annotations: annotations,
 			Labels: map[string]string{
-				compv1alpha1.ComplianceScanIndicatorLabel: owner.GetName(),
+				compv1alpha1.ComplianceScanLabel: owner.GetName(),
+				compv1alpha1.ResultLabel:         "",
 			},
 		},
 		Data: map[string]string{

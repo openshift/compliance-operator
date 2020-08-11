@@ -88,7 +88,7 @@ kind: ComplianceRemediation
 metadata:
   labels:
     compliance.openshift.io/suite: example-compliancesuite
-    complianceoperator.openshift.io/scan: masters-scan
+    compliance.openshift.io/scan-name: masters-scan
     machineconfiguration.openshift.io/role: master
   name: masters-scan-no-direct-root-logins
   namespace: openshift-compliance

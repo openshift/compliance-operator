@@ -69,7 +69,7 @@ func getPVCForScan(instance *compv1alpha1.ComplianceScan) *corev1.PersistentVolu
 			Name:      getPVCForScanName(instance.Name),
 			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels: map[string]string{
-				"complianceScan": instance.Name,
+				compv1alpha1.ComplianceScanLabel: instance.Name,
 			},
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{

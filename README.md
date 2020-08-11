@@ -200,7 +200,7 @@ metadata:
     compliance.openshift.io/check-severity: medium
     compliance.openshift.io/check-status: FAIL
     compliance.openshift.io/suite: example-compliancesuite
-    complianceoperator.openshift.io/scan: workers-scan
+    compliance.openshift.io/scan-name: workers-scan
   name: workers-scan-no-direct-root-logins
   namespace: openshift-compliance
   ownerReferences:
@@ -291,7 +291,7 @@ kind: ComplianceRemediation
 metadata:
   labels:
     compliance.openshift.io/suite: example-compliancesuite
-    complianceoperator.openshift.io/scan: workers-scan
+    compliance.openshift.io/scan-name: workers-scan
     machineconfiguration.openshift.io/role: worker
   name: workers-scan-disable-users-coredumps
   namespace: openshift-compliance

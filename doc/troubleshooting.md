@@ -147,11 +147,11 @@ In this phase, several `ConfigMaps` that contain either environment for the
 scanner pods or directly the script that the scanner pods will be evaluating.
 List the CMs with:
 ```shell
-oc get cm -lcomplianceoperator.openshift.io/scan=$scan_name
+oc get cm -lcompliance.openshift.io/scan-name=$scan_name,complianceoperator.openshift.io/scan-script=
 ```
 e.g.:
 ```shell
-oc get cm -lcomplianceoperator.openshift.io/scan=rhcos4-e8-worker
+oc get cm -lcompliance.openshift.io/scan-name=rhcos4-e8-worker,complianceoperator.openshift.io/scan-script=
 ```
 These `ConfigMaps` will be used by the scanner pods. If you ever needed to
 modify the scanner behaviour, change the scanner debug level or print the
@@ -181,9 +181,9 @@ a `Platform` scan instance and one scanner pod per matching node for a
 `Node` scan instance. The per-node pods are labeled with the node name,
 each pod is always labeled with the `ComplianceScan` name, for example:
 ```
-oc get pods -lcomplianceScan=rhcos4-e8-worker --show-labels
+oc get pods -lcompliance.openshift.io/scan-name=rhcos4-e8-worker --show-labels
 NAME                                                              READY   STATUS      RESTARTS   AGE   LABELS
-rhcos4-e8-worker-ip-10-0-169-90.eu-north-1.compute.internal-pod   0/2     Completed   0          39m   complianceScan=rhcos4-e8-worker,targetNode=ip-10-0-169-90.eu-north-1.compute.internal
+rhcos4-e8-worker-ip-10-0-169-90.eu-north-1.compute.internal-pod   0/2     Completed   0          39m   compliance.openshift.io/scan-name=rhcos4-e8-worker,targetNode=ip-10-0-169-90.eu-north-1.compute.internal
 ```
 
 At this point, the scan proceeds to the Running phase.
@@ -211,12 +211,13 @@ might be a good place to start debugging:
       container finishes. Then, it uploads the full ARF results to the
       `ResultServer` and separately uploads the XCCDF results along with scan
       result and openscap result code as a `ConfigMap.` These result configmaps
-      are labeled with the scan name (`compliance-scan=$scan_name`):
+      are labeled with the scan name (`compliance.openshift.io/scan-name=$scan_name`):
       ```
       $ oc describe cm/rhcos4-e8-worker-ip-10-0-169-90.eu-north-1.compute.internal-pod
       Name:         rhcos4-e8-worker-ip-10-0-169-90.eu-north-1.compute.internal-pod
       Namespace:    openshift-compliance
-      Labels:       compliance-scan=rhcos4-e8-worker
+      Labels:       compliance.openshift.io/scan-name-scan=rhcos4-e8-worker
+                    complianceoperator.openshift.io/scan-result=
       Annotations:  compliance-remediations/processed: 
                     compliance.openshift.io/scan-error-msg: 
                     compliance.openshift.io/scan-result: NON-COMPLIANT
@@ -258,14 +259,14 @@ When a `ConfigMap` is processed by an aggregator pod,it is labeled the
 
 The result of this phase are `ComplianceCheckResult` objects:
 ```
-oc get compliancecheckresults -lcomplianceoperator.openshift.io/scan=rhcos4-e8-worker
+oc get compliancecheckresults -lcompliance.openshift.io/scan-name=rhcos4-e8-worker
 NAME                                                       STATUS   SEVERITY
 rhcos4-e8-worker-accounts-no-uid-except-zero               PASS     high
 rhcos4-e8-worker-audit-rules-dac-modification-chmod        FAIL     medium
 ```
 and `ComplianceRemediation` objects:
 ```
-oc get complianceremediations -lcomplianceoperator.openshift.io/scan=rhcos4-e8-worker
+oc get complianceremediations -lcompliance.openshift.io/scan-name=rhcos4-e8-worker
 NAME                                                       STATE
 rhcos4-e8-worker-audit-rules-dac-modification-chmod        NotApplied
 rhcos4-e8-worker-audit-rules-dac-modification-chown        NotApplied

@@ -180,8 +180,8 @@ func defaultOpenScapScriptCm(name string, scan *compv1alpha1.ComplianceScan) *co
 			Name:      name,
 			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels: map[string]string{
-				compv1alpha1.ScanLabel:   scan.Name,
-				compv1alpha1.ScriptLabel: "",
+				compv1alpha1.ComplianceScanLabel: scan.Name,
+				compv1alpha1.ScriptLabel:         "",
 			},
 		},
 		Data: map[string]string{
@@ -196,8 +196,8 @@ func platformOpenScapScriptCm(name string, scan *compv1alpha1.ComplianceScan) *c
 			Name:      name,
 			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels: map[string]string{
-				compv1alpha1.ScanLabel:   scan.Name,
-				compv1alpha1.ScriptLabel: "",
+				compv1alpha1.ComplianceScanLabel: scan.Name,
+				compv1alpha1.ScriptLabel:         "",
 			},
 		},
 		Data: map[string]string{
@@ -214,8 +214,8 @@ func defaultOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev
 			Name:      name,
 			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels: map[string]string{
-				compv1alpha1.ScanLabel:   scan.Name,
-				compv1alpha1.ScriptLabel: "",
+				compv1alpha1.ComplianceScanLabel: scan.Name,
+				compv1alpha1.ScriptLabel:         "",
 			},
 		},
 		Data: map[string]string{
@@ -251,8 +251,8 @@ func platformOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *core
 			Name:      name,
 			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels: map[string]string{
-				compv1alpha1.ScanLabel:   scan.Name,
-				compv1alpha1.ScriptLabel: "",
+				compv1alpha1.ComplianceScanLabel: scan.Name,
+				compv1alpha1.ScriptLabel:         "",
 			},
 		},
 		Data: map[string]string{

@@ -14,12 +14,15 @@ import (
 // should be re-run
 const ComplianceScanRescanAnnotation = "compliance.openshift.io/rescan"
 
-// ComplianceScanIndicatorLabel serves as an indicator for which ComplianceScan
+// ComplianceScanLabel serves as an indicator for which ComplianceScan
 // owns the referenced object
-const ComplianceScanIndicatorLabel = "compliance-scan"
+const ComplianceScanLabel = "compliance.openshift.io/scan-name"
 
 // ScriptLabel defines that the object is a script for a scan object
 const ScriptLabel = "complianceoperator.openshift.io/scan-script"
+
+// ResultLabel defines that the object is a result of a scan
+const ResultLabel = "complianceoperator.openshift.io/scan-result"
 
 // ScanFinalizer is a finalizer for ComplianceScans. It gets automatically
 // added by the ComplianceScan controller in order to delete resources.

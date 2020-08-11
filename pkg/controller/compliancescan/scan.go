@@ -90,8 +90,8 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 	podName := getPodForNodeName(scanInstance.Name, node.Name)
 	cmName := getConfigMapForNodeName(scanInstance.Name, node.Name)
 	podLabels := map[string]string{
-		"complianceScan": scanInstance.Name,
-		"targetNode":     node.Name,
+		compv1alpha1.ComplianceScanLabel: scanInstance.Name,
+		"targetNode":                     node.Name,
 	}
 
 	return &corev1.Pod{
@@ -251,7 +251,7 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 	podName := getPodForNodeName(scanInstance.Name, PlatformScanName)
 	cmName := getConfigMapForNodeName(scanInstance.Name, PlatformScanName)
 	podLabels := map[string]string{
-		"complianceScan": scanInstance.Name,
+		compv1alpha1.ComplianceScanLabel: scanInstance.Name,
 	}
 	collectorCmd := []string{
 		"compliance-operator", "api-resource-collector",
@@ -588,7 +588,7 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 		if newCM.Labels == nil {
 			newCM.Labels = make(map[string]string)
 		}
-		newCM.Labels[compv1alpha1.ScanLabel] = scanName
+		newCM.Labels[compv1alpha1.ComplianceScanLabel] = scanName
 		newCM.Labels[compv1alpha1.ScriptLabel] = ""
 		if newCM.Data == nil {
 			newCM.Data = make(map[string]string)
@@ -616,7 +616,7 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 		if updatedCM.Labels == nil {
 			updatedCM.Labels = make(map[string]string)
 		}
-		updatedCM.Labels[compv1alpha1.ScanLabel] = scanName
+		updatedCM.Labels[compv1alpha1.ComplianceScanLabel] = scanName
 		updatedCM.Labels[compv1alpha1.ScriptLabel] = ""
 		updatedCM.Data["tailoring.xml"] = origData
 		logger.Info("Updating private Tailoring ConfigMap", "ConfigMap.Name", privName, "ConfigMap.Namespace", privNs)

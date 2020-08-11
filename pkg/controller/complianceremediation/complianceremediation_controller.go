@@ -260,7 +260,7 @@ func getApplicableMcList(r *ReconcileComplianceRemediation, instance *compv1alph
 
 	if instance.Spec.Apply == true {
 		scan := &compv1alpha1.ComplianceScan{}
-		scanKey := types.NamespacedName{Name: instance.Labels[compv1alpha1.ScanLabel], Namespace: instance.Namespace}
+		scanKey := types.NamespacedName{Name: instance.Labels[compv1alpha1.ComplianceScanLabel], Namespace: instance.Namespace}
 		if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
 			logger.Error(err, "Cannot get the scan for the remediation", "ComplianceScan.Name", scan.Name)
 			return appliedRemediations, err
@@ -305,7 +305,7 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compv1alph
 
 	scanSuiteSelector := make(map[string]string)
 	scanSuiteSelector[compv1alpha1.SuiteLabel] = rem.Labels[compv1alpha1.SuiteLabel]
-	scanSuiteSelector[compv1alpha1.ScanLabel] = rem.Labels[compv1alpha1.ScanLabel]
+	scanSuiteSelector[compv1alpha1.ComplianceScanLabel] = rem.Labels[compv1alpha1.ComplianceScanLabel]
 	scanSuiteSelector[mcfgv1.MachineConfigRoleLabelKey] = rem.Labels[mcfgv1.MachineConfigRoleLabelKey]
 
 	listOpts := client.ListOptions{

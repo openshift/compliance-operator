@@ -445,7 +445,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 		if suite.Spec.AutoApplyRemediations {
 			// get relevant scan
 			scan := &compv1alpha1.ComplianceScan{}
-			scanKey := types.NamespacedName{Name: rem.Labels[compv1alpha1.ScanLabel], Namespace: rem.Namespace}
+			scanKey := types.NamespacedName{Name: rem.Labels[compv1alpha1.ComplianceScanLabel], Namespace: rem.Namespace}
 			if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
 				return reconcile.Result{}, err
 			}

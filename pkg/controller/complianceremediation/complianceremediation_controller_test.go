@@ -94,7 +94,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 
 		testRemLabels = make(map[string]string)
 		testRemLabels[compv1alpha1.SuiteLabel] = "mySuite"
-		testRemLabels[compv1alpha1.ScanLabel] = "myScan"
+		testRemLabels[compv1alpha1.ComplianceScanLabel] = "myScan"
 		testRemLabels[mcfgv1.MachineConfigRoleLabelKey] = "myRole"
 
 		// test instance

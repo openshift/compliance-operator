@@ -99,7 +99,7 @@ func getScanConfigMaps(crClient *complianceCrClient, scan, namespace string) ([]
 
 	// Look for configMap with this scan label
 	inNs := client.InNamespace(namespace)
-	withLabel := client.MatchingLabels{compv1alpha1.ComplianceScanIndicatorLabel: scan}
+	withLabel := client.MatchingLabels{compv1alpha1.ComplianceScanLabel: scan}
 
 	err = crClient.client.List(context.TODO(), cMapList, inNs, withLabel)
 	if err != nil {
@@ -284,7 +284,7 @@ func canCreateRemediation(scan *compv1alpha1.ComplianceScan) (bool, string) {
 
 func getRemediationLabels(scan *compv1alpha1.ComplianceScan, obj runtime.Object) map[string]string {
 	labels := make(map[string]string)
-	labels[compv1alpha1.ScanLabel] = scan.Name
+	labels[compv1alpha1.ComplianceScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels[compv1alpha1.SuiteLabel]
 
 	// FIXME(jaosorior): Figure out a more pluggable way of adding these sorts of special cases
@@ -298,7 +298,7 @@ func getRemediationLabels(scan *compv1alpha1.ComplianceScan, obj runtime.Object)
 
 func getCheckResultLabels(cr *compv1alpha1.ComplianceCheckResult, resultLabels map[string]string, scan *compv1alpha1.ComplianceScan) map[string]string {
 	labels := make(map[string]string)
-	labels[compv1alpha1.ScanLabel] = scan.Name
+	labels[compv1alpha1.ComplianceScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels[compv1alpha1.SuiteLabel]
 	labels[compv1alpha1.ComplianceCheckResultStatusLabel] = string(cr.Status)
 	labels[compv1alpha1.ComplianceCheckResultSeverityLabel] = string(cr.Severity)
