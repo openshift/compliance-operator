@@ -3,6 +3,8 @@ package complianceremediation
 import (
 	"context"
 	"fmt"
+	"reflect"
+
 	"github.com/go-logr/logr"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
@@ -16,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -101,11 +102,8 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 	if remediationInstance.Spec.Current.Object != nil {
 		reqLogger.Info("Reconciling remediation")
 		err = r.reconcileRemediation(remediationInstance, reqLogger)
-	} else if remediationInstance.Spec.Current.MachineConfigContents != nil {
-		reqLogger.Info("updating deprecated MachineConfig remediation")
-		err = r.updateDeprecatedMcRemediation(remediationInstance, reqLogger)
 	} else {
-		err = fmt.Errorf("No remediation specified. Both spec.object and spec.machineconfig are empty")
+		err = fmt.Errorf("No remediation specified. spec.object is empty")
 		return common.ReturnWithRetriableError(reqLogger, common.WrapNonRetriableCtrlError(err))
 	}
 
@@ -124,13 +122,6 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 
 	reqLogger.Info("Done reconciling")
 	return reconcile.Result{}, nil
-}
-
-func (r *ReconcileComplianceRemediation) updateDeprecatedMcRemediation(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
-	remCopy := instance.DeepCopy()
-	remCopy.Spec.Current.Object = remCopy.Spec.Current.MachineConfigContents.DeepCopy()
-	remCopy.Spec.Current.MachineConfigContents = nil
-	return r.client.Update(context.TODO(), remCopy)
 }
 
 func (r *ReconcileComplianceRemediation) reconcileRemediation(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
