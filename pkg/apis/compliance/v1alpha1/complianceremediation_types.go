@@ -37,11 +37,6 @@ type ComplianceRemediationSpecMeta struct {
 }
 
 type ComplianceRemediationPayload struct {
-	// (deprecated) The actual MachineConfig remediation payload
-	// +kubebuilder:pruning:PreserveUnknownFields
-	// +kubebuilder:validation:EmbeddedResource
-	// +kubebuilder:validation:nullable
-	MachineConfigContents *unstructured.Unstructured `json:"machineConfigContents,omitempty"`
 	// The remediation payload. This would normally be a full Kubernetes
 	// object.
 	// +kubebuilder:pruning:PreserveUnknownFields
