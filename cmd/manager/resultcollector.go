@@ -349,9 +349,9 @@ func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConf
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
-		err = uploadToResultServer(arfContents, scapresultsconf)
-		if err != nil {
-			log.Error(err, "Failed to upload results to server")
+		serverUploadErr := uploadToResultServer(arfContents, scapresultsconf)
+		if serverUploadErr != nil {
+			log.Error(serverUploadErr, "Failed to upload results to server")
 			os.Exit(1)
 		}
 		log.Info("Uploaded to resultserver")
@@ -359,9 +359,9 @@ func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConf
 	}()
 
 	go func() {
-		err = uploadResultConfigMap(xccdfContents, exitcode, scapresultsconf, client)
-		if err != nil {
-			log.Error(err, "Failed to upload ConfigMap")
+		cmUploadErr := uploadResultConfigMap(xccdfContents, exitcode, scapresultsconf, client)
+		if cmUploadErr != nil {
+			log.Error(cmUploadErr, "Failed to upload ConfigMap")
 			os.Exit(1)
 		}
 		log.Info("Uploaded ConfigMap")
