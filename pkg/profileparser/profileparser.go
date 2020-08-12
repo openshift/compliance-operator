@@ -83,7 +83,7 @@ func ParseBundle(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, pcf
 		return err
 	}
 
-	if err := deleteObsoleteItems(pcfg.Client, "Profile", pb.Namespace, pb.GetImageDigest()); err != nil {
+	if err := deleteObsoleteItems(pcfg.Client, "Profile", pb.Name, pb.Namespace, pb.GetImageDigest()); err != nil {
 		return err
 	}
 
@@ -114,7 +114,7 @@ func ParseBundle(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, pcf
 		return err
 	}
 
-	if err := deleteObsoleteItems(pcfg.Client, "Rule", pb.Namespace, pb.GetImageDigest()); err != nil {
+	if err := deleteObsoleteItems(pcfg.Client, "Rule", pb.Name, pb.Namespace, pb.GetImageDigest()); err != nil {
 		return err
 	}
 
@@ -140,7 +140,7 @@ func ParseBundle(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, pcf
 		return err
 	}
 
-	if err := deleteObsoleteItems(pcfg.Client, "Variable", pb.Namespace, pb.GetImageDigest()); err != nil {
+	if err := deleteObsoleteItems(pcfg.Client, "Variable", pb.Name, pb.Namespace, pb.GetImageDigest()); err != nil {
 		return err
 	}
 
@@ -199,7 +199,7 @@ func createOrUpdate(cli runtimeclient.Client, kind string, key types.NamespacedN
 	return nil
 }
 
-func deleteObsoleteItems(cli runtimeclient.Client, kind string, namespace string, imageDigest string) error {
+func deleteObsoleteItems(cli runtimeclient.Client, kind string, pbName, namespace string, imageDigest string) error {
 	list := unstructured.UnstructuredList{}
 	list.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   cmpv1alpha1.SchemeGroupVersion.Group,
@@ -207,9 +207,12 @@ func deleteObsoleteItems(cli runtimeclient.Client, kind string, namespace string
 		Kind:    kind + "List",
 	})
 	inNs := runtimeclient.InNamespace(namespace)
+	withPbOwnerLabel := runtimeclient.MatchingLabels{
+		cmpv1alpha1.ProfileBundleOwnerLabel: pbName,
+	}
 
-	log.Info("Checking for unused object", "kind", kind, "namespace", namespace)
-	if err := cli.List(context.TODO(), &list, inNs); err != nil {
+	log.Info("Checking for unused object", "kind", kind, "owner", pbName, "namespace", namespace)
+	if err := cli.List(context.TODO(), &list, inNs, withPbOwnerLabel); err != nil {
 		return err
 	}
 
