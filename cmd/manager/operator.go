@@ -57,6 +57,9 @@ var (
 		"rhcos4",
 		"ocp4",
 	}
+	defaultScanSettingsName = "default"
+	// Run scan every day at 1am
+	defaultScanSettingsSchedule = "0 1 * * *"
 )
 
 func printVersion() {
@@ -106,13 +109,14 @@ func RunOperator(cmd *cobra.Command, args []string) {
 		Namespace:          namespace,
 		MetricsBindAddress: fmt.Sprintf("%s:%d", metricsHost, metricsPort),
 	}
+	namespaceList := strings.Split(namespace, ",")
 	// Add support for MultiNamespace set in WATCH_NAMESPACE (e.g ns1,ns2)
 	// Note that this is not intended to be used for excluding namespaces, this is better done via a Predicate
 	// Also note that you may face performance issues when using this with a high number of namespaces.
 	// More Info: https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/cache#MultiNamespacedCacheBuilder
 	if strings.Contains(namespace, ",") {
 		options.Namespace = ""
-		options.NewCache = cache.MultiNamespacedCacheBuilder(strings.Split(namespace, ","))
+		options.NewCache = cache.MultiNamespacedCacheBuilder(namespaceList)
 	}
 
 	// Get a config to talk to the apiserver
@@ -159,8 +163,12 @@ func RunOperator(cmd *cobra.Command, args []string) {
 	// Add the Metrics Service
 	addMetrics(ctx, cfg)
 
-	if err := ensureDefaultProfileBundles(ctx, mgr.GetClient(), namespace); err != nil {
+	if err := ensureDefaultProfileBundles(ctx, mgr.GetClient(), namespaceList); err != nil {
 		log.Error(err, "Error creating default ProfileBundles. Continuing anyway.")
+	}
+
+	if err := ensureDefaultScanSettings(ctx, mgr.GetClient(), namespaceList); err != nil {
+		log.Error(err, "Error creating default ScanSettings. Continuing anyway.")
 	}
 
 	log.Info("Starting the Cmd.")
@@ -216,12 +224,11 @@ func addMetrics(ctx context.Context, cfg *rest.Config) {
 	}
 }
 
-func ensureDefaultProfileBundles(ctx context.Context, crclient client.Client, namespaces string) error {
+func ensureDefaultProfileBundles(ctx context.Context, crclient client.Client, namespaceList []string) error {
 	pbimg := utils.GetComponentImage(utils.DEFAULT_PROFILE_BUNDLES)
 	var lastErr error
-	nsList := strings.Split(namespaces, ",")
 	for _, prod := range defaultProducts {
-		for _, ns := range nsList {
+		for _, ns := range namespaceList {
 			pb := &compv1alpha1.ProfileBundle{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      prod,
@@ -236,6 +243,30 @@ func ensureDefaultProfileBundles(ctx context.Context, crclient client.Client, na
 			if !k8serrors.IsAlreadyExists(err) {
 				lastErr = err
 			}
+		}
+	}
+	return lastErr
+}
+
+func ensureDefaultScanSettings(ctx context.Context, crclient client.Client, namespaceList []string) error {
+	var lastErr error
+	for _, ns := range namespaceList {
+		pb := &compv1alpha1.ScanSetting{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      defaultScanSettingsName,
+				Namespace: ns,
+			},
+			ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+				Schedule: defaultScanSettingsSchedule,
+			},
+			Roles: []string{
+				"worker",
+				"master",
+			},
+		}
+		err := crclient.Create(ctx, pb)
+		if !k8serrors.IsAlreadyExists(err) {
+			lastErr = err
 		}
 	}
 	return lastErr
