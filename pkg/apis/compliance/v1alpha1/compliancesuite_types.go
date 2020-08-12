@@ -1,14 +1,19 @@
 package v1alpha1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // SuiteLabel indicates that an object (normally the ComplianceScan
 // or a ComplianceRemediation) belongs to a certain ComplianceSuite.
 // This is an easy way to filter them.
 const SuiteLabel = "compliance.openshift.io/suite"
+
+// SuiteScriptLabel indicates that the object is a script belonging to the
+// compliance suite controller
+const SuiteScriptLabel = "compliance.openshift.io/suite-script"
 
 // SuiteFinalizer is a finalizer for ComplianceSuites. It gets automatically
 // added by the ComplianceSuite controller in order to delete resources.
