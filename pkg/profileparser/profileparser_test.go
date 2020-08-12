@@ -163,7 +163,7 @@ func init() {
 
 var _ = Describe("Testing ParseBundle", func() {
 	const (
-		moderateProfileName = "test-profile-moderate"
+		moderateProfileName        = "test-profile-moderate"
 		moderateAnotherProfileName = "test-anotherprofile-moderate"
 
 		chronydClientOnlyRuleName = "test-profile-chronyd-client-only"

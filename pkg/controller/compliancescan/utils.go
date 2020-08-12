@@ -2,6 +2,7 @@ package compliancescan
 
 import (
 	"context"
+	"fmt"
 	"path"
 
 	// we can suppress the gosec warning about sha1 here because we don't use sha1 for crypto
@@ -30,6 +31,21 @@ const (
 	RootCAPrefix                 = "root-ca-"
 	CertValidityDays             = 1
 )
+
+// New returns an error that formats as the given text.
+func newPodUnschedulableError(pod, msg string) error {
+	return &podUnschedulableError{pod, msg}
+}
+
+// podUnschedulableError represents an error that tells us that a node couldn't be scheduled
+type podUnschedulableError struct {
+	pod string
+	msg string
+}
+
+func (e *podUnschedulableError) Error() string {
+	return fmt.Sprintf("Couldn't schedule scan pod '%s': %s", e.pod, e.msg)
+}
 
 func absContentPath(relContentPath string) string {
 	return path.Join("/content/", relContentPath)

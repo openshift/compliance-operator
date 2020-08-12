@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -36,15 +35,13 @@ import (
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var resultcollectorCmd = &cobra.Command{
@@ -193,10 +190,6 @@ func compressResults(contents []byte) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
-func encodetoBase64(str []byte) string {
-	return base64.StdEncoding.EncodeToString(str)
-}
-
 type resultFileContents struct {
 	contents   []byte
 	compressed bool
@@ -227,42 +220,6 @@ func readResultsFile(filename string, timeout int64) (*resultFileContents, error
 	}
 
 	return &rfContents, nil
-}
-
-func getConfigMap(owner metav1.Object, configMapName, filename, nodeName string, contents []byte, compressed bool, exitcode string) *corev1.ConfigMap {
-	var strcontents string
-	annotations := map[string]string{}
-	if compressed {
-		annotations = map[string]string{
-			"openscap-scan-result/compressed": "",
-		}
-		strcontents = encodetoBase64(contents)
-	} else {
-		strcontents = string(contents)
-	}
-	if nodeName != "" {
-		annotations["openscap-scan-result/node"] = nodeName
-	}
-
-	return &corev1.ConfigMap{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "ConfigMap",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        configMapName,
-			Namespace:   common.GetComplianceOperatorNamespace(),
-			Annotations: annotations,
-			Labels: map[string]string{
-				compv1alpha1.ComplianceScanLabel: owner.GetName(),
-				compv1alpha1.ResultLabel:         "",
-			},
-		},
-		Data: map[string]string{
-			"exit-code": exitcode,
-			filename:    strcontents,
-		},
-	}
 }
 
 func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scapresultsConfig) error {
@@ -306,7 +263,7 @@ func uploadResultConfigMap(xccdfContents *resultFileContents, exitcode string,
 		if err != nil {
 			return err
 		}
-		confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results", scapresultsconf.NodeName, xccdfContents.contents, xccdfContents.compressed, exitcode)
+		confMap := utils.GetResultConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results", scapresultsconf.NodeName, xccdfContents.contents, xccdfContents.compressed, exitcode)
 		err = client.client.Create(context.TODO(), confMap)
 
 		if errors.IsAlreadyExists(err) {
@@ -324,7 +281,7 @@ func uploadErrorConfigMap(errorMsg *resultFileContents, exitcode string,
 		if err != nil {
 			return err
 		}
-		confMap := getConfigMap(openscapScan, scapresultsconf.ConfigMapName, "error-msg", scapresultsconf.NodeName, errorMsg.contents, errorMsg.compressed, exitcode)
+		confMap := utils.GetResultConfigMap(openscapScan, scapresultsconf.ConfigMapName, "error-msg", scapresultsconf.NodeName, errorMsg.contents, errorMsg.compressed, exitcode)
 		err = client.client.Create(context.TODO(), confMap)
 
 		if errors.IsAlreadyExists(err) {
