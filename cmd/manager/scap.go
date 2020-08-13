@@ -112,7 +112,7 @@ func openNonEmptyFile(filename string) (*os.File, error) {
 func (c *scapContentDataStream) FigureResources(profile string) error {
 	found := getResourcePaths(c.dataStream, profile)
 	if len(found) == 0 {
-		return fmt.Errorf("no checks found in datastream")
+		fmt.Printf("no valid checks found in datastream\n")
 	}
 	// Always stage the clusteroperators/openshift-apiserver object for version detection.
 	paths := []string{"/apis/config.openshift.io/v1/clusteroperators/openshift-apiserver"}
