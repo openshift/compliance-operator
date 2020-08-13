@@ -141,13 +141,14 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 		updateProfileBundleStatus(pcfg, pb, fmt.Errorf("Couldn't read content file: %s", err))
 		os.Exit(1)
 	}
-	// #nosec
-	defer contentFile.Close()
 	bufContentFile := bufio.NewReader(contentFile)
 	contentDom, err := xmldom.Parse(bufContentFile)
 	if err != nil {
 		log.Error(err, "Couldn't read the content XML")
 		updateProfileBundleStatus(pcfg, pb, fmt.Errorf("Couldn't read content XML: %s", err))
+		if closeErr := contentFile.Close(); closeErr != nil {
+			log.Error(err, "Couldn't close the content file")
+		}
 		os.Exit(1)
 	}
 
@@ -156,6 +157,10 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 	// The err variable might be nil, this is fine, it'll just update the status
 	// to valid
 	updateProfileBundleStatus(pcfg, pb, err)
+
+	if closeErr := contentFile.Close(); closeErr != nil {
+		log.Error(err, "Couldn't close the content file")
+	}
 
 	<-exitSignal
 }
