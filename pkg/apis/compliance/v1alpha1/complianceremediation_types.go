@@ -92,10 +92,16 @@ func (r *ComplianceRemediation) GetScan() string {
 }
 
 func (r *ComplianceRemediation) GetMcName() string {
-	if r.GetScan() == "" || r.GetSuite() == "" {
+	if r.GetScan() == "" {
 		return ""
 	}
-	return fmt.Sprintf("75-%s-%s", r.GetScan(), r.GetSuite())
+
+	mcName := fmt.Sprintf("75-%s", r.GetScan())
+	if r.GetSuite() != "" {
+		mcName += "-" + r.GetSuite()
+	}
+
+	return mcName
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

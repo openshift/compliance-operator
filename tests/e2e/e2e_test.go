@@ -160,6 +160,67 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
+			Name:       "TestScanProducesRemediations",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				scanName := getObjNameFromTest(t)
+				selectWorkers := map[string]string{
+					"node-role.kubernetes.io/worker": "",
+				}
+				testScan := &compv1alpha1.ComplianceScan{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      scanName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceScanSpec{
+						Profile: "xccdf_org.ssgproject.content_profile_moderate",
+						Content: rhcosContentFile,
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							Debug: true,
+						},
+						NodeSelector: selectWorkers,
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), testScan, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+
+				// We expect that a scan that is using all the rules wouldn't be compliant
+				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultNonCompliant)
+				if err != nil {
+					return err
+				}
+
+				// Since the scan was not compliant, there should be some remediations and none
+				// of them should be an error
+				inNs := client.InNamespace(namespace)
+				withLabel := client.MatchingLabels{compv1alpha1.ComplianceScanLabel: testScan.Name}
+				fmt.Println(inNs, withLabel)
+				remList := &compv1alpha1.ComplianceRemediationList{}
+				err = f.Client.List(goctx.TODO(), remList, inNs, withLabel)
+				if err != nil {
+					return err
+				}
+
+				if len(remList.Items) == 0 {
+					return fmt.Errorf("expected at least one remediation")
+				}
+				for _, rem := range remList.Items {
+					if rem.Status.ApplicationState != compv1alpha1.RemediationNotApplied {
+						return fmt.Errorf("expected all remediations are unapplied when scan finishes")
+					}
+				}
+
+				return nil
+			},
+		},
+		testExecution{
 			Name:       "TestSingleScanWithStorageSucceeds",
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
