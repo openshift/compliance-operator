@@ -241,11 +241,11 @@ func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, e
 				DBG("no data in request body")
 				return nil
 			}
-			yaml, err := yaml.JSONToYAML(body)
+			yamlBody, err := yaml.JSONToYAML(body)
 			if err != nil {
 				return err
 			}
-			results[uri] = yaml
+			results[uri] = yamlBody
 			return nil
 		}()
 		if err != nil {
