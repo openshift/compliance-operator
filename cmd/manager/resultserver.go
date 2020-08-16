@@ -37,6 +37,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
+
+	utils "github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var resultServerCmd = &cobra.Command{
@@ -113,23 +115,13 @@ func ensureDir(path string) error {
 	return nil
 }
 
-// Directory is a holding struct used to sort directories by time
-type Directory struct {
-	CreationTime time.Time
-	Path         string
-}
-
-func timespecToTime(ts syscall.Timespec) time.Time {
-	return time.Unix(int64(ts.Sec), int64(ts.Nsec))
-}
-
 func rotateResultDirectories(rootPath string, rotation uint16) error {
 	// If rotation is a negative number, we don't rotate
 	if rotation == 0 {
 		log.Info("Rotation policy set to '0'. No need to rotate.")
 		return nil
 	}
-	dirs := []Directory{}
+	dirs := []utils.Directory{}
 	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			log.Error(err, "Error accessing directory. Prevent panic by handling failure accessing a path", "filepath", path)
@@ -145,11 +137,7 @@ func rotateResultDirectories(rootPath string, rotation uint16) error {
 			return filepath.SkipDir
 		}
 		if info.IsDir() {
-			statinfo := info.Sys().(*syscall.Stat_t)
-			dirs = append(dirs, Directory{
-				CreationTime: timespecToTime(statinfo.Ctim),
-				Path:         path,
-			})
+			dirs = append(dirs, utils.NewDirectory(path, info))
 			return filepath.SkipDir
 		}
 		return nil
