@@ -57,7 +57,11 @@ export OPERATOR_NAMESPACE?=openshift-compliance
 # Operator-sdk variables
 # ======================
 SDK_VERSION?=v0.18.2
-OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-x86_64-linux-gnu
+ifeq ($(OS_NAME), Linux)
+    OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-x86_64-linux-gnu
+else ifeq ($(OS_NAME), Darwin)
+    OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-x86_64-apple-darwin
+endif
 
 # Test variables
 # ==============
