@@ -25,7 +25,7 @@ RELATED_IMAGE_OPENSCAP_TAG?=$(OPENSCAP_DEFAULT_IMAGE_TAG)
 # the cluster or if we're on CI.
 RELATED_IMAGE_OPERATOR_PATH?=$(IMAGE_REPO)/$(APP_NAME)
 RELATED_IMAGE_OPENSCAP_PATH=$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME)
-OPENSCAP_DOCKERFILE_PATH=./images/openscap/Dockerfile
+OPENSCAP_DOCKER_CONTEXT=./images/openscap
 
 # Image tag to use. Set this if you want to use a specific tag for building
 # or your e2e tests.
@@ -114,7 +114,7 @@ operator-image: operator-sdk
 
 .PHONY: openscap-image
 openscap-image:
-	$(RUNTIME) build -f $(OPENSCAP_DOCKERFILE_PATH) -t $(RELATED_IMAGE_OPENSCAP_PATH):$(TAG)
+	$(RUNTIME) build -t $(RELATED_IMAGE_OPENSCAP_PATH):$(TAG) $(OPENSCAP_DOCKER_CONTEXT)
 
 .PHONY: build
 build: fmt manager ## Build the compliance-operator binary
