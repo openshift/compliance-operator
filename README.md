@@ -826,3 +826,18 @@ $ oc extract cm/masters-scan-ip-10-0-174-253.ec2.internal-pod
 
 Note that if the results are too big for the ConfigMap, they'll be bzipped and
 base64 encoded.
+
+OS support
+==========
+
+Node scans
+----------
+
+Note that the current testing has been done in RHCOS. In the absence of
+RHEL/CentOS support, one can simply run OpenSCAP directly on the nodes.
+
+Platform scans
+--------------
+
+Current testing has been done on OpenShift (OCP). The project is open to
+getting other platforms tested, so volunteers are needed for this.
