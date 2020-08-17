@@ -6,7 +6,15 @@ RELATED_IMAGE_OPENSCAP_NAME=openscap-ocp
 # Container image variables
 # =========================
 IMAGE_REPO?=quay.io/compliance-operator
-RUNTIME?=podman
+
+# Detect the OS to set per-OS defaults
+OS_NAME=$(shell uname -s)
+# Container runtime
+ifeq ($(OS_NAME), Linux)
+    RUNTIME?=podman
+else ifeq ($(OS_NAME), Darwin)
+    RUNTIME?=docker
+endif
 
 # Temporary
 OPENSCAP_DEFAULT_IMAGE_TAG=1.3.3
