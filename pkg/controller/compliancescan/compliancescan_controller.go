@@ -193,6 +193,13 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 		return reconcile.Result{}, err
 	}
 
+	if len(instance.Spec.RawResultStorage.PVAccessModes) == 0 {
+		instanceCopy := instance.DeepCopy()
+		instanceCopy.Spec.RawResultStorage.PVAccessModes = defaultAccessMode
+		err := r.client.Update(context.TODO(), instanceCopy)
+		return reconcile.Result{}, err
+	}
+
 	//validate raw storage size
 	if _, err := resource.ParseQuantity(instance.Spec.RawResultStorage.Size); err != nil {
 		instanceCopy := instance.DeepCopy()

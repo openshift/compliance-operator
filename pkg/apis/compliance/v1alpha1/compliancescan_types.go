@@ -127,6 +127,16 @@ type RawResultStorageSettings struct {
 	// policy of '0' disables rotation entirely. Defaults to 3.
 	// +kubebuilder:default=3
 	Rotation uint16 `json:"rotation,omitempty"`
+	// Specifies the StorageClassName to use when creating the PersistentVolumeClaim
+	// to hold the raw results. By default this is null, which will attempt to use the
+	// default storage class configured in the cluster. If there is no default class specified
+	// then this needs to be set.
+	// +nullable
+	StorageClassName *string `json:"storageClassName,omitempty"`
+	// Specifies the access modes that the PersistentVolume will be created with.
+	// The persistent volume will hold the raw results of the scan.
+	// +kubebuilder:default={"ReadWriteOnce"}
+	PVAccessModes []corev1.PersistentVolumeAccessMode `json:"pvAccessModes,omitempty"`
 }
 
 // ComplianceScanSettings groups together settings of a ComplianceScan
