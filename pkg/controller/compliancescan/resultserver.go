@@ -103,8 +103,8 @@ func (r *ReconcileComplianceScan) deleteResultServer(instance *compv1alpha1.Comp
 
 func getResultServerLabels(instance *compv1alpha1.ComplianceScan) map[string]string {
 	return map[string]string{
-		"complianceScan": instance.Name,
-		"app":            "resultserver",
+		compv1alpha1.ComplianceScanLabel: instance.Name,
+		"app":                            "resultserver",
 	}
 }
 

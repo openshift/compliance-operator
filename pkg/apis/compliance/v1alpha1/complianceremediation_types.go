@@ -26,8 +26,7 @@ const (
 )
 
 const (
-	// ScanLabel defines the label that associates the Remediation with the scan
-	ScanLabel                = "complianceoperator.openshift.io/scan"
+	// OutdatedRemediationLabel specifies that the remediation has been superseded by a newer version
 	OutdatedRemediationLabel = "complianceoperator.openshift.io/outdated-remediation"
 )
 
@@ -89,7 +88,7 @@ func (r *ComplianceRemediation) GetSuite() string {
 }
 
 func (r *ComplianceRemediation) GetScan() string {
-	return r.Labels[ScanLabel]
+	return r.Labels[ComplianceScanLabel]
 }
 
 func (r *ComplianceRemediation) GetMcName() string {

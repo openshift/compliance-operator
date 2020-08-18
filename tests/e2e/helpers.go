@@ -610,7 +610,7 @@ func getNodesWithSelector(f *framework.Framework, labelselector map[string]strin
 
 func getPodsForScan(f *framework.Framework, scanName string) ([]corev1.Pod, error) {
 	selectPods := map[string]string{
-		"complianceScan": scanName,
+		compv1alpha1.ComplianceScanLabel: scanName,
 	}
 	var pods corev1.PodList
 	lo := &client.ListOptions{
@@ -627,7 +627,8 @@ func getPodsForScan(f *framework.Framework, scanName string) ([]corev1.Pod, erro
 func getConfigMapsFromScan(f *framework.Framework, scaninstance *compv1alpha1.ComplianceScan) []corev1.ConfigMap {
 	var configmaps corev1.ConfigMapList
 	labelselector := map[string]string{
-		compv1alpha1.ComplianceScanIndicatorLabel: scaninstance.Name,
+		compv1alpha1.ComplianceScanLabel: scaninstance.Name,
+		compv1alpha1.ResultLabel: "",
 	}
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(labelselector),
@@ -660,7 +661,7 @@ func assertHasCheck(f *framework.Framework, suiteName, scanName string, check co
 		return fmt.Errorf("Did not find expected suite name label %s, found %s", suiteName, getCheck.Labels[compv1alpha1.SuiteLabel])
 	}
 
-	if getCheck.Labels[compv1alpha1.ScanLabel] != scanName {
+	if getCheck.Labels[compv1alpha1.ComplianceScanLabel] != scanName {
 		return fmt.Errorf("Did not find expected suite name label %s, found %s", suiteName, getCheck.Labels[compv1alpha1.SuiteLabel])
 	}
 
@@ -680,7 +681,7 @@ func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string)
 
 	scanSuiteSelector := make(map[string]string)
 	scanSuiteSelector[compv1alpha1.SuiteLabel] = suiteName
-	scanSuiteSelector[compv1alpha1.ScanLabel] = scanName
+	scanSuiteSelector[compv1alpha1.ComplianceScanLabel] = scanName
 
 	listOpts := client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(scanSuiteSelector),

@@ -9,7 +9,7 @@ metadata:
           "kind": "ComplianceRemediation",
           "metadata": {
             "labels": {
-              "complianceoperator.openshift.io/scan": "example-scan",
+              "compliance.openshift.io/scan-name": "example-scan",
               "complianceoperator.openshift.io/suite": "example-suite",
               "machineconfiguration.openshift.io/role": "worker"
             },

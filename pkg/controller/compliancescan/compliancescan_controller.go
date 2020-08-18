@@ -640,8 +640,8 @@ func getTargetNodes(r *ReconcileComplianceScan, instance *compv1alpha1.Complianc
 func (r *ReconcileComplianceScan) deleteScriptConfigMaps(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	inNs := client.InNamespace(common.GetComplianceOperatorNamespace())
 	withLabel := client.MatchingLabels{
-		compv1alpha1.ScanLabel:   instance.Name,
-		compv1alpha1.ScriptLabel: "",
+		compv1alpha1.ComplianceScanLabel: instance.Name,
+		compv1alpha1.ScriptLabel:         "",
 	}
 	err := r.client.DeleteAllOf(context.Background(), &corev1.ConfigMap{}, inNs, withLabel)
 	if err != nil {
@@ -652,7 +652,7 @@ func (r *ReconcileComplianceScan) deleteScriptConfigMaps(instance *compv1alpha1.
 
 func (r *ReconcileComplianceScan) deleteResultConfigMaps(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	inNs := client.InNamespace(common.GetComplianceOperatorNamespace())
-	withLabel := client.MatchingLabels{compv1alpha1.ComplianceScanIndicatorLabel: instance.Name}
+	withLabel := client.MatchingLabels{compv1alpha1.ComplianceScanLabel: instance.Name}
 	err := r.client.DeleteAllOf(context.Background(), &corev1.ConfigMap{}, inNs, withLabel)
 	if err != nil {
 		return err
@@ -818,7 +818,7 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 	var checkList compv1alpha1.ComplianceCheckResultList
 	checkListOpts := client.MatchingLabels{
 		compv1alpha1.ComplianceCheckInconsistentLabel: "",
-		compv1alpha1.ScanLabel:                        instance.Name,
+		compv1alpha1.ComplianceScanLabel:              instance.Name,
 	}
 	if err := r.client.List(context.TODO(), &checkList, &checkListOpts); err != nil {
 		isReady = false
