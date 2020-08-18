@@ -683,6 +683,21 @@ make run
 ```
 This is mostly useful for local development.
 
+### Note on namespace removal
+Many custom resources deployed with the compliance operators use finalizers
+to handle dependencies between objects. If the whole operator namespace gets
+deleted (e.g. with `oc delete ns openshift-compliance`), the order of deleting
+objects in the namespace is not guaranteed. What can happen is that the
+operator itself is removed before the finalizers are processed which would
+manifest as the namespace being stuck in the `Terminating` state.
+
+It is recommended to remove all CRs and CRDs prior to removing the namespace
+to avoid this issue. The `Makefile` provides a `tear-down` target that does
+exactly that.
+
+If the namespace is stuck, you can work around by the issue by hand-editing
+or patching any CRs and removing the `finalizers` attributes manually.
+
 
 ## Using the operator
 
