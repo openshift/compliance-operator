@@ -156,6 +156,16 @@ func (r *ReconcileComplianceSuite) suiteDeleteHandler(suite *compv1alpha1.Compli
 		return err
 	}
 
+	inNs := client.InNamespace(common.GetComplianceOperatorNamespace())
+	withLabel := client.MatchingLabels{
+		compv1alpha1.SuiteLabel:       suite.Name,
+		compv1alpha1.SuiteScriptLabel: "",
+	}
+	err = r.client.DeleteAllOf(context.Background(), &corev1.Pod{}, inNs, withLabel)
+	if err != nil {
+		return err
+	}
+
 	suiteCopy := suite.DeepCopy()
 	// remove our finalizer from the list and update it.
 	suiteCopy.ObjectMeta.Finalizers = common.RemoveFinalizer(suiteCopy.ObjectMeta.Finalizers, compv1alpha1.SuiteFinalizer)
