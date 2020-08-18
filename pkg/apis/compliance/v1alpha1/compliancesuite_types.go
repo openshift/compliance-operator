@@ -83,10 +83,10 @@ type ComplianceSuiteSpec struct {
 // +k8s:openapi-gen=true
 type ComplianceSuiteStatus struct {
 	// +listType=atomic
-	ScanStatuses     []ComplianceScanStatusWrapper `json:"scanStatuses"`
-	AggregatedPhase  ComplianceScanStatusPhase     `json:"aggregatedPhase,omitempty"`
-	AggregatedResult ComplianceScanStatusResult    `json:"aggregatedResult,omitempty"`
-	ErrorMessage     string                        `json:"errorMessage,omitempty"`
+	ScanStatuses []ComplianceScanStatusWrapper `json:"scanStatuses"`
+	Phase        ComplianceScanStatusPhase     `json:"phase,omitempty"`
+	Result       ComplianceScanStatusResult    `json:"result,omitempty"`
+	ErrorMessage string                        `json:"errorMessage,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -96,8 +96,8 @@ type ComplianceSuiteStatus struct {
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=compliancesuites,scope=Namespaced
-// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=`.status.aggregatedPhase`
-// +kubebuilder:printcolumn:name="Result",type="string",JSONPath=`.status.aggregatedResult`
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Result",type="string",JSONPath=`.status.result`
 type ComplianceSuite struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

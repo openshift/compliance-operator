@@ -33,8 +33,8 @@ spec:
       nodeSelector:
         node-role.kubernetes.io/worker: ""
 status:
-  aggregatedPhase: DONE
-  aggregatedResult: NON-COMPLIANT
+  Phase: DONE
+  Result: NON-COMPLIANT
   scanStatuses:
   - name: workers-scan
     phase: DONE
@@ -47,9 +47,9 @@ In the `spec`:
 * **scans** contains a list of scan specifications to run in the cluster.
 
 In the `status`:
-* **aggregatedPhase**: indicates the overall phase where the scans are at. To
+* **Phase**: indicates the overall phase where the scans are at. To
   get the results you normally have to wait for the overall phase to be `DONE`.
-* **aggregatedResult**: Is the overall verdict of the suite.
+* **Result**: Is the overall verdict of the suite.
 * **scanStatuses**: Will contain the status for each of the scans that the
   suite is tracking.
 

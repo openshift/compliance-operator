@@ -196,8 +196,8 @@ func (r *ReconcileComplianceSuite) issueValidationError(suite *compv1alpha1.Comp
 
 	// Update status
 	suiteCopy := suite.DeepCopy()
-	suiteCopy.Status.AggregatedPhase = compv1alpha1.PhaseDone
-	suiteCopy.Status.AggregatedResult = compv1alpha1.ResultError
+	suiteCopy.Status.Phase = compv1alpha1.PhaseDone
+	suiteCopy.Status.Result = compv1alpha1.ResultError
 	suiteCopy.Status.ErrorMessage = enhancedMessage
 	if suiteCopy.Status.ScanStatuses == nil {
 		suiteCopy.Status.ScanStatuses = make([]compv1alpha1.ComplianceScanStatusWrapper, 0)
@@ -310,12 +310,12 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 	// Replace the copy so we use fresh metadata
 	suite = suite.DeepCopy()
 	suite.Status.ScanStatuses[idx] = modScanStatus
-	suite.Status.AggregatedPhase = suite.LowestCommonState()
-	suite.Status.AggregatedResult = suite.LowestCommonResult()
+	suite.Status.Phase = suite.LowestCommonState()
+	suite.Status.Result = suite.LowestCommonResult()
 
-	if suite.Status.AggregatedResult == compv1alpha1.ResultNotApplicable {
+	if suite.Status.Result == compv1alpha1.ResultNotApplicable {
 		suite.Status.ErrorMessage = "The suite result is not applicable, please check if you're using the correct platform"
-	} else if suite.Status.AggregatedResult == compv1alpha1.ResultInconsistent {
+	} else if suite.Status.Result == compv1alpha1.ResultInconsistent {
 		suite.Status.ErrorMessage = fmt.Sprintf("results were not consistent, search for compliancecheckresults labeled with %s",
 			compv1alpha1.ComplianceCheckInconsistentLabel)
 	}
@@ -332,14 +332,14 @@ func (r *ReconcileComplianceSuite) generateEventsForSuite(suite *compv1alpha1.Co
 		suite,
 		corev1.EventTypeNormal,
 		"ResultAvailable",
-		fmt.Sprintf("ComplianceSuite's result is: %s", suite.Status.AggregatedResult),
+		fmt.Sprintf("ComplianceSuite's result is: %s", suite.Status.Result),
 	)
 
-	if suite.Status.AggregatedResult == compv1alpha1.ResultNotApplicable {
+	if suite.Status.Result == compv1alpha1.ResultNotApplicable {
 		r.recorder.Eventf(
 			suite, corev1.EventTypeNormal, "SuiteNotApplicable",
 			"The suite result is not applicable, please check if you're using the correct platform")
-	} else if suite.Status.AggregatedResult == compv1alpha1.ResultInconsistent {
+	} else if suite.Status.Result == compv1alpha1.ResultInconsistent {
 		r.recorder.Eventf(
 			suite, corev1.EventTypeNormal, "SuiteNotConsistent",
 			"The suite result is not consistent, please check for scan results labeled with %s",
@@ -387,8 +387,8 @@ func (r *ReconcileComplianceSuite) addScanStatus(suite *compv1alpha1.ComplianceS
 	suite = suite.DeepCopy()
 	suite.Status.ScanStatuses = append(suite.Status.ScanStatuses, newScanStatus)
 	logger.Info("Adding scan status", "ComplianceScan.Name", newScanStatus.Name, "ComplianceScan.Phase", newScanStatus.Phase)
-	suite.Status.AggregatedPhase = suite.LowestCommonState()
-	suite.Status.AggregatedResult = suite.LowestCommonResult()
+	suite.Status.Phase = suite.LowestCommonState()
+	suite.Status.Result = suite.LowestCommonResult()
 	return r.client.Status().Update(context.TODO(), suite)
 }
 
@@ -495,7 +495,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 
 	// We only post-process when everything is done. This avoids unnecessary
 	// "unpauses" for MachineConfigPools
-	if suite.Status.AggregatedPhase != compv1alpha1.PhaseDone {
+	if suite.Status.Phase != compv1alpha1.PhaseDone {
 		logger.Info("Waiting until all scans are in Done phase before post-procesing remediations")
 		return reconcile.Result{}, nil
 	}
@@ -591,7 +591,7 @@ func resultToACMPolicyStatus(suite *compv1alpha1.ComplianceSuite) string {
 	const instfmt string = "; To view aggregated results, execute the following in the managed cluster: kubectl get compliancesuites -n %s %s"
 	instructions := fmt.Sprintf(instfmt, suite.Namespace, suite.Name)
 	var result string
-	switch suite.Status.AggregatedResult {
+	switch suite.Status.Result {
 	case compv1alpha1.ResultCompliant:
 		result = "Compliant"
 	case compv1alpha1.ResultNonCompliant:

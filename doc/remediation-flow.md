@@ -70,8 +70,8 @@ spec:
       node-role.kubernetes.io/master: ""
     profile: xccdf_org.ssgproject.content_profile_coreos-ncp
 status:
-  aggregatedPhase: DONE
-  aggregatedResult: NON-COMPLIANT
+  Phase: DONE
+  Result: NON-COMPLIANT
   scanStatuses:
   - name: workers-scan
     phase: DONE

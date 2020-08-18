@@ -12,10 +12,10 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.aggregatedPhase
+    - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .status.aggregatedResult
+    - jsonPath: .status.result
       name: Result
       type: string
     name: v1alpha1
@@ -200,13 +200,13 @@ spec:
           status:
             description: Contains the current state of the suite
             properties:
-              aggregatedPhase:
+              errorMessage:
+                type: string
+              phase:
                 description: Represents the status of the compliance scan run.
                 type: string
-              aggregatedResult:
+              result:
                 description: Represents the result of the compliance scan
-                type: string
-              errorMessage:
                 type: string
               scanStatuses:
                 items:
