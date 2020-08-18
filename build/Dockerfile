@@ -5,7 +5,7 @@ WORKDIR /go/src/github.com/openshift/compliance-operator
 
 ENV GOFLAGS=-mod=vendor
 
-COPY . .
+COPY --chown=default:root . .
 RUN make manager
 
 # Step two: containerize compliance-operator
