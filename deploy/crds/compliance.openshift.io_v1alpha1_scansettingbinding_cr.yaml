@@ -1,16 +1,12 @@
 apiVersion: compliance.openshift.io/v1alpha1
 kind: ScanSettingBinding
 metadata:
-  name: my-companys-compliance-requirements
+  name: nist-moderate
 profiles:
-  # Node checks
-  - name: rhcos4-empty-passwords
-    kind: TailoredProfile
-    apiGroup: compliance.openshift.io/v1alpha1
-  - name: ocp4-e8
+  - name: rhcos4-moderate
     kind: Profile
     apiGroup: compliance.openshift.io/v1alpha1
 settingsRef:
-  name: my-companys-constraints
+  name: default
   kind: ScanSetting
   apiGroup: compliance.openshift.io/v1alpha1
