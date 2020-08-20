@@ -626,16 +626,13 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 	return nil
 }
 
-func checkScanError(cm *corev1.ConfigMap) error {
+func checkScanUnknownError(cm *corev1.ConfigMap) error {
 	exitcode, ok := cm.Data["exit-code"]
 	if !ok {
 		return fmt.Errorf("the ConfigMap '%s' was missing 'exit-code'", cm.Name)
 	}
 
-	// 0: compliant
-	// 2: non-compliant
-	// anything else is treated as an error
-	if exitcode != "0" && exitcode != "2" {
+	if exitcode != common.OpenSCAPExitCodeCompliant && exitcode != common.OpenSCAPExitCodeNonCompliant && exitcode != common.PodUnschedulableExitCode {
 		errorMsg, ok := cm.Data["error-msg"]
 		if ok {
 			return fmt.Errorf(errorMsg)

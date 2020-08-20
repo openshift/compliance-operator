@@ -169,9 +169,9 @@ func getScanResult(cm *v1.ConfigMap) (compv1alpha1.ComplianceScanStatusResult, s
 	exitcode, ok := cm.Data["exit-code"]
 	if ok {
 		switch exitcode {
-		case "0":
+		case common.OpenSCAPExitCodeCompliant:
 			return compv1alpha1.ResultCompliant, ""
-		case "2":
+		case common.OpenSCAPExitCodeNonCompliant:
 			return compv1alpha1.ResultNonCompliant, ""
 		default:
 			errorMsg, ok := cm.Data["error-msg"]

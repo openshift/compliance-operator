@@ -8,6 +8,15 @@ import (
 
 var complianceOperatorNamespace = "openshift-compliance"
 
+const (
+	// OpenSCAPExitCodeCompliant defines a success coming from OpenSCAP
+	OpenSCAPExitCodeCompliant string = "0"
+	// OpenSCAPExitCodeNonCompliant defines a non-compliance error coming from OpenSCAP
+	OpenSCAPExitCodeNonCompliant string = "2"
+	// PodUnschedulableExitCode is a custom error that indicates that we couldn't schedule the pod
+	PodUnschedulableExitCode string = "unschedulable"
+)
+
 func init() {
 	if isRunModeLocal() {
 		ns, ok := os.LookupEnv("OPERATOR_NAMESPACE")

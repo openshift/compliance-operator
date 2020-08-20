@@ -2,6 +2,7 @@ package compliancescan
 
 import (
 	"context"
+	goerrors "errors"
 	"fmt"
 	"math"
 	"time"
@@ -346,6 +347,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 
 		// On each eligible node..
 		for _, node := range nodes.Items {
+			var unschedulableErr *podUnschedulableError
 			running, err := isPodRunningInNode(r, instance, &node, logger)
 			if errors.IsNotFound(err) {
 				// Let's go back to the previous state and make sure all the nodes are covered.
@@ -357,6 +359,25 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 					return reconcile.Result{}, err
 				}
 				return reconcile.Result{}, nil
+			} else if goerrors.As(err, &unschedulableErr) {
+				// Create custom error message for this pod that couldn't be scheduled
+				cmName := getConfigMapForNodeName(instance.Name, node.Name)
+				cm := utils.GetResultConfigMap(instance, cmName, "error-msg", node.Name,
+					[]byte(err.Error()), false, common.PodUnschedulableExitCode)
+				cmKey := types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}
+				foundcm := corev1.ConfigMap{}
+				cmGetErr := r.client.Get(context.TODO(), cmKey, &foundcm)
+				if errors.IsNotFound(cmGetErr) {
+					if cmCreateErr := r.client.Create(context.TODO(), cm); cmCreateErr != nil {
+						if !errors.IsAlreadyExists(cmCreateErr) {
+							return reconcile.Result{}, cmCreateErr
+						}
+					}
+				} else if cmGetErr != nil {
+					return reconcile.Result{}, cmGetErr
+				}
+
+				// We're good, the CM that tells us about this error is already there
 			} else if err != nil {
 				return reconcile.Result{}, err
 			}
@@ -675,18 +696,30 @@ func isPlatformScanPodRunning(r *ReconcileComplianceScan, scanInstance *compv1al
 }
 
 func isPodRunning(r *ReconcileComplianceScan, podName, namespace string, logger logr.Logger) (bool, error) {
+	podlogger := logger.WithValues("Pod.Name", podName)
 	foundPod := &corev1.Pod{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: namespace}, foundPod)
 	if err != nil {
-		logger.Error(err, "Cannot retrieve pod", "Pod.Name", podName)
+		podlogger.Error(err, "Cannot retrieve pod")
 		return false, err
 	} else if foundPod.Status.Phase == corev1.PodFailed || foundPod.Status.Phase == corev1.PodSucceeded {
-		logger.Info("Pod has finished")
+		podlogger.Info("Pod has finished")
 		return false, nil
 	}
 
+	// Check PodScheduled condition
+	for _, condition := range foundPod.Status.Conditions {
+		if condition.Type == corev1.PodScheduled {
+			if condition.Reason == corev1.PodReasonUnschedulable {
+				podlogger.Info("Pod unschedulable")
+				return false, newPodUnschedulableError(foundPod.Name, condition.Message)
+			}
+			break
+		}
+	}
+
 	// the pod is still running or being created etc
-	logger.Info("Pod still running", "Pod.Name", podName)
+	podlogger.Info("Pod still running")
 	return true, nil
 }
 
@@ -727,7 +760,7 @@ func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.C
 		}
 
 		// NOTE: err is only set if there is an error in the scan run
-		err = checkScanError(foundCM)
+		err = checkScanUnknownError(foundCM)
 		if err != nil {
 			return true, err
 		}
@@ -742,7 +775,7 @@ func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.C
 			}
 
 			// NOTE: err is only set if there is an error in the scan run
-			err = checkScanError(foundCM)
+			err = checkScanUnknownError(foundCM)
 			if err != nil {
 				return true, err
 			}
