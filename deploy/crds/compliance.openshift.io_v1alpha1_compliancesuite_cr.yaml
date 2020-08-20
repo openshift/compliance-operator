@@ -12,3 +12,8 @@ spec:
       contentImage: quay.io/complianceascode/ocp4:latest
       nodeSelector:
         node-role.kubernetes.io/worker: ""
+    - name: platform-scan
+      scanType: Platform
+      profile: xccdf_org.ssgproject.content_profile_moderate
+      content: ssg-ocp4-ds.xml
+      contentImage: quay.io/complianceascode/ocp4:latest
