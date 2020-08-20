@@ -16,6 +16,10 @@ const (
 	rawStorageAllocationErrorPrefix = "Couldn't allocate raw storage: "
 )
 
+var (
+	defaultAccessMode = []corev1.PersistentVolumeAccessMode{"ReadWriteOnce"}
+)
+
 // handles the necessary things to store and expose the raw results from the scan. This implies
 // that the PVC gets created, and, if necessary, the scan instance will get updated too.
 // Returns whether the reconcile loop should continue or not, and an error if encountered.
@@ -59,6 +63,10 @@ func getPVCForScan(instance *compv1alpha1.ComplianceScan) *corev1.PersistentVolu
 	if storageSize == "" {
 		storageSize = compv1alpha1.DefaultRawStorageSize
 	}
+	accessModes := instance.Spec.RawResultStorage.PVAccessModes
+	if len(accessModes) == 0 {
+		accessModes = defaultAccessMode
+	}
 
 	return &corev1.PersistentVolumeClaim{
 		TypeMeta: metav1.TypeMeta{
@@ -73,13 +81,8 @@ func getPVCForScan(instance *compv1alpha1.ComplianceScan) *corev1.PersistentVolu
 			},
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
-			// NOTE(jaosorior): Currently we don't set a StorageClass
-			// so the default will be taken into use.
-			// TODO(jaosorior): Make StorageClass configurable
-			StorageClassName: nil,
-			AccessModes: []corev1.PersistentVolumeAccessMode{
-				"ReadWriteOnce",
-			},
+			StorageClassName: instance.Spec.RawResultStorage.StorageClassName,
+			AccessModes:      accessModes,
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceStorage: resource.MustParse(storageSize),

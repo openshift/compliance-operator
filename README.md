@@ -151,6 +151,14 @@ In the `spec`:
   responsibility of administrators to store these results elsewhere before
   rotation happens. Note that a rotation policy of '0' disables rotation
   entirely. Defaults to 3.
+* **rawResultStorage.storageClassName**: Specifies the storage class that
+  should be asked for in order for the scan to store the raw results. Not
+  specifying this value will use the default storage class configured in the
+  cluster. (Defaults to nil)
+* **rawResultStorage.pvAccessModes**: Specifies the access modes for creating
+  the PVC that will host the raw results from the scan. Please check the values
+  that the storage class supports before setting this. Else, just use the default.
+  (Defaults to ["ReadWriteOnce"])
 * **scanTolerations**: Specifies tolerations that will be set in the scan Pods
   for scheduling. Defaults to allowing the scan to run on master nodes. For
   details on tolerations, see the

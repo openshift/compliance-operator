@@ -67,6 +67,15 @@ spec:
               rawResultStorage:
                 description: Specifies settings that pertain to raw result storage.
                 properties:
+                  pvAccessModes:
+                    default:
+                    - ReadWriteOnce
+                    description: Specifies the access modes that the PersistentVolume
+                      will be created with. The persistent volume will hold the raw
+                      results of the scan.
+                    items:
+                      type: string
+                    type: array
                   rotation:
                     default: 3
                     description: Specifies the amount of scans for which the raw results
@@ -80,6 +89,14 @@ spec:
                     description: Specifies the amount of storage to ask for storing
                       the raw results. Note that if re-scans happen, the new results
                       will also need to be stored. Defaults to 1Gi.
+                    type: string
+                  storageClassName:
+                    description: Specifies the StorageClassName to use when creating
+                      the PersistentVolumeClaim to hold the raw results. By default
+                      this is null, which will attempt to use the default storage
+                      class configured in the cluster. If there is no default class
+                      specified then this needs to be set.
+                    nullable: true
                     type: string
                 type: object
               rule:
