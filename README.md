@@ -12,7 +12,8 @@ operator to be deployed in other namespaces as well.
 The primary interface towards the Compliance Operator is the
 `ComplianceSuite` object, representing a set of scans. The `ComplianceSuite`
 can be defined either manually or with the help of `ScanSetting` and
-`ScanSettingBinding` objects.
+`ScanSettingBinding` objects. Note that while it is possible to use the
+lower-level `ComplianceScan` directly as well, it is not recommended.
 
 ## Deploying the operator
 Before you can actually use the operator, you need to make sure it is
