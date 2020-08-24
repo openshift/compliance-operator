@@ -377,3 +377,5 @@ git-release: package-version-to-tag
 
 .PHONY: release
 release: release-tag-image push publish undo-deploy-tag-image git-release ## Do an official release (Requires permissions)
+	# This will ensure that we also push to the latest tag
+	$(MAKE) push TAG=latest
