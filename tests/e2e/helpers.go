@@ -508,14 +508,14 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 			return false, nil
 		}
 
-		if suite.Status.AggregatedPhase != targetStatus {
-			E2ELogf(t, "Waiting until suite %s reaches target status '%s'. Current status: %s", suite.Name, targetStatus, suite.Status.AggregatedPhase)
+		if suite.Status.Phase != targetStatus {
+			E2ELogf(t, "Waiting until suite %s reaches target status '%s'. Current status: %s", suite.Name, targetStatus, suite.Status.Phase)
 			return false, nil
 		}
 
 		// The suite is now done, make sure the compliance status is expected
-		if suite.Status.AggregatedResult != targetComplianceStatus {
-			return false, fmt.Errorf("expecting %s got %s", targetComplianceStatus, suite.Status.AggregatedResult)
+		if suite.Status.Result != targetComplianceStatus {
+			return false, fmt.Errorf("expecting %s got %s", targetComplianceStatus, suite.Status.Result)
 		}
 
 		// If we were expecting an error, there's no use checking the scans
