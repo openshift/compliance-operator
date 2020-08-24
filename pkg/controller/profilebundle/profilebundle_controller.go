@@ -240,8 +240,6 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle) *appsv1.Deployme
 								},
 							},
 						},
-					},
-					Containers: []corev1.Container{
 						{
 							Name:  "profileparser",
 							Image: utils.GetComponentImage(utils.OPERATOR),
@@ -257,6 +255,15 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle) *appsv1.Deployme
 									MountPath: "/content",
 									ReadOnly:  true,
 								},
+							},
+						},
+					},
+					Containers: []corev1.Container{
+						{
+							Name:  "pauser",
+							Image: utils.GetComponentImage(utils.OPERATOR),
+							Command: []string{
+								"compliance-operator", "pause",
 							},
 						},
 					},
@@ -303,11 +310,19 @@ func podStartupError(pod *corev1.Pod) bool {
 
 func workloadNeedsUpdate(pb *compliancev1alpha1.ProfileBundle, depl *appsv1.Deployment) bool {
 	initContainers := depl.Spec.Template.Spec.InitContainers
-	if len(initContainers) != 1 {
+	if len(initContainers) != 2 {
 		// For some weird reason we don't have the amount of init containers we expect.
 		return true
 	}
 
-	// we need an update if the image reference doesn't match.
-	return pb.Spec.ContentImage != initContainers[0].Image
+	for _, container := range initContainers {
+		if container.Name == "content-container" {
+			// we need an update if the image reference doesn't match.
+			return pb.Spec.ContentImage != container.Image
+		}
+	}
+
+	// If we didn't find the container we were looking for. There's something funky going on
+	// and we should try to update anyway
+	return true
 }

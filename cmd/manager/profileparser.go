@@ -6,8 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
@@ -124,8 +122,6 @@ func updateProfileBundleStatus(pcfg *profileparser.ParserConfig, pb *cmpv1alpha1
 }
 
 func runProfileParser(cmd *cobra.Command, args []string) {
-	exitSignal := make(chan os.Signal, 1)
-	signal.Notify(exitSignal, syscall.SIGINT, syscall.SIGTERM)
 	pcfg := newParserConfig(cmd)
 
 	pb, err := getProfileBundle(pcfg)
@@ -161,6 +157,4 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 	if closeErr := contentFile.Close(); closeErr != nil {
 		log.Error(err, "Couldn't close the content file")
 	}
-
-	<-exitSignal
 }
