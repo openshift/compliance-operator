@@ -34,16 +34,6 @@ const (
 )
 
 var log = logf.Log.WithName("profileparser")
-var stdParser *referenceParser
-
-func init() {
-	stdParser = newStandardParser()
-	err := stdParser.registerStandard("NIST-800-53", `^http://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST\.SP\.800-53r4\.pdf$`)
-	log.Error(err, "Could not register NIST-800-53 reference parser") // not much we can do here..
-
-	stdParser.registerFormatter(profileOperatorFormatter)
-	stdParser.registerFormatter(rhacmFormatter)
-}
 
 type ParserConfig struct {
 	DataStreamPath   string
@@ -62,6 +52,8 @@ func GetPrefixedName(pbName, objName string) string {
 }
 
 func ParseBundle(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, pcfg *ParserConfig) error {
+	stdParser := newStandardParser()
+
 	err := ParseProfilesAndDo(contentDom, pb, func(p *cmpv1alpha1.Profile) error {
 		err := parseAction(p, "Profile", pb, pcfg, func(found, updated interface{}) error {
 			foundProfile, ok := found.(*cmpv1alpha1.Profile)
@@ -88,7 +80,7 @@ func ParseBundle(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, pcf
 		return err
 	}
 
-	err = ParseRulesAndDo(contentDom, pb, func(r *cmpv1alpha1.Rule) error {
+	err = ParseRulesAndDo(contentDom, stdParser, pb, func(r *cmpv1alpha1.Rule) error {
 		if r.Annotations == nil {
 			r.Annotations = make(map[string]string)
 		}
@@ -491,7 +483,7 @@ func parseVarValues(varNode *xmldom.Node, v *cmpv1alpha1.Variable) error {
 	return nil
 }
 
-func ParseRulesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, action func(p *cmpv1alpha1.Rule) error) error {
+func ParseRulesAndDo(contentDom *xmldom.Document, stdParser *referenceParser, pb *cmpv1alpha1.ProfileBundle, action func(p *cmpv1alpha1.Rule) error) error {
 	ruleObjs := contentDom.Root.Query("//Rule")
 	for _, ruleObj := range ruleObjs {
 		id := ruleObj.GetAttributeValue("id")
@@ -650,6 +642,11 @@ func newStandardParser() *referenceParser {
 	p := referenceParser{}
 	p.registeredStds = make([]*complianceStandard, 0)
 	p.annotationFormatters = make([]annotationsFormatterFn, 0)
+	err := p.registerStandard("NIST-800-53", `^http://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST\.SP\.800-53r4\.pdf$`)
+	log.Error(err, "Could not register NIST-800-53 reference parser") // not much we can do here..
+
+	p.registerFormatter(profileOperatorFormatter)
+	p.registerFormatter(rhacmFormatter)
 	return &p
 }
 
