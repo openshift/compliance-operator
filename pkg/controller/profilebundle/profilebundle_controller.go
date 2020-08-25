@@ -264,6 +264,7 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle) *appsv1.Deployme
 							Image: utils.GetComponentImage(utils.OPERATOR),
 							Command: []string{
 								"compliance-operator", "pause",
+								"--main-container", "profileparser",
 							},
 						},
 					},
