@@ -3,6 +3,5 @@ kind: ComplianceScan
 metadata:
   name: example-compliancescan
 spec:
-  # Add fields here
   profile: xccdf_org.ssgproject.content_profile_moderate
   content: ssg-rhcos4-ds.xml

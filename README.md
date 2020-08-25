@@ -86,10 +86,18 @@ rhcos4-moderate   2m46s
 rhcos4-ncp        2m46s
 ```
 
-These profiles define different compliance benchmarks. Before taking one into use,
-we'll need to configure how the scans will run. We can do this with the
-`ScanSetttings` custom resource. The compliance-operator already ships with a
-default `ScanSettings` object that you can take into use immediately:
+### Profile and Node scan types
+These profiles define different compliance benchmarks and as well as
+the scans fall into two basic categories - platform and node. The
+platform scans are targetting the cluster itself, in the listing above
+they're the `ocp4-*` scans, while the purpose of the node scans is to
+scan the actual cluster nodes. All the `rhcos4-*` profiles above can be
+used to create node scans.
+
+Before taking one into use, we'll need to configure how the scans
+will run. We can do this with the `ScanSetttings` custom resource. The
+compliance-operator already ships with a default `ScanSettings` object
+that you can take into use immediately:
 
 ```
 $ oc get -n $NAMESPACE scansettings default -o yaml
