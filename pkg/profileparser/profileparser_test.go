@@ -2,6 +2,7 @@ package profileparser
 
 import (
 	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	gomegatypes "github.com/onsi/gomega/types"
@@ -565,7 +566,8 @@ var _ = Describe("Testing parse rules", func() {
 			return nil
 		}
 
-		err := ParseRulesAndDo(pInput.contentDom, pInput.pb, ruleAdder)
+		stdParser := newStandardParser()
+		err := ParseRulesAndDo(pInput.contentDom, stdParser, pInput.pb, ruleAdder)
 		Expect(err).To(BeNil())
 	})
 
