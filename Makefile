@@ -27,6 +27,8 @@ RELATED_IMAGE_OPERATOR_PATH?=$(IMAGE_REPO)/$(APP_NAME)
 RELATED_IMAGE_OPENSCAP_PATH=$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME)
 OPENSCAP_DOCKER_CONTEXT=./images/openscap
 
+BUNDLE_IMAGE_PATH=$(IMAGE_REPO)/compliance-operator-bundle
+
 # Image tag to use. Set this if you want to use a specific tag for building
 # or your e2e tests.
 TAG?=latest
@@ -82,15 +84,11 @@ E2E_GO_TEST_FLAGS?=-v -timeout 120m
 DEFAULT_CONTENT_IMAGE_PATH=quay.io/complianceascode/ocp4:latest
 E2E_CONTENT_IMAGE_PATH?=quay.io/complianceascode/ocp4:latest
 
-# operator-courier arguments for `make publish`.
+# operator-sdk arguments for `make publish`.
 # Before running `make publish`, install operator-courier with `pip3 install operator-courier` and create
 # ~/.quay containing your quay.io token.
-COURIER_CMD=operator-courier
-COURIER_PACKAGE_NAME=compliance-operator-bundle
-COURIER_OPERATOR_DIR=deploy/olm-catalog/compliance-operator
-COURIER_QUAY_NAMESPACE=compliance-operator
-COURIER_PACKAGE_VERSION?=
-COURIER_QUAY_TOKEN?= $(shell cat ~/.quay)
+QUAY_NAMESPACE=compliance-operator
+OPERATOR_VERSION?=
 PACKAGE_CHANNEL?=alpha
 
 .PHONY: all
@@ -106,7 +104,7 @@ help: ## Show this help screen
 
 
 .PHONY: image
-image: fmt operator-sdk operator-image ## Build the compliance-operator container image
+image: fmt operator-sdk operator-image bundle-image ## Build the compliance-operator container image
 
 .PHONY: operator-image
 operator-image: operator-sdk
@@ -115,6 +113,10 @@ operator-image: operator-sdk
 .PHONY: openscap-image
 openscap-image:
 	$(RUNTIME) build -t $(RELATED_IMAGE_OPENSCAP_PATH):$(TAG) $(OPENSCAP_DOCKER_CONTEXT)
+
+.PHONY: bundle-image
+bundle-image:
+	$(RUNTIME) build -t $(BUNDLE_IMAGE_PATH):$(TAG) -f bundle.Dockerfile .
 
 .PHONY: build
 build: fmt manager ## Build the compliance-operator binary
@@ -291,7 +293,7 @@ deploy-local: namespace image-to-cluster deploy-crds ## Deploy the operator from
 	@oc apply -n $(NAMESPACE) -f deploy/
 	@sed -i 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 
-.PHONY: deploy-local
+.PHONY: deploy-crds
 deploy-crds:
 	@for crd in $(shell ls -1 deploy/crds/*crd.yaml) ; do \
 		oc apply -f $$crd ; \
@@ -326,29 +328,19 @@ endif
 push: image
 	# compliance-operator manager
 	$(RUNTIME) push $(RELATED_IMAGE_OPERATOR_PATH):$(TAG)
+	# bundle image
+	$(RUNTIME) push $(BUNDLE_IMAGE_PATH):$(TAG)
 
-.PHONY: publish
-publish: csv publish-bundle
-
-.PHONY: check-package-version
-check-package-version:
-ifndef COURIER_PACKAGE_VERSION
-	$(error COURIER_PACKAGE_VERSION must be defined)
+.PHONY: check-operator-version
+check-operator-version:
+ifndef OPERATOR_VERSION
+	$(error OPERATOR_VERSION must be defined)
 endif
 
-.PHONY: csv
-csv: deploy/olm-catalog/compliance-operator/$(COURIER_PACKAGE_VERSION) check-package-version operator-sdk ## Generate the CSV and packaging for the specific version (NOTE: Gotta specify the version with the COURIER_PACKAGE_VERSION environment variable)
-
-deploy/olm-catalog/compliance-operator/$(COURIER_PACKAGE_VERSION):
-	$(eval OLD_COURIER_PACKAGE_VERSION = $(shell python3 find_previous_version.py ./deploy/olm-catalog/compliance-operator))
-	$(GOPATH)/bin/operator-sdk generate csv --make-manifests=false --csv-channel $(PACKAGE_CHANNEL) --csv-version "$(COURIER_PACKAGE_VERSION)" --from-version "$(OLD_COURIER_PACKAGE_VERSION)" --update-crds
-
-.PHONY: publish-bundle
-publish-bundle: check-package-version
-	# If the validation fails, make sure you are running operator-courier
-	# 2.1.8, but also make sure the patches from https://github.com/operator-framework/operator-courier/pull/189
-	# are included. On Fedora, feel free to use https://copr.fedorainfracloud.org/coprs/jhrozek/python-operator-courier/
-	$(COURIER_CMD) push "$(COURIER_OPERATOR_DIR)" "$(COURIER_QUAY_NAMESPACE)" "$(COURIER_PACKAGE_NAME)" "$(COURIER_PACKAGE_VERSION)" "basic $(COURIER_QUAY_TOKEN)"
+.PHONY: bundle
+bundle: check-operator-version operator-sdk ## Generate the bundle and packaging for the specific version (NOTE: Gotta specify the version with the OPERATOR_VERSION environment variable)
+	$(GOPATH)/bin/operator-sdk generate bundle -q --overwrite --version "$(OPERATOR_VERSION)"
+	$(GOPATH)/bin/operator-sdk bundle validate ./deploy/olm-catalog/compliance-operator/
 
 .PHONY: package-version-to-tag
 package-version-to-tag: check-package-version
@@ -376,6 +368,6 @@ git-release: package-version-to-tag
 	git push origin "release-v$(TAG)"
 
 .PHONY: release
-release: release-tag-image push publish undo-deploy-tag-image git-release ## Do an official release (Requires permissions)
+release: release-tag-image bundle push undo-deploy-tag-image git-release ## Do an official release (Requires permissions)
 	# This will ensure that we also push to the latest tag
 	$(MAKE) push TAG=latest
