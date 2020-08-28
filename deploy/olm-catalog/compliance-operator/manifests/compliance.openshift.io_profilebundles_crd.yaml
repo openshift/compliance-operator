@@ -1,0 +1,77 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  creationTimestamp: null
+  name: profilebundles.compliance.openshift.io
+spec:
+  group: compliance.openshift.io
+  names:
+    kind: ProfileBundle
+    listKind: ProfileBundleList
+    plural: profilebundles
+    singular: profilebundle
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.contentImage
+      name: ContentImage
+      type: string
+    - jsonPath: .status.dataStreamStatus
+      name: Status
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ProfileBundle is the Schema for the profilebundles API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Defines the desired state of ProfileBundle
+            properties:
+              contentFile:
+                description: Is the path for the file in the image that contains the
+                  content for this bundle.
+                type: string
+              contentImage:
+                description: Is the path for the image that contains the content for
+                  this bundle.
+                type: string
+            required:
+            - contentFile
+            - contentImage
+            type: object
+          status:
+            description: Defines the observed state of ProfileBundle
+            properties:
+              dataStreamStatus:
+                default: PENDING
+                description: Presents the current status for the datastream for this
+                  bundle
+                type: string
+              errorMessage:
+                description: If there's an error in the datastream, it'll be presented
+                  here
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null
