@@ -643,7 +643,9 @@ func newStandardParser() *referenceParser {
 	p.registeredStds = make([]*complianceStandard, 0)
 	p.annotationFormatters = make([]annotationsFormatterFn, 0)
 	err := p.registerStandard("NIST-800-53", `^http://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST\.SP\.800-53r4\.pdf$`)
-	log.Error(err, "Could not register NIST-800-53 reference parser") // not much we can do here..
+	if err != nil {
+		log.Error(err, "Could not register NIST-800-53 reference parser") // not much we can do here..
+	}
 
 	p.registerFormatter(profileOperatorFormatter)
 	p.registerFormatter(rhacmFormatter)
