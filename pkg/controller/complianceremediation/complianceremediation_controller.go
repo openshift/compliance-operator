@@ -481,5 +481,5 @@ func mcHasRemediation(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceReme
 }
 
 func mcDiffers(current *mcfgv1.MachineConfig, merged *mcfgv1.MachineConfig) bool {
-	return !reflect.DeepEqual(current, merged)
+	return !reflect.DeepEqual(current.Spec, merged.Spec)
 }
