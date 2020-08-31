@@ -8,7 +8,7 @@ import (
 func NewDirectory(path string, info os.FileInfo) Directory {
 	statinfo := info.Sys().(*syscall.Stat_t)
 	return Directory{
-		CreationTime: timespecToTime(statinfo.Ctimespec),
+		CreationTime: timespecToTime(statinfo.Mtimespec),
 		Path:         path,
 	}
 }

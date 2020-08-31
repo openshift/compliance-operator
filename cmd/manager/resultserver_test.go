@@ -68,6 +68,18 @@ var _ = Describe("Resultserver testing", func() {
 			dir3, err = ioutil.TempDir(rootDir, "rotate-3")
 			Expect(err).To(BeNil())
 
+			// chmod the dirs in reverse order to make sure we are really relying on
+			// modification time and not change time (see OCPBUGSM-13482)
+			time.Sleep(5 * time.Millisecond)
+			err = os.Chmod(dir3, os.ModePerm)
+			Expect(err).To(BeNil())
+			time.Sleep(5 * time.Millisecond)
+			err = os.Chmod(dir2, os.ModePerm)
+			Expect(err).To(BeNil())
+			time.Sleep(5 * time.Millisecond)
+			err = os.Chmod(dir1, os.ModePerm)
+			Expect(err).To(BeNil())
+
 			// Read a file to ensure that hierarchy doesn't change
 			_, err = ioutil.ReadAll(fileToBeRead)
 			Expect(err).To(BeNil())
