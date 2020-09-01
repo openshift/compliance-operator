@@ -181,9 +181,9 @@ a `Platform` scan instance and one scanner pod per matching node for a
 `Node` scan instance. The per-node pods are labeled with the node name,
 each pod is always labeled with the `ComplianceScan` name, for example:
 ```
-oc get pods -lcompliance.openshift.io/scan-name=rhcos4-e8-worker --show-labels
+oc get pods -lcompliance.openshift.io/scan-name=rhcos4-e8-worker,workload=scanner --show-labels
 NAME                                                              READY   STATUS      RESTARTS   AGE   LABELS
-rhcos4-e8-worker-ip-10-0-169-90.eu-north-1.compute.internal-pod   0/2     Completed   0          39m   compliance.openshift.io/scan-name=rhcos4-e8-worker,targetNode=ip-10-0-169-90.eu-north-1.compute.internal
+rhcos4-e8-worker-ip-10-0-169-90.eu-north-1.compute.internal-pod   0/2     Completed   0          39m   compliance.openshift.io/scan-name=rhcos4-e8-worker,targetNode=ip-10-0-169-90.eu-north-1.compute.internal,workload=scanner
 ```
 
 At this point, the scan proceeds to the Running phase.
@@ -362,3 +362,32 @@ oc get compliancecheckresults/rhcos4-e8-worker-audit-rules-dac-modification-chmo
 NAME                                                  STATUS   SEVERITY
 rhcos4-e8-worker-audit-rules-dac-modification-chmod   PASS     medium
 ```
+
+## Useful labels
+
+Each pod that's spawned by the compliance-operator is labeled specifically with
+the scan it belongs to and the work it does.
+
+The scan identifier is labeled with the `compliance.openshift.io/scan-name`
+label.
+
+The workload identifier is labeled with the `workload` label.
+
+The compliance-operator schedules the following workloads:
+
+* **scanner**: Performs the actual compliance scan.
+
+* **resultserver**: Stores the raw results for the compliance scan.
+
+* **aggregator**: Aggregates the results, detects inconsistencies and outputs
+  result objects (checkresults and remediations).
+
+* **suitererunner**: Will tag a suite to be re-run (when a schedule is set).
+
+* **profileparser**: Parses a datastream and creates the appropriate profiles,
+  rules and variables.
+
+So, when debugging and needing the logs for a certain workload, it's possible
+to do:
+
+`oc logs -l workload=<workload name>`

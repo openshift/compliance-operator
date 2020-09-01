@@ -201,6 +201,7 @@ func (r *ReconcileProfileBundle) profileBundleDeleteHandler(pb *compliancev1alph
 func getWorkloadLabels(pb *compliancev1alpha1.ProfileBundle) map[string]string {
 	return map[string]string{
 		"profile-bundle": pb.Name,
+		"workload":       "profileparser",
 	}
 }
 
