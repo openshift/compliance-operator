@@ -31,7 +31,7 @@ Please refer to the README for general information about the API objects.
      to run a single scan or a suite with only that rule - you can find the
      rule ID from the corresponding `ComplianceCheckResult` object and use it
      as the `rule` attribute value in a Scan CR. Then, together with the
-     `debug` option enabled, the openscap-ocp container logs in the scanner
+     `debug` option enabled, the `scanner` container logs in the scanner
      pod would show the raw OpenSCAP logs.
 
 ## Anatomy of a scan
@@ -199,7 +199,7 @@ might be a good place to start debugging:
      `content-container.` It runs the *contentImage* container and
      executes a single command that copies the *contentFile* to the `/content`
      directory shared with the other containers in this pod
-   * **openscap-ocp**: This container runs the actual scan. For Node scans, the container
+   * **scanner**: This container runs the actual scan. For Node scans, the container
      mounts the node filesystem as `/host` and mounts the content delivered by the
      init container. The container also mounts the `entrypoint`
      `ConfigMap` created in the Launching phase and executes it. The default
@@ -207,7 +207,7 @@ might be a good place to start debugging:
      files in the `/results` directory shared between the pod's containers.
      Logs from this pod, especially when the `debug` flag is enabled, allow
      you to see what exactly did the openscap scanner check for.
-   * **logcollector**: The logcollector container waits until the openscap-ocp
+   * **logcollector**: The logcollector container waits until the scanner
       container finishes. Then, it uploads the full ARF results to the
       `ResultServer` and separately uploads the XCCDF results along with scan
       result and openscap result code as a `ConfigMap.` These result configmaps
@@ -240,8 +240,8 @@ Scanner pods for `Platform` scans are similar, except:
       reads the OpenScap content provided by the content-container init,
       container, figures out which API resources the content needs to
       examine and stores those API resources to a shared directory where the
-      openscap-ocp scanner pod would read them from.
-    * The openscap-ocp container does not need to mount the host filesystem
+      `scanner` container would read them from.
+    * The `scanner` container does not need to mount the host filesystem
 
 When the scanner pods are done, the scans move on to the Aggregating phase.
 

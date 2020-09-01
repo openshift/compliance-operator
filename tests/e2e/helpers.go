@@ -7,14 +7,15 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"os"
 	"path"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"k8s.io/client-go/kubernetes"
 
@@ -628,7 +629,7 @@ func getConfigMapsFromScan(f *framework.Framework, scaninstance *compv1alpha1.Co
 	var configmaps corev1.ConfigMapList
 	labelselector := map[string]string{
 		compv1alpha1.ComplianceScanLabel: scaninstance.Name,
-		compv1alpha1.ResultLabel: "",
+		compv1alpha1.ResultLabel:         "",
 	}
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(labelselector),
@@ -1778,7 +1779,7 @@ func writeToArtifactsDir(t *testing.T, f *framework.Framework, dir, scan, pod, c
 
 func logContainerOutput(t *testing.T, f *framework.Framework, namespace, name string) {
 	// Try all container/init variants for each pod and the pod itself (self), log nothing if the container is not applicable.
-	containers := []string{"self", "api-resource-collector", "log-collector", "openscap-ocp", "content-container"}
+	containers := []string{"self", "api-resource-collector", "log-collector", "scanner", "content-container"}
 	artifacts := os.Getenv("ARTIFACT_DIR")
 	if artifacts == "" {
 		return

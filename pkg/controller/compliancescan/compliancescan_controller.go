@@ -46,7 +46,7 @@ const (
 
 const (
 	// OpenSCAPScanContainerName defines the name of the contianer that will run OpenSCAP
-	OpenSCAPScanContainerName = "openscap-ocp"
+	OpenSCAPScanContainerName = "scanner"
 	// The default time we should wait before requeuing
 	requeueAfterDefault = 10 * time.Second
 )
