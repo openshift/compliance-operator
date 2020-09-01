@@ -355,8 +355,8 @@ bundle: check-operator-version operator-sdk ## Generate the bundle and packaging
 
 .PHONY: package-version-to-tag
 package-version-to-tag: check-package-version
-	@echo "Overriding default tag '$(TAG)' with release tag '$(COURIER_PACKAGE_VERSION)'"
-	$(eval TAG = $(COURIER_PACKAGE_VERSION))
+	@echo "Overriding default tag '$(TAG)' with release tag '$(OPERATOR_VERSION)'"
+	$(eval TAG = $(OPERATOR_VERSION))
 
 .PHONY: release-tag-image
 release-tag-image: package-version-to-tag
