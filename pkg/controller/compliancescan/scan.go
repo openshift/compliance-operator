@@ -92,6 +92,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 	podLabels := map[string]string{
 		compv1alpha1.ComplianceScanLabel: scanInstance.Name,
 		"targetNode":                     node.Name,
+		"workload":                       "scanner",
 	}
 
 	return &corev1.Pod{
@@ -252,6 +253,7 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 	cmName := getConfigMapForNodeName(scanInstance.Name, PlatformScanName)
 	podLabels := map[string]string{
 		compv1alpha1.ComplianceScanLabel: scanInstance.Name,
+		"workload":                       "scanner",
 	}
 	collectorCmd := []string{
 		"compliance-operator", "api-resource-collector",

@@ -95,6 +95,7 @@ func getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
 							Labels: map[string]string{
 								compv1alpha1.SuiteLabel:       suite.Name,
 								compv1alpha1.SuiteScriptLabel: "",
+								"workload":                    "suitererunner",
 							},
 						},
 						Spec: corev1.PodSpec{

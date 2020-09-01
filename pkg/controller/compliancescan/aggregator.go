@@ -26,6 +26,7 @@ func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Log
 
 	podLabels := map[string]string{
 		compv1alpha1.ComplianceScanLabel: scanInstance.Name,
+		"workload":                       "aggregator",
 	}
 
 	return &corev1.Pod{
