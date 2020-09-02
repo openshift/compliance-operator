@@ -3,7 +3,6 @@ package complianceremediation
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	"github.com/go-logr/logr"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -388,11 +387,11 @@ func createOrUpdateMachineConfig(r *ReconcileComplianceRemediation, merged *mcfg
 		return err
 	}
 
-	if rem.Spec.Apply && mcHasRemediation(mc, rem) && !mcDiffers(mc, merged) {
+	if rem.Spec.Apply && mcHasUpToDateRemediation(mc, rem) {
 		// If we have already applied this there's nothing to do
 		logger.Info("Remediation already applied, doing nothing")
 		return nil
-	} else if !rem.Spec.Apply && !mcHasRemediation(mc, rem) && !mcDiffers(mc, merged) {
+	} else if !rem.Spec.Apply && !mcHasRemediationAnnotation(mc, rem) {
 		// If we have already un-applied this there's nothing to do
 		logger.Info("Remediation already unapplied, doing nothing")
 		return nil
@@ -459,7 +458,7 @@ func ensureRemediationAnnotationIsSet(mc *mcfgv1.MachineConfig, rem *compv1alpha
 	if mc.Annotations == nil {
 		mc.Annotations = make(map[string]string)
 	}
-	mc.Annotations[getRemediationAnnotationKey(rem.Name)] = ""
+	mc.Annotations[getRemediationAnnotationKey(rem.Name)] = fmt.Sprintf("%d", rem.ObjectMeta.Generation)
 }
 
 func ensureRemediationAnnotationIsNotSet(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) {
@@ -472,7 +471,7 @@ func ensureRemediationAnnotationIsNotSet(mc *mcfgv1.MachineConfig, rem *compv1al
 	}
 }
 
-func mcHasRemediation(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) bool {
+func mcHasRemediationAnnotation(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) bool {
 	if mc.Annotations == nil {
 		return false
 	}
@@ -480,6 +479,18 @@ func mcHasRemediation(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceReme
 	return ok
 }
 
-func mcDiffers(current *mcfgv1.MachineConfig, merged *mcfgv1.MachineConfig) bool {
-	return !reflect.DeepEqual(current.Spec, merged.Spec)
+func mcHasUpToDateRemediation(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) bool {
+	if mc.Annotations == nil {
+		return false
+	}
+	persistedGeneration, ok := mc.Annotations[getRemediationAnnotationKey(rem.Name)]
+
+	if !ok {
+		return false
+	}
+
+	currentGeneration := fmt.Sprintf("%d", rem.ObjectMeta.Generation)
+
+	// If the generations don't match, then the MC doesn't have the latest remediation
+	return persistedGeneration == currentGeneration
 }
