@@ -10,15 +10,19 @@ import (
 	"path"
 
 	"github.com/go-logr/logr"
+	ocpimg "github.com/openshift/api/image/v1"
 	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
+	ocptrigger "github.com/openshift/library-go/pkg/image/trigger"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	cgorest "k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -40,7 +44,7 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileProfileBundle{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+	return &ReconcileProfileBundle{client: mgr.GetClient(), scheme: mgr.GetScheme(), reader: mgr.GetAPIReader()}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -65,6 +69,8 @@ var _ reconcile.Reconciler = &ReconcileProfileBundle{}
 
 // ReconcileProfileBundle reconciles a ProfileBundle object
 type ReconcileProfileBundle struct {
+	// Accesses the API server directly
+	reader client.Reader
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client client.Client
@@ -111,14 +117,27 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		return reconcile.Result{}, r.profileBundleDeleteHandler(instance, reqLogger)
 	}
 
+	annotations := map[string]string{}
+	isISTag, isTagImageRef, err := r.pointsToISTag(instance.Spec.ContentImage)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	effectiveImage := instance.Spec.ContentImage
+	if isISTag {
+		annotations = getISTagAnnotation(instance.Spec.ContentImage)
+		effectiveImage = isTagImageRef
+	}
+
 	// Define a new Pod object
-	depl := newWorkloadForBundle(instance)
+	depl := newWorkloadForBundle(instance, effectiveImage)
 
 	// Check if this Pod already exists
 	found := &appsv1.Deployment{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: depl.Name, Namespace: depl.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
 		reqLogger.Info("Creating a new Workload", "Deployment.Namespace", depl.Namespace, "Deployment.Name", depl.Name)
+		depl.Annotations = annotations
 		err = r.client.Create(context.TODO(), depl)
 		if err != nil {
 			return reconcile.Result{}, err
@@ -129,7 +148,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		return reconcile.Result{}, err
 	}
 
-	if workloadNeedsUpdate(instance, found) {
+	if workloadNeedsUpdate(effectiveImage, found) {
 		pbCopy := instance.DeepCopy()
 		pbCopy.Status.DataStreamStatus = compliancev1alpha1.DataStreamPending
 		pbCopy.Status.ErrorMessage = ""
@@ -142,6 +161,10 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		// This should have a copy of
 		updatedDepl := found.DeepCopy()
 		updatedDepl.Spec.Template = depl.Spec.Template
+		// Copy annotations if needed
+		for key, val := range annotations {
+			updatedDepl.Annotations[key] = val
+		}
 		reqLogger.Info("Updating Workload", "Deployment.Namespace", depl.Namespace, "Deployment.Name", depl.Name)
 		err = r.client.Update(context.TODO(), updatedDepl)
 		if err != nil {
@@ -182,7 +205,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 
 func (r *ReconcileProfileBundle) profileBundleDeleteHandler(pb *compliancev1alpha1.ProfileBundle, logger logr.Logger) error {
 	logger.Info("The ProfileBundle is being deleted")
-	pod := newWorkloadForBundle(pb)
+	pod := newWorkloadForBundle(pb, "")
 	logger.Info("Deleting profileparser workload", "Pod.Name", pod.Name)
 	err := r.client.Delete(context.TODO(), pod)
 	if err != nil && !errors.IsNotFound(err) {
@@ -198,6 +221,31 @@ func (r *ReconcileProfileBundle) profileBundleDeleteHandler(pb *compliancev1alph
 	return nil
 }
 
+func (r *ReconcileProfileBundle) pointsToISTag(contentImageRef string) (bool, string, error) {
+	// If this isn't a valid name, it's probably a direct reference to an image
+	if errs := cgorest.IsValidPathSegmentName(contentImageRef); len(errs) != 0 {
+		return false, "", nil
+	}
+
+	istag := &ocpimg.ImageStreamTag{}
+	key := types.NamespacedName{
+		Name:      contentImageRef,
+		Namespace: common.GetComplianceOperatorNamespace(),
+	}
+
+	// We need to use the API reader here because openshift-apiserver doesn't allow
+	// watching for ImageStreamTag resources. Hence, we don't want this to end up
+	// with the informer failing to watch the resource.
+	if err := r.reader.Get(context.TODO(), key, istag); err != nil {
+		if errors.IsNotFound(err) || runtime.IsNotRegisteredError(err) || meta.IsNoMatchError(err) {
+			return false, "", nil
+		}
+		return false, "", err
+	}
+	return true, istag.Image.DockerImageReference, nil
+
+}
+
 func getWorkloadLabels(pb *compliancev1alpha1.ProfileBundle) map[string]string {
 	return map[string]string{
 		"profile-bundle": pb.Name,
@@ -205,8 +253,17 @@ func getWorkloadLabels(pb *compliancev1alpha1.ProfileBundle) map[string]string {
 	}
 }
 
+// This annotation
+func getISTagAnnotation(isTagName string) map[string]string {
+	annotationFmt := `[{"from":{"kind":"ImageStreamTag","name":"%s"},"fieldPath":"spec.template.spec.initContainers[?(@.name==\"content-container\")].image"}]`
+	triggerAnn := fmt.Sprintf(annotationFmt, isTagName)
+	return map[string]string{
+		ocptrigger.TriggerAnnotationKey: triggerAnn,
+	}
+}
+
 // newPodForBundle returns a busybox pod with the same name/namespace as the cr
-func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle) *appsv1.Deployment {
+func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *appsv1.Deployment {
 	labels := getWorkloadLabels(pb)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -227,7 +284,7 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle) *appsv1.Deployme
 					InitContainers: []corev1.Container{
 						{
 							Name:  "content-container",
-							Image: pb.Spec.ContentImage,
+							Image: image,
 							Command: []string{
 								"sh",
 								"-c",
@@ -310,7 +367,7 @@ func podStartupError(pod *corev1.Pod) bool {
 	return false
 }
 
-func workloadNeedsUpdate(pb *compliancev1alpha1.ProfileBundle, depl *appsv1.Deployment) bool {
+func workloadNeedsUpdate(image string, depl *appsv1.Deployment) bool {
 	initContainers := depl.Spec.Template.Spec.InitContainers
 	if len(initContainers) != 2 {
 		// For some weird reason we don't have the amount of init containers we expect.
@@ -320,7 +377,7 @@ func workloadNeedsUpdate(pb *compliancev1alpha1.ProfileBundle, depl *appsv1.Depl
 	for _, container := range initContainers {
 		if container.Name == "content-container" {
 			// we need an update if the image reference doesn't match.
-			return pb.Spec.ContentImage != container.Image
+			return image != container.Image
 		}
 	}
 

@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	ocpapi "github.com/openshift/api"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"
@@ -152,6 +153,11 @@ func RunOperator(cmd *cobra.Command, args []string) {
 	if err := mcfgapi.Install(mgrscheme); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
+	}
+
+	if err := ocpapi.Install(mgrscheme); err != nil {
+		log.Info("Couldn't install OCP API. This is not fatal though.")
+		log.Error(err, "")
 	}
 
 	// Setup all Controllers
