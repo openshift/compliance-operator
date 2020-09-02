@@ -17,6 +17,7 @@ require (
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/library-go v0.0.0-20200320155611-2a351bebf158
 	github.com/openshift/machine-config-operator v4.2.0-alpha.0.0.20190917115525-033375cbe820+incompatible
+	github.com/operator-framework/operator-registry v1.12.6-0.20200611222234-275301b779f8
 	github.com/operator-framework/operator-sdk v0.18.2
 	github.com/robfig/cron v1.1.0
 	github.com/securego/gosec v0.0.0-20200302134848-c998389da2ac
