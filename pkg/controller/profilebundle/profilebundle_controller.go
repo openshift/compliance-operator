@@ -184,7 +184,12 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		return reconcile.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 	}
 
-	if podStartupError(&foundPods.Items[0]) {
+	// If there was a transcient error such as the image not being
+	// fetched (Image pull error) the Deployment will schedule a new
+	// pod. So let's find the newest.
+	relevantPod := utils.FindNewestPod(foundPods.Items)
+
+	if podStartupError(relevantPod) {
 		// report to status
 		pbCopy := instance.DeepCopy()
 		pbCopy.Status.DataStreamStatus = compliancev1alpha1.DataStreamInvalid

@@ -1454,7 +1454,7 @@ func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, namesp
 
 		// Deployment updates will trigger a rolling update, so we might have
 		// more than one pod. We only care about the newest
-		pod := findNewestPod(pods.Items)
+		pod := utils.FindNewestPod(pods.Items)
 		if len(pod.Status.InitContainerStatuses) != 2 {
 			E2ELogf(t, "Retrying. Content parsing isn't done yet\n")
 			return false, nil
@@ -1478,18 +1478,6 @@ func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, namesp
 	}
 	E2ELogf(t, "Profile parser Deployment Done\n")
 	return nil
-}
-
-func findNewestPod(pods []corev1.Pod) *corev1.Pod {
-	var newestPod *corev1.Pod
-	for _, pod := range pods {
-		if newestPod == nil {
-			newestPod = pod.DeepCopy()
-		} else if newestPod.CreationTimestamp.Before(&pod.CreationTimestamp) {
-			newestPod = pod.DeepCopy()
-		}
-	}
-	return newestPod
 }
 
 func assertMustHaveParsedRules(t *testing.T, f *framework.Framework, namespace, name string) error {
