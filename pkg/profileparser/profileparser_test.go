@@ -14,6 +14,7 @@ import (
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apiserver/pkg/storage/names"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -417,7 +418,8 @@ var _ = Describe("Testing parse profiles", func() {
 			return nil
 		}
 
-		err := ParseProfilesAndDo(pInput.contentDom, pInput.pb, profileAdder)
+		nonce := names.SimpleNameGenerator.GenerateName("pb-")
+		err := ParseProfilesAndDo(pInput.contentDom, pInput.pb, nonce, profileAdder)
 		Expect(err).To(BeNil())
 	})
 
@@ -492,7 +494,8 @@ var _ = Describe("Testing parse variables", func() {
 			return nil
 		}
 
-		err := ParseVariablesAndDo(pInput.contentDom, pInput.pb, variableAdder)
+		nonce := names.SimpleNameGenerator.GenerateName("pb-")
+		err := ParseVariablesAndDo(pInput.contentDom, pInput.pb, nonce, variableAdder)
 		Expect(err).To(BeNil())
 	})
 
@@ -567,7 +570,8 @@ var _ = Describe("Testing parse rules", func() {
 		}
 
 		stdParser := newStandardParser()
-		err := ParseRulesAndDo(pInput.contentDom, stdParser, pInput.pb, ruleAdder)
+		nonce := names.SimpleNameGenerator.GenerateName("pb-")
+		err := ParseRulesAndDo(pInput.contentDom, stdParser, pInput.pb, nonce, ruleAdder)
 		Expect(err).To(BeNil())
 	})
 

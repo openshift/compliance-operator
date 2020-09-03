@@ -18,6 +18,7 @@ import (
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/apiserver/pkg/storage/names"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -53,8 +54,9 @@ func GetPrefixedName(pbName, objName string) string {
 
 func ParseBundle(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, pcfg *ParserConfig) error {
 	stdParser := newStandardParser()
+	nonce := names.SimpleNameGenerator.GenerateName(fmt.Sprintf("pb-%s", pb.Name))
 
-	err := ParseProfilesAndDo(contentDom, pb, func(p *cmpv1alpha1.Profile) error {
+	err := ParseProfilesAndDo(contentDom, pb, nonce, func(p *cmpv1alpha1.Profile) error {
 		err := parseAction(p, "Profile", pb, pcfg, func(found, updated interface{}) error {
 			foundProfile, ok := found.(*cmpv1alpha1.Profile)
 			if !ok {
@@ -76,11 +78,11 @@ func ParseBundle(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, pcf
 		return err
 	}
 
-	if err := deleteObsoleteItems(pcfg.Client, "Profile", pb.Name, pb.Namespace, pb.GetImageDigest()); err != nil {
+	if err := deleteObsoleteItems(pcfg.Client, "Profile", pb.Name, pb.Namespace, nonce); err != nil {
 		return err
 	}
 
-	err = ParseRulesAndDo(contentDom, stdParser, pb, func(r *cmpv1alpha1.Rule) error {
+	err = ParseRulesAndDo(contentDom, stdParser, pb, nonce, func(r *cmpv1alpha1.Rule) error {
 		if r.Annotations == nil {
 			r.Annotations = make(map[string]string)
 		}
@@ -107,11 +109,11 @@ func ParseBundle(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, pcf
 		return err
 	}
 
-	if err := deleteObsoleteItems(pcfg.Client, "Rule", pb.Name, pb.Namespace, pb.GetImageDigest()); err != nil {
+	if err := deleteObsoleteItems(pcfg.Client, "Rule", pb.Name, pb.Namespace, nonce); err != nil {
 		return err
 	}
 
-	err = ParseVariablesAndDo(contentDom, pb, func(v *cmpv1alpha1.Variable) error {
+	err = ParseVariablesAndDo(contentDom, pb, nonce, func(v *cmpv1alpha1.Variable) error {
 		err := parseAction(v, "Variable", pb, pcfg, func(found, updated interface{}) error {
 			foundVariable, ok := found.(*cmpv1alpha1.Variable)
 			if !ok {
@@ -133,7 +135,7 @@ func ParseBundle(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, pcf
 		return err
 	}
 
-	if err := deleteObsoleteItems(pcfg.Client, "Variable", pb.Name, pb.Namespace, pb.GetImageDigest()); err != nil {
+	if err := deleteObsoleteItems(pcfg.Client, "Variable", pb.Name, pb.Namespace, nonce); err != nil {
 		return err
 	}
 
@@ -192,7 +194,7 @@ func createOrUpdate(cli runtimeclient.Client, kind string, key types.NamespacedN
 	return nil
 }
 
-func deleteObsoleteItems(cli runtimeclient.Client, kind string, pbName, namespace string, imageDigest string) error {
+func deleteObsoleteItems(cli runtimeclient.Client, kind string, pbName, namespace string, nonce string) error {
 	list := unstructured.UnstructuredList{}
 	list.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   cmpv1alpha1.SchemeGroupVersion.Group,
@@ -214,7 +216,7 @@ func deleteObsoleteItems(cli runtimeclient.Client, kind string, pbName, namespac
 	// if this ever becomes a performance problem, use labels instead
 	// with a short version of the hash
 	for _, item := range list.Items {
-		err := deleteIfNotCurrentDigest(cli, imageDigest, &item)
+		err := deleteIfNotCurrentDigest(cli, nonce, &item)
 		if err != nil {
 			return err
 		}
@@ -251,11 +253,11 @@ func getVariableType(varNode *xmldom.Node) cmpv1alpha1.VariableType {
 	return cmpv1alpha1.VarTypeString
 }
 
-func ParseProfilesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, action func(p *cmpv1alpha1.Profile) error) error {
+func ParseProfilesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, nonce string, action func(p *cmpv1alpha1.Profile) error) error {
 	benchmarks := contentDom.Root.Query("//Benchmark")
 	for _, bench := range benchmarks {
 		productType, productName := getProductTypeAndName(bench, cmpv1alpha1.ScanTypeNode, "")
-		if err := parseProfileFromNode(bench, pb, productType, productName, action); err != nil {
+		if err := parseProfileFromNode(bench, pb, productType, productName, nonce, action); err != nil {
 			return err
 		}
 	}
@@ -263,7 +265,7 @@ func ParseProfilesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBund
 	return nil
 }
 
-func parseProfileFromNode(profileRoot *xmldom.Node, pb *cmpv1alpha1.ProfileBundle, defType cmpv1alpha1.ComplianceScanType, defName string, action func(p *cmpv1alpha1.Profile) error) error {
+func parseProfileFromNode(profileRoot *xmldom.Node, pb *cmpv1alpha1.ProfileBundle, defType cmpv1alpha1.ComplianceScanType, defName, nonce string, action func(p *cmpv1alpha1.Profile) error) error {
 	profileObjs := profileRoot.Query("//Profile")
 	for _, profileObj := range profileObjs {
 
@@ -333,7 +335,7 @@ func parseProfileFromNode(profileRoot *xmldom.Node, pb *cmpv1alpha1.ProfileBundl
 			},
 		}
 
-		annotateWithPbDigest(pb, &p)
+		annotateWithNonce(&p, nonce)
 
 		err := action(&p)
 		if err != nil {
@@ -394,7 +396,7 @@ func parseProductTypeAndName(idref string, defaultType cmpv1alpha1.ComplianceSca
 	return productType, productName
 }
 
-func ParseVariablesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, action func(v *cmpv1alpha1.Variable) error) error {
+func ParseVariablesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, nonce string, action func(v *cmpv1alpha1.Variable) error) error {
 	varObjs := contentDom.Root.Query("//Value")
 	for _, varObj := range varObjs {
 		hidden := varObj.GetAttributeValue("hidden")
@@ -449,7 +451,7 @@ func ParseVariablesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBun
 			continue
 		}
 
-		annotateWithPbDigest(pb, &v)
+		annotateWithNonce(&v, nonce)
 
 		err = action(&v)
 		if err != nil {
@@ -483,7 +485,7 @@ func parseVarValues(varNode *xmldom.Node, v *cmpv1alpha1.Variable) error {
 	return nil
 }
 
-func ParseRulesAndDo(contentDom *xmldom.Document, stdParser *referenceParser, pb *cmpv1alpha1.ProfileBundle, action func(p *cmpv1alpha1.Rule) error) error {
+func ParseRulesAndDo(contentDom *xmldom.Document, stdParser *referenceParser, pb *cmpv1alpha1.ProfileBundle, nonce string, action func(p *cmpv1alpha1.Rule) error) error {
 	ruleObjs := contentDom.Root.Query("//Rule")
 	for _, ruleObj := range ruleObjs {
 		id := ruleObj.GetAttributeValue("id")
@@ -586,7 +588,7 @@ func ParseRulesAndDo(contentDom *xmldom.Document, stdParser *referenceParser, pb
 			p.AvailableFixes = fixes
 		}
 
-		annotateWithPbDigest(pb, &p)
+		annotateWithNonce(&p, nonce)
 
 		err = action(&p)
 		if err != nil {
@@ -617,12 +619,12 @@ func isRelevantFix(fix *xmldom.Node) bool {
 	return false
 }
 
-func annotateWithPbDigest(pb *cmpv1alpha1.ProfileBundle, o metav1.Object) {
+func annotateWithNonce(o metav1.Object, nonce string) {
 	annotations := o.GetAnnotations()
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
-	annotations[cmpv1alpha1.ProfileImageDigestAnnotation] = pb.GetImageDigest()
+	annotations[cmpv1alpha1.ProfileImageDigestAnnotation] = nonce
 	o.SetAnnotations(annotations)
 }
 

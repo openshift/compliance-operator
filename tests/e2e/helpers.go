@@ -14,22 +14,23 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-
-	"k8s.io/client-go/kubernetes"
-
+	ocpapi "github.com/openshift/api"
+	imagev1 "github.com/openshift/api/image/v1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -259,6 +260,17 @@ func setupTestRequirements(t *testing.T) *framework.Context {
 	for _, obj := range mcoObjs {
 		err := framework.AddToFrameworkScheme(mcfgapi.Install, obj)
 		if err != nil {
+			t.Fatalf("TEST SETUP: failed to add custom resource scheme to framework: %v", err)
+		}
+	}
+
+	// OpenShift objects
+	ocpObjs := [2]runtime.Object{
+		&imagev1.ImageStreamList{},
+		&imagev1.ImageStreamTagList{},
+	}
+	for _, obj := range ocpObjs {
+		if err := framework.AddToFrameworkScheme(ocpapi.Install, obj); err != nil {
 			t.Fatalf("TEST SETUP: failed to add custom resource scheme to framework: %v", err)
 		}
 	}
@@ -1392,6 +1404,84 @@ func findRuleReference(profile *compv1alpha1.Profile, ruleName string) bool {
 	return false
 }
 
+func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, namespace, name, imgDigest string) error {
+	lo := &client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			"profile-bundle": name,
+			"workload":       "profileparser",
+		}),
+	}
+
+	var depls appsv1.DeploymentList
+	var lastErr error
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.List(goctx.TODO(), &depls, lo)
+		if lastErr != nil {
+			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
+			return false, nil
+		}
+		depl := depls.Items[0]
+		currentImg := depl.Spec.Template.Spec.InitContainers[0].Image
+		// The image will have a different path, but the digest should be the same
+		if !strings.HasSuffix(currentImg, imgDigest) {
+			E2ELogf(t, "Retrying. Content image isn't up-to-date yet in the Deployment\n")
+			return false, nil
+		}
+		return true, nil
+	})
+	// Error in function call
+	if lastErr != nil {
+		return lastErr
+	}
+	// Timeout
+	if timeouterr != nil {
+		return timeouterr
+	}
+
+	E2ELogf(t, "Profile parser Deployment updated\n")
+
+	var pods corev1.PodList
+	timeouterr = wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.List(goctx.TODO(), &pods, lo)
+		if lastErr != nil {
+			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
+			return false, nil
+		}
+
+		// Deployment updates will trigger a rolling update, so we might have
+		// more than one pod. We only care about the newest
+		pod := utils.FindNewestPod(pods.Items)
+
+		currentImg := pod.Spec.InitContainers[0].Image
+		if !strings.HasSuffix(currentImg, imgDigest) {
+			E2ELogf(t, "Retrying. Content image isn't up-to-date yet in the Pod\n")
+			return false, nil
+		}
+		if len(pod.Status.InitContainerStatuses) != 2 {
+			E2ELogf(t, "Retrying. Content parsing isn't done yet\n")
+			return false, nil
+		}
+
+		// The profileparser will take time, so we know it'll be index 1
+		ppStatus := pod.Status.InitContainerStatuses[1]
+		if !ppStatus.Ready {
+			E2ELogf(t, "Retrying. Content parsing isn't done yet (container not ready yet)\n")
+			return false, nil
+		}
+		return true, nil
+	})
+	// Error in function call
+	if lastErr != nil {
+		return lastErr
+	}
+	// Timeout
+	if timeouterr != nil {
+		return timeouterr
+	}
+	E2ELogf(t, "Profile parser Deployment Done\n")
+	return nil
+}
+
 func assertMustHaveParsedRules(t *testing.T, f *framework.Framework, namespace, name string) error {
 	var rl compv1alpha1.RuleList
 	lo := &client.ListOptions{
@@ -1845,4 +1935,39 @@ func reRunScan(t *testing.T, f *framework.Framework, scanName, namespace string)
 
 	E2ELogf(t, "Scan re-launched")
 	return nil
+}
+
+func createImageStream(f *framework.Framework, ctx *framework.Context, iSName, ns, imgPath string) error {
+	stream := &imagev1.ImageStream{
+		TypeMeta:   metav1.TypeMeta{APIVersion: imagev1.SchemeGroupVersion.String(), Kind: "ImageStream"},
+		ObjectMeta: metav1.ObjectMeta{Name: iSName, Namespace: ns},
+		Spec: imagev1.ImageStreamSpec{
+			Tags: []imagev1.TagReference{
+				{
+					Name: "latest",
+					From: &corev1.ObjectReference{
+						Kind: "DockerImage",
+						Name: imgPath,
+					},
+					ReferencePolicy: imagev1.TagReferencePolicy{
+						Type: imagev1.LocalTagReferencePolicy,
+					},
+				},
+			},
+		},
+	}
+	return f.Client.Create(goctx.TODO(), stream, getCleanupOpts(ctx))
+}
+
+func updateImageStreamTag(f *framework.Framework, iSName, ns, imgPath string) error {
+	foundstream := &imagev1.ImageStream{}
+	key := types.NamespacedName{Name: iSName, Namespace: ns}
+	if err := f.Client.Get(goctx.TODO(), key, foundstream); err != nil {
+		return err
+	}
+
+	stream := foundstream.DeepCopy()
+	// Updated tracked image reference
+	stream.Spec.Tags[0].From.Name = imgPath
+	return f.Client.Update(goctx.TODO(), stream)
 }
