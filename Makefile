@@ -354,7 +354,7 @@ bundle: check-operator-version operator-sdk ## Generate the bundle and packaging
 	$(GOPATH)/bin/operator-sdk bundle validate ./deploy/olm-catalog/compliance-operator/
 
 .PHONY: package-version-to-tag
-package-version-to-tag: check-package-version
+package-version-to-tag: check-operator-version
 	@echo "Overriding default tag '$(TAG)' with release tag '$(OPERATOR_VERSION)'"
 	$(eval TAG = $(OPERATOR_VERSION))
 
