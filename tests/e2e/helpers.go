@@ -1424,7 +1424,7 @@ func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, namesp
 		currentImg := depl.Spec.Template.Spec.InitContainers[0].Image
 		// The image will have a different path, but the digest should be the same
 		if !strings.HasSuffix(currentImg, imgDigest) {
-			E2ELogf(t, "Retrying. Content image isn't up-to-date yet\n")
+			E2ELogf(t, "Retrying. Content image isn't up-to-date yet in the Deployment\n")
 			return false, nil
 		}
 		return true, nil
@@ -1447,14 +1447,16 @@ func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, namesp
 			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
 			return false, nil
 		}
-		if len(pods.Items) < 2 {
-			E2ELogf(t, "Retrying. The new pod hasn't been spawned by the Deployment yet\n")
-			return false, nil
-		}
 
 		// Deployment updates will trigger a rolling update, so we might have
 		// more than one pod. We only care about the newest
 		pod := utils.FindNewestPod(pods.Items)
+
+		currentImg := pod.Spec.InitContainers[0].Image
+		if !strings.HasSuffix(currentImg, imgDigest) {
+			E2ELogf(t, "Retrying. Content image isn't up-to-date yet in the Pod\n")
+			return false, nil
+		}
 		if len(pod.Status.InitContainerStatuses) != 2 {
 			E2ELogf(t, "Retrying. Content parsing isn't done yet\n")
 			return false, nil
