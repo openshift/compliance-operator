@@ -67,6 +67,13 @@ else ifeq ($(OS_NAME), Darwin)
     OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-x86_64-apple-darwin
 endif
 
+OPM_VERSION=v1.13.8
+ifeq ($(OS_NAME), Linux)
+    OPM_URL=https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/linux-amd64-opm
+else ifeq ($(OS_NAME), Darwin)
+    OPM_URL=https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/darwin-amd64-opm
+endif
+
 # Test variables
 # ==============
 TEST_OPTIONS?=
@@ -121,8 +128,8 @@ bundle-image:
 	$(RUNTIME) build -t $(BUNDLE_IMAGE_PATH):$(TAG) -f bundle.Dockerfile .
 
 .PHONE: index-image
-index-image:
-	opm index add -b $(BUNDLE_IMAGE_PATH):$(TAG) -t $(INDEX_IMAGE_PATH):$(TAG) -c podman
+index-image: opm
+	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(TAG) -t $(INDEX_IMAGE_PATH):$(TAG) -c podman
 
 .PHONY: build
 build: fmt manager ## Build the compliance-operator binary
@@ -136,6 +143,13 @@ operator-sdk: $(GOPATH)/bin/operator-sdk
 $(GOPATH)/bin/operator-sdk:
 	wget -nv $(OPERATOR_SDK_URL) -O $(GOPATH)/bin/operator-sdk || (echo "wget returned $$? trying to fetch operator-sdk. please install operator-sdk and try again"; exit 1)
 	chmod +x $(GOPATH)/bin/operator-sdk
+
+.PHONY: opm
+opm: $(GOPATH)/bin/opm
+
+$(GOPATH)/bin/opm:
+	wget -nv $(OPM_URL) -O $(GOPATH)/bin/opm || (echo "wget returned $$? trying to fetch opm. please install opm and try again"; exit 1)
+	chmod +x $(GOPATH)/bin/opm
 
 .PHONY: run
 run: operator-sdk ## Run the compliance-operator locally
