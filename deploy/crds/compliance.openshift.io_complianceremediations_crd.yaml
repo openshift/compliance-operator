@@ -41,6 +41,9 @@ spec:
                   by the operator
                 type: boolean
               current:
+                description: Defines the remediation that is proposed by the scan.
+                  If there is no "outdated" remediation in this object, the "current"
+                  remediation is what will be applied.
                 properties:
                   object:
                     description: The remediation payload. This would normally be a
@@ -50,6 +53,11 @@ spec:
                     x-kubernetes-preserve-unknown-fields: true
                 type: object
               outdated:
+                description: In case there was a previous remediation proposed by
+                  a previous scan, and that remediation now differs, the old remediation
+                  will be kept in this "outdated" key. This requires admin intervention
+                  to remove this outdated object and ensure the current is what's
+                  applied.
                 properties:
                   object:
                     description: The remediation payload. This would normally be a
