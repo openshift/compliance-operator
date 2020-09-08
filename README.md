@@ -17,10 +17,46 @@ lower-level `ComplianceScan` directly as well, it is not recommended.
 
 ## Deploying the operator
 Before you can actually use the operator, you need to make sure it is
-deployed in the cluster.
+deployed in the cluster. Depending on your needs, you might want to
+deploy the upstream released packages or directly from the source.
+
+First, become kubeadmin, either with `oc login` or by exporting `KUBECONFIG`.
+
+### Deploying upstream packages
+Deploying from package would deploy the latest released upstream version.
+
+First, create the `CatalogSource` and optionally verify it's been created
+successfuly:
+```
+$ oc create -f deploy/olm-catalog/catalog-source.yaml
+$ oc get catalogsource -nopenshift-marketplace
+```
+
+Next, create the target namespace and finally either install the operator
+from the Web Console or from the CLI following these steps:
+```
+$ oc create -f deploy/ns.yaml
+$ oc create -f deploy/olm-catalog/operator-group.yaml
+$ oc create -f deploy/olm-catalog/subscription.yaml
+```
+The Subscription file can be edited to optionally deploy a custom version,
+see the `startingCSV` attribute in the `deploy/olm-catalog/subscription.yaml`
+file.
+
+Verify that the expected objects have been created:
+```
+$ oc get sub -nopenshift-compliance
+$ oc get ip -nopenshift-compliance
+$ oc get csv -nopenshift-compliance
+```
+
+At this point, the operator should be up and running:
+```
+$ oc get deploy -nopenshift-compliance
+$ oc get pods -nopenshift-compliance
+```
 
 ### Deploying from source
-First, become kubeadmin, either with `oc login` or by exporting `KUBECONFIG`.
 ```
 $ (clone repo)
 $ oc create -f deploy/ns.yaml
