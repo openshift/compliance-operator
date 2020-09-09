@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/utils"
@@ -22,7 +23,7 @@ const rerunnerServiceAccount = "rerunner"
 func (r *ReconcileComplianceSuite) reconcileScanRerunnerCronJob(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) error {
 	rerunner := getRerunner(suite)
 	if suite.Spec.Schedule == "" {
-		return r.handleDelete(rerunner, logger)
+		return r.handleRerunnerDelete(rerunner, suite.Name, logger)
 	}
 	return r.handleCreate(suite, rerunner, logger)
 }
@@ -61,7 +62,7 @@ func (r *ReconcileComplianceSuite) handleCreate(suite *compv1alpha1.ComplianceSu
 	return nil
 }
 
-func (r *ReconcileComplianceSuite) handleDelete(rerunner *batchv1beta1.CronJob, logger logr.Logger) error {
+func (r *ReconcileComplianceSuite) handleRerunnerDelete(rerunner *batchv1beta1.CronJob, suiteName string, logger logr.Logger) error {
 	key := types.NamespacedName{Name: rerunner.GetName(), Namespace: rerunner.GetNamespace()}
 	found := &batchv1beta1.CronJob{}
 	err := r.client.Get(context.TODO(), key, found)
@@ -71,6 +72,22 @@ func (r *ReconcileComplianceSuite) handleDelete(rerunner *batchv1beta1.CronJob, 
 	} else if err != nil {
 		return err
 	}
+
+	inNs := client.InNamespace(common.GetComplianceOperatorNamespace())
+	withLabel := client.MatchingLabels{
+		compv1alpha1.SuiteLabel:       suiteName,
+		compv1alpha1.SuiteScriptLabel: "",
+	}
+	err = r.client.DeleteAllOf(context.Background(), &corev1.Pod{}, inNs, withLabel)
+	if err != nil {
+		return err
+	}
+
+	err = r.client.DeleteAllOf(context.Background(), &batchv1.Job{}, inNs, withLabel)
+	if err != nil {
+		return err
+	}
+
 	logger.Info("Deleting rerunner", "CronJob.Name", rerunner.GetName())
 	return r.client.Delete(context.TODO(), rerunner)
 }

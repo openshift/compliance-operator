@@ -113,6 +113,12 @@ rules:
   - delete 
   - update
 - apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - deletecollection # Needed for cleaning up jobs
+- apiGroups:
   - image.openshift.io
   resources:
   - imagestreamtags
