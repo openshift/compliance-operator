@@ -151,18 +151,7 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 
 func (r *ReconcileComplianceSuite) suiteDeleteHandler(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) error {
 	rerunner := getRerunner(suite)
-	err := r.client.Delete(context.TODO(), rerunner)
-	if err != nil && !errors.IsNotFound(err) {
-		return err
-	}
-
-	inNs := client.InNamespace(common.GetComplianceOperatorNamespace())
-	withLabel := client.MatchingLabels{
-		compv1alpha1.SuiteLabel:       suite.Name,
-		compv1alpha1.SuiteScriptLabel: "",
-	}
-	err = r.client.DeleteAllOf(context.Background(), &corev1.Pod{}, inNs, withLabel)
-	if err != nil {
+	if err := r.handleRerunnerDelete(rerunner, suite.Name, logger); err != nil {
 		return err
 	}
 
