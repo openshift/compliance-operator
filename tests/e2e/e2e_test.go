@@ -229,6 +229,180 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
+			Name:       "TestProfileISTagOtherNs",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				const (
+					baselineImage       = "quay.io/jhrozek/ocp4-openscap-content@sha256:a1709f5150b17a9560a5732fe48a89f07bffc72c0832aa8c49ee5504510ae687"
+					modifiedImageDigest = "sha256:7999243c0b005792bd58c6f5e1776ca88cf20adac1519c00ef08b18e77188db7"
+					removedRule         = "chronyd-no-chronyc-network"
+					unlinkedRule        = "chronyd-client-only"
+					moderateProfileName = "moderate"
+				)
+				var (
+					modifiedImage = fmt.Sprintf("quay.io/jhrozek/ocp4-openscap-content@%s", modifiedImageDigest)
+				)
+
+				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
+
+				pbName := getObjNameFromTest(t)
+				iSName := pbName
+				otherNs := "openshift"
+
+				if err := createImageStream(f, ctx, iSName, otherNs, baselineImage); err != nil {
+					return err
+				}
+
+				pb := &compv1alpha1.ProfileBundle{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      pbName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ProfileBundleSpec{
+						ContentImage: fmt.Sprintf("%s/%s:%s", otherNs, iSName, "latest"),
+						ContentFile:  rhcosContentFile,
+					},
+				}
+
+				if err := f.Client.Create(goctx.TODO(), pb, getCleanupOpts(ctx)); err != nil {
+					return err
+				}
+
+				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamValid); err != nil {
+					return err
+				}
+				if err := assertMustHaveParsedProfiles(f, pbName, string(compv1alpha1.ScanTypeNode), "redhat_enterprise_linux_coreos_4"); err != nil {
+					return err
+				}
+
+				// Check that the rule we removed exists in the original profile
+				err, found := doesRuleExist(f, pb.Namespace, prefixName(pbName, removedRule))
+				if err != nil {
+					return err
+				} else if found != true {
+					t.Errorf("Expected rule %s not found", prefixName(pbName, removedRule))
+					return err
+				}
+
+				// Check that the rule we unlined in the modified profile is linked in the original
+				profilePreUpdate := &compv1alpha1.Profile{}
+				if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: pb.Namespace, Name: prefixName(pbName, moderateProfileName)}, profilePreUpdate); err != nil {
+					return err
+				}
+				found = findRuleReference(profilePreUpdate, prefixName(pbName, unlinkedRule))
+				if found != true {
+					t.Errorf("Expected rule %s not found", prefixName(pbName, unlinkedRule))
+					return err
+				}
+
+				// Update the reference in the image stream
+				if err := updateImageStreamTag(f, iSName, otherNs, modifiedImage); err != nil {
+					return err
+				}
+
+				// Note that when an update happens through an imagestream tag, the operator doesn't get
+				// a notification about it... It all happens on the Kube Deployment's side.
+				// So we don't need to wait for the profile bundle's statuses
+				if err := waitForDeploymentContentUpdate(t, f, namespace, pbName, modifiedImageDigest); err != nil {
+					return err
+				}
+
+				if err := assertMustHaveParsedRules(t, f, namespace, pbName); err != nil {
+					return err
+				}
+
+				// We removed this rule in the update, it must no longer exist
+				err, found = doesRuleExist(f, pb.Namespace, prefixName(pbName, removedRule))
+				if err != nil {
+					return err
+				} else if found != false {
+					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, removedRule))
+					return err
+				}
+
+				// This rule was unlinked
+				profilePostUpdate := &compv1alpha1.Profile{}
+				if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: pb.Namespace, Name: prefixName(pbName, moderateProfileName)}, profilePostUpdate); err != nil {
+					return err
+				}
+				found = findRuleReference(profilePostUpdate, prefixName(pbName, unlinkedRule))
+				if found != false {
+					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
+					return err
+				}
+
+				return nil
+			},
+		},
+		testExecution{
+			Name:       "TestInvalidBundleWithUnexistentRef",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				const (
+					unexistentImage     = "bad-namespace/bad-image:latest"
+					removedRule         = "chronyd-no-chronyc-network"
+					unlinkedRule        = "chronyd-client-only"
+					moderateProfileName = "moderate"
+				)
+
+				pbName := getObjNameFromTest(t)
+
+				pb := &compv1alpha1.ProfileBundle{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      pbName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ProfileBundleSpec{
+						ContentImage: unexistentImage,
+						ContentFile:  rhcosContentFile,
+					},
+				}
+
+				if err := f.Client.Create(goctx.TODO(), pb, getCleanupOpts(ctx)); err != nil {
+					return err
+				}
+
+				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamInvalid); err != nil {
+					return err
+				}
+				return nil
+			},
+		},
+		testExecution{
+			Name:       "TestInvalidBundleWithNoTag",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				const (
+					noTagImage          = "bad-namespace/bad-image"
+					removedRule         = "chronyd-no-chronyc-network"
+					unlinkedRule        = "chronyd-client-only"
+					moderateProfileName = "moderate"
+				)
+
+				pbName := getObjNameFromTest(t)
+
+				pb := &compv1alpha1.ProfileBundle{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      pbName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ProfileBundleSpec{
+						ContentImage: noTagImage,
+						ContentFile:  rhcosContentFile,
+					},
+				}
+
+				if err := f.Client.Create(goctx.TODO(), pb, getCleanupOpts(ctx)); err != nil {
+					return err
+				}
+
+				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamInvalid); err != nil {
+					return err
+				}
+				return nil
+			},
+		},
+		testExecution{
 			Name:       "TestSingleScanSucceeds",
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
