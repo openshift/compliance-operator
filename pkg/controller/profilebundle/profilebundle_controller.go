@@ -269,6 +269,11 @@ func (r *ReconcileProfileBundle) pointsToISTag(contentImageRef string) (bool, st
 		if errors.IsNotFound(err) || runtime.IsNotRegisteredError(err) || meta.IsNoMatchError(err) {
 			return false, "", nil
 		}
+		// If you're not allowed access to the image stream, just let the container fail
+		// the error will manifest itself as "ImagePullBackOff".
+		if errors.IsForbidden(err) {
+			return false, "", nil
+		}
 		return false, "", err
 	}
 	return true, istag.Image.DockerImageReference, nil
