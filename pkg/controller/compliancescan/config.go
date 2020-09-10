@@ -32,6 +32,8 @@ const (
 	OpenScapRuleEnvName         = "RULE"
 	OpenScapVerbosityeEnvName   = "VERBOSITY"
 	OpenScapTailoringDirEnvName = "TAILORING_DIR"
+	HTTPSProxyEnvName           = "HTTPS_PROXY"
+	DisconnectedInstallEnvName  = "DISCONNECTED"
 
 	ResultServerPort = int32(8443)
 
@@ -87,8 +89,15 @@ if [ ! -z "$TAILORING_DIR" ]; then
 	cmd+=(--tailoring-file "$TAILORING_DIR/tailoring.xml")
 fi
 
+if [ ! -z "$HTTPS_PROXY" ]; then
+	export http_proxy="$HTTPS_PROXY"
+fi
+
+if [ -z "$DISCONNECTED" ]; then
+	cmd+=(--fetch-remote-resources)
+fi
+
 cmd+=(
-    --fetch-remote-resources \
     --profile $PROFILE \
     --results-arf $ARF_REPORT
 )
@@ -237,6 +246,14 @@ func defaultOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev
 
 	if scan.Spec.TailoringConfigMap != nil {
 		cm.Data[OpenScapTailoringDirEnvName] = OpenScapTailoringDir
+	}
+
+	if scan.Spec.HTTPSProxy != "" {
+		cm.Data[HTTPSProxyEnvName] = scan.Spec.HTTPSProxy
+	}
+
+	if scan.Spec.NoExternalResources {
+		cm.Data[DisconnectedInstallEnvName] = "true"
 	}
 
 	return cm
