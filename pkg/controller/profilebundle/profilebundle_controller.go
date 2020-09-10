@@ -121,7 +121,20 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 	annotations := map[string]string{}
 	isISTag, isTagImageRef, err := r.pointsToISTag(instance.Spec.ContentImage)
 	if err != nil {
-		return reconcile.Result{}, err
+		if common.IsRetriable(err) {
+			return reconcile.Result{}, err
+		}
+
+		pbCopy := instance.DeepCopy()
+		pbCopy.Status.DataStreamStatus = compliancev1alpha1.DataStreamInvalid
+		pbCopy.Status.ErrorMessage = err.Error()
+		err = r.client.Status().Update(context.TODO(), pbCopy)
+		if err != nil {
+			reqLogger.Error(err, "Couldn't update ProfileBundle status")
+			return reconcile.Result{}, err
+		}
+		// this was a fatal error, don't requeue
+		return reconcile.Result{}, nil
 	}
 
 	effectiveImage := instance.Spec.ContentImage
@@ -232,13 +245,13 @@ func (r *ReconcileProfileBundle) profileBundleDeleteHandler(pb *compliancev1alph
 func (r *ReconcileProfileBundle) pointsToISTag(contentImageRef string) (bool, string, error) {
 	ref, err := reference.Parse(contentImageRef)
 	if err != nil {
-		return false, "", fmt.Errorf("the 'contentImage' does not appear to be a valid reference to an image: %v", err)
+		return false, "", common.NewNonRetriableCtrlError("the 'contentImage' does not appear to be a valid reference to an image: %v", err)
 	}
 	if len(ref.Registry) > 0 || len(ref.ID) > 0 {
 		return false, "", nil
 	}
 	if len(ref.Tag) == 0 {
-		return false, "", fmt.Errorf("the 'contentImage' must include the tag you wish to pull from")
+		return false, "", common.NewNonRetriableCtrlError("the 'contentImage' must include the tag you wish to pull from")
 	}
 	imageName := ref.NameString()
 	imageNamespace := getISTagNamespace(ref)
