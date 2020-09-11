@@ -11,9 +11,9 @@ import (
 
 	"github.com/go-logr/logr"
 	ocpimg "github.com/openshift/api/image/v1"
-	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
+	"github.com/openshift/library-go/pkg/image/reference"
 	ocptrigger "github.com/openshift/library-go/pkg/image/trigger"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -22,7 +22,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	cgorest "k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -30,6 +29,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 var log = logf.Log.WithName("profilebundlectrl")
@@ -120,12 +121,27 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 	annotations := map[string]string{}
 	isISTag, isTagImageRef, err := r.pointsToISTag(instance.Spec.ContentImage)
 	if err != nil {
-		return reconcile.Result{}, err
+		if common.IsRetriable(err) {
+			return reconcile.Result{}, err
+		}
+
+		pbCopy := instance.DeepCopy()
+		pbCopy.Status.DataStreamStatus = compliancev1alpha1.DataStreamInvalid
+		pbCopy.Status.ErrorMessage = err.Error()
+		err = r.client.Status().Update(context.TODO(), pbCopy)
+		if err != nil {
+			reqLogger.Error(err, "Couldn't update ProfileBundle status")
+			return reconcile.Result{}, err
+		}
+		// this was a fatal error, don't requeue
+		return reconcile.Result{}, nil
 	}
 
 	effectiveImage := instance.Spec.ContentImage
 	if isISTag {
-		annotations = getISTagAnnotation(instance.Spec.ContentImage)
+		// NOTE(jaosorior): Errors were already checked for in the pointsToISTag function
+		ref, _ := reference.Parse(instance.Spec.ContentImage)
+		annotations = getISTagAnnotation(ref.NameString(), getISTagNamespace(ref))
 		effectiveImage = isTagImageRef
 	}
 
@@ -227,15 +243,23 @@ func (r *ReconcileProfileBundle) profileBundleDeleteHandler(pb *compliancev1alph
 }
 
 func (r *ReconcileProfileBundle) pointsToISTag(contentImageRef string) (bool, string, error) {
-	// If this isn't a valid name, it's probably a direct reference to an image
-	if errs := cgorest.IsValidPathSegmentName(contentImageRef); len(errs) != 0 {
+	ref, err := reference.Parse(contentImageRef)
+	if err != nil {
+		return false, "", common.NewNonRetriableCtrlError("the 'contentImage' does not appear to be a valid reference to an image: %v", err)
+	}
+	if len(ref.Registry) > 0 || len(ref.ID) > 0 {
 		return false, "", nil
 	}
+	if len(ref.Tag) == 0 {
+		return false, "", common.NewNonRetriableCtrlError("the 'contentImage' must include the tag you wish to pull from")
+	}
+	imageName := ref.NameString()
+	imageNamespace := getISTagNamespace(ref)
 
 	istag := &ocpimg.ImageStreamTag{}
 	key := types.NamespacedName{
-		Name:      contentImageRef,
-		Namespace: common.GetComplianceOperatorNamespace(),
+		Name:      imageName,
+		Namespace: imageNamespace,
 	}
 
 	// We need to use the API reader here because openshift-apiserver doesn't allow
@@ -245,10 +269,23 @@ func (r *ReconcileProfileBundle) pointsToISTag(contentImageRef string) (bool, st
 		if errors.IsNotFound(err) || runtime.IsNotRegisteredError(err) || meta.IsNoMatchError(err) {
 			return false, "", nil
 		}
+		// If you're not allowed access to the image stream, just let the container fail
+		// the error will manifest itself as "ImagePullBackOff".
+		if errors.IsForbidden(err) {
+			return false, "", nil
+		}
 		return false, "", err
 	}
 	return true, istag.Image.DockerImageReference, nil
 
+}
+
+// Gets the namespace for the image stream tag. If none is given, it'll use the operator's namespace
+func getISTagNamespace(ref reference.DockerImageReference) string {
+	if ref.Namespace != "" {
+		return ref.Namespace
+	}
+	return common.GetComplianceOperatorNamespace()
 }
 
 func getWorkloadLabels(pb *compliancev1alpha1.ProfileBundle) map[string]string {
@@ -259,9 +296,9 @@ func getWorkloadLabels(pb *compliancev1alpha1.ProfileBundle) map[string]string {
 }
 
 // This annotation
-func getISTagAnnotation(isTagName string) map[string]string {
-	annotationFmt := `[{"from":{"kind":"ImageStreamTag","name":"%s"},"fieldPath":"spec.template.spec.initContainers[?(@.name==\"content-container\")].image"}]`
-	triggerAnn := fmt.Sprintf(annotationFmt, isTagName)
+func getISTagAnnotation(isTagName, isTagNamespace string) map[string]string {
+	annotationFmt := `[{"from":{"kind":"ImageStreamTag","name":"%s","namespace":"%s"},"fieldPath":"spec.template.spec.initContainers[?(@.name==\"content-container\")].image"}]`
+	triggerAnn := fmt.Sprintf(annotationFmt, isTagName, isTagNamespace)
 	return map[string]string{
 		ocptrigger.TriggerAnnotationKey: triggerAnn,
 	}
