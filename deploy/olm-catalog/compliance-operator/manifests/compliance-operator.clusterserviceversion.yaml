@@ -216,9 +216,6 @@ spec:
   description: An operator which runs OpenSCAP and allows you to keep your cluster
     compliant with the security benchmark you need.
   displayName: Compliance Operator
-  icon:
-  - base64data: ""
-    mediatype: ""
   install:
     spec:
       clusterPermissions:
