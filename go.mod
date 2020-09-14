@@ -14,16 +14,17 @@ require (
 	github.com/google/go-cmp v0.4.0
 	github.com/onsi/ginkgo v1.12.1
 	github.com/onsi/gomega v1.10.1
-	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
-	github.com/openshift/library-go v0.0.0-20200320155611-2a351bebf158
-	github.com/openshift/machine-config-operator v4.2.0-alpha.0.0.20190917115525-033375cbe820+incompatible
+	github.com/openshift/api v0.0.0-20200829102639-8a3a835f1acf
+	github.com/openshift/library-go v0.0.0-20200831114015-2ab0c61c15de
+	github.com/openshift/machine-config-operator v0.0.1-0.20200913004441-7eba765c69c9
 	github.com/operator-framework/operator-sdk v0.19.0
-	github.com/robfig/cron v1.1.0
+	github.com/robfig/cron v1.2.0
 	github.com/securego/gosec v0.0.0-20200302134848-c998389da2ac
 	github.com/spf13/cobra v1.0.0
 	github.com/subchen/go-xmldom v1.1.2
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	go.uber.org/zap v1.14.1
+	go4.org v0.0.0-20200411211856-f5505b9728dd // indirect
 	k8s.io/api v0.19.0
 	k8s.io/apimachinery v0.19.0
 	k8s.io/apiserver v0.19.0
@@ -32,8 +33,8 @@ require (
 )
 
 replace (
-	github.com/openshift/api => github.com/openshift/api v0.0.0-20200323095748-e7041f8762a3
-	github.com/openshift/machine-config-operator => github.com/openshift/machine-config-operator v0.0.1-0.20200612125844-01bfc14d61f3
+	github.com/openshift/api => github.com/openshift/api v0.0.0-20200829102639-8a3a835f1acf
+	github.com/openshift/machine-config-operator => github.com/openshift/machine-config-operator v0.0.1-0.20200913004441-7eba765c69c9
 	k8s.io/api => k8s.io/api v0.19.0
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.19.0
 	k8s.io/apimachinery => k8s.io/apimachinery v0.19.0
