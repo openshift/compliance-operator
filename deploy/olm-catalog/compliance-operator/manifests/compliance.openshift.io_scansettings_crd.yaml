@@ -29,6 +29,10 @@ spec:
           debug:
             description: Enable debug logging of workloads and OpenSCAP
             type: boolean
+          httpsProxy:
+            description: Defines a proxy for the scan to get external resources from.
+              This is useful for disconnected installations with access to a proxy.
+            type: string
           kind:
             description: 'Kind is a string value representing the REST resource this
               object represents. Servers may infer this from the endpoint the client
@@ -36,6 +40,11 @@ spec:
             type: string
           metadata:
             type: object
+          noExternalResources:
+            description: Defines that no external resources in the Data Stream should
+              be used. External resources could be, for instance, CVE feeds. This
+              is useful for disconnected installations without access to a proxy.
+            type: boolean
           rawResultStorage:
             description: Specifies settings that pertain to raw result storage.
             properties:

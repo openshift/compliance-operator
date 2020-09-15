@@ -53,6 +53,17 @@ spec:
               debug:
                 description: Enable debug logging of workloads and OpenSCAP
                 type: boolean
+              httpsProxy:
+                description: Defines a proxy for the scan to get external resources
+                  from. This is useful for disconnected installations with access
+                  to a proxy.
+                type: string
+              noExternalResources:
+                description: Defines that no external resources in the Data Stream
+                  should be used. External resources could be, for instance, CVE feeds.
+                  This is useful for disconnected installations without access to
+                  a proxy.
+                type: boolean
               nodeSelector:
                 additionalProperties:
                   type: string
