@@ -4,22 +4,29 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"reflect"
 	"sort"
 
 	"github.com/clarketm/json"
 	fcctbase "github.com/coreos/fcct/base/v0_1"
-	ignconverter "github.com/coreos/ign-converter"
+	"github.com/coreos/ign-converter/translate/v23tov30"
+	"github.com/coreos/ign-converter/translate/v31tov22"
 	ign2error "github.com/coreos/ignition/config/shared/errors"
-	ign "github.com/coreos/ignition/config/v2_2"
+	ign2 "github.com/coreos/ignition/config/v2_2"
 	ign2types "github.com/coreos/ignition/config/v2_2/types"
+	ign2_3 "github.com/coreos/ignition/config/v2_3"
 	validate2 "github.com/coreos/ignition/config/validate"
-	ign3 "github.com/coreos/ignition/v2/config/v3_0"
-	ign3types "github.com/coreos/ignition/v2/config/v3_0/types"
+	ign3error "github.com/coreos/ignition/v2/config/shared/errors"
+	ign3_0 "github.com/coreos/ignition/v2/config/v3_0"
+	ign3 "github.com/coreos/ignition/v2/config/v3_1"
+	translate3 "github.com/coreos/ignition/v2/config/v3_1/translate"
+	ign3types "github.com/coreos/ignition/v2/config/v3_1/types"
 	validate3 "github.com/coreos/ignition/v2/config/validate"
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"github.com/vincent-petithory/dataurl"
 	kerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -39,61 +46,32 @@ func MergeMachineConfigs(configs []*mcfgv1.MachineConfig, osImageURL string) (*m
 	}
 	sort.SliceStable(configs, func(i, j int) bool { return configs[i].Name < configs[j].Name })
 
-	var fips, ok bool
+	var fips bool
 	var kernelType string
-	var outIgn ign2types.Config
+	var outIgn ign3types.Config
+	var err error
 
 	if configs[0].Spec.Config.Raw == nil {
-		outIgn = ign2types.Config{}
+		outIgn = ign3types.Config{
+			Ignition: ign3types.Ignition{
+				Version: ign3types.MaxVersion.String(),
+			},
+		}
 	} else {
-		parsedIgn, err := IgnParseWrapper(configs[0].Spec.Config.Raw)
+		outIgn, err = ParseAndConvertConfig(configs[0].Spec.Config.Raw)
 		if err != nil {
 			return nil, err
-		}
-		switch parsedIgnValue := parsedIgn.(type) {
-		case ign3types.Config:
-			convertedIgn, err := convertIgnition3to2(parsedIgnValue)
-			if err != nil {
-				return nil, err
-			}
-			outIgn = convertedIgn
-		default:
-			outIgn, ok = parsedIgn.(ign2types.Config)
-			if !ok {
-				return nil, errors.Errorf("something unexpected happened when parsing: %v", ok)
-			}
 		}
 	}
 
 	for idx := 1; idx < len(configs); idx++ {
-		// if any of the config has FIPS enabled, it'll be set
-		if configs[idx].Spec.FIPS {
-			fips = true
-		}
-
-		var appendIgn ign2types.Config
-		if configs[idx].Spec.Config.Raw == nil {
-			appendIgn = ign2types.Config{}
-		} else {
-			parsedIgn, err := IgnParseWrapper(configs[idx].Spec.Config.Raw)
+		if configs[idx].Spec.Config.Raw != nil {
+			mergedIgn, err := ParseAndConvertConfig(configs[idx].Spec.Config.Raw)
 			if err != nil {
 				return nil, err
 			}
-			switch parsedIgnValue := parsedIgn.(type) {
-			case ign3types.Config:
-				convertedIgn, err := convertIgnition3to2(parsedIgnValue)
-				if err != nil {
-					return nil, err
-				}
-				appendIgn = convertedIgn
-			default:
-				appendIgn, ok = parsedIgn.(ign2types.Config)
-				if !ok {
-					return nil, errors.Errorf("something unexpected happened when parsing: %v", ok)
-				}
-			}
+			outIgn = ign3.Merge(outIgn, mergedIgn)
 		}
-		outIgn = ign.Append(outIgn, appendIgn)
 	}
 	rawOutIgn, err := json.Marshal(outIgn)
 	if err != nil {
@@ -102,7 +80,11 @@ func MergeMachineConfigs(configs []*mcfgv1.MachineConfig, osImageURL string) (*m
 
 	// sets the KernelType if specified in any of the MachineConfig
 	// Setting kerneType to realtime in any of MachineConfig takes priority
+	// also if any of the config has FIPS enabled, it'll be set
 	for _, cfg := range configs {
+		if cfg.Spec.FIPS {
+			fips = true
+		}
 		if cfg.Spec.KernelType == KernelTypeRealtime {
 			kernelType = cfg.Spec.KernelType
 			break
@@ -121,6 +103,18 @@ func MergeMachineConfigs(configs []*mcfgv1.MachineConfig, osImageURL string) (*m
 		kargs = append(kargs, cfg.Spec.KernelArguments...)
 	}
 
+	extensions := []string{}
+	for _, cfg := range configs {
+		extensions = append(extensions, cfg.Spec.Extensions...)
+	}
+
+	// Ensure that kernel-devel extension is applied only with default kernel.
+	if kernelType != KernelTypeDefault {
+		if InSlice("kernel-devel", extensions) {
+			return nil, fmt.Errorf("installing kernel-devel extension is not supported with kernelType: %s", kernelType)
+		}
+	}
+
 	return &mcfgv1.MachineConfig{
 		Spec: mcfgv1.MachineConfigSpec{
 			OSImageURL:      osImageURL,
@@ -130,15 +124,50 @@ func MergeMachineConfigs(configs []*mcfgv1.MachineConfig, osImageURL string) (*m
 			},
 			FIPS:       fips,
 			KernelType: kernelType,
+			Extensions: extensions,
+		},
+	}, nil
+}
+
+// PointerConfig generates the stub ignition for the machine to boot properly
+// NOTE: If you change this, you also need to change the pointer configuration in openshift/installer, see
+// https://github.com/openshift/installer/blob/master/pkg/asset/ignition/machine/node.go#L20
+func PointerConfig(ignitionHost string, rootCA []byte) (ign3types.Config, error) {
+	configSourceURL := &url.URL{
+		Scheme: "https",
+		Host:   ignitionHost,
+		Path:   "/config/{{.Role}}",
+	}
+	// we do decoding here as curly brackets are escaped to %7B and breaks golang's templates
+	ignitionHostTmpl, err := url.QueryUnescape(configSourceURL.String())
+	if err != nil {
+		return ign3types.Config{}, err
+	}
+	CASource := dataurl.EncodeBytes(rootCA)
+	return ign3types.Config{
+		Ignition: ign3types.Ignition{
+			Version: ign3types.MaxVersion.String(),
+			Config: ign3types.IgnitionConfig{
+				Merge: []ign3types.Resource{{
+					Source: &ignitionHostTmpl,
+				}},
+			},
+			Security: ign3types.Security{
+				TLS: ign3types.TLS{
+					CertificateAuthorities: []ign3types.Resource{{
+						Source: &CASource,
+					}},
+				},
+			},
 		},
 	}, nil
 }
 
 // NewIgnConfig returns an empty ignition config with version set as latest version
-func NewIgnConfig() ign2types.Config {
-	return ign2types.Config{
-		Ignition: ign2types.Ignition{
-			Version: ign2types.MaxVersion.String(),
+func NewIgnConfig() ign3types.Config {
+	return ign3types.Config{
+		Ignition: ign3types.Ignition{
+			Version: ign3types.MaxVersion.String(),
 		},
 	}
 }
@@ -150,13 +179,88 @@ func WriteTerminationError(err error) {
 	glog.Fatal(msg)
 }
 
-// convertIgnition3to2 takes an igntion v3 config and returns a v2 config
-func convertIgnition3to2(ignconfig ign3types.Config) (ign2types.Config, error) {
-	converted2, err := ignconverter.Translate3to2(ignconfig)
-	if err != nil {
-		return converted2, errors.Errorf("unable to convert Ignition V3 config to V2: %v", err)
+// ConvertRawExtIgnitionToV3 ensures that the Ignition config in
+// the RawExtension is spec v3.1, or translates to it.
+func ConvertRawExtIgnitionToV3(inRawExtIgn *runtime.RawExtension) (runtime.RawExtension, error) {
+	// This function is only used by the MCServer so we don't need to consider v3.0
+	_, rptV3, errV3 := ign3.Parse(inRawExtIgn.Raw)
+	if errV3 == nil && !rptV3.IsFatal() {
+		// The rawExt is already on V3.1, no need to translate
+		return *inRawExtIgn, nil
 	}
-	glog.V(4).Infof("Successfully translated ignition V3 config to ignition V2 config: %v", converted2)
+
+	ignCfg, rpt, err := ign2.Parse(inRawExtIgn.Raw)
+	if err != nil || rpt.IsFatal() {
+		return runtime.RawExtension{}, errors.Errorf("parsing Ignition config spec v2.2 failed with error: %v\nReport: %v", err, rpt)
+	}
+	converted3, err := convertIgnition2to3(ignCfg)
+	if err != nil {
+		return runtime.RawExtension{}, errors.Errorf("failed to convert config from spec v2.2 to v3.1: %v", err)
+	}
+
+	outIgnV3, err := json.Marshal(converted3)
+	if err != nil {
+		return runtime.RawExtension{}, errors.Errorf("failed to marshal converted config: %v", err)
+	}
+
+	outRawExt := runtime.RawExtension{}
+	outRawExt.Raw = outIgnV3
+
+	return outRawExt, nil
+}
+
+// ConvertRawExtIgnitionToV2 ensures that the Ignition config in
+// the RawExtension is spec v2.2, or translates to it.
+func ConvertRawExtIgnitionToV2(inRawExtIgn *runtime.RawExtension) (runtime.RawExtension, error) {
+	ignCfg, rpt, err := ign3.Parse(inRawExtIgn.Raw)
+	if err != nil || rpt.IsFatal() {
+		return runtime.RawExtension{}, errors.Errorf("parsing Ignition config spec v3.1 failed with error: %v\nReport: %v", err, rpt)
+	}
+
+	converted2, err := convertIgnition3to2(ignCfg)
+	if err != nil {
+		return runtime.RawExtension{}, errors.Errorf("failed to convert config from spec v3.1 to v2.2: %v", err)
+	}
+
+	outIgnV2, err := json.Marshal(converted2)
+	if err != nil {
+		return runtime.RawExtension{}, errors.Errorf("failed to marshal converted config: %v", err)
+	}
+
+	outRawExt := runtime.RawExtension{}
+	outRawExt.Raw = outIgnV2
+
+	return outRawExt, nil
+}
+
+// convertIgnition2to3 takes an ignition spec v2.2 config and returns a v3.1 config
+func convertIgnition2to3(ign2config ign2types.Config) (ign3types.Config, error) {
+	// only support writing to root file system
+	fsMap := map[string]string{
+		"root": "/",
+	}
+
+	// Workaround to get v2.3 as input for converter
+	ign2_3config := ign2_3.Translate(ign2config)
+	ign3_0config, err := v23tov30.Translate(ign2_3config, fsMap)
+	if err != nil {
+		return ign3types.Config{}, errors.Errorf("unable to convert Ignition spec v2 config to v3: %v", err)
+	}
+	// Workaround to get a v3.1 config as output
+	converted3 := translate3.Translate(ign3_0config)
+
+	glog.V(4).Infof("Successfully translated Ignition spec v2 config to Ignition spec v3 config: %v", converted3)
+	return converted3, nil
+}
+
+// convertIgnition3to2 takes an ignition spec v3.1 config and returns a v2.2 config
+func convertIgnition3to2(ign3config ign3types.Config) (ign2types.Config, error) {
+	converted2, err := v31tov22.Translate(ign3config)
+	if err != nil {
+		return ign2types.Config{}, errors.Errorf("unable to convert Ignition spec v3 config to v2: %v", err)
+	}
+	glog.V(4).Infof("Successfully translated Ignition spec v3 config to Ignition spec v2 config: %v", converted2)
+
 	return converted2, nil
 }
 
@@ -188,6 +292,16 @@ func ValidateIgnition(ignconfig interface{}) error {
 	}
 }
 
+// InSlice search for an element in slice and return true if found, otherwise return false
+func InSlice(elem string, slice []string) bool {
+	for _, k := range slice {
+		if k == elem {
+			return true
+		}
+	}
+	return false
+}
+
 // ValidateMachineConfig validates that given MachineConfig Spec is valid.
 func ValidateMachineConfig(cfg mcfgv1.MachineConfigSpec) error {
 	if !(cfg.KernelType == "" || cfg.KernelType == KernelTypeDefault || cfg.KernelType == KernelTypeRealtime) {
@@ -208,29 +322,131 @@ func ValidateMachineConfig(cfg mcfgv1.MachineConfigSpec) error {
 
 // IgnParseWrapper parses rawIgn for both V2 and V3 ignition configs and returns
 // a V2 or V3 Config or an error. This wrapper is necessary since V2 and V3 use different parsers.
-func IgnParseWrapper(rawIgn []byte) (ignconfig interface{}, err error) {
-	ignCfg, rpt, err := ign.Parse(rawIgn)
-
-	// this is an ignv2cfg that was successfully parsed
-	if err == nil {
-		return ignCfg, nil
+func IgnParseWrapper(rawIgn []byte) (interface{}, error) {
+	ignCfgV3_1, rptV3_1, errV3_1 := ign3.Parse(rawIgn)
+	if errV3_1 == nil && !rptV3_1.IsFatal() {
+		return ignCfgV3_1, nil
 	}
-	if err.Error() == ign2error.ErrUnknownVersion.Error() {
-		// check to see if this is an ignv3cfg
-		ignCfgV3, rptV3, errV3 := ign3.Parse(rawIgn)
-		if errV3 == nil {
-			return ignCfgV3, nil
+	// unlike spec v2 parsers, v3 parsers aren't chained by default so we need to try parsing as spec v3.0 as well
+	if errV3_1.Error() == ign3error.ErrUnknownVersion.Error() {
+		ignCfgV3_0, rptV3_0, errV3_0 := ign3_0.Parse(rawIgn)
+		if errV3_0 == nil && !rptV3_0.IsFatal() {
+			return translate3.Translate(ignCfgV3_0), nil
 		}
-		return ign2types.Config{}, errors.Errorf("parsing Ignition config failed with error: %v\nReport: %v", errV3, rptV3)
+
+		if errV3_0.Error() == ign3error.ErrUnknownVersion.Error() {
+			ignCfgV2, rptV2, errV2 := ign2.Parse(rawIgn)
+			if errV2 == nil && !rptV2.IsFatal() {
+				return ignCfgV2, nil
+			}
+
+			// If the error is still UnknownVersion it's not a 3.1/3.0 or 2.x config, thus unsupported
+			if errV2.Error() == ign2error.ErrUnknownVersion.Error() {
+				return ign3types.Config{}, errors.Errorf("parsing Ignition config failed: unknown version. Supported spec versions: 2.2, 3.0, 3.1")
+			}
+			return ign3types.Config{}, errors.Errorf("parsing Ignition spec v2 failed with error: %v\nReport: %v", errV2, rptV2)
+		}
+		return ign3types.Config{}, errors.Errorf("parsing Ignition config spec v3.0 failed with error: %v\nReport: %v", errV3_0, rptV3_0)
 	}
-	return ign2types.Config{}, errors.Errorf("parsing Ignition config failed with error: %v\nReport: %v", err, rpt)
+	return ign3types.Config{}, errors.Errorf("parsing Ignition config spec v3.1 failed with error: %v\nReport: %v", errV3_1, rptV3_1)
+}
+
+// ParseAndConvertConfig parses rawIgn for both V2 and V3 ignition configs and returns
+// a V3 or an error.
+func ParseAndConvertConfig(rawIgn []byte) (ign3types.Config, error) {
+	ignconfigi, err := IgnParseWrapper(rawIgn)
+	if err != nil {
+		return ign3types.Config{}, errors.Wrapf(err, "failed to parse Ignition config")
+	}
+
+	switch typedConfig := ignconfigi.(type) {
+	case ign3types.Config:
+		return ignconfigi.(ign3types.Config), nil
+	case ign2types.Config:
+		ignconfv2 := removeIgnDuplicateFilesAndUnits(ignconfigi.(ign2types.Config))
+		convertedIgnV3, err := convertIgnition2to3(ignconfv2)
+		if err != nil {
+			return ign3types.Config{}, errors.Wrapf(err, "failed to convert Ignition config spec v2 to v3")
+		}
+		return convertedIgnV3, nil
+	default:
+		return ign3types.Config{}, errors.Errorf("unexpected type for ignition config: %v", typedConfig)
+	}
+}
+
+// Function to remove duplicated files/units from a V2 MC, since the translator
+// (and ignition spec V3) does not allow for duplicated entries in one MC.
+// This should really not change the actual final behaviour, since it keeps
+// ordering into consideration and has contents from the highest alphanumeric
+// MC's final version of a file.
+// Note:
+// Append is not considered since we do not allow for appending
+// Units have one exception: dropins are concat'ed
+
+func removeIgnDuplicateFilesAndUnits(ignConfig ign2types.Config) ign2types.Config {
+
+	files := ignConfig.Storage.Files
+	units := ignConfig.Systemd.Units
+
+	filePathMap := map[string]bool{}
+	var outFiles []ign2types.File
+	for i := len(files) - 1; i >= 0; i-- {
+		// We do not actually support to other filesystems so we make the assumption that there is only 1 here
+		path := files[i].Path
+		if _, isDup := filePathMap[path]; isDup {
+			continue
+		}
+		outFiles = append(outFiles, files[i])
+		filePathMap[path] = true
+	}
+
+	unitNameMap := map[string]bool{}
+	var outUnits []ign2types.Unit
+	for i := len(units) - 1; i >= 0; i-- {
+		unitName := units[i].Name
+		if _, isDup := unitNameMap[unitName]; isDup {
+			// this is a duplicated unit by name, so let's check for the dropins and append them
+			if len(units[i].Dropins) > 0 {
+				for j := range outUnits {
+					if outUnits[j].Name == unitName {
+						// outUnits[j] is the highest priority entry with this unit name
+						// now loop over the new unit's dropins and append it if the name
+						// isn't duplicated in the existing unit's dropins
+						for _, newDropin := range units[i].Dropins {
+							hasExistingDropin := false
+							for _, existingDropins := range outUnits[j].Dropins {
+								if existingDropins.Name == newDropin.Name {
+									hasExistingDropin = true
+									break
+								}
+							}
+							if !hasExistingDropin {
+								outUnits[j].Dropins = append(outUnits[j].Dropins, newDropin)
+							}
+						}
+						continue
+					}
+				}
+				glog.V(2).Infof("Found duplicate unit %v, appending dropin section", unitName)
+			}
+			continue
+		}
+		outUnits = append(outUnits, units[i])
+		unitNameMap[unitName] = true
+	}
+
+	// outFiles and outUnits should now have all duplication removed
+	ignConfig.Storage.Files = outFiles
+	ignConfig.Systemd.Units = outUnits
+
+	return ignConfig
 }
 
 // TranspileCoreOSConfigToIgn transpiles Fedora CoreOS config to ignition
-// internally it transpiles to Ign spec v3 config and translates to spec v2
-func TranspileCoreOSConfigToIgn(files, units []string) (*ign2types.Config, error) {
-	var ctCfg fcctbase.Config
+// internally it transpiles to Ign spec v3 config
+func TranspileCoreOSConfigToIgn(files, units []string) (*ign3types.Config, error) {
 	overwrite := true
+	outConfig := ign3types.Config{}
 	// Convert data to Ignition resources
 	for _, d := range files {
 		f := new(fcctbase.File)
@@ -240,7 +456,14 @@ func TranspileCoreOSConfigToIgn(files, units []string) (*ign2types.Config, error
 		f.Overwrite = &overwrite
 
 		// Add the file to the config
+		var ctCfg fcctbase.Config
 		ctCfg.Storage.Files = append(ctCfg.Storage.Files, *f)
+		ign3_0config, tSet, err := ctCfg.ToIgn3_0()
+		if err != nil {
+			return nil, fmt.Errorf("failed to transpile config to Ignition config %s\nTranslation set: %v", err, tSet)
+		}
+		ign3_1config := translate3.Translate(ign3_0config)
+		outConfig = ign3.Merge(outConfig, ign3_1config)
 	}
 
 	for _, d := range units {
@@ -250,20 +473,17 @@ func TranspileCoreOSConfigToIgn(files, units []string) (*ign2types.Config, error
 		}
 
 		// Add the unit to the config
+		var ctCfg fcctbase.Config
 		ctCfg.Systemd.Units = append(ctCfg.Systemd.Units, *u)
+		ign3_0config, tSet, err := ctCfg.ToIgn3_0()
+		if err != nil {
+			return nil, fmt.Errorf("failed to transpile config to Ignition config %s\nTranslation set: %v", err, tSet)
+		}
+		ign3_1config := translate3.Translate(ign3_0config)
+		outConfig = ign3.Merge(outConfig, ign3_1config)
 	}
 
-	ign3Cfg, tSet, err := ctCfg.ToIgn3_0()
-	if err != nil {
-		return nil, fmt.Errorf("failed to transpile config to Ignition config %s\nTranslation set: %v", err, tSet)
-	}
-
-	convertedIgnCfgV2, errV3 := convertIgnition3to2(ign3Cfg)
-	if errV3 != nil {
-		return nil, errors.Errorf("converting Ignition spec v3 config to v2 failed with error: %v", errV3)
-	}
-
-	return &convertedIgnCfgV2, nil
+	return &outConfig, nil
 }
 
 // MachineConfigFromIgnConfig creates a MachineConfig with the provided Ignition config

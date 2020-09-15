@@ -1,11 +1,11 @@
 # Step one: build compliance-operator
-FROM registry.access.redhat.com/ubi8/go-toolset as builder
+FROM golang:1.14 AS builder
 
 WORKDIR /go/src/github.com/openshift/compliance-operator
 
 ENV GOFLAGS=-mod=vendor
 
-COPY --chown=default:root . .
+COPY . . 
 RUN make manager
 
 # Step two: containerize compliance-operator

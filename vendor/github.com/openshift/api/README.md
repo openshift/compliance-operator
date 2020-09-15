@@ -34,16 +34,16 @@ Then do the following with your openshift/origin pull request:
 
 Since Kubernetes 1.16, every CRD created in `apiextensions.k8s.io/v1` is required to have a [structural OpenAPIV3 schema](https://kubernetes.io/blog/2019/06/20/crd-structural-schema/). The schemas provide server-side validation for fields, as well as providing the descriptions for `oc explain`. Moreover, schemas ensure structural consistency of data in etcd. Without it anything can be stored in a resource which can have security implications. As we host many of our CRDs in this repo along with their corresponding Go types we also require them to have schemas. However, the following instructions apply for CRDs that are not hosted here as well.
 
-These schemas are often very long and complex, and should not be written by hand. For OpenShift, we provide Makefile targets in [library-go's alpha-build-machinery](https://github.com/openshift/library-go/tree/master/alpha-build-machinery) which generate the schema, built on upstream's [controller-gen](https://github.com/kubernetes-sigs/controller-tools) tool.
+These schemas are often very long and complex, and should not be written by hand. For OpenShift, we provide Makefile targets in [build-machinery-go](https://github.com/openshift/build-machinery-go/) which generate the schema, built on upstream's [controller-gen](https://github.com/kubernetes-sigs/controller-tools) tool.
 
 If you make a change to a CRD type in this repo, simply calling `make update-codegen-crds` should regenerate all CRDs and update the manifests. If yours is not updated, ensure that the path to its API is included in our [calls to the Makefile targets](https://github.com/openshift/api/blob/release-4.5/Makefile#L17-L29).
 
 To add this generator to another repo:
-1. Vendor `github.com/openshift/library-go` (and ensure that the `alpha-build-machinery` subdirectory is also included in your `vendor`)
+1. Vendor `github.com/openshift/build-machinery-go`
 
 2. Update your `Makefile` to include the following:
 ```
-include $(addprefix ./vendor/github.com/openshift/library-go/alpha-build-machinery/make/, \
+include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
   targets/openshift/crd-schema-gen.mk \
 )
 
@@ -67,3 +67,14 @@ After this, calling `make update-codegen-crds` should generate a new structural 
   2. `// +kubebuilder:validation:Optional`, this tells the operator that fields should be optional unless explicitly marked with `// +kubebuilder:validation:Required`
   
 For more information on the API markers to add to your Go types, see the [Kubebuilder book](https://book.kubebuilder.io/reference/markers.html)
+
+### Post-schema-generation Patches
+
+Schema generation features might be limited or fall behind what CRD schemas supports in the latest Kubernetes version.
+To work around this, there are two patch mechanisms implemented by the `add-crd-gen` target. Basic idea is that you 
+place a patch file next to the CRD yaml manifest with either `yaml-merge-patch` or `yaml-patch` as extension, 
+but with the same base name. The `update-codegen-crds` Makefile target will apply these **after** calling 
+kubebuilder's controller-gen:
+
+- `yaml-merge-patch`: these are applied via `yq m -x <yaml-file> <patch-file>` compare https://mikefarah.gitbook.io/yq/commands/merge#overwrite-values.
+- `yaml-patch`: these are applied via `yaml-patch -o <patch-file> < <yaml-file>` using https://github.com/krishicks/yaml-patch.
