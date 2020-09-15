@@ -116,8 +116,8 @@ help: ## Show this help screen
 image: fmt operator-sdk operator-image bundle-image ## Build the compliance-operator container image
 
 .PHONY: operator-image
-operator-image: operator-sdk
-	$(GOPATH)/bin/operator-sdk build $(RELATED_IMAGE_OPERATOR_PATH):$(TAG) --image-builder $(RUNTIME)
+operator-image:
+	$(RUNTIME) build -t $(RELATED_IMAGE_OPERATOR_PATH):$(TAG) -f build/Dockerfile .
 
 .PHONY: openscap-image
 openscap-image:
