@@ -18,6 +18,12 @@ else ifeq ($(OS_NAME), Darwin)
     SED=sed -i ''
 endif
 
+ifeq ($(RUNTIME), podman)
+    LOGIN_PUSH_OPTS="--tls-verify=false"
+else ifeq ($(RUNTIME), docker)
+    LOGIN_PUSH_OPTS=
+endif
+
 # Temporary
 OPENSCAP_DEFAULT_IMAGE_TAG=1.3.3
 RELATED_IMAGE_OPENSCAP_TAG?=$(OPENSCAP_DEFAULT_IMAGE_TAG)
@@ -294,8 +300,8 @@ cluster-image-push: namespace openshift-user
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
 	@echo "Pushing image $(RELATED_IMAGE_OPERATOR_PATH):$(TAG) to the image registry"
 	IMAGE_REGISTRY_HOST=$$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}'); \
-		$(RUNTIME) login --tls-verify=false -u $(OPENSHIFT_USER) -p $(shell oc whoami -t) $${IMAGE_REGISTRY_HOST}; \
-		$(RUNTIME) push --tls-verify=false $(RELATED_IMAGE_OPERATOR_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/openshift/$(APP_NAME):$(TAG)
+		$(RUNTIME) login $(LOGIN_PUSH_OPTS) -u $(OPENSHIFT_USER) -p $(shell oc whoami -t) $${IMAGE_REGISTRY_HOST}; \
+		$(RUNTIME) push $(LOGIN_PUSH_OPTS) $(RELATED_IMAGE_OPERATOR_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/openshift/$(APP_NAME):$(TAG)
 	@echo "Removing the route from the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
 	$(eval RELATED_IMAGE_OPERATOR_PATH = image-registry.openshift-image-registry.svc:5000/openshift/$(APP_NAME):$(TAG))
