@@ -9,8 +9,6 @@ import (
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -316,14 +314,6 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 func (r *ReconcileComplianceSuite) generateEventsForSuite(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) {
 	logger.Info("Generating events for suite")
 
-	// Event for Suite
-	r.recorder.Event(
-		suite,
-		corev1.EventTypeNormal,
-		"ResultAvailable",
-		fmt.Sprintf("ComplianceSuite's result is: %s", suite.Status.Result),
-	)
-
 	if suite.Status.Result == compv1alpha1.ResultNotApplicable {
 		r.recorder.Eventf(
 			suite, corev1.EventTypeNormal, "SuiteNotApplicable",
@@ -345,27 +335,7 @@ func (r *ReconcileComplianceSuite) generateEventsForSuite(suite *compv1alpha1.Co
 			"One of suite's scans produced outdated remediations, please check for complianceremediation objects labeled with %s",
 			compv1alpha1.OutdatedRemediationLabel)
 	}
-
-	ownerRefs := suite.GetOwnerReferences()
-	if len(ownerRefs) == 0 {
-		return //there is nothing to do, since no owner is set
-	}
-	for _, ownerRef := range ownerRefs {
-		// we are making an assumption that the GRC policy has a single owner, or we chose the first owner in the list
-		if string(ownerRef.UID) == "" {
-			continue //there is nothing to do, since no owner UID is set
-		}
-		// FIXME(jaosorior): Figure out a less hacky way to check this
-		if ownerRef.Kind == "Policy" {
-			pol := getParentPolicy(&ownerRef, suite.GetNamespace())
-			r.recorder.Event(
-				pol,
-				corev1.EventTypeNormal,
-				fmt.Sprintf("policy: %s/%s", suite.Namespace, suite.Name),
-				resultToACMPolicyStatus(suite),
-			)
-		}
-	}
+	common.GenerateEventForResult(r.recorder, suite, suite, suite.Status.Result)
 }
 
 func (r *ReconcileComplianceSuite) addScanStatus(suite *compv1alpha1.ComplianceSuite, scan *compv1alpha1.ComplianceScan, logger logr.Logger) error {
@@ -559,34 +529,4 @@ func (r *ReconcileComplianceSuite) getAffectedMcfgPool(scan *compv1alpha1.Compli
 		}
 	}
 	return mcfgv1.MachineConfigPool{}, false
-}
-
-func getParentPolicy(ownerRef *metav1.OwnerReference, ns string) *unstructured.Unstructured {
-	return &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": ownerRef.APIVersion,
-			"kind":       ownerRef.Kind,
-			"metadata": map[string]interface{}{
-				"name":      ownerRef.Name,
-				"namespace": ns,
-				"uid":       ownerRef.UID,
-			},
-		},
-	}
-}
-
-// Converts the given result of a ComplianceSuite into a string that's usable by ACM
-func resultToACMPolicyStatus(suite *compv1alpha1.ComplianceSuite) string {
-	const instfmt string = "; To view aggregated results, execute the following in the managed cluster: kubectl get compliancesuites -n %s %s"
-	instructions := fmt.Sprintf(instfmt, suite.Namespace, suite.Name)
-	var result string
-	switch suite.Status.Result {
-	case compv1alpha1.ResultCompliant:
-		result = "Compliant"
-	case compv1alpha1.ResultNonCompliant:
-		result = "NonCompliant"
-	default:
-		result = "UnknownCompliancy"
-	}
-	return result + instructions
 }
