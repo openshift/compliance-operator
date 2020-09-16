@@ -155,13 +155,13 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 	if errors.IsNotFound(err) {
 		err = r.client.Create(context.TODO(), &suite)
 		if err == nil {
-			log.Info("Suite created", "suite.Name", suite.Name)
+			reqLogger.Info("Suite created", "suite.Name", suite.Name)
 			r.Eventf(
 				instance, corev1.EventTypeNormal, "SuiteCreated",
 				"ComplianceSuite %s/%s created", suite.Namespace, suite.Name,
 			)
 		} else {
-			log.Error(err, "Suite failed to create", "suite.Name", suite.Name)
+			reqLogger.Error(err, "Suite failed to create", "suite.Name", suite.Name)
 			r.Eventf(
 				instance, corev1.EventTypeWarning, "SuiteNotCreated",
 				"ComplianceSuite %s/%s could not be created: %s", suite.Namespace, suite.Name, err,
@@ -177,13 +177,13 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 		found.Spec = suite.Spec
 		err = r.client.Update(context.TODO(), &found)
 		if err == nil {
-			log.Info("Suite updated", "suite.Name", suite.Name)
+			reqLogger.Info("Suite updated", "suite.Name", suite.Name)
 			r.Eventf(
 				instance, corev1.EventTypeNormal, "SuiteUpdated",
 				"ComplianceSuite %s/%s updatd", suite.Namespace, suite.Name,
 			)
 		} else {
-			log.Error(err, "Suite failed to update", "suite.Name", suite.Name)
+			reqLogger.Error(err, "Suite failed to update", "suite.Name", suite.Name)
 			r.Eventf(
 				instance, corev1.EventTypeWarning, "SuiteNotUpdated",
 				"ComplianceSuite %s/%s could not be updated: %s", suite.Namespace, suite.Name, err,
@@ -191,7 +191,7 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 		}
 		return reconcile.Result{}, err
 	} else {
-		log.Info("Suite does not need update", "suite.Name", suite.Name)
+		reqLogger.Info("Suite does not need update", "suite.Name", suite.Name)
 	}
 
 	return reconcile.Result{}, nil
@@ -330,7 +330,7 @@ func fillContentData(bundle *unstructured.Unstructured, scan *compliancev1alpha1
 	if v1alphaBundle.Status.DataStreamStatus != compliancev1alpha1.DataStreamValid {
 		return common.NewRetriableCtrlErrorWithCustomHandler(func() (reconcile.Result, error) {
 			return reconcile.Result{RequeueAfter: requeueAfterDefault, Requeue: true}, nil
-		}, "Tailoring ConfigMap not found")
+		}, "ProfileBundle '%s' is still being processed", v1alphaBundle.GetName())
 	}
 
 	scan.Content = v1alphaBundle.Spec.ContentFile
