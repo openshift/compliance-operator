@@ -57,7 +57,7 @@ func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Log
 			},
 			Containers: []corev1.Container{
 				{
-					Name:  "log-collector",
+					Name:  "aggregator",
 					Image: utils.GetComponentImage(utils.OPERATOR),
 					Command: []string{
 						"compliance-operator", "aggregator",
