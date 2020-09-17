@@ -67,6 +67,15 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	// Watch for changes to secondary resource ComplianceScans and requeue the owner ComplianceSuite
+	err = c.Watch(&source.Kind{Type: &compliancev1alpha1.ComplianceSuite{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &compliancev1alpha1.ScanSettingBinding{},
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -192,6 +201,11 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 		return reconcile.Result{}, err
 	} else {
 		reqLogger.Info("Suite does not need update", "suite.Name", suite.Name)
+	}
+
+	if found.Status.Phase == compliancev1alpha1.PhaseDone {
+		reqLogger.Info("Generating events for scansettingbinding")
+		common.GenerateEventForResult(r.recorder, instance, instance, found.Status.Result)
 	}
 
 	return reconcile.Result{}, nil
