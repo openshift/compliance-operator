@@ -47,7 +47,8 @@ TAG?=latest
 # ===============
 CURPATH=$(PWD)
 TARGET_DIR=$(CURPATH)/build/_output
-GO=GOFLAGS=-mod=vendor GO111MODULE=auto go
+GOFLAGS?=-mod=vendor
+GO=GOFLAGS=$(GOFLAGS) GO111MODULE=auto go
 GOBUILD=$(GO) build
 BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
