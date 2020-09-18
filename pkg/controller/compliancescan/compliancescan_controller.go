@@ -809,7 +809,9 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 		// Could be a transient error, so we requeue if there's any
 		// error here.
 		if err != nil {
+			logger.Info("Platform scan has no result ConfigMap yet", "ComplianceScan.Name", instance.Name)
 			isReady = false
+			break
 		}
 
 		// NOTE: err is only set if there is an error in the scan run
@@ -833,7 +835,9 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 			// Could be a transient error, so we requeue if there's any
 			// error here.
 			if err != nil {
+				logger.Info("Node has no result ConfigMap yet", "node.Name", node.Name)
 				isReady = false
+				continue
 			}
 
 			// NOTE: err is only set if there is an error in the scan run
