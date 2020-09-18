@@ -462,7 +462,7 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1
 
 	// We only wait if there are no errors.
 	if err == nil && !isReady {
-		log.Info("ConfigMap missing (not ready). Requeuing.")
+		log.Info("ConfigMap missing or not ready. Requeuing.")
 		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
 	}
 
@@ -814,6 +814,13 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 			break
 		}
 
+		cmHasResult := scanResultReady(foundCM)
+		if cmHasResult == false {
+			logger.Info("Scan results not ready, retrying. If the issue persists, restart or recreate the scan", "ComplianceScan.Name", instance.Name)
+			isReady = false
+			break
+		}
+
 		// NOTE: err is only set if there is an error in the scan run
 		result, err = getScanResult(foundCM)
 
@@ -836,6 +843,13 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 			// error here.
 			if err != nil {
 				logger.Info("Node has no result ConfigMap yet", "node.Name", node.Name)
+				isReady = false
+				continue
+			}
+
+			cmHasResult := scanResultReady(foundCM)
+			if cmHasResult == false {
+				logger.Info("Scan results not ready, retrying. If the issue persists, restart or recreate the scan", "ComplianceScan.Name", instance.Name)
 				isReady = false
 				continue
 			}
