@@ -645,11 +645,20 @@ func checkScanUnknownError(cm *corev1.ConfigMap) error {
 	return nil
 }
 
-func getScanResult(cm *corev1.ConfigMap) (compv1alpha1.ComplianceScanStatusResult, error) {
+func scanResultReady(cm *corev1.ConfigMap) bool {
 	if cm.Annotations == nil {
-		return compv1alpha1.ResultError, fmt.Errorf("the ConfigMap '%s' was missing annotations", cm.Name)
+		return false
 	}
 
+	_, ok := cm.Annotations[compv1alpha1.CmScanResultAnnotation]
+	if !ok {
+		return false
+	}
+
+	return true
+}
+
+func getScanResult(cm *corev1.ConfigMap) (compv1alpha1.ComplianceScanStatusResult, error) {
 	strResult, ok := cm.Annotations[compv1alpha1.CmScanResultAnnotation]
 	if !ok {
 		return compv1alpha1.ResultError, fmt.Errorf("the ConfigMap '%s' annotation was missing the result key", cm.Name)
