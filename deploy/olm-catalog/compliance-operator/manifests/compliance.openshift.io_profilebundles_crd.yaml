@@ -16,6 +16,9 @@ spec:
     - jsonPath: .spec.contentImage
       name: ContentImage
       type: string
+    - jsonPath: .spec.contentFile
+      name: ContentFile
+      type: string
     - jsonPath: .status.dataStreamStatus
       name: Status
       type: string
