@@ -102,9 +102,6 @@ E2E_GO_TEST_FLAGS?=-test.v -test.timeout 120m
 DEFAULT_CONTENT_IMAGE_PATH=quay.io/complianceascode/ocp4:latest
 E2E_CONTENT_IMAGE_PATH?=quay.io/complianceascode/ocp4:latest
 
-# operator-sdk arguments for `make publish`.
-# Before running `make publish`, install operator-courier with `pip3 install operator-courier` and create
-# ~/.quay containing your quay.io token.
 QUAY_NAMESPACE=compliance-operator
 OPERATOR_VERSION?=
 PACKAGE_CHANNEL?=alpha
