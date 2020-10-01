@@ -133,7 +133,7 @@ openscap-image:
 bundle-image:
 	$(RUNTIME) build -t $(BUNDLE_IMAGE_PATH):$(TAG) -f bundle.Dockerfile .
 
-.PHONE: index-image
+.PHONY: index-image
 index-image: opm
 	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(TAG) -t $(INDEX_IMAGE_PATH):$(TAG) -c podman
 
