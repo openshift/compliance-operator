@@ -25,7 +25,7 @@ else ifeq ($(RUNTIME), docker)
 endif
 
 # Temporary
-OPENSCAP_DEFAULT_IMAGE_TAG=1.3.3
+OPENSCAP_DEFAULT_IMAGE_TAG=1.3.4
 RELATED_IMAGE_OPENSCAP_TAG?=$(OPENSCAP_DEFAULT_IMAGE_TAG)
 
 # Image path to use. Set this if you want to use a specific path for building
