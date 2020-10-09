@@ -1,0 +1,10 @@
+[copr:copr.fedorainfracloud.org:jhrozek:openscap-1.3.4]
+name=Copr repo for openscap-1.3.4 owned by jhrozek
+baseurl=https://download.copr.fedorainfracloud.org/results/jhrozek/openscap-1.3.4/epel-8-$basearch/
+type=rpm-md
+skip_if_unavailable=True
+gpgcheck=1
+gpgkey=https://download.copr.fedorainfracloud.org/results/jhrozek/openscap-1.3.4/pubkey.gpg
+repo_gpgcheck=0
+enabled=1
+enabled_metadata=1

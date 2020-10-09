@@ -10,7 +10,7 @@ LABEL \
 
 # The repo will only be needed until RHEL-8.2 comes out
 COPY \
-    jhrozek-openscap-with-chroot-epel-8.repo /etc/yum.repos.d/
+    jhrozek-openscap-1.3.4-epel-8.repo /etc/yum.repos.d/
 
 RUN true \
     && microdnf install -y openscap-scanner \
