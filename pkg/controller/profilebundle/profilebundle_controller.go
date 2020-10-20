@@ -309,7 +309,7 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 	labels := getWorkloadLabels(pb)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      pb.Name + "-pp",
+			Name:      pb.Name + "-" + pb.Namespace + "-pp",
 			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels:    labels,
 		},
