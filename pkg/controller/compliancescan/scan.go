@@ -193,6 +193,10 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 							ReadOnly:  true,
 						},
 						{
+							Name:      "tmp-dir",
+							MountPath: "/tmp",
+						},
+						{
 							Name:      scriptCmForScan(scanInstance),
 							MountPath: "/scripts",
 							ReadOnly:  true,
@@ -232,6 +236,12 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 				},
 				{
 					Name: "content-dir",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "tmp-dir",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
@@ -387,6 +397,10 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 							ReadOnly:  true,
 						},
 						{
+							Name:      "tmp-dir",
+							MountPath: "/tmp",
+						},
+						{
 							Name:      "fetch-results",
 							MountPath: PlatformScanDataRoot,
 						},
@@ -421,6 +435,12 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 				},
 				{
 					Name: "content-dir",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "tmp-dir",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
