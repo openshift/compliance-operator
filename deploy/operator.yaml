@@ -20,6 +20,9 @@ spec:
           - compliance-operator
           - operator
           imagePullPolicy: Always
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
           env:
             - name: WATCH_NAMESPACE
               valueFrom:

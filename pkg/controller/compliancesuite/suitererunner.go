@@ -98,6 +98,8 @@ func GetRerunnerName(suiteName string) string {
 }
 
 func getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
+	falseP := false
+	trueP := true
 	return &batchv1beta1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetRerunnerName(suite.Name),
@@ -122,6 +124,10 @@ func getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
 								{
 									Name:  "rerunner",
 									Image: utils.GetComponentImage(utils.OPERATOR),
+									SecurityContext: &corev1.SecurityContext{
+										AllowPrivilegeEscalation: &falseP,
+										ReadOnlyRootFilesystem:   &trueP,
+									},
 									Command: []string{
 										"compliance-operator", "suitererunner",
 										"--name", suite.GetName(),
