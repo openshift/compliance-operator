@@ -104,6 +104,7 @@ E2E_CONTENT_IMAGE_PATH?=quay.io/complianceascode/ocp4:latest
 
 QUAY_NAMESPACE=compliance-operator
 OPERATOR_VERSION?=
+PREVIOUS_OPERATOR_VERSION=$(shell grep -E "\s+version: [0-9]+.[0-9]+.[0-9]+" deploy/olm-catalog/compliance-operator/manifests/compliance-operator.clusterserviceversion.yaml | sed 's/.*version: //')
 PACKAGE_CHANNEL?=alpha
 
 .PHONY: all
@@ -135,7 +136,7 @@ bundle-image:
 
 .PHONY: index-image
 index-image: opm
-	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(TAG) -t $(INDEX_IMAGE_PATH):$(TAG) -c podman
+	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(TAG) -f $(INDEX_IMAGE_PATH):$(PREVIOUS_OPERATOR_VERSION) -t $(INDEX_IMAGE_PATH):$(TAG) -c podman
 
 .PHONY: build
 build: fmt manager ## Build the compliance-operator binary
