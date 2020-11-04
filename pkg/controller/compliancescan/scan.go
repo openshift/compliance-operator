@@ -94,6 +94,8 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 		"targetNode":                     node.Name,
 		"workload":                       "scanner",
 	}
+	falseP := false
+	trueP := true
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -116,6 +118,10 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 						fmt.Sprintf("cp %s /content | /bin/true", path.Join("/", scanInstance.Spec.Content)),
 					},
 					ImagePullPolicy: corev1.PullAlways,
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: &falseP,
+						ReadOnlyRootFilesystem:   &trueP,
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "content-dir",
@@ -144,6 +150,10 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 						"--tls-ca=/etc/pki/tls/ca.crt",
 					},
 					ImagePullPolicy: corev1.PullAlways,
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: &falseP,
+						ReadOnlyRootFilesystem:   &trueP,
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "report-dir",
@@ -162,7 +172,10 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 					Image:   utils.GetComponentImage(utils.OPENSCAP),
 					Command: []string{OpenScapScriptPath},
 					SecurityContext: &corev1.SecurityContext{
-						Privileged: &trueVal,
+						Privileged:             &trueVal,
+						ReadOnlyRootFilesystem: &trueP,
+						// TODO(jaosorior): Figure out if the default
+						// seccomp profile is sufficient here.
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
@@ -178,6 +191,10 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 							Name:      "content-dir",
 							MountPath: "/content",
 							ReadOnly:  true,
+						},
+						{
+							Name:      "tmp-dir",
+							MountPath: "/tmp",
 						},
 						{
 							Name:      scriptCmForScan(scanInstance),
@@ -224,6 +241,12 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 					},
 				},
 				{
+					Name: "tmp-dir",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
 					Name: scriptCmForScan(scanInstance),
 					VolumeSource: corev1.VolumeSource{
 						ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -261,6 +284,8 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 		"--resultdir=" + PlatformScanDataRoot,
 		"--profile=" + scanInstance.Spec.Profile,
 	}
+	falseP := false
+	trueP := true
 
 	if scanInstance.Spec.Debug {
 		collectorCmd = append(collectorCmd, "--debug")
@@ -284,6 +309,10 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 						fmt.Sprintf("cp %s /content | /bin/true", path.Join("/", scanInstance.Spec.Content)),
 					},
 					ImagePullPolicy: corev1.PullAlways,
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: &falseP,
+						ReadOnlyRootFilesystem:   &trueP,
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "content-dir",
@@ -296,10 +325,15 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 					Image:           utils.GetComponentImage(utils.OPERATOR),
 					Command:         collectorCmd,
 					ImagePullPolicy: corev1.PullAlways,
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: &falseP,
+						ReadOnlyRootFilesystem:   &trueP,
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "content-dir",
 							MountPath: "/content",
+							ReadOnly:  true,
 						},
 						{
 							Name:      "fetch-results",
@@ -327,6 +361,10 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 						"--tls-ca=/etc/pki/tls/ca.crt",
 					},
 					ImagePullPolicy: corev1.PullAlways,
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: &falseP,
+						ReadOnlyRootFilesystem:   &trueP,
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "report-dir",
@@ -344,6 +382,10 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 					Name:    OpenSCAPScanContainerName,
 					Image:   utils.GetComponentImage(utils.OPENSCAP),
 					Command: []string{OpenScapScriptPath},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: &falseP,
+						ReadOnlyRootFilesystem:   &trueP,
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "report-dir",
@@ -353,6 +395,10 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 							Name:      "content-dir",
 							MountPath: "/content",
 							ReadOnly:  true,
+						},
+						{
+							Name:      "tmp-dir",
+							MountPath: "/tmp",
 						},
 						{
 							Name:      "fetch-results",
@@ -389,6 +435,12 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 				},
 				{
 					Name: "content-dir",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "tmp-dir",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},

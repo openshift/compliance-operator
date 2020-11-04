@@ -29,6 +29,9 @@ func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Log
 		"workload":                       "aggregator",
 	}
 
+	falseP := false
+	trueP := true
+
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -47,6 +50,10 @@ func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Log
 						fmt.Sprintf("cp %s /content | /bin/true", path.Join("/", scanInstance.Spec.Content)),
 					},
 					ImagePullPolicy: corev1.PullAlways,
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: &falseP,
+						ReadOnlyRootFilesystem:   &trueP,
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "content-dir",
@@ -64,6 +71,10 @@ func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Log
 						"--content=" + absContentPath(scanInstance.Spec.Content),
 						"--scan=" + scanInstance.Name,
 						"--namespace=" + scanInstance.Namespace,
+					},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: &falseP,
+						ReadOnlyRootFilesystem:   &trueP,
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{

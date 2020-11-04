@@ -112,6 +112,8 @@ func getResultServerLabels(instance *compv1alpha1.ComplianceScan) map[string]str
 // Needs corresponding Service (with service-serving cert).
 // Need to aggregate reports into one service ? on subdirs?
 func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]string, logger logr.Logger) *appsv1.Deployment {
+	falseP := false
+	trueP := true
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getResultServerName(scanInstance),
@@ -144,6 +146,10 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 								"--tls-server-cert=/etc/pki/tls/tls.crt",
 								"--tls-server-key=/etc/pki/tls/tls.key",
 								"--tls-ca=/etc/pki/tls/ca.crt",
+							},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: &falseP,
+								ReadOnlyRootFilesystem:   &trueP,
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
