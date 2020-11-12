@@ -47,6 +47,11 @@ var contentImagePath string
 var rhcosPb *compv1alpha1.ProfileBundle
 var ocp4Pb *compv1alpha1.ProfileBundle
 
+type ObjectResouceVersioner interface {
+	runtime.Object
+	metav1.Common
+}
+
 func init() {
 	contentImagePath = os.Getenv("CONTENT_IMAGE")
 
@@ -485,6 +490,38 @@ func waitForObjectToExist(t *testing.T, f *framework.Framework, name, namespace 
 				return false, nil
 			}
 			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
+			return false, nil
+		}
+
+		return true, nil
+	})
+	// Error in function call
+	if lastErr != nil {
+		return lastErr
+	}
+	// Timeout
+	if timeouterr != nil {
+		return timeouterr
+	}
+
+	E2ELogf(t, "Object found '%s' found\n", name)
+	return nil
+}
+
+func waitForObjectToUpdate(t *testing.T, f *framework.Framework, name, namespace string, obj ObjectResouceVersioner) error {
+	var lastErr error
+
+	initialVersion := obj.GetResourceVersion()
+
+	// retry and ignore errors until timeout
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, obj)
+		if lastErr != nil {
+			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
+			return false, nil
+		}
+		if obj.GetResourceVersion() == initialVersion {
+			E2ELogf(t, "Retrying. Object still doesn't update. got version %s ... wanted %s\n", obj.GetResourceVersion(), initialVersion)
 			return false, nil
 		}
 

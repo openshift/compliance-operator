@@ -134,32 +134,90 @@ func (r *ReconcileComplianceRemediation) reconcileRemediation(instance *compv1al
 // remediation if applicable
 func (r *ReconcileComplianceRemediation) reconcileGenericRemediation(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
 	obj := instance.Spec.Current.Object
+	objectLogger := logger.WithValues("Object.Name", obj.GetName(), "Object.Namespace", obj.GetNamespace())
+
+	objectLogger.Info("Reconciling remediation object")
+
 	found := obj.DeepCopy()
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, found)
-	if instance.Spec.Apply {
-		logger.Info("Remediation will be applied", "ComplianceRemediation.Name", instance.Name)
-		if errors.IsNotFound(err) {
-			return r.client.Create(context.TODO(), obj)
-		} else if meta.IsNoMatchError(err) {
-			// If the kind is not available in the cluster, we can't retry
-			return common.NewNonRetriableCtrlError("Unable to create ComplianceRemediation. Make sure the CRD is installed: %s", err)
-		}
-		// TODO(jaosorior): If the object is found, should we update it?
-		return err
-	} else {
-		logger.Info("Remediation will be unapplied", "ComplianceRemediation.Name", instance.Name)
-	}
 
-	// unapply remediation
-	if err == nil {
-		return r.client.Delete(context.TODO(), obj)
-	} else if errors.IsNotFound(err) {
-		return nil
+	if errors.IsForbidden(err) {
+		return common.NewNonRetriableCtrlError(
+			"Unable to get fix object from ComplianceRemediation. "+
+				"Please update the compliance-operator's permissions: %s", err)
 	} else if meta.IsNoMatchError(err) {
 		// If the kind is not available in the cluster, we can't retry
-		return common.NewNonRetriableCtrlError("Unable to use ComplianceRemediation. Make sure the CRD is installed: %s", err)
+		return common.NewNonRetriableCtrlError(
+			"Unable to get fix object for ComplianceRemediation. "+
+				"Make sure the CRD is installed: %s", err)
+	} else if errors.IsNotFound(err) {
+		if instance.Spec.Apply {
+			return r.createGenericRemediation(obj, found, objectLogger)
+		}
+
+		objectLogger.Info("The object wasn't found, so no action is needed to unapply it")
+		return nil
+	} else if err != nil {
+		return err
 	}
-	return err
+
+	if instance.Spec.Apply {
+		return r.patchGenericRemediation(obj, found, objectLogger)
+	}
+
+	return r.deleteGenericRemediation(obj, found, objectLogger)
+}
+
+func (r *ReconcileComplianceRemediation) createGenericRemediation(remObj *unstructured.Unstructured, foundObj *unstructured.Unstructured, logger logr.Logger) error {
+	logger.Info("Remediation will be created")
+	compv1alpha1.AddRemediationAnnotation(remObj)
+
+	createErr := r.client.Create(context.TODO(), remObj)
+
+	if errors.IsForbidden(createErr) {
+		// If the kind is not available in the cluster, we can't retry
+		return common.NewNonRetriableCtrlError(
+			"Unable to create fix object from ComplianceRemediation. "+
+				" Please update the compliance-operator's permissions: %s", createErr)
+	}
+
+	return createErr
+}
+
+func (r *ReconcileComplianceRemediation) patchGenericRemediation(remObj *unstructured.Unstructured, foundObj *unstructured.Unstructured, logger logr.Logger) error {
+	logger.Info("Remediation patch object")
+
+	patchErr := r.client.Patch(context.TODO(), remObj, client.Merge)
+
+	if errors.IsForbidden(patchErr) {
+		// If the kind is not available in the cluster, we can't retry
+		return common.NewNonRetriableCtrlError(
+			"Unable to patch fix object from ComplianceRemediation. "+
+				"Please update the compliance-operator's permissions: %s", patchErr)
+	}
+
+	return patchErr
+
+}
+
+func (r *ReconcileComplianceRemediation) deleteGenericRemediation(remObj *unstructured.Unstructured, foundObj *unstructured.Unstructured, logger logr.Logger) error {
+	logger.Info("Remediation will be deleted")
+
+	if !compv1alpha1.RemediationWasCreatedByOperator(foundObj) {
+		logger.Info("Can't unapply since this object wasn't created by the operator")
+		return nil
+	}
+	deleteErr := r.client.Delete(context.TODO(), remObj)
+
+	if errors.IsForbidden(deleteErr) {
+		return common.NewNonRetriableCtrlError(
+			"Unable to delete fix object from ComplianceRemediation. "+
+				"Please update the compliance-operator's permissions: %s", deleteErr)
+	} else if errors.IsNotFound(deleteErr) {
+		return nil
+	}
+
+	return deleteErr
 }
 
 // reconcileMcRemediation makes sure that the list of selected ComplianceRemediations is reflected in an
