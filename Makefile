@@ -101,6 +101,8 @@ E2E_GO_TEST_FLAGS?=-test.v -test.timeout 120m
 # Specifies the image path to use for the content in the tests
 DEFAULT_CONTENT_IMAGE_PATH=quay.io/complianceascode/ocp4:latest
 E2E_CONTENT_IMAGE_PATH?=quay.io/complianceascode/ocp4:latest
+# We specifically omit the tag here since we only use this for testing.
+E2E_BROKEN_CONTENT_IMAGE_PATH?=quay.io/compliance-operator/test-broken-content:latest
 
 QUAY_NAMESPACE=compliance-operator
 OPERATOR_VERSION?=
@@ -137,6 +139,10 @@ bundle-image:
 .PHONY: index-image
 index-image: opm
 	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(TAG) -f $(INDEX_IMAGE_PATH):$(PREVIOUS_OPERATOR_VERSION) -t $(INDEX_IMAGE_PATH):$(TAG) -c podman
+
+.PHONY: test-broken-content-image
+test-broken-content-image:
+	$(RUNTIME) build -t $(E2E_BROKEN_CONTENT_IMAGE_PATH) -f images/testcontent/broken-content.Dockerfile .
 
 .PHONY: build
 build: fmt manager ## Build the compliance-operator binary
@@ -232,7 +238,7 @@ e2e: namespace tear-down operator-sdk image-to-cluster openshift-user deploy-crd
 	@$(SED) 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	@$(SED) 's%$(DEFAULT_CONTENT_IMAGE_PATH)%$(E2E_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 	@echo "Running e2e tests"
-	unset GOFLAGS && CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --skip-cleanup-error --image "$(RELATED_IMAGE_OPERATOR_PATH)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
+	unset GOFLAGS && BROKEN_CONTENT_IMAGE=$(E2E_BROKEN_CONTENT_IMAGE_PATH) CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --skip-cleanup-error --image "$(RELATED_IMAGE_OPERATOR_PATH)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 	@echo "Restoring image references in deploy/operator.yaml"
 	@$(SED) 's%$(RELATED_IMAGE_OPENSCAP_PATH):$(RELATED_IMAGE_OPENSCAP_TAG)%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%' deploy/operator.yaml
 	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml

@@ -283,6 +283,7 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 		"--content=/content/" + scanInstance.Spec.Content,
 		"--resultdir=" + PlatformScanDataRoot,
 		"--profile=" + scanInstance.Spec.Profile,
+		"--warnings-output-file=/reports/warning_output",
 	}
 	falseP := false
 	trueP := true
@@ -339,6 +340,10 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 							Name:      "fetch-results",
 							MountPath: PlatformScanDataRoot,
 						},
+						{
+							Name:      "report-dir",
+							MountPath: "/reports",
+						},
 					},
 				},
 			},
@@ -352,6 +357,7 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 						"--results-file=/reports/report.xml",
 						"--exit-code-file=/reports/exit_code",
 						"--oscap-output-file=/reports/cmd_output",
+						"--warnings-output-file=/reports/warning_output",
 						"--config-map-name=" + cmName,
 						"--owner=" + scanInstance.Name,
 						"--namespace=" + scanInstance.Namespace,

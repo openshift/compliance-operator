@@ -44,6 +44,7 @@ import (
 
 var contentImagePath string
 var shouldLogContainerOutput bool
+var brokenContentImagePath string
 
 var rhcosPb *compv1alpha1.ProfileBundle
 var ocp4Pb *compv1alpha1.ProfileBundle
@@ -64,6 +65,13 @@ func init() {
 	logContainerOutputEnv := os.Getenv("LOG_CONTAINER_OUTPUT")
 	if logContainerOutputEnv != "" {
 		shouldLogContainerOutput = true
+	}
+
+	brokenContentImagePath = os.Getenv("BROKEN_CONTENT_IMAGE")
+
+	if brokenContentImagePath == "" {
+		fmt.Println("Please set the 'BROKEN_CONTENT_IMAGE' environment variable")
+		os.Exit(1)
 	}
 }
 
@@ -633,6 +641,18 @@ func scanResultIsExpected(t *testing.T, f *framework.Framework, namespace, name 
 		if cs.Status.ErrorMessage == "" {
 			return fmt.Errorf("The ComplianceScan 'errormsg' wasn't set (it was empty). Even if we expected an error")
 		}
+	}
+	return nil
+}
+
+func scanHasWarnings(t *testing.T, f *framework.Framework, namespace, name string) error {
+	cs := &compv1alpha1.ComplianceScan{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, cs)
+	if err != nil {
+		return err
+	}
+	if cs.Status.Warnings == "" {
+		return fmt.Errorf("E2E-FAILURE: Excepted the scan %s to contain a warning", name)
 	}
 	return nil
 }

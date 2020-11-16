@@ -533,6 +533,46 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
+			Name:       "TestScanWithUnexistentResourceFails",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				scanName := getObjNameFromTest(t)
+				testScan := &compv1alpha1.ComplianceScan{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      scanName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceScanSpec{
+						Profile:      "xccdf_org.ssgproject.content_profile_test",
+						Content:      unexistentResourceContentFile,
+						ContentImage: brokenContentImagePath,
+						Rule:         "xccdf_org.ssgproject.content_rule_api_server_unexistent_resource",
+						ScanType:     compv1alpha1.ScanTypePlatform,
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), testScan, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+
+				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultNonCompliant)
+				if err != nil {
+					return err
+				}
+
+				if err = scanHasWarnings(t, f, namespace, scanName); err != nil {
+					return err
+				}
+
+				return nil
+			},
+		},
+		testExecution{
 			Name:       "TestScanStorageOutOfLimitRangeFails",
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
