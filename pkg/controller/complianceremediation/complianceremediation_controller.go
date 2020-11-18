@@ -391,7 +391,7 @@ func createOrUpdateMachineConfig(r *ReconcileComplianceRemediation, merged *mcfg
 		// If we have already applied this there's nothing to do
 		logger.Info("Remediation already applied, doing nothing")
 		return nil
-	} else if !rem.Spec.Apply && !mcHasRemediationAnnotation(mc, rem) {
+	} else if !rem.Spec.Apply && !MCHasRemediationAnnotation(mc, rem) {
 		// If we have already un-applied this there's nothing to do
 		logger.Info("Remediation already unapplied, doing nothing")
 		return nil
@@ -471,7 +471,7 @@ func ensureRemediationAnnotationIsNotSet(mc *mcfgv1.MachineConfig, rem *compv1al
 	}
 }
 
-func mcHasRemediationAnnotation(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) bool {
+func MCHasRemediationAnnotation(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) bool {
 	if mc.Annotations == nil {
 		return false
 	}
