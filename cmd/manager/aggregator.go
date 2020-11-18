@@ -99,7 +99,10 @@ func getScanConfigMaps(crClient *complianceCrClient, scan, namespace string) ([]
 
 	// Look for configMap with this scan label
 	inNs := client.InNamespace(namespace)
-	withLabel := client.MatchingLabels{compv1alpha1.ComplianceScanLabel: scan}
+	withLabel := client.MatchingLabels{
+		compv1alpha1.ComplianceScanLabel: scan,
+		compv1alpha1.ResultLabel:         "",
+	}
 
 	err = crClient.client.List(context.TODO(), cMapList, inNs, withLabel)
 	if err != nil {
