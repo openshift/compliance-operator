@@ -340,9 +340,6 @@ func TestE2E(t *testing.T) {
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				const (
 					unexistentImage     = "bad-namespace/bad-image:latest"
-					removedRule         = "chronyd-no-chronyc-network"
-					unlinkedRule        = "chronyd-client-only"
-					moderateProfileName = "moderate"
 				)
 
 				pbName := getObjNameFromTest(t)
@@ -374,9 +371,6 @@ func TestE2E(t *testing.T) {
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				const (
 					noTagImage          = "bad-namespace/bad-image"
-					removedRule         = "chronyd-no-chronyc-network"
-					unlinkedRule        = "chronyd-client-only"
-					moderateProfileName = "moderate"
 				)
 
 				pbName := getObjNameFromTest(t)
