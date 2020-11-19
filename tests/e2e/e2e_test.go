@@ -96,7 +96,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				if err := assertMustHaveParsedRules(t, f, namespace, pbName); err != nil {
+				if err := assertMustHaveParsedRules(f, pbName); err != nil {
 					return err
 				}
 
@@ -201,7 +201,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				if err := assertMustHaveParsedRules(t, f, namespace, pbName); err != nil {
+				if err := assertMustHaveParsedRules(f, pbName); err != nil {
 					return err
 				}
 
@@ -307,7 +307,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				if err := assertMustHaveParsedRules(t, f, namespace, pbName); err != nil {
+				if err := assertMustHaveParsedRules(f, pbName); err != nil {
 					return err
 				}
 

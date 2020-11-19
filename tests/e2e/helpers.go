@@ -1519,7 +1519,7 @@ func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, namesp
 	return nil
 }
 
-func assertMustHaveParsedRules(t *testing.T, f *framework.Framework, namespace, name string) error {
+func assertMustHaveParsedRules(f *framework.Framework, name string) error {
 	var rl compv1alpha1.RuleList
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(map[string]string{
