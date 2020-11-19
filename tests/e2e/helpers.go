@@ -1441,7 +1441,7 @@ func findRuleReference(profile *compv1alpha1.Profile, ruleName string) bool {
 	return false
 }
 
-func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, namespace, name, imgDigest string) error {
+func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, name, imgDigest string) error {
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(map[string]string{
 			"profile-bundle": name,

@@ -197,7 +197,7 @@ func TestE2E(t *testing.T) {
 				// Note that when an update happens through an imagestream tag, the operator doesn't get
 				// a notification about it... It all happens on the Kube Deployment's side.
 				// So we don't need to wait for the profile bundle's statuses
-				if err := waitForDeploymentContentUpdate(t, f, namespace, pbName, modifiedImageDigest); err != nil {
+				if err := waitForDeploymentContentUpdate(t, f, pbName, modifiedImageDigest); err != nil {
 					return err
 				}
 
@@ -303,7 +303,7 @@ func TestE2E(t *testing.T) {
 				// Note that when an update happens through an imagestream tag, the operator doesn't get
 				// a notification about it... It all happens on the Kube Deployment's side.
 				// So we don't need to wait for the profile bundle's statuses
-				if err := waitForDeploymentContentUpdate(t, f, namespace, pbName, modifiedImageDigest); err != nil {
+				if err := waitForDeploymentContentUpdate(t, f, pbName, modifiedImageDigest); err != nil {
 					return err
 				}
 
