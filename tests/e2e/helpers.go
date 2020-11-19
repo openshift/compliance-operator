@@ -1796,33 +1796,33 @@ func initContainerCompleted(t *testing.T, c kubernetes.Interface, name, namespac
 			return false, err
 		}
 		if apierrors.IsNotFound(err) {
-			t.Logf("Pod %s not found yet", name)
+			E2ELogf(t, "Pod %s not found yet", name)
 			return false, nil
 		}
 
 		for _, initStatus := range pod.Status.InitContainerStatuses {
-			t.Log(initStatus)
+			E2ELog(t, initStatus)
 			// the init container must have passed the readiness probe
 			if initStatus.Ready == false {
-				t.Log("Init container not ready yet")
+				E2ELog(t, "Init container not ready yet")
 				return false, nil
 			}
 
 			// the init container must have terminated
 			if initStatus.State.Terminated == nil {
-				t.Log("Init container did not terminate yet")
+				E2ELog(t, "Init container did not terminate yet")
 				return false, nil
 			}
 
 			if initStatus.State.Terminated.ExitCode != 0 {
 				return true, errors.New("the init container failed")
 			} else {
-				t.Logf("init container in pod %s has finished", name)
+				E2ELogf(t, "init container in pod %s has finished", name)
 				return true, nil
 			}
 		}
 
-		t.Logf("init container in pod %s not finished yet", name)
+		E2ELogf(t, "init container in pod %s not finished yet", name)
 		return false, nil
 	}
 }

@@ -2386,7 +2386,7 @@ func TestE2E(t *testing.T) {
 				defer func() {
 					err := f.KubeClient.CoreV1().Secrets("openshift-config").Delete(goctx.TODO(), "htpass", metav1.DeleteOptions{})
 					if err != nil {
-						t.Logf("could not clean up openshift-config/htpass test secret: %v", err)
+						E2ELogf(t, "could not clean up openshift-config/htpass test secret: %v", err)
 					}
 				}()
 
@@ -2416,7 +2416,7 @@ func TestE2E(t *testing.T) {
 
 				err = f.Client.Update(goctx.TODO(), oauthUpdate)
 				if err != nil {
-					t.Logf("error updating idp: %v", err)
+					E2ELogf(t, "error updating idp: %v", err)
 					return err
 				}
 
@@ -2424,7 +2424,7 @@ func TestE2E(t *testing.T) {
 					fetchedOauth := &configv1.OAuth{}
 					err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: "cluster"}, fetchedOauth)
 					if err != nil {
-						t.Logf("error restoring idp: %v", err)
+						E2ELogf(t, "error restoring idp: %v", err)
 					} else {
 						oauth := fetchedOauth.DeepCopy()
 						// Make sure it's cleared out
@@ -2433,7 +2433,7 @@ func TestE2E(t *testing.T) {
 						}
 						err = f.Client.Update(goctx.TODO(), oauth)
 						if err != nil {
-							t.Logf("error restoring idp: %v", err)
+							E2ELogf(t, "error restoring idp: %v", err)
 						}
 					}
 				}()
