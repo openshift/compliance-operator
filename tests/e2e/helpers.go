@@ -1888,7 +1888,7 @@ func getReadyProfileBundle(t *testing.T, f *framework.Framework, name, namespace
 	return pb, nil
 }
 
-func writeToArtifactsDir(t *testing.T, f *framework.Framework, dir, scan, pod, container, log string) error {
+func writeToArtifactsDir(dir, scan, pod, container, log string) error {
 	logPath := path.Join(dir, fmt.Sprintf("%s_%s_%s.log", scan, pod, container))
 	logFile, err := os.Create(logPath)
 	if err != nil {
@@ -1940,7 +1940,7 @@ func logContainerOutput(t *testing.T, f *framework.Framework, namespace, name st
 				if len(logs) == 0 {
 					E2ELogf(t, "no logs for %s/%s", pod.Name, con)
 				} else {
-					err := writeToArtifactsDir(t, f, artifacts, name, pod.Name, con, logs)
+					err := writeToArtifactsDir(artifacts, name, pod.Name, con, logs)
 					if err != nil {
 						E2ELogf(t, "error writing logs for %s/%s: %v", pod.Name, con, err)
 					} else {
