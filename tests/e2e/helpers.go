@@ -77,8 +77,8 @@ func E2ELogf(t *testing.T, format string, args ...interface{}) {
 	t.Logf(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), format), args...)
 }
 
-func E2ELog(t *testing.T, format string) {
-	t.Log(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), format))
+func E2ELog(t *testing.T, args ...interface{}) {
+	t.Log(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), fmt.Sprint(args...)))
 }
 
 func getObjNameFromTest(t *testing.T) string {
