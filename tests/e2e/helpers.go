@@ -311,9 +311,9 @@ func replaceNamespaceFromManifest(t *testing.T, namespace string, namespacedManP
 	if namespacedManPath == nil {
 		t.Fatal("Error: no namespaced manifest given as test argument. operator-sdk might have changed.")
 	}
-	path := *namespacedManPath
+	manPath := *namespacedManPath
 	// #nosec
-	read, err := ioutil.ReadFile(path)
+	read, err := ioutil.ReadFile(manPath)
 	if err != nil {
 		t.Fatalf("Error reading namespaced manifest file: %s", err)
 	}
@@ -321,7 +321,7 @@ func replaceNamespaceFromManifest(t *testing.T, namespace string, namespacedManP
 	newContents := strings.Replace(string(read), "openshift-compliance", namespace, -1)
 
 	// #nosec
-	err = ioutil.WriteFile(path, []byte(newContents), 644)
+	err = ioutil.WriteFile(manPath, []byte(newContents), 644)
 	if err != nil {
 		t.Fatalf("Error writing namespaced manifest file: %s", err)
 	}
