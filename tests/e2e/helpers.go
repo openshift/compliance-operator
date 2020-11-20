@@ -1631,9 +1631,10 @@ func getRotationCheckerWorkload(namespace, rawResultName string) *corev1.Pod {
 			RestartPolicy: corev1.RestartPolicyOnFailure,
 			Containers: []corev1.Container{
 				{
-					Name:    "checker",
-					Image:   "registry.access.redhat.com/ubi8/ubi-minimal",
-					Command: []string{"/bin/bash", "-c", "ls /raw-results | grep -v 'lost+found'"},
+					Name:            "checker",
+					Image:           "registry.access.redhat.com/ubi8/ubi-minimal",
+					ImagePullPolicy: corev1.PullIfNotPresent,
+					Command:         []string{"/bin/bash", "-c", "ls /raw-results | grep -v 'lost+found'"},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "raw-results",
