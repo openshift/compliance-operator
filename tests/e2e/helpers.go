@@ -43,6 +43,7 @@ import (
 )
 
 var contentImagePath string
+var shouldLogContainerOutput bool
 
 var rhcosPb *compv1alpha1.ProfileBundle
 var ocp4Pb *compv1alpha1.ProfileBundle
@@ -58,6 +59,11 @@ func init() {
 	if contentImagePath == "" {
 		fmt.Println("Please set the 'CONTENT_IMAGE' environment variable")
 		os.Exit(1)
+	}
+
+	logContainerOutputEnv := os.Getenv("LOG_CONTAINER_OUTPUT")
+	if logContainerOutputEnv != "" {
+		shouldLogContainerOutput = true
 	}
 }
 
@@ -1905,6 +1911,10 @@ func writeToArtifactsDir(dir, scan, pod, container, log string) error {
 }
 
 func logContainerOutput(t *testing.T, f *framework.Framework, namespace, name string) {
+	if shouldLogContainerOutput == false {
+		return
+	}
+
 	// Try all container/init variants for each pod and the pod itself (self), log nothing if the container is not applicable.
 	containers := []string{"self", "api-resource-collector", "log-collector", "scanner", "content-container"}
 	artifacts := os.Getenv("ARTIFACT_DIR")
