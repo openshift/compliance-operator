@@ -311,9 +311,9 @@ func replaceNamespaceFromManifest(t *testing.T, namespace string, namespacedManP
 	if namespacedManPath == nil {
 		t.Fatal("Error: no namespaced manifest given as test argument. operator-sdk might have changed.")
 	}
-	path := *namespacedManPath
+	manPath := *namespacedManPath
 	// #nosec
-	read, err := ioutil.ReadFile(path)
+	read, err := ioutil.ReadFile(manPath)
 	if err != nil {
 		t.Fatalf("Error reading namespaced manifest file: %s", err)
 	}
@@ -321,7 +321,7 @@ func replaceNamespaceFromManifest(t *testing.T, namespace string, namespacedManP
 	newContents := strings.Replace(string(read), "openshift-compliance", namespace, -1)
 
 	// #nosec
-	err = ioutil.WriteFile(path, []byte(newContents), 644)
+	err = ioutil.WriteFile(manPath, []byte(newContents), 644)
 	if err != nil {
 		t.Fatalf("Error writing namespaced manifest file: %s", err)
 	}
@@ -1441,7 +1441,7 @@ func findRuleReference(profile *compv1alpha1.Profile, ruleName string) bool {
 	return false
 }
 
-func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, namespace, name, imgDigest string) error {
+func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, name, imgDigest string) error {
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(map[string]string{
 			"profile-bundle": name,
@@ -1519,7 +1519,7 @@ func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, namesp
 	return nil
 }
 
-func assertMustHaveParsedRules(t *testing.T, f *framework.Framework, namespace, name string) error {
+func assertMustHaveParsedRules(f *framework.Framework, name string) error {
 	var rl compv1alpha1.RuleList
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(map[string]string{
@@ -1888,7 +1888,7 @@ func getReadyProfileBundle(t *testing.T, f *framework.Framework, name, namespace
 	return pb, nil
 }
 
-func writeToArtifactsDir(t *testing.T, f *framework.Framework, dir, scan, pod, container, log string) error {
+func writeToArtifactsDir(dir, scan, pod, container, log string) error {
 	logPath := path.Join(dir, fmt.Sprintf("%s_%s_%s.log", scan, pod, container))
 	logFile, err := os.Create(logPath)
 	if err != nil {
@@ -1940,7 +1940,7 @@ func logContainerOutput(t *testing.T, f *framework.Framework, namespace, name st
 				if len(logs) == 0 {
 					E2ELogf(t, "no logs for %s/%s", pod.Name, con)
 				} else {
-					err := writeToArtifactsDir(t, f, artifacts, name, pod.Name, con, logs)
+					err := writeToArtifactsDir(artifacts, name, pod.Name, con, logs)
 					if err != nil {
 						E2ELogf(t, "error writing logs for %s/%s: %v", pod.Name, con, err)
 					} else {
