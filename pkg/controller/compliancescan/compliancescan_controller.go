@@ -709,7 +709,7 @@ func isPodRunning(r *ReconcileComplianceScan, podName, namespace string, logger 
 	if err != nil {
 		podlogger.Error(err, "Cannot retrieve pod")
 		return false, err
-	} else if foundPod.Status.Phase == corev1.PodFailed || foundPod.Status.Phase == corev1.PodSucceeded {
+	} else if foundPod.Status.Phase == corev1.PodSucceeded {
 		podlogger.Info("Pod has finished")
 		return false, nil
 	}
@@ -723,6 +723,15 @@ func isPodRunning(r *ReconcileComplianceScan, podName, namespace string, logger 
 			}
 			break
 		}
+	}
+
+	// We check for failured in the end, as we want to make sure that conditions
+	// are checked first.
+	if foundPod.Status.Phase == corev1.PodFailed {
+		podlogger.Info("Pod failed. It should be restarted.", "Reason", foundPod.Status.Reason, "Message", foundPod.Status.Message)
+		// We mark this as if the pod is still running, as it should be
+		// restarted by the kubelet due to the restart policy
+		return true, nil
 	}
 
 	// the pod is still running or being created etc
