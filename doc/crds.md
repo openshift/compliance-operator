@@ -158,6 +158,9 @@ Regarding the `status`:
 * **result**: Indicates the verdict of the scan. The scan can be `COMPLIANT`,
   `NON-COMPLIANT`, or report an `ERROR` if an unforeseen issue happened or
   there's an issue in the scan specification.
+* **warnings**: Indicates non-fatal errors in the scan. e.g. the operator not having
+  the necessary RBAC permissions to fetch a resource, or a resource type not existing
+  in the cluster.
 
 When a scan is created by a suite, the scan is owned by it. Deleting a
 `ComplianceSuite` object will result in deleting all the scans that it created.

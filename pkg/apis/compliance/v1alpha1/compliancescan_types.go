@@ -215,6 +215,9 @@ type ComplianceScanStatus struct {
 	CurrentIndex int64 `json:"currentIndex,omitempty"`
 	// Specifies the object that's storing the raw results for the scan.
 	ResultsStorage StorageReference `json:"resultsStorage,omitempty"`
+	// If there are warnings on the scan, this will be filled up with warning
+	// messages.
+	Warnings string `json:"warnings,omitempty"`
 }
 
 // StorageReference stores a reference to where certain objects are being stored

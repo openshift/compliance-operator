@@ -370,7 +370,7 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 				// Create custom error message for this pod that couldn't be scheduled
 				cmName := getConfigMapForNodeName(instance.Name, node.Name)
 				cm := utils.GetResultConfigMap(instance, cmName, "error-msg", node.Name,
-					[]byte(err.Error()), false, common.PodUnschedulableExitCode)
+					[]byte(err.Error()), false, common.PodUnschedulableExitCode, "")
 				cmKey := types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}
 				foundcm := corev1.ConfigMap{}
 				cmGetErr := r.client.Get(context.TODO(), cmKey, &foundcm)
@@ -416,7 +416,11 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1
 		return reconcile.Result{}, err
 	}
 
-	isReady, err := shouldLaunchAggregator(r, instance, nodes)
+	isReady, warnings, err := shouldLaunchAggregator(r, instance, nodes)
+
+	if warnings != "" {
+		instance.Status.Warnings = warnings
+	}
 
 	// We only wait if there are no errors.
 	if err == nil && !isReady {
@@ -764,7 +768,8 @@ func getNodeScanCM(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 // shouldLaunchAggregator is a check that tests whether the scanner already failed
 // hard in which case there might not be a reason to launch the aggregator pod, e.g.
 // in cases the content cannot be loaded at all
-func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList) (bool, error) {
+func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList) (bool, string, error) {
+	var warnings string
 	switch instance.GetScanType() {
 	case compv1alpha1.ScanTypePlatform:
 		foundCM, err := getPlatformScanCM(r, instance)
@@ -772,13 +777,18 @@ func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.C
 		// Could be a transient error, so we requeue if there's any
 		// error here.
 		if err != nil {
-			return false, nil
+			return false, "", nil
+		}
+
+		warns, ok := foundCM.Data["warnings"]
+		if ok {
+			warnings = warns
 		}
 
 		// NOTE: err is only set if there is an error in the scan run
 		err = checkScanUnknownError(foundCM)
 		if err != nil {
-			return true, err
+			return true, warnings, err
 		}
 	case compv1alpha1.ScanTypeNode:
 		for _, node := range nodes.Items {
@@ -787,18 +797,23 @@ func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.C
 			// Could be a transient error, so we requeue if there's any
 			// error here.
 			if err != nil {
-				return false, nil
+				return false, "", nil
+			}
+
+			warns, ok := foundCM.Data["warnings"]
+			if ok {
+				warnings = warns
 			}
 
 			// NOTE: err is only set if there is an error in the scan run
 			err = checkScanUnknownError(foundCM)
 			if err != nil {
-				return true, err
+				return true, warnings, err
 			}
 		}
 	}
 
-	return true, nil
+	return true, warnings, nil
 }
 
 // gatherResults will iterate the nodes in the scan and get the results

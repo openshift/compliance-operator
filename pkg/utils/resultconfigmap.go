@@ -15,7 +15,7 @@ func encodetoBase64(str []byte) string {
 }
 
 // GetResultConfigMap gets a configmap that reflects a result or an error for a scan
-func GetResultConfigMap(owner metav1.Object, configMapName, filename, nodeName string, contents []byte, compressed bool, exitcode string) *corev1.ConfigMap {
+func GetResultConfigMap(owner metav1.Object, configMapName, filename, nodeName string, contents []byte, compressed bool, exitcode string, warnings string) *corev1.ConfigMap {
 	var strcontents string
 	annotations := map[string]string{}
 	if compressed {
@@ -47,6 +47,7 @@ func GetResultConfigMap(owner metav1.Object, configMapName, filename, nodeName s
 		Data: map[string]string{
 			"exit-code": exitcode,
 			filename:    strcontents,
+			"warnings":  warnings,
 		},
 	}
 }
