@@ -62,7 +62,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				} else if found != true {
-					t.Errorf("Expected rule %s not found", prefixName(pbName, removedRule))
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, removedRule))
 					return err
 				}
 
@@ -73,7 +73,7 @@ func TestE2E(t *testing.T) {
 				}
 				found = findRuleReference(profilePreUpdate, prefixName(pbName, unlinkedRule))
 				if found != true {
-					t.Errorf("Expected rule %s not found", prefixName(pbName, unlinkedRule))
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, unlinkedRule))
 					return err
 				}
 
@@ -105,7 +105,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				} else if found != false {
-					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, removedRule))
+					E2EErrorf(t, "Rule %s unexpectedly found", prefixName(pbName, removedRule))
 					return err
 				}
 
@@ -116,7 +116,7 @@ func TestE2E(t *testing.T) {
 				}
 				found = findRuleReference(profilePostUpdate, prefixName(pbName, unlinkedRule))
 				if found != false {
-					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
+					E2EErrorf(t, "Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
 					return err
 				}
 
@@ -174,7 +174,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				} else if found != true {
-					t.Errorf("Expected rule %s not found", prefixName(pbName, removedRule))
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, removedRule))
 					return err
 				}
 
@@ -185,7 +185,7 @@ func TestE2E(t *testing.T) {
 				}
 				found = findRuleReference(profilePreUpdate, prefixName(pbName, unlinkedRule))
 				if found != true {
-					t.Errorf("Expected rule %s not found", prefixName(pbName, unlinkedRule))
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, unlinkedRule))
 					return err
 				}
 
@@ -210,7 +210,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				} else if found != false {
-					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, removedRule))
+					E2EErrorf(t, "Rule %s unexpectedly found", prefixName(pbName, removedRule))
 					return err
 				}
 
@@ -221,7 +221,7 @@ func TestE2E(t *testing.T) {
 				}
 				found = findRuleReference(profilePostUpdate, prefixName(pbName, unlinkedRule))
 				if found != false {
-					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
+					E2EErrorf(t, "Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
 					return err
 				}
 
@@ -280,7 +280,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				} else if found != true {
-					t.Errorf("Expected rule %s not found", prefixName(pbName, removedRule))
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, removedRule))
 					return err
 				}
 
@@ -291,7 +291,7 @@ func TestE2E(t *testing.T) {
 				}
 				found = findRuleReference(profilePreUpdate, prefixName(pbName, unlinkedRule))
 				if found != true {
-					t.Errorf("Expected rule %s not found", prefixName(pbName, unlinkedRule))
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, unlinkedRule))
 					return err
 				}
 
@@ -316,7 +316,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				} else if found != false {
-					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, removedRule))
+					E2EErrorf(t, "Rule %s unexpectedly found", prefixName(pbName, removedRule))
 					return err
 				}
 
@@ -327,7 +327,7 @@ func TestE2E(t *testing.T) {
 				}
 				found = findRuleReference(profilePostUpdate, prefixName(pbName, unlinkedRule))
 				if found != false {
-					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
+					E2EErrorf(t, "Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
 					return err
 				}
 
@@ -1901,7 +1901,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				if masterScan.Spec.Debug != true {
-					t.Errorf("Expected that the settings set debug to true in master scan")
+					E2EErrorf(t, "Expected that the settings set debug to true in master scan")
 				}
 
 				workerScanKey := types.NamespacedName{Namespace: namespace, Name: rhcos4e8profile.Name + "-worker"}
@@ -1911,7 +1911,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				if workerScan.Spec.Debug != true {
-					t.Errorf("Expected that the settings set debug to true in workers scan")
+					E2EErrorf(t, "Expected that the settings set debug to true in workers scan")
 				}
 
 				return nil
@@ -1954,7 +1954,7 @@ func TestE2E(t *testing.T) {
 
 				err := mcTctx.createE2EPool()
 				if err != nil {
-					t.Errorf("Cannot create subpool for this test")
+					E2EErrorf(t, "Cannot create subpool for this test")
 					return err
 				}
 
@@ -1982,7 +1982,7 @@ func TestE2E(t *testing.T) {
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
 				err = waitForRemediationToBeAutoApplied(t, f, workersNoRootLoginsRemName, namespace, poolBeforeRemediation)
 				if err != nil {
-					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
 				}
 
@@ -2057,14 +2057,14 @@ func TestE2E(t *testing.T) {
 				// We need to wait for both the pool to update..
 				err = waitForMachinePoolUpdate(t, f, testPoolName, dummyAction, poolHasNoMc, nil)
 				if err != nil {
-					t.Errorf("Failed to wait for workers to come back up after deleting MC")
+					E2EErrorf(t, "Failed to wait for workers to come back up after deleting MC")
 					return err
 				}
 
 				// ..as well as the nodes
 				err = waitForNodesToBeReady(t, f)
 				if err != nil {
-					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
 				}
 
@@ -2109,7 +2109,7 @@ func TestE2E(t *testing.T) {
 
 				err := mcTctx.createE2EPool()
 				if err != nil {
-					t.Errorf("Cannot create subpool for this test")
+					E2EErrorf(t, "Cannot create subpool for this test")
 					return err
 				}
 
@@ -2153,7 +2153,7 @@ func TestE2E(t *testing.T) {
 
 				err = waitForNodesToBeReady(t, f)
 				if err != nil {
-					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
 				}
 
@@ -2174,7 +2174,7 @@ func TestE2E(t *testing.T) {
 				err = f.Client.Get(goctx.TODO(), mcName, mcOne)
 
 				if mcOne.Generation == mcBoth.Generation {
-					t.Errorf("Expected that the MC generation changes. Got: %d, Expected: %d", mcOne.Generation, mcBoth.Generation)
+					E2EErrorf(t, "Expected that the MC generation changes. Got: %d, Expected: %d", mcOne.Generation, mcBoth.Generation)
 				}
 
 				// When we unapply the second remediation, the MC should be deleted, too
@@ -2186,7 +2186,7 @@ func TestE2E(t *testing.T) {
 				mcShouldntExist := &mcfgv1.MachineConfig{}
 				err = f.Client.Get(goctx.TODO(), mcName, mcShouldntExist)
 				if err == nil {
-					t.Errorf("MC %s unexpectedly found", mcName)
+					E2EErrorf(t, "MC %s unexpectedly found", mcName)
 				}
 
 				return nil
@@ -2243,7 +2243,7 @@ func TestE2E(t *testing.T) {
 				// Ensure that all the scans in the suite have finished and are marked as Done
 				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultInconsistent)
 				if err != nil {
-					t.Errorf("Got an unexpected status")
+					E2EErrorf(t, "Got an unexpected status")
 				}
 
 				if err := f.KubeClient.CoreV1().Pods(namespace).Delete(goctx.TODO(), pod.Name, metav1.DeleteOptions{}); err != nil {
@@ -2420,7 +2420,7 @@ func TestE2E(t *testing.T) {
 				defer func() {
 					err := f.KubeClient.CoreV1().Secrets("openshift-config").Delete(goctx.TODO(), "htpass", metav1.DeleteOptions{})
 					if err != nil {
-						t.Logf("could not clean up openshift-config/htpass test secret: %v", err)
+						E2ELogf(t, "could not clean up openshift-config/htpass test secret: %v", err)
 					}
 				}()
 
@@ -2450,7 +2450,7 @@ func TestE2E(t *testing.T) {
 
 				err = f.Client.Update(goctx.TODO(), oauthUpdate)
 				if err != nil {
-					t.Logf("error updating idp: %v", err)
+					E2ELogf(t, "error updating idp: %v", err)
 					return err
 				}
 
@@ -2458,7 +2458,7 @@ func TestE2E(t *testing.T) {
 					fetchedOauth := &configv1.OAuth{}
 					err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: "cluster"}, fetchedOauth)
 					if err != nil {
-						t.Logf("error restoring idp: %v", err)
+						E2ELogf(t, "error restoring idp: %v", err)
 					} else {
 						oauth := fetchedOauth.DeepCopy()
 						// Make sure it's cleared out
@@ -2467,7 +2467,7 @@ func TestE2E(t *testing.T) {
 						}
 						err = f.Client.Update(goctx.TODO(), oauth)
 						if err != nil {
-							t.Logf("error restoring idp: %v", err)
+							E2ELogf(t, "error restoring idp: %v", err)
 						}
 					}
 				}()
@@ -2562,7 +2562,7 @@ func TestE2E(t *testing.T) {
 
 				err := mcTctx.createE2EPool()
 				if err != nil {
-					t.Errorf("Cannot create subpool for this test")
+					E2EErrorf(t, "Cannot create subpool for this test")
 					return err
 				}
 
@@ -2586,7 +2586,7 @@ func TestE2E(t *testing.T) {
 
 				err = waitForNodesToBeReady(t, f)
 				if err != nil {
-					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
 				}
 
@@ -2631,7 +2631,7 @@ func TestE2E(t *testing.T) {
 
 				err = waitForNodesToBeReady(t, f)
 				if err != nil {
-					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
 				}
 
@@ -2653,7 +2653,7 @@ func TestE2E(t *testing.T) {
 
 				err = waitForNodesToBeReady(t, f)
 				if err != nil {
-					t.Errorf("Failed to wait for nodes to come back up after unapplying MC: %v", err)
+					E2EErrorf(t, "Failed to wait for nodes to come back up after unapplying MC: %v", err)
 					return err
 				}
 

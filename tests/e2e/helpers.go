@@ -91,8 +91,12 @@ func E2ELogf(t *testing.T, format string, args ...interface{}) {
 	t.Logf(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), format), args...)
 }
 
-func E2ELog(t *testing.T, format string) {
-	t.Log(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), format))
+func E2ELog(t *testing.T, args ...interface{}) {
+	t.Log(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), fmt.Sprint(args...)))
+}
+
+func E2EErrorf(t *testing.T, format string, args ...interface{}) {
+	t.Errorf(fmt.Sprintf("E2E-FAILURE: %s: %s", time.Now().Format(time.RFC3339), format), args...)
 }
 
 func getObjNameFromTest(t *testing.T) string {
@@ -129,7 +133,7 @@ func (c *mcTestCtx) cleanupTrackedPools() {
 
 		err := unLabelNodes(c.t, c.f, rmPoolLabel, poolNodes)
 		if err != nil {
-			c.t.Errorf("Could not unlabel nodes from pool %s: %v\n", rmPoolLabel, err)
+			E2EErrorf(c.t, "Could not unlabel nodes from pool %s: %v\n", rmPoolLabel, err)
 		}
 
 		// Unlabeling the nodes triggers an update of the affected nodes because the nodes
@@ -139,19 +143,18 @@ func (c *mcTestCtx) cleanupTrackedPools() {
 		// e2e pool that would be gone when we remove it with the next call
 		err = waitForNodesToHaveARenderedPool(c.t, c.f, poolNodes, workerPoolName)
 		if err != nil {
-			c.t.Errorf("Error waiting for nodes to reach the worker pool again: %v\n", err)
+			E2EErrorf(c.t, "Error waiting for nodes to reach the worker pool again: %v\n", err)
 		}
-
 		err = waitForPoolCondition(c.t, c.f, mcfgv1.MachineConfigPoolUpdated, p.Name)
 		if err != nil {
-			c.t.Errorf("Error waiting for reboot after nodes were unlabeled: %v\n", err)
+			E2EErrorf(c.t, "Error waiting for reboot after nodes were unlabeled: %v\n", err)
 		}
 
 		// Then delete the pool itself
 		E2ELogf(c.t, "Removing pool %s\n", p.Name)
 		err = c.f.Client.Delete(goctx.TODO(), p)
 		if err != nil {
-			c.t.Errorf("Could not remove pool %s: %v\n", p.Name, err)
+			E2EErrorf(c.t, "Could not remove pool %s: %v\n", p.Name, err)
 		}
 	}
 }
@@ -793,7 +796,7 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 	})
 
 	if err != nil {
-		t.Errorf("Error waiting for remediations to appear")
+		E2EErrorf(t, "Error waiting for remediations to appear")
 		return err
 	}
 
@@ -817,7 +820,7 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 		poolPre = &mcfgv1.MachineConfigPool{}
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name}, poolPre)
 		if err != nil {
-			t.Errorf("Could not find the pool pre update")
+			E2EErrorf(t, "Could not find the pool pre update")
 			return err
 		}
 	}
@@ -825,7 +828,7 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 
 	err := action()
 	if err != nil {
-		t.Errorf("Action failed %v", err)
+		E2EErrorf(t, "Action failed %v", err)
 		return err
 	}
 
@@ -835,13 +838,13 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name}, pool)
 		if err != nil {
 			// even not found is a hard error here
-			t.Errorf("Could not find the pool post update")
+			E2EErrorf(t, "Could not find the pool post update")
 			return false, err
 		}
 
 		ok, err := predicate(t, pool)
 		if err != nil {
-			t.Errorf("Predicate failed %v", err)
+			E2EErrorf(t, "Predicate failed %v", err)
 			return false, err
 		}
 
@@ -920,7 +923,7 @@ func waitForNodesToHaveARenderedPool(t *testing.T, f *framework.Framework, nodes
 	pool := &mcfgv1.MachineConfigPool{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
 	if err != nil {
-		t.Errorf("Could not find pool %s\n", poolName)
+		E2EErrorf(t, "Could not find pool %s\n", poolName)
 		return err
 	}
 
@@ -964,7 +967,7 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, n
 		rem.Spec.Apply = true
 		err = f.Client.Update(goctx.TODO(), rem)
 		if err != nil {
-			t.Errorf("Cannot apply remediation")
+			E2EErrorf(t, "Cannot apply remediation")
 			return err
 		}
 		E2ELogf(t, "Remediation applied")
@@ -993,7 +996,7 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, n
 
 	err = waitForMachinePoolUpdate(t, f, pool, applyRemediation, predicate, nil)
 	if err != nil {
-		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
+		E2EErrorf(t, "Failed to wait for pool to update after applying MC: %v", err)
 		return err
 	}
 
@@ -1016,7 +1019,7 @@ func removeObsoleteRemediationAndCheck(t *testing.T, f *framework.Framework, nam
 		remCopy.Spec.Outdated.Object = nil
 		err = f.Client.Update(goctx.TODO(), remCopy)
 		if err != nil {
-			t.Errorf("Cannot update remediation")
+			E2EErrorf(t, "Cannot update remediation")
 			return err
 		}
 		E2ELogf(t, "Obsolete data removed")
@@ -1060,7 +1063,7 @@ func removeObsoleteRemediationAndCheck(t *testing.T, f *framework.Framework, nam
 
 	err = waitForMachinePoolUpdate(t, f, pool, removeObsoleteContents, predicate, poolBeforeRemediation)
 	if err != nil {
-		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
+		E2EErrorf(t, "Failed to wait for pool to update after applying MC: %v", err)
 		return err
 	}
 
@@ -1096,7 +1099,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 		rem.Spec.Apply = false
 		err = f.Client.Update(goctx.TODO(), rem)
 		if err != nil {
-			t.Errorf("Cannot apply remediation")
+			E2EErrorf(t, "Cannot apply remediation")
 			return err
 		}
 		E2ELogf(t, "Remediation applied")
@@ -1126,7 +1129,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 
 	err = waitForMachinePoolUpdate(t, f, pool, applyRemediation, predicate, nil)
 	if err != nil {
-		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
+		E2EErrorf(t, "Failed to wait for pool to update after applying MC: %v", err)
 		return err
 	}
 
@@ -1185,14 +1188,14 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 
 	err := waitForMachinePoolUpdate(t, f, pool.Name, preNoop, predicate, pool)
 	if err != nil {
-		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
+		E2EErrorf(t, "Failed to wait for pool to update after applying MC: %v", err)
 		return err
 	}
 
 	E2ELogf(t, "Machines updated with remediation")
 	err = waitForNodesToBeReady(t, f)
 	if err != nil {
-		t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+		E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
 		return err
 	}
 
@@ -1203,7 +1206,7 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName string) error {
 	err := unPauseMachinePool(t, f, poolName)
 	if err != nil {
-		t.Errorf("Could not unpause the MC pool")
+		E2EErrorf(t, "Could not unpause the MC pool")
 		return err
 	}
 
@@ -1214,7 +1217,7 @@ func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName st
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
 		if err != nil {
 			// even not found is a hard error here
-			t.Errorf("Could not find the pool post update")
+			E2EErrorf(t, "Could not find the pool post update")
 			return false, err
 		}
 
@@ -1249,7 +1252,7 @@ func modMachinePoolPause(t *testing.T, f *framework.Framework, poolName string, 
 	pool := &mcfgv1.MachineConfigPool{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
 	if err != nil {
-		t.Errorf("Could not find the pool to modify")
+		E2EErrorf(t, "Could not find the pool to modify")
 		return err
 	}
 
@@ -1257,7 +1260,7 @@ func modMachinePoolPause(t *testing.T, f *framework.Framework, poolName string, 
 	poolCopy.Spec.Paused = pause
 	err = f.Client.Update(goctx.TODO(), poolCopy)
 	if err != nil {
-		t.Errorf("Could not update the pool")
+		E2EErrorf(t, "Could not update the pool")
 		return err
 	}
 
@@ -1284,7 +1287,7 @@ func createMachineConfigPoolSubset(t *testing.T, f *framework.Framework, oldPool
 	oldPool := &mcfgv1.MachineConfigPool{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: oldPoolName}, oldPool)
 	if err != nil {
-		t.Errorf("Could not find the pool to modify")
+		E2EErrorf(t, "Could not find the pool to modify")
 		return nil, err
 	}
 
@@ -1375,7 +1378,7 @@ func waitForPoolCondition(t *testing.T, f *framework.Framework, conditionType mc
 		pool := mcfgv1.MachineConfigPool{}
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: newPoolName}, &pool)
 		if err != nil {
-			t.Errorf("Could not find the pool post update")
+			E2EErrorf(t, "Could not find the pool post update")
 			return false, err
 		}
 
@@ -1822,33 +1825,33 @@ func initContainerCompleted(t *testing.T, c kubernetes.Interface, name, namespac
 			return false, err
 		}
 		if apierrors.IsNotFound(err) {
-			t.Logf("Pod %s not found yet", name)
+			E2ELogf(t, "Pod %s not found yet", name)
 			return false, nil
 		}
 
 		for _, initStatus := range pod.Status.InitContainerStatuses {
-			t.Log(initStatus)
+			E2ELog(t, initStatus)
 			// the init container must have passed the readiness probe
 			if initStatus.Ready == false {
-				t.Log("Init container not ready yet")
+				E2ELog(t, "Init container not ready yet")
 				return false, nil
 			}
 
 			// the init container must have terminated
 			if initStatus.State.Terminated == nil {
-				t.Log("Init container did not terminate yet")
+				E2ELog(t, "Init container did not terminate yet")
 				return false, nil
 			}
 
 			if initStatus.State.Terminated.ExitCode != 0 {
 				return true, errors.New("the init container failed")
 			} else {
-				t.Logf("init container in pod %s has finished", name)
+				E2ELogf(t, "init container in pod %s has finished", name)
 				return true, nil
 			}
 		}
 
-		t.Logf("init container in pod %s not finished yet", name)
+		E2ELogf(t, "init container in pod %s not finished yet", name)
 		return false, nil
 	}
 }
