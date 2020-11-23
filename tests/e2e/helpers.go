@@ -36,6 +36,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/compliance-operator/pkg/apis"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/complianceremediation"
 	compsuitectrl "github.com/openshift/compliance-operator/pkg/controller/compliancesuite"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
@@ -1108,9 +1109,18 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 
 	predicate := func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error) {
 		// If the remediation that we deselect is NOT the last one, it is expected
-		// that the MC would still be present. Just return true in this case.
+		// that the MC would still be present. Check for appropriate annotation
 		if lastRemediation == false {
-			return true, nil
+			mc := &mcfgv1.MachineConfig{}
+			err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: rem.GetMcName()}, mc)
+			if err != nil {
+				E2ELogf(t, "Error while getting relevant MC, returning false: %v", err)
+				return false, nil
+			}
+
+			// If the MC doesn't have the appropriate annotation, we keep
+			// going...
+			return !complianceremediation.MCHasRemediationAnnotation(mc, rem), nil
 		}
 
 		// On the other hand, if the remediation we deselect WAS the last one, we want
