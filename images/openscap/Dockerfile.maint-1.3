@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi8/ubi-minimal
+FROM registry.fedoraproject.org/fedora-minimal:33
 
 LABEL \
     name="openscap-ocp" \
@@ -7,10 +7,6 @@ LABEL \
     io.k8s.description="OpenSCAP security scanner for scanning hosts through a host mount - test version" \
     io.openshift.tags="compliance openscap scan" \
     io.openshift.wants="scap-content"
-
-# The repo is only for testing. Used to create quay.io/compliance-operator/openscap-ocp:1.3.3
-COPY \
-    mrogers-openscap-with-yaml-epel-8.repo /etc/yum.repos.d/
 
 RUN true \
     && microdnf install -y openscap-scanner \

@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi8/ubi-minimal
+FROM registry.fedoraproject.org/fedora-minimal:33
 
 LABEL \
     name="openscap-ocp" \
@@ -7,10 +7,6 @@ LABEL \
     io.k8s.description="OpenSCAP security scanner for scanning hosts through a host mount" \
     io.openshift.tags="compliance openscap scan" \
     io.openshift.wants="scap-content"
-
-# The repo will only be needed until RHEL-8.2 comes out
-COPY \
-    jhrozek-openscap-1.3.4-epel-8.repo /etc/yum.repos.d/
 
 RUN true \
     && microdnf install -y openscap-scanner \
