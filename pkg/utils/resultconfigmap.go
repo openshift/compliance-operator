@@ -2,6 +2,8 @@ package utils
 
 import (
 	"encoding/base64"
+	"io"
+	"io/ioutil"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -10,12 +12,25 @@ import (
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 )
 
-func encodetoBase64(str []byte) string {
-	return base64.StdEncoding.EncodeToString(str)
+func encodetoBase64(src io.Reader) string {
+	pr, pw := io.Pipe()
+	enc := base64.NewEncoder(base64.StdEncoding, pw)
+	go func() {
+		_, err := io.Copy(enc, src)
+		enc.Close()
+
+		if err != nil {
+			pw.CloseWithError(err)
+		} else {
+			pw.Close()
+		}
+	}()
+	out, _ := ioutil.ReadAll(pr)
+	return string(out)
 }
 
 // GetResultConfigMap gets a configmap that reflects a result or an error for a scan
-func GetResultConfigMap(owner metav1.Object, configMapName, filename, nodeName string, contents []byte, compressed bool, exitcode string, warnings string) *corev1.ConfigMap {
+func GetResultConfigMap(owner metav1.Object, configMapName, filename, nodeName string, contents io.Reader, compressed bool, exitcode string, warnings string) *corev1.ConfigMap {
 	var strcontents string
 	annotations := map[string]string{}
 	if compressed {
@@ -24,7 +39,8 @@ func GetResultConfigMap(owner metav1.Object, configMapName, filename, nodeName s
 		}
 		strcontents = encodetoBase64(contents)
 	} else {
-		strcontents = string(contents)
+		contentBytes, _ := ioutil.ReadAll(contents)
+		strcontents = string(contentBytes)
 	}
 	if nodeName != "" {
 		annotations["openscap-scan-result/node"] = nodeName
