@@ -27,6 +27,7 @@ import (
 	"net/http/httputil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,6 +42,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
@@ -57,19 +59,20 @@ func init() {
 }
 
 type scapresultsConfig struct {
-	ArfFile         string
-	XccdfFile       string
-	ExitCodeFile    string
-	CmdOutputFile   string
-	ScanName        string
-	ConfigMapName   string
-	NodeName        string
-	Namespace       string
-	ResultServerURI string
-	Timeout         int64
-	Cert            string
-	Key             string
-	CA              string
+	ArfFile            string
+	XccdfFile          string
+	ExitCodeFile       string
+	CmdOutputFile      string
+	WarningsOutputFile string
+	ScanName           string
+	ConfigMapName      string
+	NodeName           string
+	Namespace          string
+	ResultServerURI    string
+	Timeout            int64
+	Cert               string
+	Key                string
+	CA                 string
 }
 
 func defineResultcollectorFlags(cmd *cobra.Command) {
@@ -77,6 +80,7 @@ func defineResultcollectorFlags(cmd *cobra.Command) {
 	cmd.Flags().String("results-file", "", "The XCCDF results file to watch.")
 	cmd.Flags().String("exit-code-file", "", "A file containing the oscap command's exit code.")
 	cmd.Flags().String("oscap-output-file", "", "A file containing the oscap command's output.")
+	cmd.Flags().String("warnings-output-file", "", "A file containing the warnings to output.")
 	cmd.Flags().String("owner", "", "The compliance scan that owns the configMap objects.")
 	cmd.Flags().String("config-map-name", "", "The configMap to upload to, typically the podname.")
 	cmd.Flags().String("node-name", "", "The node that was scanned.")
@@ -113,6 +117,7 @@ func parseConfig(cmd *cobra.Command) *scapresultsConfig {
 	if conf.ResultServerURI == "" {
 		conf.ResultServerURI = "http://" + conf.ScanName + "-rs:8080/"
 	}
+	conf.WarningsOutputFile, _ = cmd.Flags().GetString("warnings-output-file")
 
 	// platform scans have no node name
 	conf.NodeName, _ = cmd.Flags().GetString("node-name")
@@ -222,6 +227,24 @@ func readResultsFile(filename string, timeout int64) (*resultFileContents, error
 	return &rfContents, nil
 }
 
+func readWarningsFile(filename string) string {
+	// No warnings file provided, no need to parse anything
+	if filename == "" {
+		return ""
+	}
+	contents, err := ioutil.ReadFile(filepath.Clean(filename))
+	if os.IsNotExist(err) {
+		// warnings file provided, but no warnings were generated
+		return ""
+	}
+	if err != nil {
+		DBG("Error while reading warnings file: %v", err)
+		return ""
+	}
+
+	return strings.Trim(string(contents), "\n")
+}
+
 func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scapresultsConfig) error {
 	return backoff.Retry(func() error {
 		url := scapresultsconf.ResultServerURI
@@ -257,13 +280,16 @@ func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scap
 
 func uploadResultConfigMap(xccdfContents *resultFileContents, exitcode string,
 	scapresultsconf *scapresultsConfig, client *complianceCrClient) error {
+	warnings := readWarningsFile(scapresultsconf.WarningsOutputFile)
+
 	return backoff.Retry(func() error {
 		log.Info("Trying to upload results ConfigMap")
 		openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, client)
 		if err != nil {
 			return err
 		}
-		confMap := utils.GetResultConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results", scapresultsconf.NodeName, xccdfContents.contents, xccdfContents.compressed, exitcode)
+		confMap := utils.GetResultConfigMap(openscapScan, scapresultsconf.ConfigMapName, "results",
+			scapresultsconf.NodeName, xccdfContents.contents, xccdfContents.compressed, exitcode, warnings)
 		err = client.client.Create(context.TODO(), confMap)
 
 		if errors.IsAlreadyExists(err) {
@@ -275,13 +301,16 @@ func uploadResultConfigMap(xccdfContents *resultFileContents, exitcode string,
 
 func uploadErrorConfigMap(errorMsg *resultFileContents, exitcode string,
 	scapresultsconf *scapresultsConfig, client *complianceCrClient) error {
+	warnings := readWarningsFile(scapresultsconf.WarningsOutputFile)
+
 	return backoff.Retry(func() error {
 		log.Info("Trying to upload error ConfigMap")
 		openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, client)
 		if err != nil {
 			return err
 		}
-		confMap := utils.GetResultConfigMap(openscapScan, scapresultsconf.ConfigMapName, "error-msg", scapresultsconf.NodeName, errorMsg.contents, errorMsg.compressed, exitcode)
+		confMap := utils.GetResultConfigMap(openscapScan, scapresultsconf.ConfigMapName, "error-msg",
+			scapresultsconf.NodeName, errorMsg.contents, errorMsg.compressed, exitcode, warnings)
 		err = client.client.Create(context.TODO(), confMap)
 
 		if errors.IsAlreadyExists(err) {
@@ -385,7 +414,7 @@ func getMutualHttpsTransport(c *scapresultsConfig) (*http.Transport, error) {
 // an exit code of 2 means that the scan returned non-compliant
 // an exit code of 1 means that the scan encountered an error
 func exitCodeIsError(exitcode string) bool {
-	return exitcode != "0" && exitcode != "2"
+	return exitcode != common.OpenSCAPExitCodeCompliant && exitcode != common.OpenSCAPExitCodeNonCompliant
 }
 
 func resultCollectorMain(cmd *cobra.Command, args []string) {

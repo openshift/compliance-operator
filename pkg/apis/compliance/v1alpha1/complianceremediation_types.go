@@ -27,7 +27,8 @@ const (
 
 const (
 	// OutdatedRemediationLabel specifies that the remediation has been superseded by a newer version
-	OutdatedRemediationLabel = "complianceoperator.openshift.io/outdated-remediation"
+	OutdatedRemediationLabel               = "complianceoperator.openshift.io/outdated-remediation"
+	RemediationCreatedByOperatorAnnotation = "compliance.openshift.io/remediation"
 )
 
 type ComplianceRemediationSpecMeta struct {
@@ -116,6 +117,28 @@ type ComplianceRemediationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ComplianceRemediation `json:"items"`
+}
+
+// AddRemediationAnnotation annotates an object to say it was created
+// by this operator
+func AddRemediationAnnotation(obj metav1.Object) {
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[RemediationCreatedByOperatorAnnotation] = ""
+	obj.SetAnnotations(annotations)
+}
+
+// AddRemediationAnnotation tells us if an object was created by this
+// operator
+func RemediationWasCreatedByOperator(obj metav1.Object) bool {
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+	_, ok := annotations[RemediationCreatedByOperatorAnnotation]
+	return ok
 }
 
 func init() {
