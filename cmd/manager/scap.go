@@ -30,6 +30,8 @@ import (
 
 	"github.com/ghodss/yaml"
 
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/openshift/compliance-operator/pkg/utils"
@@ -47,6 +49,12 @@ type scapContentDataStream struct {
 	dataStream *utils.XMLDocument
 	resources  []string
 	found      map[string][]byte
+}
+
+func NewDataStreamResourceFetcher(client *kubernetes.Clientset) ResourceFetcher {
+	return &scapContentDataStream{
+		client: client,
+	}
 }
 
 func (c *scapContentDataStream) LoadSource(path string) error {
@@ -213,23 +221,28 @@ func getResourcePaths(ds *utils.XMLDocument, profile string) []string {
 	return out
 }
 
-func (c *scapContentDataStream) FetchResources() error {
-	found, err := fetch(c.client, c.resources)
+func (c *scapContentDataStream) FetchResources() ([]string, error) {
+	found, warnings, err := fetch(c.client, c.resources)
 	if err != nil {
-		return err
+		return warnings, err
 	}
 	c.found = found
-	return nil
+	return warnings, nil
 }
 
-func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, error) {
+func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, []string, error) {
+	warnings := []string{}
 	results := map[string][]byte{}
 	for _, uri := range objects {
 		err := func() error {
 			LOG("Fetching URI: '%s'", uri)
 			req := client.RESTClient().Get().RequestURI(uri)
 			stream, err := req.Stream(context.TODO())
-			if err != nil {
+			if meta.IsNoMatchError(err) || kerrors.IsForbidden(err) {
+				DBG("Encountered non-fatal error to be persisted in the scan: %s", err)
+				warnings = append(warnings, err.Error())
+				return nil
+			} else if err != nil {
 				return err
 			}
 			defer stream.Close()
@@ -249,10 +262,21 @@ func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, e
 			return nil
 		}()
 		if err != nil {
-			return nil, err
+			return nil, warnings, err
 		}
 	}
-	return results, nil
+	return results, warnings, nil
+}
+
+func (c *scapContentDataStream) SaveWarningsIfAny(warnings []string, outputFile string) error {
+	// No warnings to persist
+	if warnings == nil || len(warnings) == 0 {
+		return nil
+	}
+	DBG("Persisting warnings to output file")
+	warningsStr := strings.Join(warnings, "\n")
+	err := ioutil.WriteFile(outputFile, []byte(warningsStr), 0600)
+	return err
 }
 
 func (c *scapContentDataStream) SaveResources(to string) error {

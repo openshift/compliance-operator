@@ -36,6 +36,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/compliance-operator/pkg/apis"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/complianceremediation"
 	compsuitectrl "github.com/openshift/compliance-operator/pkg/controller/compliancesuite"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
@@ -43,15 +44,34 @@ import (
 )
 
 var contentImagePath string
+var shouldLogContainerOutput bool
+var brokenContentImagePath string
 
 var rhcosPb *compv1alpha1.ProfileBundle
 var ocp4Pb *compv1alpha1.ProfileBundle
+
+type ObjectResouceVersioner interface {
+	runtime.Object
+	metav1.Common
+}
 
 func init() {
 	contentImagePath = os.Getenv("CONTENT_IMAGE")
 
 	if contentImagePath == "" {
 		fmt.Println("Please set the 'CONTENT_IMAGE' environment variable")
+		os.Exit(1)
+	}
+
+	logContainerOutputEnv := os.Getenv("LOG_CONTAINER_OUTPUT")
+	if logContainerOutputEnv != "" {
+		shouldLogContainerOutput = true
+	}
+
+	brokenContentImagePath = os.Getenv("BROKEN_CONTENT_IMAGE")
+
+	if brokenContentImagePath == "" {
+		fmt.Println("Please set the 'BROKEN_CONTENT_IMAGE' environment variable")
 		os.Exit(1)
 	}
 }
@@ -72,8 +92,12 @@ func E2ELogf(t *testing.T, format string, args ...interface{}) {
 	t.Logf(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), format), args...)
 }
 
-func E2ELog(t *testing.T, format string) {
-	t.Log(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), format))
+func E2ELog(t *testing.T, args ...interface{}) {
+	t.Log(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), fmt.Sprint(args...)))
+}
+
+func E2EErrorf(t *testing.T, format string, args ...interface{}) {
+	t.Errorf(fmt.Sprintf("E2E-FAILURE: %s: %s", time.Now().Format(time.RFC3339), format), args...)
 }
 
 func getObjNameFromTest(t *testing.T) string {
@@ -110,7 +134,7 @@ func (c *mcTestCtx) cleanupTrackedPools() {
 
 		err := unLabelNodes(c.t, c.f, rmPoolLabel, poolNodes)
 		if err != nil {
-			c.t.Errorf("Could not unlabel nodes from pool %s: %v\n", rmPoolLabel, err)
+			E2EErrorf(c.t, "Could not unlabel nodes from pool %s: %v\n", rmPoolLabel, err)
 		}
 
 		// Unlabeling the nodes triggers an update of the affected nodes because the nodes
@@ -120,19 +144,18 @@ func (c *mcTestCtx) cleanupTrackedPools() {
 		// e2e pool that would be gone when we remove it with the next call
 		err = waitForNodesToHaveARenderedPool(c.t, c.f, poolNodes, workerPoolName)
 		if err != nil {
-			c.t.Errorf("Error waiting for nodes to reach the worker pool again: %v\n", err)
+			E2EErrorf(c.t, "Error waiting for nodes to reach the worker pool again: %v\n", err)
 		}
-
 		err = waitForPoolCondition(c.t, c.f, mcfgv1.MachineConfigPoolUpdated, p.Name)
 		if err != nil {
-			c.t.Errorf("Error waiting for reboot after nodes were unlabeled: %v\n", err)
+			E2EErrorf(c.t, "Error waiting for reboot after nodes were unlabeled: %v\n", err)
 		}
 
 		// Then delete the pool itself
 		E2ELogf(c.t, "Removing pool %s\n", p.Name)
 		err = c.f.Client.Delete(goctx.TODO(), p)
 		if err != nil {
-			c.t.Errorf("Could not remove pool %s: %v\n", p.Name, err)
+			E2EErrorf(c.t, "Could not remove pool %s: %v\n", p.Name, err)
 		}
 	}
 }
@@ -306,9 +329,9 @@ func replaceNamespaceFromManifest(t *testing.T, namespace string, namespacedManP
 	if namespacedManPath == nil {
 		t.Fatal("Error: no namespaced manifest given as test argument. operator-sdk might have changed.")
 	}
-	path := *namespacedManPath
+	manPath := *namespacedManPath
 	// #nosec
-	read, err := ioutil.ReadFile(path)
+	read, err := ioutil.ReadFile(manPath)
 	if err != nil {
 		t.Fatalf("Error reading namespaced manifest file: %s", err)
 	}
@@ -316,7 +339,7 @@ func replaceNamespaceFromManifest(t *testing.T, namespace string, namespacedManP
 	newContents := strings.Replace(string(read), "openshift-compliance", namespace, -1)
 
 	// #nosec
-	err = ioutil.WriteFile(path, []byte(newContents), 644)
+	err = ioutil.WriteFile(manPath, []byte(newContents), 644)
 	if err != nil {
 		t.Fatalf("Error writing namespaced manifest file: %s", err)
 	}
@@ -503,6 +526,38 @@ func waitForObjectToExist(t *testing.T, f *framework.Framework, name, namespace 
 	return nil
 }
 
+func waitForObjectToUpdate(t *testing.T, f *framework.Framework, name, namespace string, obj ObjectResouceVersioner) error {
+	var lastErr error
+
+	initialVersion := obj.GetResourceVersion()
+
+	// retry and ignore errors until timeout
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, obj)
+		if lastErr != nil {
+			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
+			return false, nil
+		}
+		if obj.GetResourceVersion() == initialVersion {
+			E2ELogf(t, "Retrying. Object still doesn't update. got version %s ... wanted %s\n", obj.GetResourceVersion(), initialVersion)
+			return false, nil
+		}
+
+		return true, nil
+	})
+	// Error in function call
+	if lastErr != nil {
+		return lastErr
+	}
+	// Timeout
+	if timeouterr != nil {
+		return timeouterr
+	}
+
+	E2ELogf(t, "Object found '%s' found\n", name)
+	return nil
+}
+
 // waitForScanStatus will poll until the compliancescan that we're lookingfor reaches a certain status, or until
 // a timeout is reached.
 func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus compv1alpha1.ComplianceScanStatusPhase, targetComplianceStatus compv1alpha1.ComplianceScanStatusResult) error {
@@ -590,6 +645,18 @@ func scanResultIsExpected(t *testing.T, f *framework.Framework, namespace, name 
 		if cs.Status.ErrorMessage == "" {
 			return fmt.Errorf("The ComplianceScan 'errormsg' wasn't set (it was empty). Even if we expected an error")
 		}
+	}
+	return nil
+}
+
+func scanHasWarnings(t *testing.T, f *framework.Framework, namespace, name string) error {
+	cs := &compv1alpha1.ComplianceScan{}
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, cs)
+	if err != nil {
+		return err
+	}
+	if cs.Status.Warnings == "" {
+		return fmt.Errorf("E2E-FAILURE: Excepted the scan %s to contain a warning", name)
 	}
 	return nil
 }
@@ -730,7 +797,7 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 	})
 
 	if err != nil {
-		t.Errorf("Error waiting for remediations to appear")
+		E2EErrorf(t, "Error waiting for remediations to appear")
 		return err
 	}
 
@@ -754,7 +821,7 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 		poolPre = &mcfgv1.MachineConfigPool{}
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name}, poolPre)
 		if err != nil {
-			t.Errorf("Could not find the pool pre update")
+			E2EErrorf(t, "Could not find the pool pre update")
 			return err
 		}
 	}
@@ -762,7 +829,7 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 
 	err := action()
 	if err != nil {
-		t.Errorf("Action failed %v", err)
+		E2EErrorf(t, "Action failed %v", err)
 		return err
 	}
 
@@ -772,13 +839,13 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name}, pool)
 		if err != nil {
 			// even not found is a hard error here
-			t.Errorf("Could not find the pool post update")
+			E2EErrorf(t, "Could not find the pool post update")
 			return false, err
 		}
 
 		ok, err := predicate(t, pool)
 		if err != nil {
-			t.Errorf("Predicate failed %v", err)
+			E2EErrorf(t, "Predicate failed %v", err)
 			return false, err
 		}
 
@@ -857,7 +924,7 @@ func waitForNodesToHaveARenderedPool(t *testing.T, f *framework.Framework, nodes
 	pool := &mcfgv1.MachineConfigPool{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
 	if err != nil {
-		t.Errorf("Could not find pool %s\n", poolName)
+		E2EErrorf(t, "Could not find pool %s\n", poolName)
 		return err
 	}
 
@@ -901,7 +968,7 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, n
 		rem.Spec.Apply = true
 		err = f.Client.Update(goctx.TODO(), rem)
 		if err != nil {
-			t.Errorf("Cannot apply remediation")
+			E2EErrorf(t, "Cannot apply remediation")
 			return err
 		}
 		E2ELogf(t, "Remediation applied")
@@ -930,7 +997,7 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, n
 
 	err = waitForMachinePoolUpdate(t, f, pool, applyRemediation, predicate, nil)
 	if err != nil {
-		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
+		E2EErrorf(t, "Failed to wait for pool to update after applying MC: %v", err)
 		return err
 	}
 
@@ -953,7 +1020,7 @@ func removeObsoleteRemediationAndCheck(t *testing.T, f *framework.Framework, nam
 		remCopy.Spec.Outdated.Object = nil
 		err = f.Client.Update(goctx.TODO(), remCopy)
 		if err != nil {
-			t.Errorf("Cannot update remediation")
+			E2EErrorf(t, "Cannot update remediation")
 			return err
 		}
 		E2ELogf(t, "Obsolete data removed")
@@ -997,7 +1064,7 @@ func removeObsoleteRemediationAndCheck(t *testing.T, f *framework.Framework, nam
 
 	err = waitForMachinePoolUpdate(t, f, pool, removeObsoleteContents, predicate, poolBeforeRemediation)
 	if err != nil {
-		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
+		E2EErrorf(t, "Failed to wait for pool to update after applying MC: %v", err)
 		return err
 	}
 
@@ -1033,7 +1100,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 		rem.Spec.Apply = false
 		err = f.Client.Update(goctx.TODO(), rem)
 		if err != nil {
-			t.Errorf("Cannot apply remediation")
+			E2EErrorf(t, "Cannot apply remediation")
 			return err
 		}
 		E2ELogf(t, "Remediation applied")
@@ -1042,9 +1109,18 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 
 	predicate := func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error) {
 		// If the remediation that we deselect is NOT the last one, it is expected
-		// that the MC would still be present. Just return true in this case.
+		// that the MC would still be present. Check for appropriate annotation
 		if lastRemediation == false {
-			return true, nil
+			mc := &mcfgv1.MachineConfig{}
+			err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: rem.GetMcName()}, mc)
+			if err != nil {
+				E2ELogf(t, "Error while getting relevant MC, returning false: %v", err)
+				return false, nil
+			}
+
+			// If the MC doesn't have the appropriate annotation, we keep
+			// going...
+			return !complianceremediation.MCHasRemediationAnnotation(mc, rem), nil
 		}
 
 		// On the other hand, if the remediation we deselect WAS the last one, we want
@@ -1063,7 +1139,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 
 	err = waitForMachinePoolUpdate(t, f, pool, applyRemediation, predicate, nil)
 	if err != nil {
-		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
+		E2EErrorf(t, "Failed to wait for pool to update after applying MC: %v", err)
 		return err
 	}
 
@@ -1122,14 +1198,14 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 
 	err := waitForMachinePoolUpdate(t, f, pool.Name, preNoop, predicate, pool)
 	if err != nil {
-		t.Errorf("Failed to wait for pool to update after applying MC: %v", err)
+		E2EErrorf(t, "Failed to wait for pool to update after applying MC: %v", err)
 		return err
 	}
 
 	E2ELogf(t, "Machines updated with remediation")
 	err = waitForNodesToBeReady(t, f)
 	if err != nil {
-		t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+		E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
 		return err
 	}
 
@@ -1140,7 +1216,7 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName string) error {
 	err := unPauseMachinePool(t, f, poolName)
 	if err != nil {
-		t.Errorf("Could not unpause the MC pool")
+		E2EErrorf(t, "Could not unpause the MC pool")
 		return err
 	}
 
@@ -1151,7 +1227,7 @@ func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName st
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
 		if err != nil {
 			// even not found is a hard error here
-			t.Errorf("Could not find the pool post update")
+			E2EErrorf(t, "Could not find the pool post update")
 			return false, err
 		}
 
@@ -1186,7 +1262,7 @@ func modMachinePoolPause(t *testing.T, f *framework.Framework, poolName string, 
 	pool := &mcfgv1.MachineConfigPool{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
 	if err != nil {
-		t.Errorf("Could not find the pool to modify")
+		E2EErrorf(t, "Could not find the pool to modify")
 		return err
 	}
 
@@ -1194,7 +1270,7 @@ func modMachinePoolPause(t *testing.T, f *framework.Framework, poolName string, 
 	poolCopy.Spec.Paused = pause
 	err = f.Client.Update(goctx.TODO(), poolCopy)
 	if err != nil {
-		t.Errorf("Could not update the pool")
+		E2EErrorf(t, "Could not update the pool")
 		return err
 	}
 
@@ -1221,7 +1297,7 @@ func createMachineConfigPoolSubset(t *testing.T, f *framework.Framework, oldPool
 	oldPool := &mcfgv1.MachineConfigPool{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: oldPoolName}, oldPool)
 	if err != nil {
-		t.Errorf("Could not find the pool to modify")
+		E2EErrorf(t, "Could not find the pool to modify")
 		return nil, err
 	}
 
@@ -1312,7 +1388,7 @@ func waitForPoolCondition(t *testing.T, f *framework.Framework, conditionType mc
 		pool := mcfgv1.MachineConfigPool{}
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: newPoolName}, &pool)
 		if err != nil {
-			t.Errorf("Could not find the pool post update")
+			E2EErrorf(t, "Could not find the pool post update")
 			return false, err
 		}
 
@@ -1404,7 +1480,7 @@ func findRuleReference(profile *compv1alpha1.Profile, ruleName string) bool {
 	return false
 }
 
-func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, namespace, name, imgDigest string) error {
+func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, name, imgDigest string) error {
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(map[string]string{
 			"profile-bundle": name,
@@ -1482,7 +1558,7 @@ func waitForDeploymentContentUpdate(t *testing.T, f *framework.Framework, namesp
 	return nil
 }
 
-func assertMustHaveParsedRules(t *testing.T, f *framework.Framework, namespace, name string) error {
+func assertMustHaveParsedRules(f *framework.Framework, name string) error {
 	var rl compv1alpha1.RuleList
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(map[string]string{
@@ -1759,33 +1835,33 @@ func initContainerCompleted(t *testing.T, c kubernetes.Interface, name, namespac
 			return false, err
 		}
 		if apierrors.IsNotFound(err) {
-			t.Logf("Pod %s not found yet", name)
+			E2ELogf(t, "Pod %s not found yet", name)
 			return false, nil
 		}
 
 		for _, initStatus := range pod.Status.InitContainerStatuses {
-			t.Log(initStatus)
+			E2ELog(t, initStatus)
 			// the init container must have passed the readiness probe
 			if initStatus.Ready == false {
-				t.Log("Init container not ready yet")
+				E2ELog(t, "Init container not ready yet")
 				return false, nil
 			}
 
 			// the init container must have terminated
 			if initStatus.State.Terminated == nil {
-				t.Log("Init container did not terminate yet")
+				E2ELog(t, "Init container did not terminate yet")
 				return false, nil
 			}
 
 			if initStatus.State.Terminated.ExitCode != 0 {
 				return true, errors.New("the init container failed")
 			} else {
-				t.Logf("init container in pod %s has finished", name)
+				E2ELogf(t, "init container in pod %s has finished", name)
 				return true, nil
 			}
 		}
 
-		t.Logf("init container in pod %s not finished yet", name)
+		E2ELogf(t, "init container in pod %s not finished yet", name)
 		return false, nil
 	}
 }
@@ -1851,7 +1927,7 @@ func getReadyProfileBundle(t *testing.T, f *framework.Framework, name, namespace
 	return pb, nil
 }
 
-func writeToArtifactsDir(t *testing.T, f *framework.Framework, dir, scan, pod, container, log string) error {
+func writeToArtifactsDir(dir, scan, pod, container, log string) error {
 	logPath := path.Join(dir, fmt.Sprintf("%s_%s_%s.log", scan, pod, container))
 	logFile, err := os.Create(logPath)
 	if err != nil {
@@ -1868,6 +1944,10 @@ func writeToArtifactsDir(t *testing.T, f *framework.Framework, dir, scan, pod, c
 }
 
 func logContainerOutput(t *testing.T, f *framework.Framework, namespace, name string) {
+	if shouldLogContainerOutput == false {
+		return
+	}
+
 	// Try all container/init variants for each pod and the pod itself (self), log nothing if the container is not applicable.
 	containers := []string{"self", "api-resource-collector", "log-collector", "scanner", "content-container"}
 	artifacts := os.Getenv("ARTIFACT_DIR")
@@ -1903,7 +1983,7 @@ func logContainerOutput(t *testing.T, f *framework.Framework, namespace, name st
 				if len(logs) == 0 {
 					E2ELogf(t, "no logs for %s/%s", pod.Name, con)
 				} else {
-					err := writeToArtifactsDir(t, f, artifacts, name, pod.Name, con, logs)
+					err := writeToArtifactsDir(artifacts, name, pod.Name, con, logs)
 					if err != nil {
 						E2ELogf(t, "error writing logs for %s/%s: %v", pod.Name, con, err)
 					} else {

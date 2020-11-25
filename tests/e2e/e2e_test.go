@@ -62,7 +62,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				} else if found != true {
-					t.Errorf("Expected rule %s not found", prefixName(pbName, removedRule))
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, removedRule))
 					return err
 				}
 
@@ -73,7 +73,7 @@ func TestE2E(t *testing.T) {
 				}
 				found = findRuleReference(profilePreUpdate, prefixName(pbName, unlinkedRule))
 				if found != true {
-					t.Errorf("Expected rule %s not found", prefixName(pbName, unlinkedRule))
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, unlinkedRule))
 					return err
 				}
 
@@ -96,7 +96,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				if err := assertMustHaveParsedRules(t, f, namespace, pbName); err != nil {
+				if err := assertMustHaveParsedRules(f, pbName); err != nil {
 					return err
 				}
 
@@ -105,7 +105,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				} else if found != false {
-					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, removedRule))
+					E2EErrorf(t, "Rule %s unexpectedly found", prefixName(pbName, removedRule))
 					return err
 				}
 
@@ -116,7 +116,7 @@ func TestE2E(t *testing.T) {
 				}
 				found = findRuleReference(profilePostUpdate, prefixName(pbName, unlinkedRule))
 				if found != false {
-					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
+					E2EErrorf(t, "Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
 					return err
 				}
 
@@ -174,7 +174,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				} else if found != true {
-					t.Errorf("Expected rule %s not found", prefixName(pbName, removedRule))
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, removedRule))
 					return err
 				}
 
@@ -185,7 +185,7 @@ func TestE2E(t *testing.T) {
 				}
 				found = findRuleReference(profilePreUpdate, prefixName(pbName, unlinkedRule))
 				if found != true {
-					t.Errorf("Expected rule %s not found", prefixName(pbName, unlinkedRule))
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, unlinkedRule))
 					return err
 				}
 
@@ -197,11 +197,11 @@ func TestE2E(t *testing.T) {
 				// Note that when an update happens through an imagestream tag, the operator doesn't get
 				// a notification about it... It all happens on the Kube Deployment's side.
 				// So we don't need to wait for the profile bundle's statuses
-				if err := waitForDeploymentContentUpdate(t, f, namespace, pbName, modifiedImageDigest); err != nil {
+				if err := waitForDeploymentContentUpdate(t, f, pbName, modifiedImageDigest); err != nil {
 					return err
 				}
 
-				if err := assertMustHaveParsedRules(t, f, namespace, pbName); err != nil {
+				if err := assertMustHaveParsedRules(f, pbName); err != nil {
 					return err
 				}
 
@@ -210,7 +210,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				} else if found != false {
-					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, removedRule))
+					E2EErrorf(t, "Rule %s unexpectedly found", prefixName(pbName, removedRule))
 					return err
 				}
 
@@ -221,7 +221,7 @@ func TestE2E(t *testing.T) {
 				}
 				found = findRuleReference(profilePostUpdate, prefixName(pbName, unlinkedRule))
 				if found != false {
-					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
+					E2EErrorf(t, "Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
 					return err
 				}
 
@@ -280,7 +280,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				} else if found != true {
-					t.Errorf("Expected rule %s not found", prefixName(pbName, removedRule))
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, removedRule))
 					return err
 				}
 
@@ -291,7 +291,7 @@ func TestE2E(t *testing.T) {
 				}
 				found = findRuleReference(profilePreUpdate, prefixName(pbName, unlinkedRule))
 				if found != true {
-					t.Errorf("Expected rule %s not found", prefixName(pbName, unlinkedRule))
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, unlinkedRule))
 					return err
 				}
 
@@ -303,11 +303,11 @@ func TestE2E(t *testing.T) {
 				// Note that when an update happens through an imagestream tag, the operator doesn't get
 				// a notification about it... It all happens on the Kube Deployment's side.
 				// So we don't need to wait for the profile bundle's statuses
-				if err := waitForDeploymentContentUpdate(t, f, namespace, pbName, modifiedImageDigest); err != nil {
+				if err := waitForDeploymentContentUpdate(t, f, pbName, modifiedImageDigest); err != nil {
 					return err
 				}
 
-				if err := assertMustHaveParsedRules(t, f, namespace, pbName); err != nil {
+				if err := assertMustHaveParsedRules(f, pbName); err != nil {
 					return err
 				}
 
@@ -316,7 +316,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				} else if found != false {
-					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, removedRule))
+					E2EErrorf(t, "Rule %s unexpectedly found", prefixName(pbName, removedRule))
 					return err
 				}
 
@@ -327,7 +327,7 @@ func TestE2E(t *testing.T) {
 				}
 				found = findRuleReference(profilePostUpdate, prefixName(pbName, unlinkedRule))
 				if found != false {
-					t.Errorf("Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
+					E2EErrorf(t, "Rule %s unexpectedly found", prefixName(pbName, unlinkedRule))
 					return err
 				}
 
@@ -340,9 +340,6 @@ func TestE2E(t *testing.T) {
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				const (
 					unexistentImage     = "bad-namespace/bad-image:latest"
-					removedRule         = "chronyd-no-chronyc-network"
-					unlinkedRule        = "chronyd-client-only"
-					moderateProfileName = "moderate"
 				)
 
 				pbName := getObjNameFromTest(t)
@@ -374,9 +371,6 @@ func TestE2E(t *testing.T) {
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				const (
 					noTagImage          = "bad-namespace/bad-image"
-					removedRule         = "chronyd-no-chronyc-network"
-					unlinkedRule        = "chronyd-client-only"
-					moderateProfileName = "moderate"
 				)
 
 				pbName := getObjNameFromTest(t)
@@ -536,6 +530,46 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 				return scanHasValidPVCReferenceWithSize(f, namespace, scanName, "2Gi")
+			},
+		},
+		testExecution{
+			Name:       "TestScanWithUnexistentResourceFails",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				scanName := getObjNameFromTest(t)
+				testScan := &compv1alpha1.ComplianceScan{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      scanName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceScanSpec{
+						Profile:      "xccdf_org.ssgproject.content_profile_test",
+						Content:      unexistentResourceContentFile,
+						ContentImage: brokenContentImagePath,
+						Rule:         "xccdf_org.ssgproject.content_rule_api_server_unexistent_resource",
+						ScanType:     compv1alpha1.ScanTypePlatform,
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), testScan, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+
+				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultNonCompliant)
+				if err != nil {
+					return err
+				}
+
+				if err = scanHasWarnings(t, f, namespace, scanName); err != nil {
+					return err
+				}
+
+				return nil
 			},
 		},
 		testExecution{
@@ -1149,6 +1183,97 @@ func TestE2E(t *testing.T) {
 				}
 				val, ok := cm.Data["key"]
 				if !ok || val != "value" {
+					return fmt.Errorf("ComplianceRemediation '%s' generated a malformed ConfigMap", remName)
+				}
+
+				// verify object is marked as created by the operator
+				if !compv1alpha1.RemediationWasCreatedByOperator(cm) {
+					return fmt.Errorf("ComplianceRemediation '%s' is missing controller annotation '%s'",
+						remName, compv1alpha1.RemediationCreatedByOperatorAnnotation)
+				}
+				return nil
+			},
+		},
+		testExecution{
+			Name:       "TestPatchGenericRemediation",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				remName := getObjNameFromTest(t)
+				cmName := remName
+				cmKey := types.NamespacedName{
+					Name:      cmName,
+					Namespace: namespace,
+				}
+				existingCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cmKey.Name,
+						Namespace: cmKey.Namespace,
+					},
+					Data: map[string]string{
+						"existingKey": "existingData",
+					},
+				}
+
+				if err := f.Client.Create(goctx.TODO(), existingCM, getCleanupOpts(ctx)); err != nil {
+					return err
+				}
+
+				cm := &corev1.ConfigMap{}
+				if err := waitForObjectToExist(t, f, cmKey.Name, namespace, cm); err != nil {
+					return err
+				}
+
+				unstruct := &unstructured.Unstructured{}
+				unstruct.SetUnstructuredContent(map[string]interface{}{
+					"kind":       "ConfigMap",
+					"apiVersion": "v1",
+					"metadata": map[string]interface{}{
+						"name":      cmKey.Name,
+						"namespace": cmKey.Namespace,
+					},
+					"data": map[string]interface{}{
+						"newKey": "newData",
+					},
+				})
+
+				genericRem := &compv1alpha1.ComplianceRemediation{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      remName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceRemediationSpec{
+						ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
+							Apply: true,
+						},
+						Current: compv1alpha1.ComplianceRemediationPayload{
+							Object: unstruct,
+						},
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err := f.Client.Create(goctx.TODO(), genericRem, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+				err = waitForRemediationState(t, f, namespace, remName, compv1alpha1.RemediationApplied)
+				if err != nil {
+					return err
+				}
+
+				err = waitForObjectToUpdate(t, f, cmKey.Name, namespace, cm)
+				if err != nil {
+					return err
+				}
+
+				// Old data should still be there
+				val, ok := cm.Data["existingKey"]
+				if !ok || val != "existingData" {
+					return fmt.Errorf("ComplianceRemediation '%s' generated a malformed ConfigMap", remName)
+				}
+
+				// new data should be there too
+				val, ok = cm.Data["newKey"]
+				if !ok || val != "newData" {
 					return fmt.Errorf("ComplianceRemediation '%s' generated a malformed ConfigMap", remName)
 				}
 				return nil
@@ -1776,7 +1901,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				if masterScan.Spec.Debug != true {
-					t.Errorf("Expected that the settings set debug to true in master scan")
+					E2EErrorf(t, "Expected that the settings set debug to true in master scan")
 				}
 
 				workerScanKey := types.NamespacedName{Namespace: namespace, Name: rhcos4e8profile.Name + "-worker"}
@@ -1786,7 +1911,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				if workerScan.Spec.Debug != true {
-					t.Errorf("Expected that the settings set debug to true in workers scan")
+					E2EErrorf(t, "Expected that the settings set debug to true in workers scan")
 				}
 
 				return nil
@@ -1829,7 +1954,7 @@ func TestE2E(t *testing.T) {
 
 				err := mcTctx.createE2EPool()
 				if err != nil {
-					t.Errorf("Cannot create subpool for this test")
+					E2EErrorf(t, "Cannot create subpool for this test")
 					return err
 				}
 
@@ -1857,7 +1982,7 @@ func TestE2E(t *testing.T) {
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
 				err = waitForRemediationToBeAutoApplied(t, f, workersNoRootLoginsRemName, namespace, poolBeforeRemediation)
 				if err != nil {
-					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
 				}
 
@@ -1932,14 +2057,14 @@ func TestE2E(t *testing.T) {
 				// We need to wait for both the pool to update..
 				err = waitForMachinePoolUpdate(t, f, testPoolName, dummyAction, poolHasNoMc, nil)
 				if err != nil {
-					t.Errorf("Failed to wait for workers to come back up after deleting MC")
+					E2EErrorf(t, "Failed to wait for workers to come back up after deleting MC")
 					return err
 				}
 
 				// ..as well as the nodes
 				err = waitForNodesToBeReady(t, f)
 				if err != nil {
-					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
 				}
 
@@ -1984,7 +2109,7 @@ func TestE2E(t *testing.T) {
 
 				err := mcTctx.createE2EPool()
 				if err != nil {
-					t.Errorf("Cannot create subpool for this test")
+					E2EErrorf(t, "Cannot create subpool for this test")
 					return err
 				}
 
@@ -2028,7 +2153,7 @@ func TestE2E(t *testing.T) {
 
 				err = waitForNodesToBeReady(t, f)
 				if err != nil {
-					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
 				}
 
@@ -2049,7 +2174,7 @@ func TestE2E(t *testing.T) {
 				err = f.Client.Get(goctx.TODO(), mcName, mcOne)
 
 				if mcOne.Generation == mcBoth.Generation {
-					t.Errorf("Expected that the MC generation changes. Got: %d, Expected: %d", mcOne.Generation, mcBoth.Generation)
+					E2EErrorf(t, "Expected that the MC generation changes. Got: %d, Expected: %d", mcOne.Generation, mcBoth.Generation)
 				}
 
 				// When we unapply the second remediation, the MC should be deleted, too
@@ -2061,7 +2186,7 @@ func TestE2E(t *testing.T) {
 				mcShouldntExist := &mcfgv1.MachineConfig{}
 				err = f.Client.Get(goctx.TODO(), mcName, mcShouldntExist)
 				if err == nil {
-					t.Errorf("MC %s unexpectedly found", mcName)
+					E2EErrorf(t, "MC %s unexpectedly found", mcName)
 				}
 
 				return nil
@@ -2118,7 +2243,7 @@ func TestE2E(t *testing.T) {
 				// Ensure that all the scans in the suite have finished and are marked as Done
 				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultInconsistent)
 				if err != nil {
-					t.Errorf("Got an unexpected status")
+					E2EErrorf(t, "Got an unexpected status")
 				}
 
 				if err := f.KubeClient.CoreV1().Pods(namespace).Delete(goctx.TODO(), pod.Name, metav1.DeleteOptions{}); err != nil {
@@ -2295,7 +2420,7 @@ func TestE2E(t *testing.T) {
 				defer func() {
 					err := f.KubeClient.CoreV1().Secrets("openshift-config").Delete(goctx.TODO(), "htpass", metav1.DeleteOptions{})
 					if err != nil {
-						t.Logf("could not clean up openshift-config/htpass test secret: %v", err)
+						E2ELogf(t, "could not clean up openshift-config/htpass test secret: %v", err)
 					}
 				}()
 
@@ -2325,7 +2450,7 @@ func TestE2E(t *testing.T) {
 
 				err = f.Client.Update(goctx.TODO(), oauthUpdate)
 				if err != nil {
-					t.Logf("error updating idp: %v", err)
+					E2ELogf(t, "error updating idp: %v", err)
 					return err
 				}
 
@@ -2333,7 +2458,7 @@ func TestE2E(t *testing.T) {
 					fetchedOauth := &configv1.OAuth{}
 					err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: "cluster"}, fetchedOauth)
 					if err != nil {
-						t.Logf("error restoring idp: %v", err)
+						E2ELogf(t, "error restoring idp: %v", err)
 					} else {
 						oauth := fetchedOauth.DeepCopy()
 						// Make sure it's cleared out
@@ -2342,7 +2467,7 @@ func TestE2E(t *testing.T) {
 						}
 						err = f.Client.Update(goctx.TODO(), oauth)
 						if err != nil {
-							t.Logf("error restoring idp: %v", err)
+							E2ELogf(t, "error restoring idp: %v", err)
 						}
 					}
 				}()
@@ -2437,7 +2562,7 @@ func TestE2E(t *testing.T) {
 
 				err := mcTctx.createE2EPool()
 				if err != nil {
-					t.Errorf("Cannot create subpool for this test")
+					E2EErrorf(t, "Cannot create subpool for this test")
 					return err
 				}
 
@@ -2461,7 +2586,7 @@ func TestE2E(t *testing.T) {
 
 				err = waitForNodesToBeReady(t, f)
 				if err != nil {
-					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
 				}
 
@@ -2506,7 +2631,7 @@ func TestE2E(t *testing.T) {
 
 				err = waitForNodesToBeReady(t, f)
 				if err != nil {
-					t.Errorf("Failed to wait for nodes to come back up after applying MC: %v", err)
+					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
 					return err
 				}
 
@@ -2528,7 +2653,7 @@ func TestE2E(t *testing.T) {
 
 				err = waitForNodesToBeReady(t, f)
 				if err != nil {
-					t.Errorf("Failed to wait for nodes to come back up after unapplying MC: %v", err)
+					E2EErrorf(t, "Failed to wait for nodes to come back up after unapplying MC: %v", err)
 					return err
 				}
 
