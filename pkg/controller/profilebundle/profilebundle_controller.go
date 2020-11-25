@@ -306,6 +306,8 @@ func getISTagAnnotation(isTagName, isTagNamespace string) map[string]string {
 
 // newPodForBundle returns a busybox pod with the same name/namespace as the cr
 func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *appsv1.Deployment {
+	falseP := false
+	trueP := true
 	labels := getWorkloadLabels(pb)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -333,6 +335,10 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 								fmt.Sprintf("cp %s /content | /bin/true", path.Join("/", pb.Spec.ContentFile)),
 							},
 							ImagePullPolicy: corev1.PullAlways,
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: &falseP,
+								ReadOnlyRootFilesystem:   &trueP,
+							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "content-dir",
@@ -343,6 +349,10 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 						{
 							Name:  "profileparser",
 							Image: utils.GetComponentImage(utils.OPERATOR),
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: &falseP,
+								ReadOnlyRootFilesystem:   &trueP,
+							},
 							Command: []string{
 								"compliance-operator", "profileparser",
 								"--name", pb.Name,
@@ -362,6 +372,10 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 						{
 							Name:  "pauser",
 							Image: utils.GetComponentImage(utils.OPERATOR),
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: &falseP,
+								ReadOnlyRootFilesystem:   &trueP,
+							},
 							Command: []string{
 								"compliance-operator", "pause",
 								"--main-container", "profileparser",

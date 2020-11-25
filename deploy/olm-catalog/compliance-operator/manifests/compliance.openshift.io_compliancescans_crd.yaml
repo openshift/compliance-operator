@@ -220,6 +220,10 @@ spec:
                     description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
                     type: string
                 type: object
+              warnings:
+                description: If there are warnings on the scan, this will be filled
+                  up with warning messages.
+                type: string
             type: object
         type: object
     served: true

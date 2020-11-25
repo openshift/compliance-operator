@@ -159,6 +159,19 @@ rules:
   verbs:
   - get
   - list
+# These are needed for the CIS benchmark
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - apiservers
+  resourceNames:
+  - cluster
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
