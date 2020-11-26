@@ -4,7 +4,7 @@ import "time"
 
 const (
 	retryInterval                 = time.Second * 5
-	timeout                       = time.Minute * 15
+	timeout                       = time.Minute * 20
 	cleanupRetryInterval          = time.Second * 1
 	cleanupTimeout                = time.Minute * 5
 	workerPoolName                = "worker"
