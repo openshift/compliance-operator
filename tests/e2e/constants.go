@@ -7,6 +7,8 @@ const (
 	timeout                       = time.Minute * 20
 	cleanupRetryInterval          = time.Second * 1
 	cleanupTimeout                = time.Minute * 5
+	machineOperationTimeout       = time.Minute * 25
+	machineOperationRetryInterval = time.Second * 10
 	workerPoolName                = "worker"
 	testPoolName                  = "e2e"
 	rhcosContentFile              = "ssg-rhcos4-ds.xml"
