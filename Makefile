@@ -354,7 +354,7 @@ openshift-user:
 ifeq ($(shell oc whoami 2> /dev/null),kube:admin)
 	$(eval OPENSHIFT_USER = kubeadmin)
 else
-	$(eval OPENSHIFT_USER = $(oc whoami))
+	$(eval OPENSHIFT_USER = $(shell oc whoami))
 endif
 
 .PHONY: push
