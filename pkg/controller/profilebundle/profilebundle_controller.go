@@ -431,9 +431,16 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 								ReadOnlyRootFilesystem:   &trueP,
 							},
 							Command: []string{
-								"compliance-operator", "pause",
-								"--main-container", "profileparser",
+								"/bin/sh", "-c",
 							},
+							Args: []string{`
+							sleep infinity & PID=$!
+							trap "kill $PID" INT TERM
+
+							echo This is merely a pause container. You should instead check the logs of profileparser
+							# Waits for the sleep infinity running in the background and always returns zero
+							wait
+							`},
 						},
 					},
 					ServiceAccountName: "profileparser",
