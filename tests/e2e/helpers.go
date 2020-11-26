@@ -217,13 +217,15 @@ func executeTests(t *testing.T, tests ...testExecution) {
 	// defer deleting the profiles or else the test namespace get stuck in Terminating
 	defer f.Client.Delete(goctx.TODO(), ocp4Pb)
 
-	t.Run("Parallel tests", func(t *testing.T) {
+	t.Run("ExParallel tests", func(t *testing.T) {
 		for _, test := range tests {
 			// Don't loose test reference
 			test := test
 			if test.IsParallel {
 				t.Run(test.Name, func(tt *testing.T) {
-					tt.Parallel()
+					// FIXME(jaosorior): re-enable parallel tests once we get
+					// over the resource issues.
+					// tt.Parallel()
 					if err := test.TestFn(tt, f, ctx, mcTctx, ns); err != nil {
 						tt.Error(err)
 					}
