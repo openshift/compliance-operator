@@ -238,7 +238,7 @@ func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, [
 			LOG("Fetching URI: '%s'", uri)
 			req := client.RESTClient().Get().RequestURI(uri)
 			stream, err := req.Stream(context.TODO())
-			if meta.IsNoMatchError(err) || kerrors.IsForbidden(err) {
+			if meta.IsNoMatchError(err) || kerrors.IsForbidden(err) || kerrors.IsNotFound(err) {
 				DBG("Encountered non-fatal error to be persisted in the scan: %s", err)
 				warnings = append(warnings, err.Error())
 				return nil
