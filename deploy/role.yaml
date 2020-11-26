@@ -1041,3 +1041,14 @@ rules:
   - get
   - list
   - watch
+# Necessary for the CIS benchmark
+- apiGroups:
+  - logging.openshift.io
+  resources:
+  - clusterlogforwarders
+  resourceNames:
+  - instance
+  verbs:
+  - get
+  - list
+  - watch
