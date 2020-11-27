@@ -2,6 +2,11 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   annotations:
+    "operatorframework.io/suggested-namespace": openshift-compliance
+    capabilities: Seamless Upgrades
+    categories: Monitoring,Security
+    repository: https://github.com/openshift/compliance-operator
+    support: Red Hat Inc.
     alm-examples: |-
       [
         {
@@ -157,7 +162,6 @@ metadata:
           }
         }
       ]
-    capabilities: Basic Install
   name: compliance-operator.v0.1.20
   namespace: placeholder
 spec:
@@ -1280,9 +1284,9 @@ spec:
     type: OwnNamespace
   - supported: true
     type: SingleNamespace
-  - supported: false
-    type: MultiNamespace
   - supported: true
+    type: MultiNamespace
+  - supported: false
     type: AllNamespaces
   keywords:
   - security
