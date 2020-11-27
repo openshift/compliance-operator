@@ -159,7 +159,7 @@ rules:
   verbs:
   - get
   - list
-# These are needed for the CIS benchmark
+# These are needed for remediating objects for the CIS benchmark
 - apiGroups:
   - config.openshift.io
   resources:
@@ -1041,13 +1041,33 @@ rules:
   - get
   - list
   - watch
-# Necessary for the CIS benchmark
+# Necessary for the reading resources for CIS benchmark
 - apiGroups:
   - logging.openshift.io
   resources:
   - clusterlogforwarders
   resourceNames:
   - instance
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - flowcontrol.apiserver.k8s.io
+  resources:
+  - flowschemas
+  resourceNames:
+  - catch-all
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - operator.openshift.io
+  resources:
+  - kubeapiservers
+  resourceNames:
+  - cluster
   verbs:
   - get
   - list
