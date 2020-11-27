@@ -130,7 +130,7 @@ operator-image:
 
 .PHONY: openscap-image
 openscap-image:
-	$(RUNTIME) build -t $(RELATED_IMAGE_OPENSCAP_PATH):$(TAG) $(OPENSCAP_DOCKER_CONTEXT)
+	$(RUNTIME) build --no-cache -t $(RELATED_IMAGE_OPENSCAP_PATH):$(TAG) $(OPENSCAP_DOCKER_CONTEXT)
 
 .PHONY: bundle-image
 bundle-image:
