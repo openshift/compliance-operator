@@ -1299,5 +1299,4 @@ spec:
   provider:
     name: Red Hat Inc.
     url: www.redhat.com
-  replaces: compliance-operator.v0.1.19
   version: 0.1.20
