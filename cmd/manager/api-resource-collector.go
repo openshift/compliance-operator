@@ -43,6 +43,8 @@ func init() {
 type ResourceFetcher interface {
 	// Load from a source path, including the decoding step.
 	LoadSource(path string) error
+	// Load from a tailoring path, including the decoding step.
+	LoadTailoring(path string) error
 	// Search the decoded data for the resources we need under a particular profile.
 	FigureResources(profile string) error
 	// Fetch the resources.
@@ -55,6 +57,7 @@ type ResourceFetcher interface {
 
 type fetcherConfig struct {
 	Content            string
+	Tailoring          string
 	ResultDir          string
 	Profile            string
 	ExitCodeFile       string
@@ -63,6 +66,7 @@ type fetcherConfig struct {
 
 func defineAPIResourceCollectorFlags(cmd *cobra.Command) {
 	cmd.Flags().String("content", "", "The path to the OpenSCAP content file.")
+	cmd.Flags().String("tailoring", "", "The path to the OpenSCAP tailoring file.")
 	cmd.Flags().String("resultdir", "", "The directory to write the collected object files to.")
 	cmd.Flags().String("profile", "", "The scan profile.")
 	cmd.Flags().String("warnings-output-file", "", "A file containing the warnings output.")
@@ -83,6 +87,7 @@ func parseAPIResourceCollectorConfig(cmd *cobra.Command) *fetcherConfig {
 	conf.Profile = getValidStringArg(cmd, "profile")
 	conf.WarningsOutputFile = getValidStringArg(cmd, "warnings-output-file")
 	debugLog, _ = cmd.Flags().GetBool("debug")
+	conf.Tailoring, _ = cmd.Flags().GetString("tailoring")
 	return &conf
 }
 
@@ -106,7 +111,11 @@ func runAPIResourceCollector(cmd *cobra.Command, args []string) {
 	if err := fetcher.LoadSource(fetcherConf.Content); err != nil {
 		FATAL("Error loading source data: %v", err)
 	}
-
+	if fetcherConf.Tailoring != "" {
+		if err := fetcher.LoadTailoring(fetcherConf.Tailoring); err != nil {
+			FATAL("Error loading tailoring data: %v", err)
+		}
+	}
 	if err := fetcher.FigureResources(fetcherConf.Profile); err != nil {
 		FATAL("Error finding resources: %v", err)
 	}
