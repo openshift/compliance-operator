@@ -1,0 +1,8 @@
+# Exclude test files
+*_test.go
+tests/
+.git/
+build/_output
+build/_test
+_output
+README.md
