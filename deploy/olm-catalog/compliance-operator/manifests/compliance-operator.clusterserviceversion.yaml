@@ -2,11 +2,6 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   annotations:
-    "operatorframework.io/suggested-namespace": openshift-compliance
-    capabilities: Seamless Upgrades
-    categories: Monitoring,Security
-    repository: https://github.com/openshift/compliance-operator
-    support: Red Hat Inc.
     alm-examples: |-
       [
         {
@@ -162,7 +157,12 @@ metadata:
           }
         }
       ]
-  name: compliance-operator.v0.1.20
+    capabilities: Seamless Upgrades
+    categories: Monitoring,Security
+    operatorframework.io/suggested-namespace: openshift-compliance
+    repository: https://github.com/openshift/compliance-operator
+    support: Red Hat Inc.
+  name: compliance-operator.v0.1.21
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -254,6 +254,18 @@ spec:
           verbs:
           - get
           - list
+        - apiGroups:
+          - config.openshift.io
+          resourceNames:
+          - cluster
+          resources:
+          - apiservers
+          verbs:
+          - get
+          - list
+          - watch
+          - update
+          - patch
         serviceAccountName: compliance-operator
       - rules:
         - apiGroups:
@@ -971,6 +983,36 @@ spec:
           - get
           - list
           - watch
+        - apiGroups:
+          - logging.openshift.io
+          resourceNames:
+          - instance
+          resources:
+          - clusterlogforwarders
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - flowcontrol.apiserver.k8s.io
+          resourceNames:
+          - catch-all
+          resources:
+          - flowschemas
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - operator.openshift.io
+          resourceNames:
+          - cluster
+          resources:
+          - kubeapiservers
+          verbs:
+          - get
+          - list
+          - watch
         serviceAccountName: api-resource-collector
       deployments:
       - name: compliance-operator
@@ -1003,10 +1045,10 @@ spec:
                 - name: RELATED_IMAGE_OPENSCAP
                   value: quay.io/compliance-operator/openscap-ocp:1.3.4
                 - name: RELATED_IMAGE_OPERATOR
-                  value: quay.io/compliance-operator/compliance-operator:0.1.20
+                  value: quay.io/compliance-operator/compliance-operator:0.1.21
                 - name: RELATED_IMAGE_PROFILE
                   value: quay.io/complianceascode/ocp4:latest
-                image: quay.io/compliance-operator/compliance-operator:0.1.20
+                image: quay.io/compliance-operator/compliance-operator:0.1.21
                 imagePullPolicy: Always
                 name: compliance-operator
                 resources: {}
@@ -1303,4 +1345,5 @@ spec:
   provider:
     name: Red Hat Inc.
     url: www.redhat.com
-  version: 0.1.20
+  replaces: compliance-operator.v0.1.20
+  version: 0.1.21
