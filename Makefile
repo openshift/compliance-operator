@@ -76,7 +76,7 @@ else ifeq ($(OS_NAME), Darwin)
     OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-x86_64-apple-darwin
 endif
 
-OPM_VERSION=v1.13.8
+OPM_VERSION=v1.15.2
 ifeq ($(OS_NAME), Linux)
     OPM_URL=https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/linux-amd64-opm
 else ifeq ($(OS_NAME), Darwin)
@@ -138,7 +138,7 @@ bundle-image:
 
 .PHONY: index-image
 index-image: opm
-	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(TAG) -f $(INDEX_IMAGE_PATH):latest -t $(INDEX_IMAGE_PATH):latest -c podman
+	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(TAG) -f $(INDEX_IMAGE_PATH):latest -t $(INDEX_IMAGE_PATH):latest -c $(RUNTIME) --overwrite-latest
 
 .PHONY: test-broken-content-image
 test-broken-content-image:
