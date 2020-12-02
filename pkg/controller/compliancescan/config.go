@@ -111,7 +111,7 @@ cmd+=($CONTENT)
 # The whole purpose of the shell entrypoint is to semi-atomically
 # move the results file when the command is done so the log collector
 # picks up the whole thing and not a partial file
-echo "Running oscap-chroot as ${cmd[@]}"
+echo "Running oscap-chroot $(rpm -q openscap-scanner) as ${cmd[@]}"
 "${cmd[@]}" &> $REPORT_DIR/cmd_output 
 rv=$?
 echo "The scanner returned $rv"

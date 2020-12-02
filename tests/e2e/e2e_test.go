@@ -339,7 +339,7 @@ func TestE2E(t *testing.T) {
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				const (
-					unexistentImage     = "bad-namespace/bad-image:latest"
+					unexistentImage = "bad-namespace/bad-image:latest"
 				)
 
 				pbName := getObjNameFromTest(t)
@@ -370,7 +370,7 @@ func TestE2E(t *testing.T) {
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				const (
-					noTagImage          = "bad-namespace/bad-image"
+					noTagImage = "bad-namespace/bad-image"
 				)
 
 				pbName := getObjNameFromTest(t)
@@ -433,8 +433,10 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name:       "TestScanProducesRemediations",
-			IsParallel: true,
+			Name: "TestScanProducesRemediations",
+			// NOTE(jaosorior): This was made a serial test because it runs the long-running, resource-taking and
+			// big AF moderate profile
+			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				scanName := getObjNameFromTest(t)
 				selectWorkers := map[string]string{
@@ -1369,8 +1371,10 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name:       "TestSuiteScan",
-			IsParallel: true,
+			Name: "TestSuiteScan",
+			// NOTE(jaosorior): This was made a serial test because it runs the long-running, resource-taking and
+			// big AF moderate profile
+			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				suiteName := "test-suite-two-scans"
 

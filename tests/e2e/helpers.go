@@ -833,8 +833,7 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 		return err
 	}
 
-	// Should we make this configurable? Maybe 5 minutes is not enough time for slower clusters?
-	err = wait.PollImmediate(10*time.Second, 20*time.Minute, func() (bool, error) {
+	err = wait.PollImmediate(machineOperationRetryInterval, machineOperationTimeout, func() (bool, error) {
 		pool := &mcfgv1.MachineConfigPool{}
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name}, pool)
 		if err != nil {
@@ -885,7 +884,7 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 // waitForNodesToBeReady waits until all the nodes in the cluster have
 // reached the expected machineConfig.
 func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
-	err := wait.PollImmediate(10*time.Second, timeout, func() (bool, error) {
+	err := wait.PollImmediate(machineOperationRetryInterval, machineOperationTimeout, func() (bool, error) {
 		var nodes corev1.NodeList
 
 		f.Client.List(goctx.TODO(), &nodes, &client.ListOptions{})
@@ -929,7 +928,7 @@ func waitForNodesToHaveARenderedPool(t *testing.T, f *framework.Framework, nodes
 	}
 
 	E2ELogf(t, "We'll wait for the nodes to reach %s\n", pool.Spec.Configuration.Name)
-	return wait.PollImmediate(10*time.Second, timeout, func() (bool, error) {
+	return wait.PollImmediate(machineOperationRetryInterval, machineOperationTimeout, func() (bool, error) {
 		for _, loopNode := range nodes {
 			node := &corev1.Node{}
 			err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: loopNode.Name}, node)
@@ -1222,7 +1221,7 @@ func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName st
 
 	// When the pool updates, we need to wait for the machines to pick up the new rendered
 	// config
-	err = wait.PollImmediate(10*time.Second, 20*time.Minute, func() (bool, error) {
+	err = wait.PollImmediate(machineOperationRetryInterval, machineOperationTimeout, func() (bool, error) {
 		pool := &mcfgv1.MachineConfigPool{}
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
 		if err != nil {
@@ -1384,7 +1383,7 @@ func createMCPObject(f *framework.Framework, newPoolNodeLabel, oldPoolName, newP
 }
 
 func waitForPoolCondition(t *testing.T, f *framework.Framework, conditionType mcfgv1.MachineConfigPoolConditionType, newPoolName string) error {
-	return wait.PollImmediate(10*time.Second, 20*time.Minute, func() (bool, error) {
+	return wait.PollImmediate(machineOperationRetryInterval, machineOperationTimeout, func() (bool, error) {
 		pool := mcfgv1.MachineConfigPool{}
 		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: newPoolName}, &pool)
 		if err != nil {

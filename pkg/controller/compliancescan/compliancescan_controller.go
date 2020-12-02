@@ -5,6 +5,7 @@ import (
 	goerrors "errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -369,8 +370,9 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 			} else if goerrors.As(err, &unschedulableErr) {
 				// Create custom error message for this pod that couldn't be scheduled
 				cmName := getConfigMapForNodeName(instance.Name, node.Name)
+				errorReader := strings.NewReader(err.Error())
 				cm := utils.GetResultConfigMap(instance, cmName, "error-msg", node.Name,
-					[]byte(err.Error()), false, common.PodUnschedulableExitCode, "")
+					errorReader, false, common.PodUnschedulableExitCode, "")
 				cmKey := types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}
 				foundcm := corev1.ConfigMap{}
 				cmGetErr := r.client.Get(context.TODO(), cmKey, &foundcm)
