@@ -157,6 +157,7 @@ metadata:
           }
         }
       ]
+    olm.skipRange: ">=0.1.17 <0.1.22"
     capabilities: Seamless Upgrades
     categories: Monitoring,Security
     operatorframework.io/suggested-namespace: openshift-compliance
@@ -1345,5 +1346,4 @@ spec:
   provider:
     name: Red Hat Inc.
     url: www.redhat.com
-  replaces: compliance-operator.v0.1.21
   version: 0.1.22
