@@ -39,22 +39,8 @@ func (r *ReconcileComplianceScan) createNodeScanPods(instance *compv1alpha1.Comp
 		// ..schedule a pod..
 		logger.Info("Creating a pod for node", "Pod.Name", node.Name)
 		pod := newScanPodForNode(instance, &node, logger)
-
-		if instance.Spec.TailoringConfigMap != nil {
-			if err := r.reconcileTailoring(instance, pod, logger); err != nil {
-				return err
-			}
-		}
-
-		// ..and launch it..
-		err := r.client.Create(context.TODO(), pod)
-		if errors.IsAlreadyExists(err) {
-			logger.Info("Pod already exists. This is fine.", "Pod.Name", pod.Name)
-		} else if err != nil {
-			log.Error(err, "Failed to launch a pod", "Pod.Name", pod.Name)
+		if err := r.launchScanPod(instance, pod, logger); err != nil {
 			return err
-		} else {
-			logger.Info("Launched a pod", "Pod.Name", pod.Name)
 		}
 	}
 
@@ -64,23 +50,27 @@ func (r *ReconcileComplianceScan) createNodeScanPods(instance *compv1alpha1.Comp
 func (r *ReconcileComplianceScan) createPlatformScanPod(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	logger.Info("Creating a Platform scan pod")
 	pod := newPlatformScanPod(instance, logger)
+	return r.launchScanPod(instance, pod, logger)
+}
 
+func (r *ReconcileComplianceScan) launchScanPod(instance *compv1alpha1.ComplianceScan, pod *corev1.Pod, logger logr.Logger) error {
+	podLogger := logger.WithValues("Pod.Name", pod.Name)
 	if instance.Spec.TailoringConfigMap != nil {
 		if err := r.reconcileTailoring(instance, pod, logger); err != nil {
 			return err
 		}
 	}
 
+	// ..and launch it..
 	err := r.client.Create(context.TODO(), pod)
 	if errors.IsAlreadyExists(err) {
-		logger.Info("Pod already exists. This is fine.", "pod", pod)
+		podLogger.Info("Pod already exists. This is fine.")
 	} else if err != nil {
-		log.Error(err, "Failed to launch a pod", "pod", pod)
+		podLogger.Error(err, "Failed to launch a pod")
 		return err
 	} else {
-		logger.Info("Launched a pod", "pod", pod)
+		podLogger.Info("Launched a pod")
 	}
-
 	return nil
 }
 
@@ -285,6 +275,13 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 		"--profile=" + scanInstance.Spec.Profile,
 		"--warnings-output-file=/reports/warning_output",
 	}
+	if scanInstance.Spec.TailoringConfigMap != nil {
+		// NOTE(jaosorior): Adding the tailoring volume is handled in the
+		// addTailoringVolume function
+		tailoringArg := fmt.Sprintf("--tailoring=%s/tailoring.xml", OpenScapTailoringDir)
+		collectorCmd = append(collectorCmd, tailoringArg)
+	}
+
 	falseP := false
 	trueP := true
 
@@ -537,6 +534,17 @@ func (r *ReconcileComplianceScan) addTailoringVolume(name string, pod *corev1.Po
 	})
 
 	// The index is used to get the references instead of copies
+	for i := range pod.Spec.InitContainers {
+		container := &pod.Spec.InitContainers[i]
+		if container.Name == PlatformScanResourceCollectorName {
+			container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+				Name:      tailoringCMVolumeName,
+				MountPath: OpenScapTailoringDir,
+				ReadOnly:  true,
+			})
+		}
+	}
+
 	for i := range pod.Spec.Containers {
 		container := &pod.Spec.Containers[i]
 		if container.Name == OpenSCAPScanContainerName {
