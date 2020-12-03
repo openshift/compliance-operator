@@ -339,7 +339,7 @@ func TestE2E(t *testing.T) {
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				const (
-					unexistentImage     = "bad-namespace/bad-image:latest"
+					unexistentImage = "bad-namespace/bad-image:latest"
 				)
 
 				pbName := getObjNameFromTest(t)
@@ -370,7 +370,7 @@ func TestE2E(t *testing.T) {
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				const (
-					noTagImage          = "bad-namespace/bad-image"
+					noTagImage = "bad-namespace/bad-image"
 				)
 
 				pbName := getObjNameFromTest(t)
@@ -433,8 +433,10 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name:       "TestScanProducesRemediations",
-			IsParallel: true,
+			Name: "TestScanProducesRemediations",
+			// NOTE(jaosorior): This was made a serial test because it runs the long-running, resource-taking and
+			// big AF moderate profile
+			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				scanName := getObjNameFromTest(t)
 				selectWorkers := map[string]string{
@@ -753,6 +755,66 @@ func TestE2E(t *testing.T) {
 				}
 
 				return scanResultIsExpected(t, f, namespace, "test-single-tailored-scan-succeeds", compv1alpha1.ResultCompliant)
+			},
+		},
+		testExecution{
+			Name:       "TestSingleTailoredPlatformScanSucceeds",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				tailoringCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-tailored-platform-scan-succeeds-cm",
+						Namespace: namespace,
+					},
+					Data: map[string]string{
+						"tailoring.xml": `<?xml version="1.0" encoding="UTF-8"?>
+<xccdf-1.2:Tailoring xmlns:xccdf-1.2="http://checklists.nist.gov/xccdf/1.2" id="xccdf_compliance.openshift.io_tailoring_tailoredplatformprofile">
+  <xccdf-1.2:benchmark href="/content/ssg-ocp4-ds.xml"></xccdf-1.2:benchmark>
+  <xccdf-1.2:version time="2020-11-27T11:58:27Z">1</xccdf-1.2:version>
+  <xccdf-1.2:Profile id="xccdf_compliance.openshift.io_profile_test-tailoredplatformprofile">
+    <xccdf-1.2:title override="true">Test Tailored Platform profile</xccdf-1.2:title>
+    <xccdf-1.2:description override="true">This is a test for platform profile tailoring</xccdf-1.2:description>
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_scheduler_no_bind_address" selected="true"></xccdf-1.2:select>
+  </xccdf-1.2:Profile>
+</xccdf-1.2:Tailoring>`,
+					},
+				}
+
+				err := f.Client.Create(goctx.TODO(), tailoringCM, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+
+				exampleComplianceScan := &compv1alpha1.ComplianceScan{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-single-tailored-platform-scan-succeeds",
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceScanSpec{
+						ScanType:     compv1alpha1.ScanTypePlatform,
+						ContentImage: contentImagePath,
+						Profile:      "xccdf_compliance.openshift.io_profile_test-tailoredplatformprofile",
+						Rule:         "xccdf_org.ssgproject.content_rule_scheduler_no_bind_address",
+						Content:      ocpContentFile,
+						TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
+							Name: tailoringCM.Name,
+						},
+						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+							Debug: true,
+						},
+					},
+				}
+				// use Context's create helper to create the object and add a cleanup function for the new object
+				err = f.Client.Create(goctx.TODO(), exampleComplianceScan, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+				err = waitForScanStatus(t, f, namespace, exampleComplianceScan.Name, compv1alpha1.PhaseDone)
+				if err != nil {
+					return err
+				}
+
+				return scanResultIsExpected(t, f, namespace, exampleComplianceScan.Name, compv1alpha1.ResultCompliant)
 			},
 		},
 		testExecution{
@@ -1369,8 +1431,10 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name:       "TestSuiteScan",
-			IsParallel: true,
+			Name: "TestSuiteScan",
+			// NOTE(jaosorior): This was made a serial test because it runs the long-running, resource-taking and
+			// big AF moderate profile
+			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				suiteName := "test-suite-two-scans"
 

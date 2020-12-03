@@ -2,6 +2,7 @@ package scansettingbinding
 
 import (
 	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -349,7 +350,12 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			}
 
 			profRhcosE8Badproduct := profRhcosE8.DeepCopy()
+			profRhcosE8Badproduct.SetName("e8-bad-product")
 			profRhcosE8Badproduct.Annotations = platformBadProfileAnnotations
+			profRhcosE8Badproduct.SetResourceVersion("")
+
+			err := reconciler.client.Create(context.TODO(), profRhcosE8Badproduct)
+			Expect(err).To(BeNil())
 
 			ssb = &compv1alpha1.ScanSettingBinding{
 				ObjectMeta: v1.ObjectMeta{
@@ -370,7 +376,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 				},
 			}
 
-			err := reconciler.client.Create(context.TODO(), ssb)
+			err = reconciler.client.Create(context.TODO(), ssb)
 			Expect(err).To(BeNil())
 			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,

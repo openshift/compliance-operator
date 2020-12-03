@@ -96,7 +96,7 @@ E2E_SKIP_CONTAINER_BUILD?=false
 # Pass extra flags to the e2e test run.
 # e.g. to run a specific test in the e2e test suite, do:
 # 	make e2e E2E_GO_TEST_FLAGS="-v -run TestE2E/TestScanWithNodeSelectorFiltersCorrectly"
-E2E_GO_TEST_FLAGS?=-test.v -test.timeout 120m -test.p 2
+E2E_GO_TEST_FLAGS?=-test.v -test.timeout 120m
 
 # Specifies the image path to use for the content in the tests
 DEFAULT_CONTENT_IMAGE_PATH=quay.io/complianceascode/ocp4:latest
@@ -130,7 +130,7 @@ operator-image:
 
 .PHONY: openscap-image
 openscap-image:
-	$(RUNTIME) build -t $(RELATED_IMAGE_OPENSCAP_PATH):$(TAG) $(OPENSCAP_DOCKER_CONTEXT)
+	$(RUNTIME) build --no-cache -t $(RELATED_IMAGE_OPENSCAP_PATH):$(TAG) $(OPENSCAP_DOCKER_CONTEXT)
 
 .PHONY: bundle-image
 bundle-image:
@@ -354,7 +354,7 @@ openshift-user:
 ifeq ($(shell oc whoami 2> /dev/null),kube:admin)
 	$(eval OPENSHIFT_USER = kubeadmin)
 else
-	$(eval OPENSHIFT_USER = $(oc whoami))
+	$(eval OPENSHIFT_USER = $(shell oc whoami))
 endif
 
 .PHONY: push
@@ -378,6 +378,8 @@ endif
 .PHONY: bundle
 bundle: check-operator-version operator-sdk ## Generate the bundle and packaging for the specific version (NOTE: Gotta specify the version with the OPERATOR_VERSION environment variable)
 	$(GOPATH)/bin/operator-sdk generate bundle -q --overwrite --version "$(OPERATOR_VERSION)"
+	sed -i '/replaces:/d' deploy/olm-catalog/compliance-operator/manifests/compliance-operator.clusterserviceversion.yaml
+	sed -i "s/\(olm.skipRange: '>=.*\)<.*'/\1<$(OPERATOR_VERSION)'/" deploy/olm-catalog/compliance-operator/manifests/compliance-operator.clusterserviceversion.yaml
 	$(GOPATH)/bin/operator-sdk bundle validate ./deploy/olm-catalog/compliance-operator/
 
 .PHONY: package-version-to-tag

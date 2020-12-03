@@ -16,12 +16,14 @@ limitations under the License.
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
@@ -178,11 +180,11 @@ func waitForResultsFile(filename string, timeout int64) *os.File {
 	return nil
 }
 
-func resultNeedsCompression(contents []byte) bool {
-	return len(contents) > 1048570
+func resultNeedsCompression(size int64) bool {
+	return size > 1048570
 }
 
-func compressResults(contents []byte) ([]byte, error) {
+func compressResults(contents io.Reader) (io.Reader, error) {
 	// Encode the contents ascii, compress it with gzip, b64encode it so it
 	// can be stored in the configmap.
 	var buffer bytes.Buffer
@@ -190,30 +192,47 @@ func compressResults(contents []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	w.Write([]byte(contents))
-	w.Close()
-	return buffer.Bytes(), nil
+	defer w.Close()
+	_, err = io.Copy(w, contents)
+	if err != nil {
+		return nil, err
+	}
+	return &buffer, nil
 }
 
 type resultFileContents struct {
-	contents   []byte
+	contents   io.Reader
 	compressed bool
+	close      func() error
 }
 
 func readResultsFile(filename string, timeout int64) (*resultFileContents, error) {
 	var err error
 	var rfContents resultFileContents
 
-	handle := waitForResultsFile(filename, timeout)
+	cleanFileName := filepath.Clean(filename)
+	handle := waitForResultsFile(cleanFileName, timeout)
 	// #nosec
 	defer handle.Close()
 
-	rfContents.contents, err = ioutil.ReadAll(handle)
+	// #nosec
+	contentsfile, err := os.Open(cleanFileName)
 	if err != nil {
 		return nil, err
 	}
+	rfContents.contents = bufio.NewReader(contentsfile)
 
-	if resultNeedsCompression(rfContents.contents) {
+	// Using stat avoids us having to read the file's contents
+	statInfo, err := os.Stat(cleanFileName)
+	if err != nil {
+		return nil, err
+	}
+	if resultNeedsCompression(statInfo.Size()) {
+		// #nosec
+		defer contentsfile.Close()
+		rfContents.close = func() error {
+			return nil
+		}
 		rfContents.contents, err = compressResults(rfContents.contents)
 		log.Info("File needs compression", "results-file", filename)
 		if err != nil {
@@ -221,9 +240,12 @@ func readResultsFile(filename string, timeout int64) (*resultFileContents, error
 			return nil, err
 		}
 		rfContents.compressed = true
-		log.Info("Compressed results bytes size", "bytes", len(rfContents.contents))
+		log.Info("Compressed results")
+	} else {
+		rfContents.close = func() error {
+			return contentsfile.Close()
+		}
 	}
-
 	return &rfContents, nil
 }
 
@@ -249,14 +271,13 @@ func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scap
 	return backoff.Retry(func() error {
 		url := scapresultsconf.ResultServerURI
 		log.Info("Trying to upload to resultserver", "url", url)
-		reader := bytes.NewReader(arfContents.contents)
 		transport, err := getMutualHttpsTransport(scapresultsconf)
 		if err != nil {
 			log.Error(err, "Failed to get https transport")
 			return err
 		}
 		client := &http.Client{Transport: transport}
-		req, _ := http.NewRequest("POST", url, reader)
+		req, _ := http.NewRequest("POST", url, arfContents.contents)
 		req.Header.Add("Content-Type", "application/xml")
 		req.Header.Add("X-Report-Name", scapresultsconf.ConfigMapName)
 		if arfContents.compressed {
@@ -326,12 +347,14 @@ func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConf
 		log.Error(err, "Failed to read ARF file")
 		os.Exit(1)
 	}
+	defer arfContents.close()
 
 	xccdfContents, err := readResultsFile(scapresultsconf.XccdfFile, scapresultsconf.Timeout)
 	if err != nil {
 		log.Error(err, "Failed to read XCCDF file")
 		os.Exit(1)
 	}
+	defer xccdfContents.close()
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -363,6 +386,7 @@ func handleErrorInOscapRun(exitcode string, scapresultsconf *scapresultsConfig, 
 		log.Error(err, "Failed to read error message output from oscap run")
 		os.Exit(1)
 	}
+	defer errorMsg.close()
 
 	err = uploadErrorConfigMap(errorMsg, exitcode, scapresultsconf, client)
 	if err != nil {
@@ -378,13 +402,10 @@ func getOscapExitCode(scapresultsconf *scapresultsConfig) string {
 		log.Error(err, "Failed to read oscap error code")
 		os.Exit(1)
 	}
+	defer exitcodeContent.close()
 
-	if len(exitcodeContent.contents) < 1 {
-		log.Error(fmt.Errorf("error code file can't be empty"), "exitcode file was empty")
-		os.Exit(1)
-	}
-
-	return string(exitcodeContent.contents[0])
+	exitcode, _ := ioutil.ReadAll(exitcodeContent.contents)
+	return strings.Trim(string(exitcode), "\n")
 }
 
 func getMutualHttpsTransport(c *scapresultsConfig) (*http.Transport, error) {

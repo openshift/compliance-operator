@@ -47,6 +47,7 @@ type scapContentDataStream struct {
 	client *kubernetes.Clientset
 	// Staging objects
 	dataStream *utils.XMLDocument
+	tailoring  *utils.XMLDocument
 	resources  []string
 	found      map[string][]byte
 }
@@ -58,18 +59,31 @@ func NewDataStreamResourceFetcher(client *kubernetes.Clientset) ResourceFetcher 
 }
 
 func (c *scapContentDataStream) LoadSource(path string) error {
-	f, err := openNonEmptyFile(path)
-	if err != nil {
-		return err
-	}
-	// #nosec
-	defer f.Close()
-	xml, err := parseContent(f)
+	xml, err := c.loadContent(path)
 	if err != nil {
 		return err
 	}
 	c.dataStream = xml
 	return nil
+}
+
+func (c *scapContentDataStream) LoadTailoring(path string) error {
+	xml, err := c.loadContent(path)
+	if err != nil {
+		return err
+	}
+	c.tailoring = xml
+	return nil
+}
+
+func (c *scapContentDataStream) loadContent(path string) (*utils.XMLDocument, error) {
+	f, err := openNonEmptyFile(path)
+	if err != nil {
+		return nil, err
+	}
+	// #nosec
+	defer f.Close()
+	return parseContent(f)
 }
 
 func parseContent(f *os.File) (*utils.XMLDocument, error) {
@@ -118,15 +132,31 @@ func openNonEmptyFile(filename string) (*os.File, error) {
 }
 
 func (c *scapContentDataStream) FigureResources(profile string) error {
-	found := getResourcePaths(c.dataStream, profile)
-	if len(found) == 0 {
-		fmt.Printf("no valid checks found in datastream\n")
-	}
 	// Always stage the clusteroperators/openshift-apiserver object for version detection.
-	paths := []string{"/apis/config.openshift.io/v1/clusteroperators/openshift-apiserver"}
-	paths = append(paths, found...)
+	found := []string{"/apis/config.openshift.io/v1/clusteroperators/openshift-apiserver"}
+	effectiveProfile := profile
 
-	c.resources = paths
+	if c.tailoring != nil {
+		selected := getResourcePaths(c.tailoring, c.dataStream, profile)
+		if len(selected) == 0 {
+			fmt.Printf("no valid checks found in tailoring\n")
+		}
+		found = append(found, selected...)
+		// Overwrite profile so the next search uses the extended profile
+		effectiveProfile = c.getExtendedProfileFromTailoring(c.tailoring, profile)
+		// No profile is being extended
+		if effectiveProfile == "" {
+			c.resources = found
+			return nil
+		}
+	}
+
+	selected := getResourcePaths(c.dataStream, c.dataStream, effectiveProfile)
+	if len(selected) == 0 {
+		fmt.Printf("no valid checks found in profile\n")
+	}
+	found = append(found, selected...)
+	c.resources = found
 	return nil
 }
 
@@ -158,13 +188,13 @@ func getPathFromWarningXML(in string) string {
 
 // Collect the resource paths for objects that this scan needs to obtain.
 // The profile will have a series of "selected" checks that we grab all of the path info from.
-func getResourcePaths(ds *utils.XMLDocument, profile string) []string {
+func getResourcePaths(profileDefs *utils.XMLDocument, ruleDefs *utils.XMLDocument, profile string) []string {
 	out := []string{}
 	selectedChecks := []string{}
 
 	// First we find the Profile node, to locate the enabled checks.
 	DBG("Using profile %s", profile)
-	nodes := ds.Root.Query("//Profile")
+	nodes := profileDefs.Root.Query("//Profile")
 	for _, node := range nodes {
 		profileID := node.GetAttributeValue("id")
 		if profileID != profile {
@@ -184,7 +214,7 @@ func getResourcePaths(ds *utils.XMLDocument, profile string) []string {
 		}
 	}
 
-	checkDefinitions := ds.Root.Query("//Rule")
+	checkDefinitions := ruleDefs.Root.Query("//Rule")
 	if len(checkDefinitions) == 0 {
 		DBG("WARNING: No rules to query (invalid datastream)")
 		return out
@@ -221,6 +251,22 @@ func getResourcePaths(ds *utils.XMLDocument, profile string) []string {
 	return out
 }
 
+func (c *scapContentDataStream) getExtendedProfileFromTailoring(ds *utils.XMLDocument, tailoredProfile string) string {
+	nodes := ds.Root.Query("//Profile")
+	for _, node := range nodes {
+		tailoredProfileID := node.GetAttributeValue("id")
+		if tailoredProfileID != tailoredProfile {
+			continue
+		}
+
+		profileID := node.GetAttributeValue("extends")
+		if profileID != "" {
+			return profileID
+		}
+	}
+	return ""
+}
+
 func (c *scapContentDataStream) FetchResources() ([]string, error) {
 	found, warnings, err := fetch(c.client, c.resources)
 	if err != nil {
@@ -238,7 +284,7 @@ func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, [
 			LOG("Fetching URI: '%s'", uri)
 			req := client.RESTClient().Get().RequestURI(uri)
 			stream, err := req.Stream(context.TODO())
-			if meta.IsNoMatchError(err) || kerrors.IsForbidden(err) {
+			if meta.IsNoMatchError(err) || kerrors.IsForbidden(err) || kerrors.IsNotFound(err) {
 				DBG("Encountered non-fatal error to be persisted in the scan: %s", err)
 				warnings = append(warnings, err.Error())
 				return nil
