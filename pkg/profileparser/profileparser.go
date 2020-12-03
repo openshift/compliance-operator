@@ -6,6 +6,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"sync"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -53,89 +54,117 @@ func GetPrefixedName(pbName, objName string) string {
 }
 
 func ParseBundle(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, pcfg *ParserConfig) error {
+	// One go routine per type
+	errors := make(chan error)
+	done := make(chan string)
+	var wg sync.WaitGroup
+	wg.Add(3)
 	stdParser := newStandardParser()
 	nonce := names.SimpleNameGenerator.GenerateName(fmt.Sprintf("pb-%s", pb.Name))
+	go func() {
+		profErr := ParseProfilesAndDo(contentDom, pb, nonce, func(p *cmpv1alpha1.Profile) error {
+			err := parseAction(p, "Profile", pb, pcfg, func(found, updated interface{}) error {
+				foundProfile, ok := found.(*cmpv1alpha1.Profile)
+				if !ok {
+					return fmt.Errorf("unexpected type")
+				}
+				updatedProfile, ok := updated.(*cmpv1alpha1.Profile)
+				if !ok {
+					return fmt.Errorf("unexpected type")
+				}
 
-	err := ParseProfilesAndDo(contentDom, pb, nonce, func(p *cmpv1alpha1.Profile) error {
-		err := parseAction(p, "Profile", pb, pcfg, func(found, updated interface{}) error {
-			foundProfile, ok := found.(*cmpv1alpha1.Profile)
-			if !ok {
-				return fmt.Errorf("unexpected type")
-			}
-			updatedProfile, ok := updated.(*cmpv1alpha1.Profile)
-			if !ok {
-				return fmt.Errorf("unexpected type")
-			}
-
-			foundProfile.Annotations = updatedProfile.Annotations
-			foundProfile.ProfilePayload = *updatedProfile.ProfilePayload.DeepCopy()
-			return pcfg.Client.Update(context.TODO(), foundProfile)
+				foundProfile.Annotations = updatedProfile.Annotations
+				foundProfile.ProfilePayload = *updatedProfile.ProfilePayload.DeepCopy()
+				return pcfg.Client.Update(context.TODO(), foundProfile)
+			})
+			return err
 		})
-		return err
-	})
 
-	if err != nil {
-		return err
-	}
-
-	if err := deleteObsoleteItems(pcfg.Client, "Profile", pb.Name, pb.Namespace, nonce); err != nil {
-		return err
-	}
-
-	err = ParseRulesAndDo(contentDom, stdParser, pb, nonce, func(r *cmpv1alpha1.Rule) error {
-		if r.Annotations == nil {
-			r.Annotations = make(map[string]string)
+		if profErr != nil {
+			errors <- profErr
 		}
-		r.Annotations[cmpv1alpha1.RuleIDAnnotationKey] = r.Name
 
-		err := parseAction(r, "Rule", pb, pcfg, func(found, updated interface{}) error {
-			foundRule, ok := found.(*cmpv1alpha1.Rule)
-			if !ok {
-				return fmt.Errorf("unexpected type")
-			}
-			updatedRule, ok := updated.(*cmpv1alpha1.Rule)
-			if !ok {
-				return fmt.Errorf("unexpected type")
-			}
+		if err := deleteObsoleteItems(pcfg.Client, "Profile", pb.Name, pb.Namespace, nonce); err != nil {
+			errors <- err
+		}
+		wg.Done()
+	}()
 
-			foundRule.Annotations = updatedRule.Annotations
-			foundRule.RulePayload = *updatedRule.RulePayload.DeepCopy()
-			return pcfg.Client.Update(context.TODO(), foundRule)
+	go func() {
+		ruleErr := ParseRulesAndDo(contentDom, stdParser, pb, nonce, func(r *cmpv1alpha1.Rule) error {
+			if r.Annotations == nil {
+				r.Annotations = make(map[string]string)
+			}
+			r.Annotations[cmpv1alpha1.RuleIDAnnotationKey] = r.Name
+
+			err := parseAction(r, "Rule", pb, pcfg, func(found, updated interface{}) error {
+				foundRule, ok := found.(*cmpv1alpha1.Rule)
+				if !ok {
+					return fmt.Errorf("unexpected type")
+				}
+				updatedRule, ok := updated.(*cmpv1alpha1.Rule)
+				if !ok {
+					return fmt.Errorf("unexpected type")
+				}
+
+				foundRule.Annotations = updatedRule.Annotations
+				foundRule.RulePayload = *updatedRule.RulePayload.DeepCopy()
+				return pcfg.Client.Update(context.TODO(), foundRule)
+			})
+			return err
 		})
-		return err
-	})
 
-	if err != nil {
-		return err
-	}
+		if ruleErr != nil {
+			errors <- ruleErr
+		}
 
-	if err := deleteObsoleteItems(pcfg.Client, "Rule", pb.Name, pb.Namespace, nonce); err != nil {
-		return err
-	}
+		if err := deleteObsoleteItems(pcfg.Client, "Rule", pb.Name, pb.Namespace, nonce); err != nil {
+			errors <- err
+		}
+		wg.Done()
+	}()
 
-	err = ParseVariablesAndDo(contentDom, pb, nonce, func(v *cmpv1alpha1.Variable) error {
-		err := parseAction(v, "Variable", pb, pcfg, func(found, updated interface{}) error {
-			foundVariable, ok := found.(*cmpv1alpha1.Variable)
-			if !ok {
-				return fmt.Errorf("unexpected type")
-			}
-			updatedVariable, ok := updated.(*cmpv1alpha1.Variable)
-			if !ok {
-				return fmt.Errorf("unexpected type")
-			}
+	go func() {
+		varErr := ParseVariablesAndDo(contentDom, pb, nonce, func(v *cmpv1alpha1.Variable) error {
+			err := parseAction(v, "Variable", pb, pcfg, func(found, updated interface{}) error {
+				foundVariable, ok := found.(*cmpv1alpha1.Variable)
+				if !ok {
+					return fmt.Errorf("unexpected type")
+				}
+				updatedVariable, ok := updated.(*cmpv1alpha1.Variable)
+				if !ok {
+					return fmt.Errorf("unexpected type")
+				}
 
-			foundVariable.Annotations = updatedVariable.Annotations
-			foundVariable.VariablePayload = *updatedVariable.VariablePayload.DeepCopy()
-			return pcfg.Client.Update(context.TODO(), foundVariable)
+				foundVariable.Annotations = updatedVariable.Annotations
+				foundVariable.VariablePayload = *updatedVariable.VariablePayload.DeepCopy()
+				return pcfg.Client.Update(context.TODO(), foundVariable)
+			})
+			return err
 		})
-		return err
-	})
 
-	if err != nil {
-		return err
-	}
+		if varErr != nil {
+			errors <- varErr
+		}
 
-	if err := deleteObsoleteItems(pcfg.Client, "Variable", pb.Name, pb.Namespace, nonce); err != nil {
+		if err := deleteObsoleteItems(pcfg.Client, "Variable", pb.Name, pb.Namespace, nonce); err != nil {
+			errors <- err
+		}
+		wg.Done()
+	}()
+
+	// Wait for the go routines to end and close the "done" channel
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// carry on
+		break
+	case err := <-errors:
+		close(errors)
 		return err
 	}
 

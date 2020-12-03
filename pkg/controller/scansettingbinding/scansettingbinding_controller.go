@@ -136,17 +136,15 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 			return common.ReturnWithRetriableError(reqLogger, err)
 		}
 
-		if product != "" {
-			if nodeProduct == "" {
-				nodeProduct = product
-			} else {
-				r.Eventf(
-					instance, corev1.EventTypeWarning, "MultipleProducts",
-					"ScanSettingBinding defines multiple products: %s and %s", product, nodeProduct,
-				)
-				// Don't requeue in this case, nothing we can do
-				return reconcile.Result{}, nil
-			}
+		nodeProduct = getRelevantProduct(nodeProduct, product)
+
+		if isDifferentProduct(nodeProduct, product) {
+			r.Eventf(
+				instance, corev1.EventTypeWarning, "MultipleProducts",
+				"ScanSettingBinding defines multiple products: %s and %s", product, nodeProduct,
+			)
+			// Don't requeue in this case, nothing we can do
+			return reconcile.Result{}, nil
 		}
 
 		suite.Spec.Scans = append(suite.Spec.Scans, *scan)
@@ -209,6 +207,18 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func getRelevantProduct(nodeProduct, incomingProduct string) string {
+	// Initialize
+	if nodeProduct == "" && incomingProduct != "" {
+		return incomingProduct
+	}
+	return nodeProduct
+}
+
+func isDifferentProduct(nodeProduct, incomingProduct string) bool {
+	return incomingProduct != "" && incomingProduct != nodeProduct
 }
 
 func applyConstraint(r *ReconcileScanSettingBinding, instance *compliancev1alpha1.ScanSettingBinding, suite *compliancev1alpha1.ComplianceSuite, constraintRef *compliancev1alpha1.NamedObjectReference, logger logr.Logger) error {
