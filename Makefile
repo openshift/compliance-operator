@@ -130,7 +130,7 @@ operator-image:
 
 .PHONY: openscap-image
 openscap-image:
-	$(RUNTIME) build -t $(RELATED_IMAGE_OPENSCAP_PATH):$(TAG) $(OPENSCAP_DOCKER_CONTEXT)
+	$(RUNTIME) build --no-cache -t $(RELATED_IMAGE_OPENSCAP_PATH):$(TAG) $(OPENSCAP_DOCKER_CONTEXT)
 
 .PHONY: bundle-image
 bundle-image:
@@ -378,6 +378,8 @@ endif
 .PHONY: bundle
 bundle: check-operator-version operator-sdk ## Generate the bundle and packaging for the specific version (NOTE: Gotta specify the version with the OPERATOR_VERSION environment variable)
 	$(GOPATH)/bin/operator-sdk generate bundle -q --overwrite --version "$(OPERATOR_VERSION)"
+	sed -i '/replaces:/d' deploy/olm-catalog/compliance-operator/manifests/compliance-operator.clusterserviceversion.yaml
+	sed -i "s/\(olm.skipRange: '>=.*\)<.*'/\1<$(OPERATOR_VERSION)'/" deploy/olm-catalog/compliance-operator/manifests/compliance-operator.clusterserviceversion.yaml
 	$(GOPATH)/bin/operator-sdk bundle validate ./deploy/olm-catalog/compliance-operator/
 
 .PHONY: package-version-to-tag

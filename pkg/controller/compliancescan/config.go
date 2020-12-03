@@ -215,7 +215,7 @@ func platformOpenScapScriptCm(name string, scan *compv1alpha1.ComplianceScan) *c
 	}
 }
 
-func defaultOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev1.ConfigMap {
+func commonOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev1.ConfigMap {
 	content := absContentPath(scan.Spec.Content)
 
 	cm := &corev1.ConfigMap{
@@ -228,7 +228,6 @@ func defaultOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev
 			},
 		},
 		Data: map[string]string{
-			OpenScapHostRootEnvName:  "/host",
 			OpenScapProfileEnvName:   scan.Spec.Profile,
 			OpenScapContentEnvName:   content,
 			OpenScapReportDirEnvName: "/reports",
@@ -259,36 +258,15 @@ func defaultOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev
 	return cm
 }
 
+func defaultOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev1.ConfigMap {
+	cm := commonOpenScapEnvCm(name, scan)
+	cm.Data[OpenScapHostRootEnvName] = "/host"
+	return cm
+}
+
 // Same as above but without hostroot.
 func platformOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev1.ConfigMap {
-	content := absContentPath(scan.Spec.Content)
-
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: common.GetComplianceOperatorNamespace(),
-			Labels: map[string]string{
-				compv1alpha1.ComplianceScanLabel: scan.Name,
-				compv1alpha1.ScriptLabel:         "",
-			},
-		},
-		Data: map[string]string{
-			OpenScapProfileEnvName:   scan.Spec.Profile,
-			OpenScapContentEnvName:   content,
-			OpenScapReportDirEnvName: "/reports",
-		},
-	}
-
-	if scan.Spec.Rule != "" {
-		cm.Data[OpenScapRuleEnvName] = scan.Spec.Rule
-	}
-
-	if scan.Spec.Debug {
-		// info seems like a good compromise in terms of verbosity
-		cm.Data[OpenScapVerbosityeEnvName] = "INFO"
-	}
-
-	return cm
+	return commonOpenScapEnvCm(name, scan)
 }
 
 func scriptCmForScan(scan *compv1alpha1.ComplianceScan) string {

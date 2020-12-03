@@ -34,7 +34,7 @@ var _ = Describe("Testing SCAP parsing and storage", func() {
 
 		It("Gets the appropriate resource URIs", func() {
 			expected := []string{"/apis/config.openshift.io/v1/oauths/cluster"}
-			got := getResourcePaths(contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate")
+			got := getResourcePaths(contentDS, contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate")
 			Expect(got).To(Equal(expected))
 		})
 	})

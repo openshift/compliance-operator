@@ -114,6 +114,8 @@ To view them, use the following command:
 ```
 $ oc get -n $NAMESPACE profiles.compliance
 NAME              AGE
+ocp4-cis          2m50s
+ocp4-cis-node     2m50s
 ocp4-e8           2m50s
 ocp4-moderate     2m50s
 ocp4-ncp          2m50s
@@ -122,7 +124,7 @@ rhcos4-moderate   2m46s
 rhcos4-ncp        2m46s
 ```
 
-### Profile and Node scan types
+### Platform and Node scan types
 These profiles define different compliance benchmarks and as well as
 the scans fall into two basic categories - platform and node. The
 platform scans are targetting the cluster itself, in the listing above
@@ -230,7 +232,7 @@ pool pushes the configuration to the nodes and reboots the nodes.
 
 You can watch the node status with:
 ```
-$ oc get nodes
+$ oc get nodes -w
 ```
 
 Once the nodes reboot, you might want to run another Suite to ensure that
@@ -285,7 +287,7 @@ spec:
 You can inspect the files by listing the `/workers-scan-results` directory and copy the
 files locally:
 ```
-$ oc exec pods/pv-extract ls /workers-scan-results/0
+$ oc exec pods/pv-extract -- ls /workers-scan-results/0
 lost+found
 workers-scan-ip-10-0-129-252.ec2.internal-pod.xml.bzip2
 workers-scan-ip-10-0-149-70.ec2.internal-pod.xml.bzip2
@@ -301,7 +303,7 @@ The XCCDF results are much smaller and can be stored in a configmap, from
 which you can extract the results. For easier filtering, the configmaps
 are labeled with the scan name:
 ```
-$ oc get cm -l=compliance-scan=masters-scan
+$ oc get cm -l=compliance.openshift.io/scan-name=masters-scan
 NAME                                            DATA   AGE
 masters-scan-ip-10-0-129-248.ec2.internal-pod   1      25m
 masters-scan-ip-10-0-144-54.ec2.internal-pod    1      24m
