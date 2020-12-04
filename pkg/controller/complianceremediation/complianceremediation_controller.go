@@ -40,7 +40,7 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileComplianceRemediation{client: mgr.GetClient(),
+	return &ReconcileComplianceRemediation{client: mgr.GetClient(), nonCachedClient: mgr.GetAPIReader(),
 		scheme: mgr.GetScheme()}
 }
 
@@ -68,8 +68,9 @@ var _ reconcile.Reconciler = &ReconcileComplianceRemediation{}
 type ReconcileComplianceRemediation struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
+	client          client.Client
+	nonCachedClient client.Reader
+	scheme          *runtime.Scheme
 }
 
 // Reconcile reads that state of the cluster for a ComplianceRemediation object and makes changes based on the state read
@@ -436,7 +437,7 @@ func mergeMachineConfigs(configs []*mcfgv1.MachineConfig, name string, roleLabel
 
 func createOrUpdateMachineConfig(r *ReconcileComplianceRemediation, merged *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
 	mc := &mcfgv1.MachineConfig{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: merged.Name}, mc)
+	err := r.nonCachedClient.Get(context.TODO(), types.NamespacedName{Name: merged.Name}, mc)
 	if err != nil && errors.IsNotFound(err) {
 		return createMachineConfig(r, merged, rem, logger)
 	} else if err != nil {
