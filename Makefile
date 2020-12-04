@@ -138,7 +138,7 @@ bundle-image:
 
 .PHONY: index-image
 index-image: opm
-	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(TAG) -f $(INDEX_IMAGE_PATH):$(PREVIOUS_OPERATOR_VERSION) -t $(INDEX_IMAGE_PATH):$(TAG) -c podman
+	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(TAG) -f $(INDEX_IMAGE_PATH):latest -t $(INDEX_IMAGE_PATH):latest -c podman
 
 .PHONY: test-broken-content-image
 test-broken-content-image:
@@ -410,4 +410,3 @@ git-release: package-version-to-tag
 release: release-tag-image bundle push push-index undo-deploy-tag-image git-release ## Do an official release (Requires permissions)
 	# This will ensure that we also push to the latest tag
 	$(MAKE) push TAG=latest
-	$(MAKE) push-index TAG=latest
