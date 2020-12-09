@@ -93,6 +93,14 @@ E2E_USE_DEFAULT_IMAGES?=false
 # In a local-env e2e run, push images to the cluster but skip building them. Useful if the container push fails.
 E2E_SKIP_CONTAINER_BUILD?=false
 
+GOLANGCI_LINT_VERSION=1.33.0
+ifeq ($(OS_NAME), Linux)
+    GOLANGCI_LINT_OS=linux
+else ifeq ($(OS_NAME), Darwin)
+    GOLANGCI_LINT_OS=darwin
+endif
+GOLANGCI_LINT_URL=https://github.com/golangci/golangci-lint/releases/download/v$(GOLANGCI_LINT_VERSION)/golangci-lint-$(GOLANGCI_LINT_VERSION)-$(GOLANGCI_LINT_OS)-amd64.tar.gz
+
 # Pass extra flags to the e2e test run.
 # e.g. to run a specific test in the e2e test suite, do:
 # 	make e2e E2E_GO_TEST_FLAGS="-v -run TestE2E/TestScanWithNodeSelectorFiltersCorrectly"
@@ -164,6 +172,16 @@ $(GOPATH)/bin/opm:
 	wget -nv $(OPM_URL) -O $(GOPATH)/bin/opm || (echo "wget returned $$? trying to fetch opm. please install opm and try again"; exit 1)
 	chmod +x $(GOPATH)/bin/opm
 
+.PHONY: golangci-lint
+golangci-lint: $(GOPATH)/bin/golangci-lint
+
+$(GOPATH)/bin/golangci-lint:
+	curl -L --output - $(GOLANGCI_LINT_URL) | \
+		tar xz --strip-components 1 -C $(GOPATH)/bin/ golangci-lint-$(GOLANGCI_LINT_VERSION)-$(GOLANGCI_LINT_OS)-amd64/golangci-lint || \
+		(echo "curl returned $$? trying to fetch golangci-lint. please install golangci-lint and try again"; exit 1); \
+	GOLANGCI_LINT_CACHE=/tmp/golangci-cache $(GOPATH)/bin/golangci-lint version
+	GOLANGCI_LINT_CACHE=/tmp/golangci-cache $(GOPATH)/bin/golangci-lint linters
+
 .PHONY: run
 run: operator-sdk ## Run the compliance-operator locally
 	WATCH_NAMESPACE=$(NAMESPACE) \
@@ -195,7 +213,7 @@ simplify:
 	@gofmt -s -l -w $(SRC)
 
 .PHONY: verify
-verify: vet mod-verify gosec ## Run code lint checks
+verify: vet mod-verify verify-go-lint ## Run code lint checks
 
 .PHONY: vet
 vet:
@@ -205,9 +223,9 @@ vet:
 mod-verify:
 	@$(GO) mod verify
 
-.PHONY: gosec
-gosec:
-	@$(GO) run github.com/securego/gosec/cmd/gosec -severity medium -confidence medium -quiet ./...
+.PHONY: verify-go-lint
+verify-go-lint: golangci-lint ## Verify the golang code by linting
+	GOLANGCI_LINT_CACHE=/tmp/golangci-cache $(GOPATH)/bin/golangci-lint run
 
 .PHONY: generate
 generate: operator-sdk ## Run operator-sdk's code generation (k8s and crds)
