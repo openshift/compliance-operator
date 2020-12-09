@@ -13,54 +13,71 @@ linters:
     - deadcode
     - depguard
     - dogsled
-    - dupl
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- dupl
     - errcheck
     - errorlint
-    - exhaustive
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- exhaustive
     - exportloopref
     - gci
-    - gochecknoinits
-    - gocognit
+    #- gochecknoinits
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- gocognit
     - goconst
-    - gocritic
-    - gocyclo
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- gocritic
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- gocyclo
     - godot
-    - godox
-    - goerr113
+    #- godox
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- goerr113
     - gofmt
     - gofumpt
     - goheader
     - goimports
-    - golint
-    - gomnd
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- golint
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- gomnd
     - gomodguard
-    - goprintffuncname
-    - gosec
+    #- goprintffuncname
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- gosec
     - gosimple
     - govet
-    - ineffassign
-    - interfacer
-    - lll
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- ineffassign
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- interfacer
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- lll
     - maligned
     - misspell
     - nakedret
-    - nestif
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- nestif
     - noctx
     - nolintlint
-    - prealloc
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- prealloc
     - rowserrcheck
     - sqlclosecheck
     - staticcheck
     - structcheck
-    - stylecheck
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- stylecheck
     - tparallel
     - typecheck
     - unconvert
-    - unparam
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- unparam
     - unused
     - varcheck
     - whitespace
-    - wrapcheck
+    # TODO(jaosorior): Re-enable this in a subsequent PR
+    #- wrapcheck
     # - exhaustivestruct
     # - funlen
     # - gochecknoglobals
