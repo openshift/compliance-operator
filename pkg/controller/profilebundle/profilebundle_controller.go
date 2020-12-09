@@ -192,7 +192,9 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 
 	labels := getWorkloadLabels(instance)
 	foundPods := &corev1.PodList{}
-	err = r.client.List(context.TODO(), foundPods, client.MatchingLabels(labels))
+	if err := r.client.List(context.TODO(), foundPods, client.MatchingLabels(labels)); err != nil {
+		return reconcile.Result{}, err
+	}
 
 	if len(foundPods.Items) == 0 {
 		reqLogger.Info("Pod not scheduled yet. Waiting for Deployment to do it.",

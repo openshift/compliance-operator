@@ -458,8 +458,8 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1
 	if running {
 		logger.Info("Remaining in the aggregating phase")
 		instance.Status.Phase = compv1alpha1.PhaseAggregating
-		err = r.client.Status().Update(context.TODO(), instance)
-		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
+		err := r.client.Status().Update(context.TODO(), instance)
+		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, err
 	}
 
 	logger.Info("Moving on to the Done phase")
