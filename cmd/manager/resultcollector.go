@@ -293,7 +293,7 @@ func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scap
 			return err
 		}
 		client := &http.Client{Transport: transport}
-		req, err := http.NewRequest("POST", url, arfContents.contents)
+		req, err := http.NewRequestWithContext(context.TODO(), "POST", url, arfContents.contents)
 		if err != nil {
 			log.Error(err, "Failed to create POST request for server")
 			return err
