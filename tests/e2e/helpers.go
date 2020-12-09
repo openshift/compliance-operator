@@ -339,7 +339,7 @@ func replaceNamespaceFromManifest(t *testing.T, namespace string, namespacedManP
 	newContents := strings.Replace(string(read), "openshift-compliance", namespace, -1)
 
 	// #nosec
-	err = ioutil.WriteFile(manPath, []byte(newContents), 644)
+	err = ioutil.WriteFile(manPath, []byte(newContents), 0644)
 	if err != nil {
 		t.Fatalf("Error writing namespaced manifest file: %s", err)
 	}
