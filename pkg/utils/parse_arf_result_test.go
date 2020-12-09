@@ -74,6 +74,7 @@ var _ = Describe("XCCDF parser", func() {
 			dsDom, err := ParseContent(ds)
 			Expect(err).NotTo(HaveOccurred())
 			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+			Expect(err).NotTo(HaveOccurred())
 			nChecks, nRems = countResultItems(resultList)
 		})
 

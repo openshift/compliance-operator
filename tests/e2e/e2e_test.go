@@ -2232,6 +2232,9 @@ func TestE2E(t *testing.T) {
 				mcName := types.NamespacedName{Name: fmt.Sprintf("75-%s-%s", workerScanName, suiteName)}
 				mcBoth := &mcfgv1.MachineConfig{}
 				err = f.Client.Get(goctx.TODO(), mcName, mcBoth)
+				if err != nil {
+					E2ELogf(t, "WARNING: Got an error getting MachineConfig with both remediations: %w", err)
+				}
 				E2ELogf(t, "MC %s exists", mcName.Name)
 
 				// Revert one remediation. The MC should stay, but its generation should bump
@@ -2243,6 +2246,9 @@ func TestE2E(t *testing.T) {
 				E2ELogf(t, "Remediation %s reverted", workersNoEmptyPassRemName)
 				mcOne := &mcfgv1.MachineConfig{}
 				err = f.Client.Get(goctx.TODO(), mcName, mcOne)
+				if err != nil {
+					E2ELogf(t, "WARNING: got an error when getting MachineConfig '%s': %w", mcName, err)
+				}
 
 				if mcOne.Generation == mcBoth.Generation {
 					E2EErrorf(t, "Expected that the MC generation changes. Got: %d, Expected: %d", mcOne.Generation, mcBoth.Generation)
@@ -2251,6 +2257,9 @@ func TestE2E(t *testing.T) {
 				// When we unapply the second remediation, the MC should be deleted, too
 				E2ELogf(t, "Will revert remediation %s", workersNoRootLoginsRemName)
 				err = unApplyRemediationAndCheck(t, f, namespace, workersNoRootLoginsRemName, testPoolName, true)
+				if err != nil {
+					E2ELogf(t, "WARNING: got an error when unapplaying remediation: %w", err)
+				}
 				E2ELogf(t, "Remediation %s reverted", workersNoEmptyPassRemName)
 
 				E2ELogf(t, "No remediation-based MCs should exist now")
@@ -2384,7 +2393,7 @@ func TestE2E(t *testing.T) {
 		testExecution{
 			Name:       "TestPlatformAndNodeSuiteScan",
 			IsParallel: false,
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, mcTctx *mcTestCtx, namespace string) error {
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				suiteName := "test-suite-two-scans-with-platform"
 
 				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)

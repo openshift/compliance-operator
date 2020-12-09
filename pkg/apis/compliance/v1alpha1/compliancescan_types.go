@@ -276,11 +276,11 @@ func (cs *ComplianceScan) NeedsRescan() bool {
 // GetScanTypeIfValid returns scan type if the scan has a valid one, else it returns
 // an error.
 func (cs *ComplianceScan) GetScanTypeIfValid() (ComplianceScanType, error) {
-	if strings.ToLower(string(cs.Spec.ScanType)) == strings.ToLower(string(ScanTypePlatform)) {
+	if strings.EqualFold(string(cs.Spec.ScanType), string(ScanTypePlatform)) {
 		return ScanTypePlatform, nil
 	}
 
-	if strings.ToLower(string(cs.Spec.ScanType)) == strings.ToLower(string(ScanTypeNode)) {
+	if strings.EqualFold(string(cs.Spec.ScanType), string(ScanTypeNode)) {
 		return ScanTypeNode, nil
 	}
 	return "", fmt.Errorf("Unknown scan type")

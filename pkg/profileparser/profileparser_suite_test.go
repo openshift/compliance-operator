@@ -6,15 +6,11 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	compapis "github.com/openshift/compliance-operator/pkg/apis"
-	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 var _ = BeforeSuite(func() {
-	objs := []k8sruntime.Object{}
-	objs = append(objs, &cmpv1alpha1.ProfileBundle{}, &cmpv1alpha1.Profile{}, &cmpv1alpha1.ProfileList{})
-
 	cmpScheme := k8sruntime.NewScheme()
 	err := compapis.AddToScheme(cmpScheme)
 	Expect(err).To(BeNil())
