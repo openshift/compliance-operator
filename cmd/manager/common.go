@@ -8,7 +8,6 @@ import (
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -43,7 +42,7 @@ func (crclient *complianceCrClient) useEventRecorder(source string, config *rest
 			log.Info(e.Type, "object", e.InvolvedObject, "reason", e.Reason, "message", e.Message)
 		})
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
-	crclient.recorder = eventBroadcaster.NewRecorder(crclient.scheme, v1.EventSource{Component: source})
+	crclient.recorder = eventBroadcaster.NewRecorder(crclient.scheme, corev1.EventSource{Component: source})
 	return nil
 }
 
