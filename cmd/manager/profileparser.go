@@ -44,11 +44,6 @@ func defineProfileParserFlags(cmd *cobra.Command) {
 	flags.AddGoFlagSet(flag.CommandLine)
 }
 
-// XMLDocument is a wrapper that keeps the interface XML-parser-agnostic.
-type XMLDocument struct {
-	*xmldom.Document
-}
-
 func newParserConfig(cmd *cobra.Command) *profileparser.ParserConfig {
 	pcfg := profileparser.ParserConfig{}
 
