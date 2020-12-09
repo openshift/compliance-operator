@@ -132,10 +132,14 @@ func (c *mcTestCtx) cleanupTrackedPools() {
 	for _, p := range c.pools {
 		// Then find all nodes that are labeled with this pool and remove the label
 		// Search the nodes with this label
-		poolNodes := getNodesWithSelector(c.f, p.Spec.NodeSelector.MatchLabels)
+		poolNodes, err := getNodesWithSelector(c.f, p.Spec.NodeSelector.MatchLabels)
+		if err != nil {
+			E2EErrorf(c.t, "Could get nodes with selector %s", p.Spec.NodeSelector.MatchLabels)
+			continue
+		}
 		rmPoolLabel := utils.GetFirstNodeRoleLabel(p.Spec.NodeSelector.MatchLabels)
 
-		err := unLabelNodes(c.t, c.f, rmPoolLabel, poolNodes)
+		err = unLabelNodes(c.t, c.f, rmPoolLabel, poolNodes)
 		if err != nil {
 			E2EErrorf(c.t, "Could not unlabel nodes from pool %s: %v\n", rmPoolLabel, err)
 		}
@@ -211,14 +215,22 @@ func executeTests(t *testing.T, tests ...testExecution) {
 		t.Error(err)
 	}
 	// defer deleting the profiles or else the test namespace get stuck in Terminating
-	defer f.Client.Delete(goctx.TODO(), rhcosPb)
+	defer func() {
+		if err := f.Client.Delete(goctx.TODO(), rhcosPb); err != nil {
+			E2ELogf(t, "WARNING: Error deleting ProfileBundle: %s", err)
+		}
+	}()
 
 	ocp4Pb, err = getReadyProfileBundle(t, f, "ocp4", ns)
 	if err != nil {
 		t.Error(err)
 	}
 	// defer deleting the profiles or else the test namespace get stuck in Terminating
-	defer f.Client.Delete(goctx.TODO(), ocp4Pb)
+	defer func() {
+		if err := f.Client.Delete(goctx.TODO(), ocp4Pb); err != nil {
+			E2ELogf(t, "WARNING: Error deleting ProfileBundle: %s", err)
+		}
+	}()
 
 	t.Run("Parallel tests", func(t *testing.T) {
 		for _, test := range tests {
@@ -683,13 +695,30 @@ func suiteErrorMessageMatchesRegex(t *testing.T, f *framework.Framework, namespa
 }
 
 // getNodesWithSelector lists nodes according to a specific selector.
-func getNodesWithSelector(f *framework.Framework, labelselector map[string]string) []corev1.Node {
+func getNodesWithSelector(f *framework.Framework, labelselector map[string]string) ([]corev1.Node, error) {
 	var nodes corev1.NodeList
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(labelselector),
 	}
-	f.Client.List(goctx.TODO(), &nodes, lo)
-	return nodes.Items
+
+	var lastErr error
+	// retry and ignore errors until timeout
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.List(goctx.TODO(), &nodes, lo)
+		if lastErr != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	// Error in function call
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	// Timeout
+	if timeouterr != nil {
+		return nil, timeouterr
+	}
+	return nodes.Items, nil
 }
 
 func getPodsForScan(f *framework.Framework, scanName string) ([]corev1.Pod, error) {
@@ -717,7 +746,9 @@ func getConfigMapsFromScan(f *framework.Framework, scaninstance *compv1alpha1.Co
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(labelselector),
 	}
-	f.Client.List(goctx.TODO(), &configmaps, lo)
+	if err := f.Client.List(goctx.TODO(), &configmaps, lo); err != nil {
+		return nil
+	}
 	return configmaps.Items
 }
 
@@ -760,7 +791,7 @@ func assertHasCheck(f *framework.Framework, suiteName, scanName string, check co
 	return nil
 }
 
-func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string) []compv1alpha1.ComplianceRemediation {
+func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string) ([]compv1alpha1.ComplianceRemediation, error) {
 	var scanSuiteRemediations compv1alpha1.ComplianceRemediationList
 
 	scanSuiteSelector := make(map[string]string)
@@ -771,8 +802,10 @@ func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string)
 		LabelSelector: labels.SelectorFromSet(scanSuiteSelector),
 	}
 
-	f.Client.List(goctx.TODO(), &scanSuiteRemediations, &listOpts)
-	return scanSuiteRemediations.Items
+	if err := f.Client.List(goctx.TODO(), &scanSuiteRemediations, &listOpts); err != nil {
+		return nil, err
+	}
+	return scanSuiteRemediations.Items, nil
 }
 
 func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scanName, roleLabel string, remNameList []string) error {
@@ -784,7 +817,11 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 	// to signify somehow that the remediations were already processed, but in the
 	// meantime, poll for 5 minutes while the remediations are being created
 	err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
-		scanSuiteRemediations = getRemediationsFromScan(f, suiteName, scanName)
+		var err error
+		scanSuiteRemediations, err = getRemediationsFromScan(f, suiteName, scanName)
+		if err != nil {
+			return false, err
+		}
 		for _, rem := range scanSuiteRemediations {
 			scanSuiteMapNames[rem.Name] = true
 		}
@@ -892,7 +929,9 @@ func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
 	err := wait.PollImmediate(machineOperationRetryInterval, machineOperationTimeout, func() (bool, error) {
 		var nodes corev1.NodeList
 
-		f.Client.List(goctx.TODO(), &nodes, &client.ListOptions{})
+		if listErr := f.Client.List(goctx.TODO(), &nodes, &client.ListOptions{}); listErr != nil {
+			return false, listErr
+		}
 		for _, node := range nodes.Items {
 			E2ELogf(t, "Node %s has config %s, desired config %s state %s",
 				node.Name,
@@ -1029,7 +1068,11 @@ func removeObsoleteRemediationAndCheck(t *testing.T, f *framework.Framework, nam
 		E2ELogf(t, "Obsolete data removed")
 
 		rem2 := &compv1alpha1.ComplianceRemediation{}
-		f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem2)
+		err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem2)
+		if err != nil {
+			E2EErrorf(t, "Cannot get remediation post-update")
+			return err
+		}
 		E2ELogf(t, "post-update %v", rem2.Status)
 
 		return nil
@@ -1305,7 +1348,11 @@ func createMachineConfigPoolSubset(t *testing.T, f *framework.Framework, oldPool
 	}
 
 	// list the nodes matching the node selector
-	poolNodes := getNodesWithSelector(f, oldPool.Spec.NodeSelector.MatchLabels)
+	poolNodes, err := getNodesWithSelector(f, oldPool.Spec.NodeSelector.MatchLabels)
+	if err != nil {
+		E2EErrorf(t, "Could get nodes with selector %s", oldPool.Spec.NodeSelector.MatchLabels)
+		return nil, err
+	}
 	if len(poolNodes) == 0 {
 		return nil, errors.New("no nodes found with the old pool selector")
 	}
@@ -1942,7 +1989,10 @@ func writeToArtifactsDir(dir, scan, pod, container, log string) error {
 	if err != nil {
 		return err
 	}
-	logFile.Sync()
+	err = logFile.Sync()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -38,7 +38,8 @@ func getRemediation(serviceName string) *compv1alpha1.ComplianceRemediation {
 		},
 	}
 
-	rawIgnCfg, _ := json.Marshal(ignConfig)
+	rawIgnCfg, err := json.Marshal(ignConfig)
+	Expect(err).To(BeNil())
 	mc := &mcfgv1.MachineConfig{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "MachineConfig",
@@ -54,7 +55,8 @@ func getRemediation(serviceName string) *compv1alpha1.ComplianceRemediation {
 		},
 	}
 
-	unstructuredobj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(mc)
+	unstructuredobj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(mc)
+	Expect(err).To(BeNil())
 	obj := &unstructured.Unstructured{Object: unstructuredobj}
 
 	return &compv1alpha1.ComplianceRemediation{

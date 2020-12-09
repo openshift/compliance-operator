@@ -48,9 +48,15 @@ func (crclient *complianceCrClient) useEventRecorder(source string, config *rest
 func createCrClient(config *rest.Config) (*complianceCrClient, error) {
 	scheme := runtime.NewScheme()
 
-	corev1.AddToScheme(scheme)
-	mcfgv1.AddToScheme(scheme)
-	compapis.AddToScheme(scheme)
+	if err := corev1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := mcfgv1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := compapis.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
 
 	client, err := runtimeclient.New(config, runtimeclient.Options{
 		Scheme: scheme,
@@ -66,7 +72,11 @@ func createCrClient(config *rest.Config) (*complianceCrClient, error) {
 }
 
 func getValidStringArg(cmd *cobra.Command, name string) string {
-	val, _ := cmd.Flags().GetString(name)
+	val, err := cmd.Flags().GetString(name)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting command line argument '%s' %v.\n", name, err)
+		os.Exit(1)
+	}
 	if val == "" {
 		fmt.Fprintf(os.Stderr, "The command line argument '%s' is mandatory.\n", name)
 		os.Exit(1)

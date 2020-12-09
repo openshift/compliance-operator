@@ -46,22 +46,27 @@ var _ = Describe("Resultserver testing", func() {
 
 			// Ensure lost+found
 			lostFoundDir = path.Join(rootDir, "lost+found")
-			os.Mkdir(lostFoundDir, 0644)
+			err = os.Mkdir(lostFoundDir, 0644)
+			Expect(err).To(BeNil())
 
 			// Create temporary directories which represent what will be rotated
 			dir1, err = ioutil.TempDir(rootDir, "rotate-1")
 			Expect(err).To(BeNil())
-			ioutil.TempFile(dir1, "foo")
+			_, err = ioutil.TempFile(dir1, "foo")
+			Expect(err).To(BeNil())
 			fileToBeRead, err := ioutil.TempFile(dir1, "bar")
 			Expect(err).To(BeNil())
-			ioutil.TempFile(dir1, "baz")
+			_, err = ioutil.TempFile(dir1, "baz")
+			Expect(err).To(BeNil())
 
 			// Ensure next directory will have significant time difference
 			time.Sleep(5 * time.Millisecond)
 			dir2, err = ioutil.TempDir(rootDir, "rotate-2")
 			Expect(err).To(BeNil())
-			ioutil.TempFile(dir2, "foo")
-			ioutil.TempFile(dir2, "bar")
+			_, err = ioutil.TempFile(dir2, "foo")
+			Expect(err).To(BeNil())
+			_, err = ioutil.TempFile(dir2, "bar")
+			Expect(err).To(BeNil())
 
 			// Ensure next directory will have significant time difference
 			time.Sleep(5 * time.Millisecond)

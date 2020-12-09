@@ -64,9 +64,12 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			},
 		}
 
-		caSecret, _ := makeCASecret(compliancescaninstance, common.GetComplianceOperatorNamespace())
-		serverSecret, _ := serverCertSecret(compliancescaninstance, caSecret.Data[corev1.TLSCertKey], caSecret.Data[corev1.TLSPrivateKeyKey], common.GetComplianceOperatorNamespace())
-		clientSecret, _ := clientCertSecret(compliancescaninstance, caSecret.Data[corev1.TLSCertKey], caSecret.Data[corev1.TLSPrivateKeyKey], common.GetComplianceOperatorNamespace())
+		caSecret, err := makeCASecret(compliancescaninstance, common.GetComplianceOperatorNamespace())
+		Expect(err).To(BeNil())
+		serverSecret, err := serverCertSecret(compliancescaninstance, caSecret.Data[corev1.TLSCertKey], caSecret.Data[corev1.TLSPrivateKeyKey], common.GetComplianceOperatorNamespace())
+		Expect(err).To(BeNil())
+		clientSecret, err := clientCertSecret(compliancescaninstance, caSecret.Data[corev1.TLSCertKey], caSecret.Data[corev1.TLSPrivateKeyKey], common.GetComplianceOperatorNamespace())
+		Expect(err).To(BeNil())
 
 		objs = append(objs, nodeinstance1, nodeinstance2, caSecret, serverSecret, clientSecret)
 		scheme := scheme.Scheme
@@ -108,7 +111,8 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 					Name:      compliancescaninstance.Name,
 					Namespace: compliancescaninstance.Namespace,
 				}
-				reconciler.client.Get(context.TODO(), key, scan)
+				err = reconciler.client.Get(context.TODO(), key, scan)
+				Expect(err).To(BeNil())
 				Expect(scan.Spec.RawResultStorage.Size).To(Equal(compv1alpha1.DefaultRawStorageSize))
 			})
 		})
@@ -125,7 +129,8 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 					Name:      compliancescaninstance.Name,
 					Namespace: compliancescaninstance.Namespace,
 				}
-				reconciler.client.Get(context.TODO(), key, scan)
+				err = reconciler.client.Get(context.TODO(), key, scan)
+				Expect(err).To(BeNil())
 				Expect(scan.Status.Phase).To(Equal(compv1alpha1.PhaseDone))
 				Expect(scan.Status.Result).To(Equal(compv1alpha1.ResultError))
 			})
@@ -136,7 +141,8 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 		BeforeEach(func() {
 			// Set state to RUNNING
 			compliancescaninstance.Status.Phase = compv1alpha1.PhaseLaunching
-			reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+			err := reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+			Expect(err).To(BeNil())
 		})
 		It("should create PVC and stay on the same phase", func() {
 			result, err := reconciler.phaseLaunchingHandler(compliancescaninstance, logger)
@@ -150,14 +156,16 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				Name:      compliancescaninstance.Name,
 				Namespace: compliancescaninstance.Namespace,
 			}
-			reconciler.client.Get(context.TODO(), key, scan)
+			err = reconciler.client.Get(context.TODO(), key, scan)
+			Expect(err).To(BeNil())
 			Expect(scan.Status.ResultsStorage.Name).To(Equal(getPVCForScanName(key.Name)))
 		})
 		Context("with the PVC set", func() {
 			BeforeEach(func() {
 				compliancescaninstance.Status.ResultsStorage.Name = getPVCForScanName(compliancescaninstance.Name)
 				compliancescaninstance.Status.ResultsStorage.Namespace = common.GetComplianceOperatorNamespace()
-				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+				err := reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 			})
 			It("should update the compliancescan instance to phase RUNNING", func() {
 				result, err := reconciler.phaseLaunchingHandler(compliancescaninstance, logger)
@@ -166,9 +174,11 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseRunning))
 
 				// We should have scheduled a pod per node
-				nodes, _ := getTargetNodes(&reconciler, compliancescaninstance)
+				nodes, err := getTargetNodes(&reconciler, compliancescaninstance)
+				Expect(err).To(BeNil())
 				var pods corev1.PodList
-				reconciler.client.List(context.TODO(), &pods)
+				err = reconciler.client.List(context.TODO(), &pods)
+				Expect(err).To(BeNil())
 				Expect(len(pods.Items)).To(Equal(len(nodes.Items)))
 			})
 		})
@@ -188,35 +198,34 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			BeforeEach(func() {
 				// Create the pods for the test
 				podName1 := getPodForNodeName(compliancescaninstance.Name, nodeinstance1.Name)
-				reconciler.client.Create(context.TODO(), &corev1.Pod{
+				err := reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      podName1,
 						Namespace: common.GetComplianceOperatorNamespace(),
 					},
 				})
+				Expect(err).To(BeNil())
 
 				podName2 := getPodForNodeName(compliancescaninstance.Name, nodeinstance2.Name)
-				reconciler.client.Create(context.TODO(), &corev1.Pod{
+				err = reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      podName2,
 						Namespace: common.GetComplianceOperatorNamespace(),
 					},
 				})
+				Expect(err).To(BeNil())
 
-				reconciler.client.Update(context.TODO(), compliancescaninstance)
+				err = reconciler.client.Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 
 				// Set state to RUNNING
 				compliancescaninstance.Status.Phase = compv1alpha1.PhaseRunning
-				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+				err = reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 			})
 
 			It("should stay in RUNNING state", func() {
 				result, err := reconciler.phaseRunningHandler(compliancescaninstance, logger)
-				pods := &corev1.PodList{}
-				reconciler.client.List(context.TODO(), pods)
-				for _, pod := range pods.Items {
-					fmt.Printf("* OZZ: Found pod: %s\n", pod.Name)
-				}
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
 				Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseRunning))
@@ -227,7 +236,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			BeforeEach(func() {
 				// Create the pods for the test
 				podName1 := getPodForNodeName(compliancescaninstance.Name, nodeinstance1.Name)
-				reconciler.client.Create(context.TODO(), &corev1.Pod{
+				err := reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      podName1,
 						Namespace: common.GetComplianceOperatorNamespace(),
@@ -236,9 +245,10 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 						Phase: corev1.PodSucceeded,
 					},
 				})
+				Expect(err).To(BeNil())
 
 				podName2 := getPodForNodeName(compliancescaninstance.Name, nodeinstance2.Name)
-				reconciler.client.Create(context.TODO(), &corev1.Pod{
+				err = reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      podName2,
 						Namespace: common.GetComplianceOperatorNamespace(),
@@ -247,12 +257,15 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 						Phase: corev1.PodSucceeded,
 					},
 				})
+				Expect(err).To(BeNil())
 
-				reconciler.client.Update(context.TODO(), compliancescaninstance)
+				err = reconciler.client.Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 
 				// Set state to RUNNING
 				compliancescaninstance.Status.Phase = compv1alpha1.PhaseRunning
-				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+				err = reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 			})
 
 			It("should move to AGGREGATING state", func() {
@@ -269,30 +282,34 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			BeforeEach(func() {
 				// Create the pods for the test
 				podName1 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name)
-				reconciler.client.Create(context.TODO(), &corev1.Pod{
+				err := reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      podName1,
 						Namespace: common.GetComplianceOperatorNamespace(),
 					},
 				})
+				Expect(err).To(BeNil())
 
 				podName2 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name)
-				reconciler.client.Create(context.TODO(), &corev1.Pod{
+				err = reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      podName2,
 						Namespace: common.GetComplianceOperatorNamespace(),
 					},
 				})
+				Expect(err).To(BeNil())
 
 				// Set state to DONE
 				compliancescaninstance.Status.Phase = compv1alpha1.PhaseDone
-				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+				err = reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 			})
 			It("Should return success & preserve resources", func() {
 				var pods corev1.PodList
 				result, err := reconciler.phaseDoneHandler(compliancescaninstance, logger, dontDelete)
-				reconciler.client.List(context.TODO(), &pods)
+				Expect(err).To(BeNil())
 				Expect(result).ToNot(BeNil())
+				err = reconciler.client.List(context.TODO(), &pods)
 				Expect(err).To(BeNil())
 				Expect(pods.Items).ToNot(BeEmpty())
 			})
@@ -301,30 +318,34 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			BeforeEach(func() {
 				// Create the pods for the test
 				podName1 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name)
-				reconciler.client.Create(context.TODO(), &corev1.Pod{
+				err := reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      podName1,
 						Namespace: common.GetComplianceOperatorNamespace(),
 					},
 				})
+				Expect(err).To(BeNil())
 
 				podName2 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name)
-				reconciler.client.Create(context.TODO(), &corev1.Pod{
+				err = reconciler.client.Create(context.TODO(), &corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      podName2,
 						Namespace: common.GetComplianceOperatorNamespace(),
 					},
 				})
+				Expect(err).To(BeNil())
 
 				// Set state to DONE
 				compliancescaninstance.Status.Phase = compv1alpha1.PhaseDone
-				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+				err = reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 			})
 			It("Should return success & clean up resources", func() {
 				var pods corev1.PodList
 				result, err := reconciler.phaseDoneHandler(compliancescaninstance, logger, doDelete)
-				reconciler.client.List(context.TODO(), &pods)
 				Expect(result).ToNot(BeNil())
+				Expect(err).To(BeNil())
+				err = reconciler.client.List(context.TODO(), &pods)
 				Expect(err).To(BeNil())
 				Expect(pods.Items).To(BeEmpty())
 			})

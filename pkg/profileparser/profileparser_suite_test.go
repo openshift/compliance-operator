@@ -16,7 +16,8 @@ var _ = BeforeSuite(func() {
 	objs = append(objs, &cmpv1alpha1.ProfileBundle{}, &cmpv1alpha1.Profile{}, &cmpv1alpha1.ProfileList{})
 
 	cmpScheme := k8sruntime.NewScheme()
-	_ = compapis.AddToScheme(cmpScheme)
+	err := compapis.AddToScheme(cmpScheme)
+	Expect(err).To(BeNil())
 	client = fake.NewFakeClientWithScheme(cmpScheme)
 
 	pInput = newParserInput("test-profile", testNamespace,

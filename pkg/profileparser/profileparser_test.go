@@ -120,6 +120,7 @@ func newParserInput(name, namespace, contentImage, dsPath string, client runtime
 		Scheme:           scheme,
 	}
 
+	// nolint:errcheck
 	pi.contentDom, _ = xmldom.ParseFile(pi.pcfg.DataStreamPath)
 
 	return pi

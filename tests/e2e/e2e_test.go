@@ -843,7 +843,10 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				nodes := getNodesWithSelector(f, selectWorkers)
+				nodes, err := getNodesWithSelector(f, selectWorkers)
+				if err != nil {
+					return err
+				}
 				configmaps := getConfigMapsFromScan(f, testComplianceScan)
 				if len(nodes) != len(configmaps) {
 					return fmt.Errorf(
@@ -1101,12 +1104,15 @@ func TestE2E(t *testing.T) {
 				var resultErr error
 				// The status might still be NOT-AVAILABLE... we can wait a bit
 				// for the reconciliation to update it.
-				_ = wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
+				timeoutErr := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
 					if resultErr = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultError); resultErr != nil {
 						return false, nil
 					}
 					return true, nil
 				})
+				if timeoutErr != nil {
+					return timeoutErr
+				}
 				if resultErr != nil {
 					return resultErr
 				}
@@ -1773,9 +1779,12 @@ func TestE2E(t *testing.T) {
 			Name:       "TestTolerations",
 			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
-				workerNodes := getNodesWithSelector(f, map[string]string{
+				workerNodes, err := getNodesWithSelector(f, map[string]string{
 					"node-role.kubernetes.io/worker": "",
 				})
+				if err != nil {
+					return err
+				}
 
 				taintedNode := &workerNodes[0]
 				taintKey := "co-e2e"
@@ -1828,7 +1837,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err := waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
 				if err != nil {
 					return err
 				}
@@ -1842,7 +1851,10 @@ func TestE2E(t *testing.T) {
 				workerNodesLabel := map[string]string{
 					"node-role.kubernetes.io/worker": "",
 				}
-				workerNodes := getNodesWithSelector(f, workerNodesLabel)
+				workerNodes, err := getNodesWithSelector(f, workerNodesLabel)
+				if err != nil {
+					return err
+				}
 
 				taintedNode := &workerNodes[0]
 				taintKey := "co-e2e"
@@ -1885,7 +1897,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err := waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultError)
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultError)
 				if err != nil {
 					return err
 				}
@@ -2288,7 +2300,10 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				workerNodes := getNodesWithSelector(f, selectWorkers)
+				workerNodes, err := getNodesWithSelector(f, selectWorkers)
+				if err != nil {
+					return err
+				}
 				pod, err := createAndRemoveEtcSecurettyOnNode(t, f, namespace, "create-etc-securetty", workerNodes[0].Labels["kubernetes.io/hostname"])
 				if err != nil {
 					return err

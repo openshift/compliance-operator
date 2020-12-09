@@ -78,6 +78,7 @@ var _ = Describe("NonRetriable error wrapper", func() {
 		})
 
 		It("Should execute the custom handler", func() {
+			// nolint:errcheck
 			ReturnWithRetriableError(logger, err)
 			Expect(foo).To(Equal("new value"))
 		})

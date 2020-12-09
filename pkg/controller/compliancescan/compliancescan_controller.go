@@ -489,7 +489,10 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.Compli
 	// We need to remove resources before doing a re-scan
 	if doDelete || instance.NeedsRescan() {
 		logger.Info("Cleaning up scan's resources")
-		scantype, _ := instance.GetScanTypeIfValid()
+		scantype, scanTypeErr := instance.GetScanTypeIfValid()
+		if scanTypeErr != nil {
+			return reconcile.Result{}, scanTypeErr
+		}
 		switch scantype {
 		case compv1alpha1.ScanTypePlatform:
 			if err := r.deletePlatformScanPod(instance, logger); err != nil {

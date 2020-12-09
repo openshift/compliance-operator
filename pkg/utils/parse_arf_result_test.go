@@ -148,9 +148,12 @@ var _ = Describe("XCCDF parser", func() {
 				var mcFiles []igntypes.File
 
 				BeforeEach(func() {
-					mcfg, _ := ParseMachineConfig(rem, rem.Spec.Current.Object)
-					ignRaw, _ := mcfgcommon.IgnParseWrapper(mcfg.Spec.Config.Raw)
-					parsedIgn := ignRaw.(igntypes.Config)
+					mcfg, err := ParseMachineConfig(rem, rem.Spec.Current.Object)
+					Expect(err).To(BeNil())
+					ignRaw, err := mcfgcommon.IgnParseWrapper(mcfg.Spec.Config.Raw)
+					Expect(err).To(BeNil())
+					parsedIgn, ok := ignRaw.(igntypes.Config)
+					Expect(ok).To(BeTrue())
 					mcFiles = parsedIgn.Storage.Files
 				})
 

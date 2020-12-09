@@ -21,7 +21,9 @@ func LengthName(maxLen int, hashPrefix string, format string, a ...interface{}) 
 	// purposes, but only as a string shortener
 	// #nosec G401
 	hasher := sha1.New()
-	io.WriteString(hasher, friendlyName)
+	if _, err := io.WriteString(hasher, friendlyName); err != nil {
+		return "", err
+	}
 	hashedName := hashPrefix + fmt.Sprintf("%x", hasher.Sum(nil))
 
 	if len(hashedName) >= maxLen {
@@ -34,6 +36,7 @@ func DNSLengthName(hashPrefix string, format string, a ...interface{}) string {
 	const maxDNSLen = 64
 
 	// TODO(jaosorior): Handle error
+	// nolint:errcheck
 	name, _ := LengthName(maxDNSLen, hashPrefix, format, a...)
 	return name
 }

@@ -138,6 +138,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 	effectiveImage := instance.Spec.ContentImage
 	if isISTag {
 		// NOTE(jaosorior): Errors were already checked for in the pointsToISTag function
+		// nolint:errcheck
 		ref, _ := reference.Parse(instance.Spec.ContentImage)
 		annotations = getISTagAnnotation(ref.NameString(), getISTagNamespace(ref))
 		effectiveImage = isTagImageRef

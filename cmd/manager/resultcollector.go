@@ -102,6 +102,7 @@ func defineResultcollectorFlags(cmd *cobra.Command) {
 
 func parseConfig(cmd *cobra.Command) *scapresultsConfig {
 	var conf scapresultsConfig
+	var err error
 	conf.ArfFile = getValidStringArg(cmd, "arf-file")
 	conf.XccdfFile = getValidStringArg(cmd, "results-file")
 	conf.ExitCodeFile = getValidStringArg(cmd, "exit-code-file")
@@ -112,16 +113,32 @@ func parseConfig(cmd *cobra.Command) *scapresultsConfig {
 	conf.Cert = getValidStringArg(cmd, "tls-client-cert")
 	conf.Key = getValidStringArg(cmd, "tls-client-key")
 	conf.CA = getValidStringArg(cmd, "tls-ca")
-	conf.Timeout, _ = cmd.Flags().GetInt64("timeout")
-	conf.ResultServerURI, _ = cmd.Flags().GetString("resultserveruri")
+	conf.Timeout, err = cmd.Flags().GetInt64("timeout")
+	if err != nil {
+		log.Error(err, "Couldn't get timeout flag")
+		os.Exit(1)
+	}
+	conf.ResultServerURI, err = cmd.Flags().GetString("resultserveruri")
+	if err != nil {
+		log.Error(err, "Couldn't get resultserveruri flag")
+		os.Exit(1)
+	}
 	// Set default if needed
 	if conf.ResultServerURI == "" {
 		conf.ResultServerURI = "http://" + conf.ScanName + "-rs:8080/"
 	}
-	conf.WarningsOutputFile, _ = cmd.Flags().GetString("warnings-output-file")
+	conf.WarningsOutputFile, err = cmd.Flags().GetString("warnings-output-file")
+	if err != nil {
+		log.Error(err, "Couldn't get warnings-output-file flag")
+		os.Exit(1)
+	}
 
 	// platform scans have no node name
-	conf.NodeName, _ = cmd.Flags().GetString("node-name")
+	conf.NodeName, err = cmd.Flags().GetString("node-name")
+	if err != nil {
+		log.Error(err, "Couldn't get node-name flag")
+		os.Exit(1)
+	}
 
 	logf.SetLogger(zap.Logger())
 
@@ -276,7 +293,11 @@ func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scap
 			return err
 		}
 		client := &http.Client{Transport: transport}
-		req, _ := http.NewRequest("POST", url, arfContents.contents)
+		req, err := http.NewRequest("POST", url, arfContents.contents)
+		if err != nil {
+			log.Error(err, "Failed to create POST request for server")
+			return err
+		}
 		req.Header.Add("Content-Type", "application/xml")
 		req.Header.Add("X-Report-Name", scapresultsconf.ConfigMapName)
 		if arfContents.compressed {
@@ -403,7 +424,11 @@ func getOscapExitCode(scapresultsconf *scapresultsConfig) string {
 	}
 	defer exitcodeContent.close()
 
-	exitcode, _ := ioutil.ReadAll(exitcodeContent.contents)
+	exitcode, err := ioutil.ReadAll(exitcodeContent.contents)
+	if err != nil {
+		log.Error(err, "Failed to read oscap error code contents")
+		os.Exit(1)
+	}
 	return strings.Trim(string(exitcode), "\n")
 }
 

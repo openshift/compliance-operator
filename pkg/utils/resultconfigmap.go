@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io"
 	"io/ioutil"
 
@@ -11,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func encodetoBase64(src io.Reader) string {
+func encodetoBase64(src io.Reader) (string, error) {
 	pr, pw := io.Pipe()
 	enc := base64.NewEncoder(base64.StdEncoding, pw)
 	go func() {
@@ -19,13 +20,17 @@ func encodetoBase64(src io.Reader) string {
 		enc.Close()
 
 		if err != nil {
+			// nolint:errcheck
 			pw.CloseWithError(err)
 		} else {
 			pw.Close()
 		}
 	}()
-	out, _ := ioutil.ReadAll(pr)
-	return string(out)
+	out, err := ioutil.ReadAll(pr)
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
 }
 
 // GetResultConfigMap gets a configmap that reflects a result or an error for a scan.
@@ -36,9 +41,16 @@ func GetResultConfigMap(owner metav1.Object, configMapName, filename, nodeName s
 		annotations = map[string]string{
 			"openscap-scan-result/compressed": "",
 		}
-		strcontents = encodetoBase64(contents)
+		var err error
+		strcontents, err = encodetoBase64(contents)
+		if err != nil {
+			warnings = fmt.Sprintf("%s\nUnable to decode to base64 encode results: %s.", warnings, err)
+		}
 	} else {
-		contentBytes, _ := ioutil.ReadAll(contents)
+		contentBytes, err := ioutil.ReadAll(contents)
+		if err != nil {
+			warnings = fmt.Sprintf("%s\nUnable to read result contents: %s.", warnings, err)
+		}
 		strcontents = string(contentBytes)
 	}
 	if nodeName != "" {

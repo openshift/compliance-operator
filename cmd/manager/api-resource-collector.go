@@ -80,13 +80,20 @@ func defineAPIResourceCollectorFlags(cmd *cobra.Command) {
 }
 
 func parseAPIResourceCollectorConfig(cmd *cobra.Command) *fetcherConfig {
+	var err error
 	var conf fetcherConfig
 	conf.Content = getValidStringArg(cmd, "content")
 	conf.ResultDir = getValidStringArg(cmd, "resultdir")
 	conf.Profile = getValidStringArg(cmd, "profile")
 	conf.WarningsOutputFile = getValidStringArg(cmd, "warnings-output-file")
-	debugLog, _ = cmd.Flags().GetBool("debug")
-	conf.Tailoring, _ = cmd.Flags().GetString("tailoring")
+	debugLog, err = cmd.Flags().GetBool("debug")
+	if err != nil {
+		FATAL("Error getting debug flag %v", err)
+	}
+	conf.Tailoring, err = cmd.Flags().GetString("tailoring")
+	if err != nil {
+		FATAL("Error getting tailoring flag %v", err)
+	}
 	return &conf
 }
 

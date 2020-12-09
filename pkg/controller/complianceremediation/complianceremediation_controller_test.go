@@ -22,7 +22,8 @@ import (
 )
 
 func isRemInList(mcList []*mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) bool {
-	remMc, _ := utils.ParseMachineConfig(rem, rem.Spec.Current.Object)
+	remMc, err := utils.ParseMachineConfig(rem, rem.Spec.Current.Object)
+	Expect(err).To(BeNil())
 	for _, mc := range mcList {
 		if same := reflect.DeepEqual(mc.Spec, remMc.Spec); same == true {
 			return true
@@ -46,7 +47,8 @@ func getMockedRemediation(name string, labels map[string]string, applied bool, s
 			Files: files,
 		},
 	}
-	rawIgn, _ := json.Marshal(ign)
+	rawIgn, err := json.Marshal(ign)
+	Expect(err).To(BeNil())
 	mc := &mcfgv1.MachineConfig{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "MachineConfig",
@@ -59,7 +61,8 @@ func getMockedRemediation(name string, labels map[string]string, applied bool, s
 			},
 		},
 	}
-	unstructuredobj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(mc)
+	unstructuredobj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(mc)
+	Expect(err).To(BeNil())
 	obj := &unstructured.Unstructured{Object: unstructuredobj}
 	return &compv1alpha1.ComplianceRemediation{
 		ObjectMeta: metav1.ObjectMeta{

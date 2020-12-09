@@ -84,9 +84,14 @@ type resultServerConfig struct {
 }
 
 func parseResultServerConfig(cmd *cobra.Command) *resultServerConfig {
+	var err error
 	basePath := getValidStringArg(cmd, "path")
 	index := getValidStringArg(cmd, "scan-index")
-	rotation, _ := cmd.Flags().GetUint16("rotation")
+	rotation, err := cmd.Flags().GetUint16("rotation")
+	if err != nil {
+		log.Error(err, "Error getting rotation flag")
+		os.Exit(1)
+	}
 	conf := &resultServerConfig{
 		Address:  getValidStringArg(cmd, "address"),
 		Port:     getValidStringArg(cmd, "port"),
@@ -170,7 +175,10 @@ func server(c *resultServerConfig) {
 		os.Exit(1)
 	}
 
-	rotateResultDirectories(c.BasePath, c.Rotation)
+	if err := rotateResultDirectories(c.BasePath, c.Rotation); err != nil {
+		log.Error(err, "Error doing file rotation: %v", err)
+		os.Exit(1)
+	}
 
 	caCert, err := ioutil.ReadFile(c.CA)
 	if err != nil {
