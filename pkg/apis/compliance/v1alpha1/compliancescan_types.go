@@ -149,8 +149,6 @@ type RawResultStorageSettings struct {
 type ComplianceScanSettings struct {
 	// Enable debug logging of workloads and OpenSCAP
 	Debug bool `json:"debug,omitempty"`
-	// Specifies settings that pertain to raw result storage.
-	RawResultStorage RawResultStorageSettings `json:"rawResultStorage,omitempty"`
 	// Defines that no external resources in the Data Stream should be used. External
 	// resources could be, for instance, CVE feeds. This is useful for disconnected
 	// installations without access to a proxy.
@@ -163,6 +161,8 @@ type ComplianceScanSettings struct {
 	// workloads to run. Defaults to allowing scheduling on the master nodes.
 	// +kubebuilder:default={{key: "node-role.kubernetes.io/master", operator: "Exists", effect: "NoSchedule"}}
 	ScanTolerations []corev1.Toleration `json:"scanTolerations,omitempty"`
+	// Specifies settings that pertain to raw result storage.
+	RawResultStorage RawResultStorageSettings `json:"rawResultStorage,omitempty"`
 }
 
 // ComplianceScanSpec defines the desired state of ComplianceScan.
