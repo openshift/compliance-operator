@@ -134,14 +134,14 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 	contentFile, err := readContent(pcfg.DataStreamPath)
 	if err != nil {
 		log.Error(err, "Couldn't read the content")
-		updateProfileBundleStatus(pcfg, pb, fmt.Errorf("Couldn't read content file: %s", err))
+		updateProfileBundleStatus(pcfg, pb, fmt.Errorf("Couldn't read content file: %w", err))
 		os.Exit(1)
 	}
 	bufContentFile := bufio.NewReader(contentFile)
 	contentDom, err := xmldom.Parse(bufContentFile)
 	if err != nil {
 		log.Error(err, "Couldn't read the content XML")
-		updateProfileBundleStatus(pcfg, pb, fmt.Errorf("Couldn't read content XML: %s", err))
+		updateProfileBundleStatus(pcfg, pb, fmt.Errorf("Couldn't read content XML: %w", err))
 		if closeErr := contentFile.Close(); closeErr != nil {
 			log.Error(err, "Couldn't close the content file")
 		}

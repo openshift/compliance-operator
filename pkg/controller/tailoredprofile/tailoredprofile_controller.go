@@ -344,7 +344,7 @@ func (r *ReconcileTailoredProfile) ensurePolicyOutputObject(tp *compliancev1alph
 	if err != nil {
 		updateErr := r.updateTailoredProfileStatusError(
 			tp,
-			fmt.Errorf("Couldn't convert ConfigMap to Unstructured: %s", err),
+			fmt.Errorf("Couldn't convert ConfigMap to Unstructured: %w", err),
 		)
 		return reconcile.Result{}, updateErr
 	}

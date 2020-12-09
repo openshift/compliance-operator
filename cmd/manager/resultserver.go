@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"flag"
 	"io"
 	"io/ioutil"
@@ -239,7 +240,7 @@ func server(c *resultServerConfig) {
 
 	go func() {
 		err := server.ListenAndServeTLS(c.Cert, c.Key)
-		if err != nil && err != http.ErrServerClosed {
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error(err, "Error in result server")
 		}
 	}()

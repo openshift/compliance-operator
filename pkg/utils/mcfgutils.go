@@ -16,7 +16,7 @@ func ParseMachineConfig(rem *compv1alpha1.ComplianceRemediation, obj *unstructur
 	unstruct := obj.UnstructuredContent()
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstruct, mcfg)
 	if err != nil {
-		return nil, fmt.Errorf("The MachineConfig in the remediation '%s' is not valid: %s", rem.Name, err)
+		return nil, fmt.Errorf("The MachineConfig in the remediation '%s' is not valid: %w", rem.Name, err)
 	}
 	return mcfg, nil
 }

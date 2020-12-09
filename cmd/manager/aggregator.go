@@ -359,7 +359,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		}
 		// check is owned by the scan
 		if err := createOrUpdateOneResult(crClient, scan, checkResultLabels, checkResultAnnotations, checkResultExists, pr.CheckResult); err != nil {
-			return fmt.Errorf("cannot create or update checkResult %s: %v", pr.CheckResult.Name, err)
+			return fmt.Errorf("cannot create or update checkResult %s: %w", pr.CheckResult.Name, err)
 		}
 
 		if pr.Remediation == nil ||
@@ -433,7 +433,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 
 		// remediation is owned by the check
 		if err := createOrUpdateOneResult(crClient, pr.CheckResult, remLabels, nil, remExists, pr.Remediation); err != nil {
-			return fmt.Errorf("cannot create or update remediation %s: %v", pr.Remediation.Name, err)
+			return fmt.Errorf("cannot create or update remediation %s: %w", pr.Remediation.Name, err)
 		}
 
 		// Update the status as needed
@@ -454,13 +454,13 @@ func updateRemediationState(crClient *complianceCrClient, parsedRemediation *com
 	log.Info("Updating remediation status", "ComplianceRemediation.Name", remkey.Name,
 		"ComplianceRemediation.Namespace", remkey.Namespace)
 	if err := crClient.client.Get(context.TODO(), remkey, foundRemediation); err != nil {
-		return fmt.Errorf("cannot update remediation status %s: %v", parsedRemediation.Name, err)
+		return fmt.Errorf("cannot update remediation status %s: %w", parsedRemediation.Name, err)
 	}
 	foundRemediation.Status.ErrorMessage = ""
 	foundRemediation.Status.ApplicationState = state
 	err := crClient.client.Status().Update(context.TODO(), foundRemediation)
 	if err != nil {
-		return fmt.Errorf("cannot update remediation status %s: %v", parsedRemediation.Name, err)
+		return fmt.Errorf("cannot update remediation status %s: %w", parsedRemediation.Name, err)
 	}
 
 	return nil

@@ -327,7 +327,7 @@ func profileReferenceToScan(reference *profileReference) (*compliancev1alpha1.Co
 
 	err = setScanType(&scan, reference.profile.GetAnnotations())
 	if err != nil {
-		return nil, "", fmt.Errorf("cannot infer scan type from %s: %v", reference.profile.GetName(), err)
+		return nil, "", fmt.Errorf("cannot infer scan type from %s: %w", reference.profile.GetName(), err)
 	}
 
 	var product string

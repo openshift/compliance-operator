@@ -1,6 +1,7 @@
 package common
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/go-logr/logr"
@@ -65,8 +66,8 @@ func NewRetriableCtrlErrorWithCustomHandler(customHandler ErrorHandler, errorFmt
 // IsRetriable returns whether the error is retriable or not using the
 // NonRetriableCtrlError interface.
 func IsRetriable(err error) bool {
-	ccErr, ok := err.(*NonRetriableCtrlError)
-	if ok {
+	var ccErr *NonRetriableCtrlError
+	if errors.As(err, &ccErr) {
 		return ccErr.IsRetriable()
 	}
 	return true
@@ -75,8 +76,8 @@ func IsRetriable(err error) bool {
 // HasCustomHandler returns whether the error has a custom handler
 // or not.
 func HasCustomHandler(err error) bool {
-	ccErr, ok := err.(*NonRetriableCtrlError)
-	if ok {
+	var ccErr *NonRetriableCtrlError
+	if errors.As(err, &ccErr) {
 		return ccErr.HasCustomHandler()
 	}
 	return false
@@ -84,8 +85,8 @@ func HasCustomHandler(err error) bool {
 
 // CallCustomHandler calls the custom handler for an error if it has one.
 func CallCustomHandler(err error) (reconcile.Result, error) {
-	ccErr, ok := err.(*NonRetriableCtrlError)
-	if ok {
+	var ccErr *NonRetriableCtrlError
+	if errors.As(err, &ccErr) {
 		return ccErr.customHandler()
 	}
 	return reconcile.Result{}, nil
