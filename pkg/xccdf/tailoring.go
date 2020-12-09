@@ -11,13 +11,13 @@ import (
 )
 
 const (
-	// XMLHeader is the header for the XML doc
+	// XMLHeader is the header for the XML doc.
 	XMLHeader       string = `<?xml version="1.0" encoding="UTF-8"?>`
 	profileIDPrefix string = "xccdf_org.ssgproject.content_profile_"
 	ruleIDPrefix    string = "xccdf_org.ssgproject.content_rule_"
 	varIDPrefix     string = "xccdf_org.ssgproject.content_value_"
 	// XCCDFNamespace is the XCCDF namespace of this project. Per the XCCDF
-	// specification, this assiciates the content with the author
+	// specification, this assiciates the content with the author.
 	XCCDFNamespace string = "compliance.openshift.io"
 	XCCDFURI       string = "http://checklists.nist.gov/xccdf/1.2"
 )
@@ -74,18 +74,18 @@ type SetValueElement struct {
 	Value   string   `xml:",chardata"`
 }
 
-// GetXCCDFProfileID gets a profile xccdf ID from the TailoredProfile object
+// GetXCCDFProfileID gets a profile xccdf ID from the TailoredProfile object.
 func GetXCCDFProfileID(tp *cmpv1alpha1.TailoredProfile) string {
 	return fmt.Sprintf("xccdf_%s_profile_%s", XCCDFNamespace, tp.Name)
 }
 
-// GetProfileNameFromID gets a profile name from the xccdf ID
+// GetProfileNameFromID gets a profile name from the xccdf ID.
 func GetProfileNameFromID(id string) string {
 	trimedName := strings.TrimPrefix(id, profileIDPrefix)
 	return strings.ToLower(strings.ReplaceAll(trimedName, "_", "-"))
 }
 
-// GetRuleNameFromID gets a rule name from the xccdf ID
+// GetRuleNameFromID gets a rule name from the xccdf ID.
 func GetRuleNameFromID(id string) string {
 	trimedName := strings.TrimPrefix(id, ruleIDPrefix)
 	return strings.ToLower(strings.ReplaceAll(trimedName, "_", "-"))
@@ -134,7 +134,7 @@ func getValuesFromVariables(variables []*cmpv1alpha1.Variable) []SetValueElement
 	return values
 }
 
-// TailoredProfileToXML gets an XML string from a TailoredProfile and the corresponding Profile
+// TailoredProfileToXML gets an XML string from a TailoredProfile and the corresponding Profile.
 func TailoredProfileToXML(tp *cmpv1alpha1.TailoredProfile, p *cmpv1alpha1.Profile, pb *cmpv1alpha1.ProfileBundle, rules map[string]*cmpv1alpha1.Rule, variables []*cmpv1alpha1.Variable) (string, error) {
 	tailoring := TailoringElement{
 		XMLNamespaceURI: XCCDFURI,

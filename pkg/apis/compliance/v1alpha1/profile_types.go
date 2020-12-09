@@ -5,22 +5,22 @@ import (
 )
 
 // ProductTypeAnnotation specifies what kind of platform (node,platform)
-// this Profile or a TailoredProfile targets
+// this Profile or a TailoredProfile targets.
 const ProductTypeAnnotation = "compliance.openshift.io/product-type"
 
 // ProductAnnotation specifies the name of the platform this Profile
-// or TailoredProfile is targetting. Example: ocp4, rhcos4, ...
+// or TailoredProfile is targeting. Example: ocp4, rhcos4, ...
 const ProductAnnotation = "compliance.openshift.io/product"
 
-// ProfileRule defines the name of a specific rule in the profile
+// ProfileRule defines the name of a specific rule in the profile.
 type ProfileRule string
 
-// NewProfileRule returns a new ProfileRule from the given rule string
+// NewProfileRule returns a new ProfileRule from the given rule string.
 func NewProfileRule(rule string) ProfileRule {
 	return ProfileRule(rule)
 }
 
-// ProfileValue defines a value for a setting in the profile
+// ProfileValue defines a value for a setting in the profile.
 type ProfileValue string
 
 type ProfilePayload struct {
@@ -39,7 +39,7 @@ type ProfilePayload struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Profile is the Schema for the profiles API
+// Profile is the Schema for the profiles API.
 // +kubebuilder:resource:path=profiles,scope=Namespaced
 type Profile struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -50,7 +50,7 @@ type Profile struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ProfileList contains a list of Profile
+// ProfileList contains a list of Profile.
 type ProfileList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

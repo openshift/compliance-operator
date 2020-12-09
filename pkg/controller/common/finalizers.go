@@ -1,7 +1,7 @@
 package common
 
 // ContainsFinalizer checks if the given finalizer `f` is in the
-// given list of finalizers
+// given list of finalizers.
 func ContainsFinalizer(slice []string, f string) bool {
 	for _, item := range slice {
 		if item == f {
@@ -12,7 +12,7 @@ func ContainsFinalizer(slice []string, f string) bool {
 }
 
 // RemoveFinalizer removes the given finalizer `f` from the
-// given list of finalizers
+// given list of finalizers.
 func RemoveFinalizer(slice []string, f string) (result []string) {
 	for _, item := range slice {
 		if item == f {

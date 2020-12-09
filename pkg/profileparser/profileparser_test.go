@@ -18,7 +18,7 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// FIXME: code duplication
+// FIXME: code duplication.
 func varHaveID(id string) gomegatypes.GomegaMatcher {
 	return WithTransform(func(p cmpv1alpha1.Variable) string { return p.ID }, Equal(id))
 }
@@ -277,9 +277,7 @@ var _ = Describe("Testing ParseBundle", func() {
 			chronydMaxpollRuleName = "test-profile-chronyd-or-ntpd-set-maxpoll"
 		)
 
-		var (
-			ruleChangedSeverityPre *cmpv1alpha1.Rule
-		)
+		var ruleChangedSeverityPre *cmpv1alpha1.Rule
 
 		BeforeEach(func() {
 			ruleChangedSeverityPre = &cmpv1alpha1.Rule{}
@@ -332,9 +330,7 @@ var _ = Describe("Testing ParseBundle", func() {
 			foobarVariableName            = "test-profile-var-foobar"
 		)
 
-		var (
-			accountsPassMinLenVarPre *cmpv1alpha1.Variable
-		)
+		var accountsPassMinLenVarPre *cmpv1alpha1.Variable
 
 		BeforeEach(func() {
 			accountsPassMinLenVarPre = &cmpv1alpha1.Variable{}
@@ -377,9 +373,7 @@ var _ = Describe("Testing ParseBundle", func() {
 })
 
 var _ = Describe("Testing parse profiles", func() {
-	var (
-		profileList []cmpv1alpha1.Profile
-	)
+	var profileList []cmpv1alpha1.Profile
 
 	BeforeEach(func() {
 		// make sure init() did its job
@@ -453,9 +447,7 @@ var _ = Describe("Testing parse profiles", func() {
 })
 
 var _ = Describe("Testing parse variables", func() {
-	var (
-		varList []cmpv1alpha1.Variable
-	)
+	var varList []cmpv1alpha1.Variable
 
 	BeforeEach(func() {
 		// make sure init() did its job
@@ -528,9 +520,7 @@ var _ = Describe("Testing parse variables", func() {
 })
 
 var _ = Describe("Testing parse rules", func() {
-	var (
-		ruleList []cmpv1alpha1.Rule
-	)
+	var ruleList []cmpv1alpha1.Rule
 
 	BeforeEach(func() {
 		// make sure init() did its job

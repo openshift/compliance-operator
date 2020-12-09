@@ -11,17 +11,17 @@ import (
 // +genclient
 
 // ComplianceScanRescanAnnotation indicates that a ComplianceScan
-// should be re-run
+// should be re-run.
 const ComplianceScanRescanAnnotation = "compliance.openshift.io/rescan"
 
 // ComplianceScanLabel serves as an indicator for which ComplianceScan
-// owns the referenced object
+// owns the referenced object.
 const ComplianceScanLabel = "compliance.openshift.io/scan-name"
 
-// ScriptLabel defines that the object is a script for a scan object
+// ScriptLabel defines that the object is a script for a scan object.
 const ScriptLabel = "complianceoperator.openshift.io/scan-script"
 
-// ResultLabel defines that the object is a result of a scan
+// ResultLabel defines that the object is a result of a scan.
 const ResultLabel = "complianceoperator.openshift.io/scan-result"
 
 // ScanFinalizer is a finalizer for ComplianceScans. It gets automatically
@@ -29,23 +29,25 @@ const ResultLabel = "complianceoperator.openshift.io/scan-result"
 const ScanFinalizer = "scan.finalizers.compliance.openshift.io"
 
 // DefaultRawStorageSize specifies the default storage size where the raw
-// results will be stored at
-const DefaultRawStorageSize = "1Gi"
-const DefaultStorageRotation = 3
+// results will be stored at.
+const (
+	DefaultRawStorageSize  = "1Gi"
+	DefaultStorageRotation = 3
+)
 
 // Represents the status of the compliance scan run.
 type ComplianceScanStatusPhase string
 
 const (
-	// PhasePending represents the scan pending to be scheduled
+	// PhasePending represents the scan pending to be scheduled.
 	PhasePending ComplianceScanStatusPhase = "PENDING"
-	// PhaseLaunching represents being scheduled and launching pods to run the scans
+	// PhaseLaunching represents being scheduled and launching pods to run the scans.
 	PhaseLaunching ComplianceScanStatusPhase = "LAUNCHING"
-	// PhaseRunning represents the scan being ran by the pods and waiting for the results
+	// PhaseRunning represents the scan being ran by the pods and waiting for the results.
 	PhaseRunning ComplianceScanStatusPhase = "RUNNING"
-	// PhaseAggregating represents the scan aggregating the results
+	// PhaseAggregating represents the scan aggregating the results.
 	PhaseAggregating ComplianceScanStatusPhase = "AGGREGATING"
-	// PhaseDone represents the scan pods being done and the results being available
+	// PhaseDone represents the scan pods being done and the results being available.
 	PhaseDone ComplianceScanStatusPhase = "DONE"
 )
 
@@ -63,27 +65,27 @@ func stateCompare(lowPhase ComplianceScanStatusPhase, scanPhase ComplianceScanSt
 	return lowPhase
 }
 
-// Represents the result of the compliance scan
+// Represents the result of the compliance scan.
 type ComplianceScanStatusResult string
 
-// CmScanResultAnnotation holds the processed scanner result
+// CmScanResultAnnotation holds the processed scanner result.
 const CmScanResultAnnotation = "compliance.openshift.io/scan-result"
 
-// CmScanResultErrMsg holds the processed scanner error message
+// CmScanResultErrMsg holds the processed scanner error message.
 const CmScanResultErrMsg = "compliance.openshift.io/scan-error-msg"
 
 const (
-	// ResultNot available represents the compliance scan not having finished yet
+	// ResultNot available represents the compliance scan not having finished yet.
 	ResultNotAvailable ComplianceScanStatusResult = "NOT-AVAILABLE"
-	// ResultCompliant represents the compliance scan having succeeded
+	// ResultCompliant represents the compliance scan having succeeded.
 	ResultCompliant ComplianceScanStatusResult = "COMPLIANT"
-	// ResultNotApplicable represents the compliance scan having no useful results after finished
+	// ResultNotApplicable represents the compliance scan having no useful results after finished.
 	ResultNotApplicable ComplianceScanStatusResult = "NOT-APPLICABLE"
-	// ResultError represents a compliance scan pod having failed to run the scan or encountered an error
+	// ResultError represents a compliance scan pod having failed to run the scan or encountered an error.
 	ResultError ComplianceScanStatusResult = "ERROR"
-	// ResultNonCompliant represents the compliance scan having found a gap
+	// ResultNonCompliant represents the compliance scan having found a gap.
 	ResultNonCompliant ComplianceScanStatusResult = "NON-COMPLIANT"
-	// ResultInconsistent represents checks differing across the machines
+	// ResultInconsistent represents checks differing across the machines.
 	ResultInconsistent ComplianceScanStatusResult = "INCONSISTENT"
 	ScanTypeNode       ComplianceScanType         = "Node"
 	ScanTypePlatform   ComplianceScanType         = "Platform"
@@ -112,12 +114,12 @@ type TailoringConfigMapRef struct {
 	Name string `json:"name"`
 }
 
-// ComplianceScanType
+// ComplianceScanType.
 // +k8s:openapi-gen=true
 type ComplianceScanType string
 
 // When changing the defaults, remember to change also the DefaultRawStorageSize and
-// DefaultStorageRotation constants
+// DefaultStorageRotation constants.
 type RawResultStorageSettings struct {
 	// Specifies the amount of storage to ask for storing the raw results. Note that
 	// if re-scans happen, the new results will also need to be stored. Defaults to 1Gi.
@@ -142,7 +144,7 @@ type RawResultStorageSettings struct {
 	PVAccessModes []corev1.PersistentVolumeAccessMode `json:"pvAccessModes,omitempty"`
 }
 
-// ComplianceScanSettings groups together settings of a ComplianceScan
+// ComplianceScanSettings groups together settings of a ComplianceScan.
 // +k8s:openapi-gen=true
 type ComplianceScanSettings struct {
 	// Enable debug logging of workloads and OpenSCAP
@@ -163,7 +165,7 @@ type ComplianceScanSettings struct {
 	ScanTolerations []corev1.Toleration `json:"scanTolerations,omitempty"`
 }
 
-// ComplianceScanSpec defines the desired state of ComplianceScan
+// ComplianceScanSpec defines the desired state of ComplianceScan.
 // +k8s:openapi-gen=true
 type ComplianceScanSpec struct {
 	// The type of Compliance scan.
@@ -196,7 +198,7 @@ type ComplianceScanSpec struct {
 	ComplianceScanSettings `json:",inline"`
 }
 
-// ComplianceScanStatus defines the observed state of ComplianceScan
+// ComplianceScanStatus defines the observed state of ComplianceScan.
 // +k8s:openapi-gen=true
 type ComplianceScanStatus struct {
 	// Is the phase where the scan is at. Normally, one must wait for the scan
@@ -220,7 +222,7 @@ type ComplianceScanStatus struct {
 	Warnings string `json:"warnings,omitempty"`
 }
 
-// StorageReference stores a reference to where certain objects are being stored
+// StorageReference stores a reference to where certain objects are being stored.
 type StorageReference struct {
 	// Kind of the referent.
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
@@ -261,7 +263,7 @@ type ComplianceScan struct {
 }
 
 // NeedsRescan indicates whether a ComplianceScan needs to
-// rescan or not
+// rescan or not.
 func (cs *ComplianceScan) NeedsRescan() bool {
 	annotations := cs.GetAnnotations()
 	if annotations == nil {
@@ -272,7 +274,7 @@ func (cs *ComplianceScan) NeedsRescan() bool {
 }
 
 // GetScanTypeIfValid returns scan type if the scan has a valid one, else it returns
-// an error
+// an error.
 func (cs *ComplianceScan) GetScanTypeIfValid() (ComplianceScanType, error) {
 	if strings.ToLower(string(cs.Spec.ScanType)) == strings.ToLower(string(ScanTypePlatform)) {
 		return ScanTypePlatform, nil
@@ -284,7 +286,7 @@ func (cs *ComplianceScan) GetScanTypeIfValid() (ComplianceScanType, error) {
 	return "", fmt.Errorf("Unknown scan type")
 }
 
-// GetScanType get's the scan type for a scan
+// GetScanType get's the scan type for a scan.
 func (cs *ComplianceScan) GetScanType() ComplianceScanType {
 	scantype, err := cs.GetScanTypeIfValid()
 	if err != nil {
@@ -296,7 +298,7 @@ func (cs *ComplianceScan) GetScanType() ComplianceScanType {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ComplianceScanList contains a list of ComplianceScan
+// ComplianceScanList contains a list of ComplianceScan.
 type ComplianceScanList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

@@ -32,13 +32,11 @@ import (
 	"syscall"
 	"time"
 
+	utils "github.com/openshift/compliance-operator/pkg/utils"
+	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-
-	libgocrypto "github.com/openshift/library-go/pkg/crypto"
-
-	utils "github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var resultServerCmd = &cobra.Command{

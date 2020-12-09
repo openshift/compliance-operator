@@ -119,7 +119,6 @@ func RerunSuite(cmd *cobra.Command, args []string) {
 			}
 			return nil
 		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxScanUpdateRetries))
-
 		if err != nil {
 			fmt.Printf("Couldn't update scan '%s', err: %s\n", scan.Name, err)
 			os.Exit(1)

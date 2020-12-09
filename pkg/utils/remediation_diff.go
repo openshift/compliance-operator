@@ -12,7 +12,7 @@ import (
 // to the created k8s object based on the processing result as well as which nodes
 // the result comes from and whether it's been processed during a single loop
 // that processes a single CM yet or not. The sources are used to keep track of
-// which nodes differ from the "canonical" state of the check
+// which nodes differ from the "canonical" state of the check.
 type ParseResultContextItem struct {
 	ParseResult
 
@@ -39,7 +39,7 @@ func newParseResultWithSources(pr *ParseResult, sources ...string) *ParseResultC
 }
 
 // ParseResultContext keeps track of items that are consistent across all
-// "sources" in a ComplianceScan as well as items that are inconsistent
+// "sources" in a ComplianceScan as well as items that are inconsistent.
 type ParseResultContext struct {
 	consistent   map[string]*ParseResultContextItem
 	inconsistent map[string][]*ParseResultContextItem
@@ -53,7 +53,7 @@ func NewParseResultContext() *ParseResultContext {
 }
 
 // ParseResultContext.AddResults adds a batch of results coming from the parser and partitions them into
-// either the consistent or the inconsistent list
+// either the consistent or the inconsistent list.
 func (prCtx *ParseResultContext) AddResults(source string, parsedResList []*ParseResult) {
 	// If there is no source, the configMap is probably a platform scan map, in that case
 	// treat all the results as consistent.
@@ -89,7 +89,7 @@ func (prCtx *ParseResultContext) addInconsistentResult(id string, pr *ParseResul
 }
 
 // ParseResultContext.addParsedResults add a subsequent batch of results that must be examined
-// for consistency
+// for consistency.
 func (prCtx *ParseResultContext) addParsedResults(source string, newResults []*ParseResult) {
 	for _, consistentResult := range prCtx.consistent {
 		consistentResult.processed = false
@@ -132,10 +132,9 @@ func (prCtx *ParseResultContext) addParsedResults(source string, newResults []*P
 }
 
 // ParseResultContext.ReconcileInconsistentResults interates through all inconsistent results
-// and tries to reconcile them, creating a single consistent ParseResultContextItem for each
+// and tries to reconcile them, creating a single consistent ParseResultContextItem for each.
 func (prCtx *ParseResultContext) reconcileInconsistentResults() {
 	for id, inconsistentResultList := range prCtx.inconsistent {
-
 		if len(inconsistentResultList) < 1 {
 			continue
 		}
@@ -285,7 +284,7 @@ func mostCommonState(inconsistent []*ParseResultContextItem) (compv1alpha1.Compl
 	return mostCommonState, hasCommonState
 }
 
-// returns true if the checks are the same, false if they differ
+// returns true if the checks are the same, false if they differ.
 func diffChecks(old, new *compv1alpha1.ComplianceCheckResult) bool {
 	if old == nil {
 		return new == nil
@@ -297,7 +296,7 @@ func diffChecks(old, new *compv1alpha1.ComplianceCheckResult) bool {
 }
 
 // returns true if the remediations are the same, false if they differ
-// for now (?) just diffs the MC specs and the remediation type, not sure if we'll ever want to diff more
+// for now (?) just diffs the MC specs and the remediation type, not sure if we'll ever want to diff more.
 func diffRemediations(old, new *compv1alpha1.ComplianceRemediation) bool {
 	if old == nil {
 		return new == nil

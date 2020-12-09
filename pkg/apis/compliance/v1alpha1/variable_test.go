@@ -119,11 +119,11 @@ var _ = Describe("Testing variables API", func() {
 					Value: "42",
 					Selections: []ValueSelection{
 						{
-							"fourty two",
+							"forty two",
 							"42",
 						},
 						{
-							"fourty two times two",
+							"forty two times two",
 							"84",
 						},
 					},

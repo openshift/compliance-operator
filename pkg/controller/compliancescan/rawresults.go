@@ -16,9 +16,7 @@ const (
 	rawStorageAllocationErrorPrefix = "Couldn't allocate raw storage: "
 )
 
-var (
-	defaultAccessMode = []corev1.PersistentVolumeAccessMode{"ReadWriteOnce"}
-)
+var defaultAccessMode = []corev1.PersistentVolumeAccessMode{"ReadWriteOnce"}
 
 // handles the necessary things to store and expose the raw results from the scan. This implies
 // that the PVC gets created, and, if necessary, the scan instance will get updated too.
@@ -97,7 +95,7 @@ func instanceNeedsResultStorageReference(scan *compv1alpha1.ComplianceScan, pvc 
 		scan.Status.ResultsStorage.Namespace != pvc.Namespace
 }
 
-// GetPVCForScanName Get's the PVC name for a scan
+// GetPVCForScanName Get's the PVC name for a scan.
 func getPVCForScanName(scanName string) string {
 	return scanName
 }

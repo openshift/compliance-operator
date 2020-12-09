@@ -6,13 +6,12 @@ import (
 	"io"
 	"strings"
 
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/subchen/go-xmldom"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
-
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 const (
@@ -21,7 +20,7 @@ const (
 	rulePrefix           = "xccdf_org.ssgproject.content_rule_"
 )
 
-// XMLDocument is a wrapper that keeps the interface XML-parser-agnostic
+// XMLDocument is a wrapper that keeps the interface XML-parser-agnostic.
 type XMLDocument struct {
 	*xmldom.Document
 }
@@ -49,7 +48,7 @@ func newRuleHashTable(dsDom *XMLDocument) ruleHashTable {
 	return table
 }
 
-// ParseContent parses the DataStream and returns the XML document
+// ParseContent parses the DataStream and returns the XML document.
 func ParseContent(dsReader io.Reader) (*XMLDocument, error) {
 	dsDom, err := xmldom.Parse(dsReader)
 	if err != nil {
@@ -60,7 +59,6 @@ func ParseContent(dsReader io.Reader) (*XMLDocument, error) {
 
 func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, namespace string,
 	dsDom *XMLDocument, resultsReader io.Reader) ([]*ParseResult, error) {
-
 	resultsDom, err := xmldom.Parse(resultsReader)
 	if err != nil {
 		return nil, err
@@ -101,7 +99,7 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 	return parsedResults, nil
 }
 
-// Returns a new complianceCheckResult if the check data is usable
+// Returns a new complianceCheckResult if the check data is usable.
 func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef, scanName, namespace string) (*compv1alpha1.ComplianceCheckResult, error) {
 	name := nameFromId(scanName, ruleIdRef)
 	mappedStatus, err := mapComplianceCheckResultStatus(result)

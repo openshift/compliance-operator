@@ -10,6 +10,11 @@ import (
 	"strings"
 
 	ocpapi "github.com/openshift/api"
+	"github.com/openshift/compliance-operator/pkg/apis"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"
@@ -30,12 +35,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
-
-	"github.com/openshift/compliance-operator/pkg/apis"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var operatorCmd = &cobra.Command{
@@ -59,7 +58,7 @@ var (
 		"ocp4",
 	}
 	defaultScanSettingsName = "default"
-	// Run scan every day at 1am
+	// Run scan every day at 1am.
 	defaultScanSettingsSchedule = "0 1 * * *"
 )
 
@@ -187,7 +186,7 @@ func RunOperator(cmd *cobra.Command, args []string) {
 }
 
 // addMetrics will create the Services and Service Monitors to allow the operator export the metrics by using
-// the Prometheus operator
+// the Prometheus operator.
 func addMetrics(ctx context.Context, cfg *rest.Config) {
 	// Get the namespace the operator is currently deployed in.
 	operatorNs, err := k8sutil.GetOperatorNamespace()

@@ -1,12 +1,11 @@
 package xccdf
 
 import (
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/subchen/go-xmldom"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 type tailoredValue struct {
@@ -63,7 +62,6 @@ var _ = Describe("Testing parse variables", func() {
 			Spec:   cmpv1alpha1.TailoredProfileSpec{},
 			Status: cmpv1alpha1.TailoredProfileStatus{},
 		}
-
 	})
 
 	Context("tailoring variables", func() {

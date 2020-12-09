@@ -3,28 +3,27 @@ package compliancescan
 import (
 	"context"
 
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 const (
-	// configMap that contains the default script
+	// configMap that contains the default script.
 	OpenScapScriptConfigMapName = "openscap-container-entrypoint"
-	// This is how the script would be mounted
+	// This is how the script would be mounted.
 	OpenScapScriptPath = "/scripts/openscap-container-entrypoint"
 
-	// a configMap with env vars for the script
+	// a configMap with env vars for the script.
 	OpenScapEnvConfigMapName = "openscap-env-map"
-	// A configMap same as above but minus hostroot
+	// A configMap same as above but minus hostroot.
 	OpenScapPlatformEnvConfigMapName = "openscap-env-map-platform"
 
-	// environment variables the default script consumes
+	// environment variables the default script consumes.
 	OpenScapHostRootEnvName     = "HOSTROOT"
 	OpenScapProfileEnvName      = "PROFILE"
 	OpenScapContentEnvName      = "CONTENT"
@@ -37,7 +36,7 @@ const (
 
 	ResultServerPort = int32(8443)
 
-	// Tailoring constants
+	// Tailoring constants.
 	OpenScapTailoringDir = "/tailoring"
 
 	PlatformScanName                  = "api-checks"

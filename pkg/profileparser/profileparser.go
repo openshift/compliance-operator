@@ -8,15 +8,14 @@ import (
 	"strings"
 	"sync"
 
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-
 	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/xccdf"
 	"github.com/subchen/go-xmldom"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/apiserver/pkg/storage/names"
@@ -297,7 +296,6 @@ func ParseProfilesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBund
 func parseProfileFromNode(profileRoot *xmldom.Node, pb *cmpv1alpha1.ProfileBundle, defType cmpv1alpha1.ComplianceScanType, defName, nonce string, action func(p *cmpv1alpha1.Profile) error) error {
 	profileObjs := profileRoot.Query("//Profile")
 	for _, profileObj := range profileObjs {
-
 		id := profileObj.GetAttributeValue("id")
 		if id == "" {
 			return LogAndReturnError("no id in profile")
@@ -630,7 +628,7 @@ func ParseRulesAndDo(contentDom *xmldom.Document, stdParser *referenceParser, pb
 }
 
 // Reads a YAML file and returns an unstructured object from it. This object
-// can be taken into use by the dynamic client
+// can be taken into use by the dynamic client.
 func readObjFromYAML(r io.Reader) (*unstructured.Unstructured, error) {
 	obj := &unstructured.Unstructured{}
 	dec := k8syaml.NewYAMLToJSONDecoder(r)

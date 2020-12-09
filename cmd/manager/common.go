@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	compapis "github.com/openshift/compliance-operator/pkg/apis"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
@@ -15,8 +16,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-
-	compapis "github.com/openshift/compliance-operator/pkg/apis"
 )
 
 const (

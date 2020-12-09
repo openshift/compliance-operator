@@ -35,6 +35,9 @@ import (
 
 	backoff "github.com/cenkalti/backoff/v3"
 	"github.com/dsnet/compress/bzip2"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
@@ -42,10 +45,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var resultcollectorCmd = &cobra.Command{
@@ -433,7 +432,7 @@ func getMutualHttpsTransport(c *scapresultsConfig) (*http.Transport, error) {
 
 // an exit code of 0 means that the scan returned compliant
 // an exit code of 2 means that the scan returned non-compliant
-// an exit code of 1 means that the scan encountered an error
+// an exit code of 1 means that the scan encountered an error.
 func exitCodeIsError(exitcode string) bool {
 	return exitcode != common.OpenSCAPExitCodeCompliant && exitcode != common.OpenSCAPExitCodeNonCompliant
 }

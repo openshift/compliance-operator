@@ -4,7 +4,9 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 	"github.com/robfig/cron"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
@@ -13,9 +15,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 const rerunnerServiceAccount = "rerunner"
@@ -29,7 +28,7 @@ func (r *ReconcileComplianceSuite) reconcileScanRerunnerCronJob(suite *compv1alp
 }
 
 // validates that the provided schedule is correctly set. Else it returns false (not valid) and an
-// error message
+// error message.
 func (r *ReconcileComplianceSuite) validateSchedule(suite *compv1alpha1.ComplianceSuite) (bool, string) {
 	if suite.Spec.Schedule == "" {
 		return true, ""
@@ -92,7 +91,7 @@ func (r *ReconcileComplianceSuite) handleRerunnerDelete(rerunner *batchv1beta1.C
 	return r.client.Delete(context.TODO(), rerunner)
 }
 
-// GetRerunnerName gets the name of the rerunner workload based on the suite name
+// GetRerunnerName gets the name of the rerunner workload based on the suite name.
 func GetRerunnerName(suiteName string) string {
 	return suiteName + "-rerunner"
 }

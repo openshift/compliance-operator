@@ -2,6 +2,7 @@ package scansettingbinding
 
 import (
 	"context"
+
 	"github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"

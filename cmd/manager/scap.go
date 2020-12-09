@@ -26,15 +26,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/subchen/go-xmldom"
-
 	"github.com/ghodss/yaml"
-
+	"github.com/openshift/compliance-operator/pkg/utils"
+	"github.com/subchen/go-xmldom"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/kubernetes"
-
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 const (

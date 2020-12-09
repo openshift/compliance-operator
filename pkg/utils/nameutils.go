@@ -1,6 +1,7 @@
 package utils
 
 import (
+
 	// #nosec G505
 	"crypto/sha1"
 	"fmt"

@@ -38,13 +38,15 @@ func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
 }
 
-// newReconciler returns a new reconcile.Reconciler
+// newReconciler returns a new reconcile.Reconciler.
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileComplianceRemediation{client: mgr.GetClient(), nonCachedClient: mgr.GetAPIReader(),
-		scheme: mgr.GetScheme()}
+	return &ReconcileComplianceRemediation{
+		client: mgr.GetClient(), nonCachedClient: mgr.GetAPIReader(),
+		scheme: mgr.GetScheme(),
+	}
 }
 
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
+// add adds a new Controller to mgr with r as the reconcile.Reconciler.
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
 	c, err := controller.New("complianceremediation-controller", mgr, controller.Options{Reconciler: r})
@@ -61,10 +63,10 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-// blank assignment to verify that ReconcileComplianceRemediation implements reconcile.Reconciler
+// blank assignment to verify that ReconcileComplianceRemediation implements reconcile.Reconciler.
 var _ reconcile.Reconciler = &ReconcileComplianceRemediation{}
 
-// ReconcileComplianceRemediation reconciles a ComplianceRemediation object
+// ReconcileComplianceRemediation reconciles a ComplianceRemediation object.
 type ReconcileComplianceRemediation struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
@@ -132,7 +134,7 @@ func (r *ReconcileComplianceRemediation) reconcileRemediation(instance *compv1al
 }
 
 // Gets a generic remediation and ensures the object exists in the cluster if the
-// remediation if applicable
+// remediation if applicable.
 func (r *ReconcileComplianceRemediation) reconcileGenericRemediation(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
 	obj := instance.Spec.Current.Object
 	objectLogger := logger.WithValues("Object.Name", obj.GetName(), "Object.Namespace", obj.GetNamespace())
@@ -198,7 +200,6 @@ func (r *ReconcileComplianceRemediation) patchGenericRemediation(remObj *unstruc
 	}
 
 	return patchErr
-
 }
 
 func (r *ReconcileComplianceRemediation) deleteGenericRemediation(remObj *unstructured.Unstructured, foundObj *unstructured.Unstructured, logger logr.Logger) error {
@@ -226,7 +227,7 @@ func (r *ReconcileComplianceRemediation) deleteGenericRemediation(remObj *unstru
 // and if the Remediation being reconciled is applied, it is added to the list.
 // On the other hand, a Remediation can also be de-selected, this would result in either the resulting
 // MC having one less remediation or in the case no remediations are to be applied, the aggregate
-// MC is just deleted because it would otherwise be empty
+// MC is just deleted because it would otherwise be empty.
 func (r *ReconcileComplianceRemediation) reconcileMcRemediation(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
 	// mcList is a combination of remediations already applied and the remediation selected
 	// already converted to a list of MachineConfig API resources
@@ -415,10 +416,9 @@ func getAppliedMcRemediations(r *ReconcileComplianceRemediation, rem *compv1alph
 // Kernel arguments are concatenated.
 // It uses only the OSImageURL provided by the CVO and ignores any MC provided OSImageURL.
 //
-// taken from MachineConfigOperator
+// taken from MachineConfigOperator.
 func mergeMachineConfigs(configs []*mcfgv1.MachineConfig, name string, roleLabel string) *mcfgv1.MachineConfig {
 	mergedMc, err := mcfgcommon.MergeMachineConfigs(configs, "")
-
 	// FIXME(jaosorior): Handle errors
 	if err != nil {
 		return nil

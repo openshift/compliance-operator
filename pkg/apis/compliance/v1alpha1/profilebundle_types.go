@@ -9,26 +9,26 @@ import (
 const ProfileBundleFinalizer = "profilebundle.finalizers.compliance.openshift.io"
 
 // ProfileBundleOwnerLabel marks a profile or rule as owned by a profile bundle
-// and helps users filter such objects
+// and helps users filter such objects.
 const ProfileBundleOwnerLabel = "compliance.openshift.io/profile-bundle"
 
-// ProfileImageDigestAnnotation is the parsed out digest of the content image
+// ProfileImageDigestAnnotation is the parsed out digest of the content image.
 const ProfileImageDigestAnnotation = "compliance.openshift.io/image-digest"
 
-// DataStreamStatusType is the type for the data stream status
+// DataStreamStatusType is the type for the data stream status.
 type DataStreamStatusType string
 
 const (
 	// DataStreamPending represents the state where the data stream
-	// hasn't been processed yet
+	// hasn't been processed yet.
 	DataStreamPending DataStreamStatusType = "PENDING"
-	// DataStreamValid represents the status for a valid data stream
+	// DataStreamValid represents the status for a valid data stream.
 	DataStreamValid DataStreamStatusType = "VALID"
-	// DataStreamInvalid represents the status for an invalid data stream
+	// DataStreamInvalid represents the status for an invalid data stream.
 	DataStreamInvalid DataStreamStatusType = "INVALID"
 )
 
-// Defines the desired state of ProfileBundle
+// Defines the desired state of ProfileBundle.
 type ProfileBundleSpec struct {
 	// Is the path for the image that contains the content for this bundle.
 	ContentImage string `json:"contentImage"`
@@ -36,7 +36,7 @@ type ProfileBundleSpec struct {
 	ContentFile string `json:"contentFile"`
 }
 
-// Defines the observed state of ProfileBundle
+// Defines the observed state of ProfileBundle.
 type ProfileBundleStatus struct {
 	// Presents the current status for the datastream for this bundle
 	// +kubebuilder:default=PENDING
@@ -47,7 +47,7 @@ type ProfileBundleStatus struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ProfileBundle is the Schema for the profilebundles API
+// ProfileBundle is the Schema for the profilebundles API.
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=profilebundles,scope=Namespaced
 // +kubebuilder:printcolumn:name="ContentImage",type="string",JSONPath=`.spec.contentImage`
@@ -63,7 +63,7 @@ type ProfileBundle struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ProfileBundleList contains a list of ProfileBundle
+// ProfileBundleList contains a list of ProfileBundle.
 type ProfileBundleList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

@@ -28,6 +28,10 @@ import (
 
 	backoff "github.com/cenkalti/backoff/v3"
 	"github.com/dsnet/compress/bzip2"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
@@ -39,11 +43,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
 const (
@@ -133,7 +132,7 @@ func readCompressedData(compressed string) (*bzip2.Reader, error) {
 // content parameter.
 // Returns a triple of (array-of-ParseResults, source, error) where source identifies the entity whose
 // scan produced this configMap -- typically a nodeName for node scans. For platform scans, the source
-// is empty. The source is used later when reconciling inconsistent results
+// is empty. The source is used later when reconciling inconsistent results.
 func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*utils.ParseResult, string, error) {
 	var scanReader io.Reader
 
@@ -456,7 +455,6 @@ func updateRemediationState(crClient *complianceCrClient, parsedRemediation *com
 		"ComplianceRemediation.Namespace", remkey.Namespace)
 	if err := crClient.client.Get(context.TODO(), remkey, foundRemediation); err != nil {
 		return fmt.Errorf("cannot update remediation status %s: %v", parsedRemediation.Name, err)
-
 	}
 	foundRemediation.Status.ErrorMessage = ""
 	foundRemediation.Status.ApplicationState = state
@@ -486,7 +484,6 @@ func getObjectIfFound(crClient *complianceCrClient, key types.NamespacedName, ob
 		found = true
 		return nil
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
-
 	if err != nil {
 		log.Error(err, "Couldn't get object", "Name", key.Name, "Namespace", key.Namespace)
 	}
@@ -514,7 +511,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	var scan = &compv1alpha1.ComplianceScan{}
+	scan := &compv1alpha1.ComplianceScan{}
 	err = crclient.client.Get(context.TODO(), types.NamespacedName{
 		Namespace: aggregatorConf.Namespace,
 		Name:      aggregatorConf.ScanName,

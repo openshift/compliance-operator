@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -23,10 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var log = logf.Log.WithName("scanctrl")
@@ -39,16 +38,16 @@ var (
 )
 
 const (
-	// flag that indicates that deletion should be done
+	// flag that indicates that deletion should be done.
 	doDelete = true
-	// flag that indicates that no deletion should take place
+	// flag that indicates that no deletion should take place.
 	dontDelete = false
 )
 
 const (
-	// OpenSCAPScanContainerName defines the name of the contianer that will run OpenSCAP
+	// OpenSCAPScanContainerName defines the name of the container that will run OpenSCAP.
 	OpenSCAPScanContainerName = "scanner"
-	// The default time we should wait before requeuing
+	// The default time we should wait before requeuing.
 	requeueAfterDefault = 10 * time.Second
 )
 
@@ -58,12 +57,12 @@ func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
 }
 
-// newReconciler returns a new reconcile.Reconciler
+// newReconciler returns a new reconcile.Reconciler.
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	return &ReconcileComplianceScan{client: mgr.GetClient(), scheme: mgr.GetScheme(), recorder: mgr.GetEventRecorderFor("scanctrl")}
 }
 
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
+// add adds a new Controller to mgr with r as the reconcile.Reconciler.
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
 	c, err := controller.New("compliancescan-controller", mgr, controller.Options{Reconciler: r})
@@ -80,10 +79,10 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-// blank assignment to verify that ReconcileComplianceScan implements reconcile.Reconciler
+// blank assignment to verify that ReconcileComplianceScan implements reconcile.Reconciler.
 var _ reconcile.Reconciler = &ReconcileComplianceScan{}
 
-// ReconcileComplianceScan reconciles a ComplianceScan object
+// ReconcileComplianceScan reconciles a ComplianceScan object.
 type ReconcileComplianceScan struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
@@ -202,7 +201,7 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 		return reconcile.Result{}, err
 	}
 
-	//validate raw storage size
+	// validate raw storage size
 	if _, err := resource.ParseQuantity(instance.Spec.RawResultStorage.Size); err != nil {
 		instanceCopy := instance.DeepCopy()
 		instanceCopy.Status.ErrorMessage = fmt.Sprintf("Error parsing RawResultsStorageSize: %s", err)
@@ -694,13 +693,13 @@ func (r *ReconcileComplianceScan) deleteResultConfigMaps(instance *compv1alpha1.
 	return nil
 }
 
-// returns true if the pod is still running, false otherwise
+// returns true if the pod is still running, false otherwise.
 func isPodRunningInNode(r *ReconcileComplianceScan, scanInstance *compv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) (bool, error) {
 	podName := getPodForNodeName(scanInstance.Name, node.Name)
 	return isPodRunning(r, podName, common.GetComplianceOperatorNamespace(), logger)
 }
 
-// returns true if the pod is still running, false otherwise
+// returns true if the pod is still running, false otherwise.
 func isPlatformScanPodRunning(r *ReconcileComplianceScan, scanInstance *compv1alpha1.ComplianceScan, logger logr.Logger) (bool, error) {
 	logger.Info("Retrieving platform scan pod.", "Name", scanInstance.Name+"-"+PlatformScanName)
 
@@ -769,13 +768,12 @@ func getNodeScanCM(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 
 // shouldLaunchAggregator is a check that tests whether the scanner already failed
 // hard in which case there might not be a reason to launch the aggregator pod, e.g.
-// in cases the content cannot be loaded at all
+// in cases the content cannot be loaded at all.
 func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList) (bool, string, error) {
 	var warnings string
 	switch instance.GetScanType() {
 	case compv1alpha1.ScanTypePlatform:
 		foundCM, err := getPlatformScanCM(r, instance)
-
 		// Could be a transient error, so we requeue if there's any
 		// error here.
 		if err != nil {
@@ -795,7 +793,6 @@ func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.C
 	case compv1alpha1.ScanTypeNode:
 		for _, node := range nodes.Items {
 			foundCM, err := getNodeScanCM(r, instance, node.Name)
-
 			// Could be a transient error, so we requeue if there's any
 			// error here.
 			if err != nil {
@@ -831,7 +828,6 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 	switch instance.GetScanType() {
 	case compv1alpha1.ScanTypePlatform:
 		foundCM, err := getPlatformScanCM(r, instance)
-
 		// Could be a transient error, so we requeue if there's any
 		// error here.
 		if err != nil {
@@ -864,7 +860,6 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 	case compv1alpha1.ScanTypeNode:
 		for _, node := range nodes.Items {
 			foundCM, err := getNodeScanCM(r, instance, node.Name)
-
 			// Could be a transient error, so we requeue if there's any
 			// error here.
 			if err != nil {

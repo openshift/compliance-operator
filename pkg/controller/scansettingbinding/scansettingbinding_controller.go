@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	// The default time we should wait before requeuing
+	// The default time we should wait before requeuing.
 	requeueAfterDefault = 10 * time.Second
 )
 
@@ -39,12 +39,12 @@ func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
 }
 
-// newReconciler returns a new reconcile.Reconciler
+// newReconciler returns a new reconcile.Reconciler.
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	return &ReconcileScanSettingBinding{client: mgr.GetClient(), scheme: mgr.GetScheme(), recorder: common.NewSafeRecorder("scansettingbindingctrl", mgr)}
 }
 
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
+// add adds a new Controller to mgr with r as the reconcile.Reconciler.
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
 	c, err := controller.New("scansettingbinding-controller", mgr, controller.Options{Reconciler: r})
@@ -79,10 +79,10 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-// blank assignment to verify that ReconcileScanSettingBinding implements reconcile.Reconciler
+// blank assignment to verify that ReconcileScanSettingBinding implements reconcile.Reconciler.
 var _ reconcile.Reconciler = &ReconcileScanSettingBinding{}
 
-// ReconcileScanSettingBinding reconciles a ScanSettingBinding object
+// ReconcileScanSettingBinding reconciles a ScanSettingBinding object.
 type ReconcileScanSettingBinding struct {
 	client   client.Client
 	scheme   *runtime.Scheme
@@ -267,7 +267,6 @@ func createScansWithSelector(suite *compliancev1alpha1.ComplianceSuite, v1settin
 			logger.Info("Adding platform scan", "scanCopy.Name", scanCopy.Name)
 			scansWithSelector = append(scansWithSelector, *scanCopy)
 		}
-
 	}
 
 	return scansWithSelector
@@ -488,7 +487,6 @@ func resolveTypedParent(r *ReconcileScanSettingBinding, instance *compliancev1al
 	}
 
 	return parentObj, nil
-
 }
 
 func ownerReferenceWithKind(object metav1.Object, kind string) *metav1.OwnerReference {
@@ -535,7 +533,7 @@ func newCmpv1Alpha1Gvk(kind string) schema.GroupVersionKind {
 	}
 }
 
-// TODO: if we even support multiple versions, add an array of gvk:handler_fn tuples
+// TODO: if we even support multiple versions, add an array of gvk:handler_fn tuples.
 func isCmpv1Alpha1Gvk(obj *unstructured.Unstructured, kind string) error {
 	expGvk := newCmpv1Alpha1Gvk(kind)
 	return isGvk(obj, &expGvk)

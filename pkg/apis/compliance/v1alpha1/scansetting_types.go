@@ -6,7 +6,7 @@ import (
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ScanSetting is the Schema for the scansettings API
+// ScanSetting is the Schema for the scansettings API.
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=scansettings,scope=Namespaced
 type ScanSetting struct {
@@ -21,7 +21,7 @@ type ScanSetting struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ScanSettingList contains a list of ScanSetting
+// ScanSettingList contains a list of ScanSetting.
 type ScanSettingList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

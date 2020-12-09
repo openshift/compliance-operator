@@ -20,10 +20,9 @@ import (
 
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
-
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 var apiResourceCollectorCmd = &cobra.Command{

@@ -12,7 +12,7 @@ type NamedObjectReference struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ScanSettingBinding is the Schema for the scansettingbindings API
+// ScanSettingBinding is the Schema for the scansettingbindings API.
 // +kubebuilder:resource:path=scansettingbindings,scope=Namespaced
 type ScanSettingBinding struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -24,7 +24,7 @@ type ScanSettingBinding struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ScanSettingBindingList contains a list of ScanSettingBinding
+// ScanSettingBindingList contains a list of ScanSettingBinding.
 type ScanSettingBindingList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

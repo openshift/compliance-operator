@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Directory is a holding struct used to sort directories by time
+// Directory is a holding struct used to sort directories by time.
 type Directory struct {
 	CreationTime time.Time
 	Path         string

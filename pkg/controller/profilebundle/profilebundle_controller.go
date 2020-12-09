@@ -2,15 +2,15 @@ package profilebundle
 
 import (
 	"context"
-	"time"
 
 	// #nosec G505
-
 	"fmt"
 	"path"
+	"time"
 
 	"github.com/go-logr/logr"
 	ocpimg "github.com/openshift/api/image/v1"
+	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	"github.com/openshift/library-go/pkg/image/reference"
@@ -29,8 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 var log = logf.Log.WithName("profilebundlectrl")
@@ -43,12 +41,12 @@ func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
 }
 
-// newReconciler returns a new reconcile.Reconciler
+// newReconciler returns a new reconcile.Reconciler.
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	return &ReconcileProfileBundle{client: mgr.GetClient(), scheme: mgr.GetScheme(), reader: mgr.GetAPIReader()}
 }
 
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
+// add adds a new Controller to mgr with r as the reconcile.Reconciler.
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
 	c, err := controller.New("profilebundle-controller", mgr, controller.Options{Reconciler: r})
@@ -65,10 +63,10 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-// blank assignment to verify that ReconcileProfileBundle implements reconcile.Reconciler
+// blank assignment to verify that ReconcileProfileBundle implements reconcile.Reconciler.
 var _ reconcile.Reconciler = &ReconcileProfileBundle{}
 
-// ReconcileProfileBundle reconciles a ProfileBundle object
+// ReconcileProfileBundle reconciles a ProfileBundle object.
 type ReconcileProfileBundle struct {
 	// Accesses the API server directly
 	reader client.Reader
@@ -279,10 +277,9 @@ func (r *ReconcileProfileBundle) pointsToISTag(contentImageRef string) (bool, st
 		return false, "", err
 	}
 	return true, istag.Image.DockerImageReference, nil
-
 }
 
-// Gets the namespace for the image stream tag. If none is given, it'll use the operator's namespace
+// Gets the namespace for the image stream tag. If none is given, it'll use the operator's namespace.
 func getISTagNamespace(ref reference.DockerImageReference) string {
 	if ref.Namespace != "" {
 		return ref.Namespace
@@ -297,7 +294,7 @@ func getWorkloadLabels(pb *compliancev1alpha1.ProfileBundle) map[string]string {
 	}
 }
 
-// This annotation
+// This annotation.
 func getISTagAnnotation(isTagName, isTagNamespace string) map[string]string {
 	annotationFmt := `[{"from":{"kind":"ImageStreamTag","name":"%s","namespace":"%s"},"fieldPath":"spec.template.spec.initContainers[?(@.name==\"content-container\")].image"}]`
 	triggerAnn := fmt.Sprintf(annotationFmt, isTagName, isTagNamespace)
@@ -306,7 +303,7 @@ func getISTagAnnotation(isTagName, isTagNamespace string) map[string]string {
 	}
 }
 
-// newPodForBundle returns a busybox pod with the same name/namespace as the cr
+// newPodForBundle returns a busybox pod with the same name/namespace as the cr.
 func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *appsv1.Deployment {
 	falseP := false
 	trueP := true
@@ -401,7 +398,7 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 
 // podStartupError returns false if for some reason the pod couldn't even
 // run. If there's more conditions in the function in the future, let's
-// split it
+// split it.
 func podStartupError(pod *corev1.Pod) bool {
 	// Check if the init container couldn't even run because the content image
 	// was wrong

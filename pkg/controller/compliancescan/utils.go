@@ -5,18 +5,15 @@ import (
 	"fmt"
 	"path"
 
-	// we can suppress the gosec warning about sha1 here because we don't use sha1 for crypto
-	// purposes, but only as a string shortener
-	// #nosec G505
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/utils"
 
+	// #nosec G505
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 const (
@@ -36,7 +33,7 @@ func newPodUnschedulableError(pod, msg string) error {
 	return &podUnschedulableError{pod, msg}
 }
 
-// podUnschedulableError represents an error that tells us that a node couldn't be scheduled
+// podUnschedulableError represents an error that tells us that a node couldn't be scheduled.
 type podUnschedulableError struct {
 	pod string
 	msg string

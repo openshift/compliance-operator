@@ -5,22 +5,21 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 const resultserverSA = "default"
 
 // The result-server is a pod that listens for results from other pods and
 // stores them in a PVC.
-// It's comprised of the PVC for the scan, the pod and a service that fronts it
+// It's comprised of the PVC for the scan, the pod and a service that fronts it.
 func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	resultServerLabels := getResultServerLabels(instance)
 

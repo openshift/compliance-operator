@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 type RemediationApplicationState string
@@ -21,12 +20,12 @@ const (
 type RemediationType string
 
 const (
-	// The remediation wraps a MachineConfig payload
+	// The remediation wraps a MachineConfig payload.
 	McRemediation RemediationType = "MachineConfig"
 )
 
 const (
-	// OutdatedRemediationLabel specifies that the remediation has been superseded by a newer version
+	// OutdatedRemediationLabel specifies that the remediation has been superseded by a newer version.
 	OutdatedRemediationLabel               = "complianceoperator.openshift.io/outdated-remediation"
 	RemediationCreatedByOperatorAnnotation = "compliance.openshift.io/remediation"
 )
@@ -45,7 +44,7 @@ type ComplianceRemediationPayload struct {
 	Object *unstructured.Unstructured `json:"object,omitempty"`
 }
 
-// ComplianceRemediationSpec defines the desired state of ComplianceRemediation
+// ComplianceRemediationSpec defines the desired state of ComplianceRemediation.
 // +k8s:openapi-gen=true
 type ComplianceRemediationSpec struct {
 	ComplianceRemediationSpecMeta `json:",inline"`
@@ -58,7 +57,7 @@ type ComplianceRemediationSpec struct {
 	Outdated ComplianceRemediationPayload `json:"outdated,omitempty"`
 }
 
-// ComplianceRemediationStatus defines the observed state of ComplianceRemediation
+// ComplianceRemediationStatus defines the observed state of ComplianceRemediation.
 // +k8s:openapi-gen=true
 type ComplianceRemediationStatus struct {
 	// Whether the remediation is already applied or not
@@ -112,7 +111,7 @@ func (r *ComplianceRemediation) GetMcName() string {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ComplianceRemediationList contains a list of ComplianceRemediation
+// ComplianceRemediationList contains a list of ComplianceRemediation.
 type ComplianceRemediationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -120,7 +119,7 @@ type ComplianceRemediationList struct {
 }
 
 // AddRemediationAnnotation annotates an object to say it was created
-// by this operator
+// by this operator.
 func AddRemediationAnnotation(obj metav1.Object) {
 	annotations := obj.GetAnnotations()
 	if annotations == nil {
@@ -131,7 +130,7 @@ func AddRemediationAnnotation(obj metav1.Object) {
 }
 
 // AddRemediationAnnotation tells us if an object was created by this
-// operator
+// operator.
 func RemediationWasCreatedByOperator(obj metav1.Object) bool {
 	annotations := obj.GetAnnotations()
 	if annotations == nil {

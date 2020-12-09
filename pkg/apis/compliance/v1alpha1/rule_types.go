@@ -33,7 +33,7 @@ type RulePayload struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Rule is the Schema for the rules API
+// Rule is the Schema for the rules API.
 // +kubebuilder:resource:path=rules,scope=Namespaced
 type Rule struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -43,7 +43,7 @@ type Rule struct {
 }
 
 // FixDefinition Specifies a fix or remediation
-// that applies to a rule
+// that applies to a rule.
 type FixDefinition struct {
 	// The platform that the fix applies to
 	Platform string `json:"platform,omitempty"`
@@ -59,7 +59,7 @@ type FixDefinition struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// RuleList contains a list of Rule
+// RuleList contains a list of Rule.
 type RuleList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

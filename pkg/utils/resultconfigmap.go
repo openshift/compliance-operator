@@ -5,11 +5,10 @@ import (
 	"io"
 	"io/ioutil"
 
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func encodetoBase64(src io.Reader) string {
@@ -29,7 +28,7 @@ func encodetoBase64(src io.Reader) string {
 	return string(out)
 }
 
-// GetResultConfigMap gets a configmap that reflects a result or an error for a scan
+// GetResultConfigMap gets a configmap that reflects a result or an error for a scan.
 func GetResultConfigMap(owner metav1.Object, configMapName, filename, nodeName string, contents io.Reader, compressed bool, exitcode string, warnings string) *corev1.ConfigMap {
 	var strcontents string
 	annotations := map[string]string{}

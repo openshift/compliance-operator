@@ -6,6 +6,9 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -21,16 +24,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var log = logf.Log.WithName("suitectrl")
 
 const (
-	// The default time we should wait before requeuing
+	// The default time we should wait before requeuing.
 	requeueAfterDefault = 10 * time.Second
 )
 
@@ -40,12 +39,12 @@ func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
 }
 
-// newReconciler returns a new reconcile.Reconciler
+// newReconciler returns a new reconcile.Reconciler.
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	return &ReconcileComplianceSuite{client: mgr.GetClient(), scheme: mgr.GetScheme(), recorder: mgr.GetEventRecorderFor("suitectrl")}
 }
 
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
+// add adds a new Controller to mgr with r as the reconcile.Reconciler.
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
 	c, err := controller.New("compliancesuite-controller", mgr, controller.Options{Reconciler: r})
@@ -71,10 +70,10 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-// blank assignment to verify that ReconcileComplianceSuite implements reconcile.Reconciler
+// blank assignment to verify that ReconcileComplianceSuite implements reconcile.Reconciler.
 var _ reconcile.Reconciler = &ReconcileComplianceSuite{}
 
-// ReconcileComplianceSuite reconciles a ComplianceSuite object
+// ReconcileComplianceSuite reconciles a ComplianceSuite object.
 type ReconcileComplianceSuite struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
@@ -215,7 +214,7 @@ func (r *ReconcileComplianceSuite) reconcileScans(suite *compv1alpha1.Compliance
 			return false, err
 		}
 
-		// Update the scan spec (last becuase it's a corner case)
+		// Update the scan spec (last because it's a corner case)
 		rescheduleWithDelay, err := r.reconcileScanSpec(&scanWrap, scan, logger)
 		if rescheduleWithDelay || err != nil {
 			return rescheduleWithDelay, err
@@ -285,7 +284,7 @@ func (r *ReconcileComplianceSuite) reconcileScanSpec(scanWrap *compv1alpha1.Comp
 	return false, nil
 }
 
-// updates the status of a scan in the compliance suite. Note that the suite that this takes is already a copy, so it's safe to modify
+// updates the status of a scan in the compliance suite. Note that the suite that this takes is already a copy, so it's safe to modify.
 func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.ComplianceSuite, idx int, scanStatusWrap *compv1alpha1.ComplianceScanStatusWrapper, scan *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	// if yes, update it, if the status differs
 	if scanStatusWrap.Phase == scan.Status.Phase {

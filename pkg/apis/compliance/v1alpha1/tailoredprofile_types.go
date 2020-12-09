@@ -17,7 +17,7 @@ const (
 	ConfigMapOutput TailoredProfileOutputType = "ConfigMap"
 )
 
-// RuleReferenceSpec specifies a rule to be selected/deselected, as well as the reason why
+// RuleReferenceSpec specifies a rule to be selected/deselected, as well as the reason why.
 type RuleReferenceSpec struct {
 	// Name of the rule that's being referenced
 	Name string `json:"name"`
@@ -25,7 +25,7 @@ type RuleReferenceSpec struct {
 	Rationale string `json:"rationale"`
 }
 
-// ValueReferenceSpec specifies a value to be set for a variable with a reason why
+// ValueReferenceSpec specifies a value to be set for a variable with a reason why.
 type VariableValueSpec struct {
 	// Name of the variable that's being referenced
 	Name string `json:"name"`
@@ -35,7 +35,7 @@ type VariableValueSpec struct {
 	Value string `json:"value"`
 }
 
-// TailoredProfileSpec defines the desired state of TailoredProfile
+// TailoredProfileSpec defines the desired state of TailoredProfile.
 type TailoredProfileSpec struct {
 	// Points to the name of the profile to extend
 	Extends string `json:"extends"`
@@ -60,19 +60,19 @@ type TailoredProfileSpec struct {
 	SetValues []VariableValueSpec `json:"setValues,omitempty"`
 }
 
-// TailoredProfileState defines the state fo the tailored profile
+// TailoredProfileState defines the state fo the tailored profile.
 type TailoredProfileState string
 
 const (
-	// TailoredProfileStatePending is a state where a tailored profile is still pending to be processed
+	// TailoredProfileStatePending is a state where a tailored profile is still pending to be processed.
 	TailoredProfileStatePending TailoredProfileState = "PENDING"
-	// TailoredProfileStateReady is a state where a tailored profile is ready to be used
+	// TailoredProfileStateReady is a state where a tailored profile is ready to be used.
 	TailoredProfileStateReady TailoredProfileState = "READY"
-	// TailoredProfileStateError is a state where a tailored profile had an error while processing
+	// TailoredProfileStateError is a state where a tailored profile had an error while processing.
 	TailoredProfileStateError TailoredProfileState = "ERROR"
 )
 
-// TailoredProfileStatus defines the observed state of TailoredProfile
+// TailoredProfileStatus defines the observed state of TailoredProfile.
 type TailoredProfileStatus struct {
 	// The XCCDF ID of the tailored profile
 	ID string `json:"id,omitempty"`
@@ -83,7 +83,7 @@ type TailoredProfileStatus struct {
 	ErrorMessage string               `json:"errorMessagae,omitempty"`
 }
 
-// OutputRef is a reference to the object created from the tailored profile
+// OutputRef is a reference to the object created from the tailored profile.
 type OutputRef struct {
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
@@ -91,7 +91,7 @@ type OutputRef struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// TailoredProfile is the Schema for the tailoredprofiles API
+// TailoredProfile is the Schema for the tailoredprofiles API.
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=tailoredprofiles,scope=Namespaced
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=`.status.state`,description="State of the tailored profile"
@@ -105,7 +105,7 @@ type TailoredProfile struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// TailoredProfileList contains a list of TailoredProfile
+// TailoredProfileList contains a list of TailoredProfile.
 type TailoredProfileList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

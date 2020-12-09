@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"os"
 
+	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/profileparser"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
@@ -14,9 +17,6 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-
-	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/profileparser"
 )
 
 var profileparserCmd = &cobra.Command{
@@ -44,7 +44,7 @@ func defineProfileParserFlags(cmd *cobra.Command) {
 	flags.AddGoFlagSet(flag.CommandLine)
 }
 
-// XMLDocument is a wrapper that keeps the interface XML-parser-agnostic
+// XMLDocument is a wrapper that keeps the interface XML-parser-agnostic.
 type XMLDocument struct {
 	*xmldom.Document
 }
@@ -97,7 +97,7 @@ func getProfileBundle(pcfg *profileparser.ParserConfig) (*cmpv1alpha1.ProfileBun
 }
 
 // updateProfileBundleStatus updates the status of the given ProfileBundle. If
-// the given error is nil, the status will be valid, else it'll be invalid
+// the given error is nil, the status will be valid, else it'll be invalid.
 func updateProfileBundleStatus(pcfg *profileparser.ParserConfig, pb *cmpv1alpha1.ProfileBundle, err error) {
 	if err != nil {
 		// Never update a fetched object, always just a copy

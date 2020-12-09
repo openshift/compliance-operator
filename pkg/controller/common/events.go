@@ -3,14 +3,13 @@ package common
 import (
 	"fmt"
 
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 type SafeRecorder struct {
@@ -19,7 +18,6 @@ type SafeRecorder struct {
 
 func NewSafeRecorder(name string, mgr manager.Manager) *SafeRecorder {
 	return &SafeRecorder{recorder: mgr.GetEventRecorderFor(name)}
-
 }
 
 func (sr *SafeRecorder) Event(object runtime.Object, eventtype, reason, message string) {
@@ -39,7 +37,7 @@ func (sr *SafeRecorder) Eventf(object runtime.Object, eventtype, reason, message
 	sr.recorder.Eventf(object, eventtype, reason, messageFmt, args...)
 }
 
-// AnnotatedEventf is just like eventf, but with annotations attached
+// AnnotatedEventf is just like eventf, but with annotations attached.
 func (sr *SafeRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
 	if sr.recorder == nil {
 		return
@@ -59,12 +57,12 @@ func GenerateEventForResult(recorder record.EventRecorder, obj runtime.Object, o
 
 	ownerRefs := objInfo.GetOwnerReferences()
 	if len(ownerRefs) == 0 {
-		return //there is nothing to do, since no owner is set
+		return // there is nothing to do, since no owner is set
 	}
 	for _, ownerRef := range ownerRefs {
 		// we are making an assumption that the GRC policy has a single owner, or we chose the first owner in the list
 		if string(ownerRef.UID) == "" {
-			continue //there is nothing to do, since no owner UID is set
+			continue // there is nothing to do, since no owner UID is set
 		}
 		// FIXME(jaosorior): Figure out a less hacky way to check this
 		if ownerRef.Kind == "Policy" {

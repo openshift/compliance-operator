@@ -12,7 +12,7 @@ import (
 type ErrorHandler func() (reconcile.Result, error)
 
 // NonRetriableCtrlError wraps errors with the addition of having
-// the information for the error being non-retriable
+// the information for the error being non-retriable.
 type NonRetriableCtrlError struct {
 	err           error
 	canRetry      bool
@@ -23,20 +23,20 @@ func (cerr NonRetriableCtrlError) Error() string {
 	return cerr.err.Error()
 }
 
-// blank assignment to verify that RetriableCtrlError implements error
+// blank assignment to verify that RetriableCtrlError implements error.
 var _ error = &NonRetriableCtrlError{}
 
-// IsRetriable exposes if the error is retriable or not
+// IsRetriable exposes if the error is retriable or not.
 func (cerr NonRetriableCtrlError) IsRetriable() bool {
 	return cerr.canRetry
 }
 
-// HasCustomHandler checks whether an error has a custom handler
+// HasCustomHandler checks whether an error has a custom handler.
 func (cerr NonRetriableCtrlError) HasCustomHandler() bool {
 	return cerr.customHandler != nil
 }
 
-// WrapNonRetriableCtrlError wraps an error with the RetriableCtrlError interface
+// WrapNonRetriableCtrlError wraps an error with the RetriableCtrlError interface.
 func WrapNonRetriableCtrlError(err error) *NonRetriableCtrlError {
 	return &NonRetriableCtrlError{
 		canRetry: false,
@@ -44,7 +44,7 @@ func WrapNonRetriableCtrlError(err error) *NonRetriableCtrlError {
 	}
 }
 
-// NewNonRetriableCtrlError creates an error with the RetriableCtrlError interface
+// NewNonRetriableCtrlError creates an error with the RetriableCtrlError interface.
 func NewNonRetriableCtrlError(errorFmt string, args ...interface{}) *NonRetriableCtrlError {
 	return &NonRetriableCtrlError{
 		canRetry: false,
@@ -53,7 +53,7 @@ func NewNonRetriableCtrlError(errorFmt string, args ...interface{}) *NonRetriabl
 }
 
 // NewRetriableCtrlErrorWithCustomHandler creates an error with the RetriableCtrlError interface
-// This error is retriable has a custom handler
+// This error is retriable has a custom handler.
 func NewRetriableCtrlErrorWithCustomHandler(customHandler ErrorHandler, errorFmt string, args ...interface{}) *NonRetriableCtrlError {
 	return &NonRetriableCtrlError{
 		canRetry:      true,
@@ -63,7 +63,7 @@ func NewRetriableCtrlErrorWithCustomHandler(customHandler ErrorHandler, errorFmt
 }
 
 // IsRetriable returns whether the error is retriable or not using the
-// NonRetriableCtrlError interface
+// NonRetriableCtrlError interface.
 func IsRetriable(err error) bool {
 	ccErr, ok := err.(*NonRetriableCtrlError)
 	if ok {
@@ -73,7 +73,7 @@ func IsRetriable(err error) bool {
 }
 
 // HasCustomHandler returns whether the error has a custom handler
-// or not
+// or not.
 func HasCustomHandler(err error) bool {
 	ccErr, ok := err.(*NonRetriableCtrlError)
 	if ok {
@@ -82,7 +82,7 @@ func HasCustomHandler(err error) bool {
 	return false
 }
 
-// CallCustomHandler calls the custom handler for an error if it has one
+// CallCustomHandler calls the custom handler for an error if it has one.
 func CallCustomHandler(err error) (reconcile.Result, error) {
 	ccErr, ok := err.(*NonRetriableCtrlError)
 	if ok {

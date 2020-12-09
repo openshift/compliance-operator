@@ -20,7 +20,7 @@ var componentDefaults = []struct {
 }
 
 // GetComponentImage returns a full image pull spec for a given component
-// based on the component type
+// based on the component type.
 func GetComponentImage(component ComplianceComponent) string {
 	comp := componentDefaults[component]
 

@@ -8,6 +8,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -16,8 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
 func TestE2E(t *testing.T) {
@@ -134,9 +133,7 @@ func TestE2E(t *testing.T) {
 					unlinkedRule        = "chronyd-client-only"
 					moderateProfileName = "moderate"
 				)
-				var (
-					modifiedImage = fmt.Sprintf("quay.io/jhrozek/ocp4-openscap-content@%s", modifiedImageDigest)
-				)
+				modifiedImage := fmt.Sprintf("quay.io/jhrozek/ocp4-openscap-content@%s", modifiedImageDigest)
 
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
 
@@ -239,9 +236,7 @@ func TestE2E(t *testing.T) {
 					unlinkedRule        = "chronyd-client-only"
 					moderateProfileName = "moderate"
 				)
-				var (
-					modifiedImage = fmt.Sprintf("quay.io/jhrozek/ocp4-openscap-content@%s", modifiedImageDigest)
-				)
+				modifiedImage := fmt.Sprintf("quay.io/jhrozek/ocp4-openscap-content@%s", modifiedImageDigest)
 
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
 
@@ -1345,7 +1340,7 @@ func TestE2E(t *testing.T) {
 			Name:       "TestGenericRemediationFailsWithUnkownType",
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
-				remName := "test-generic-remediation-fails-unkown"
+				remName := "test-generic-remediation-fails-unknown"
 				genericRem := &compv1alpha1.ComplianceRemediation{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      remName,
@@ -1361,7 +1356,7 @@ func TestE2E(t *testing.T) {
 									"kind":       "OopsyDoodle",
 									"apiVersion": "foo.bar/v1",
 									"metadata": map[string]interface{}{
-										"name":      "unkown-remediation",
+										"name":      "unknown-remediation",
 										"namespace": namespace,
 									},
 									"data": map[string]interface{}{

@@ -7,13 +7,11 @@ import (
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes/scheme"
-
-	ign2types "github.com/coreos/ignition/config/v2_2/types"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	mcfgcommon "github.com/openshift/machine-config-operator/pkg/controller/common"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
 )
 
 func countResultItems(resultList []*ParseResult) (int, int) {
@@ -97,9 +95,7 @@ var _ = Describe("XCCDF parser", func() {
 				expDescription = "Configure SELinux Policy\n."
 			)
 
-			var (
-				check *compv1alpha1.ComplianceCheckResult
-			)
+			var check *compv1alpha1.ComplianceCheckResult
 
 			BeforeEach(func() {
 				for i := range resultList {
@@ -149,14 +145,12 @@ var _ = Describe("XCCDF parser", func() {
 			})
 
 			Context("MC files", func() {
-				var (
-					mcFiles []igntypes.File
-				)
+				var mcFiles []igntypes.File
 
 				BeforeEach(func() {
 					mcfg, _ := ParseMachineConfig(rem, rem.Spec.Current.Object)
 					ignRaw, _ := mcfgcommon.IgnParseWrapper(mcfg.Spec.Config.Raw)
-					parsedIgn := ignRaw.(ign2types.Config)
+					parsedIgn := ignRaw.(igntypes.Config)
 					mcFiles = parsedIgn.Storage.Files
 				})
 
@@ -185,7 +179,6 @@ var _ = Describe("XCCDF parser", func() {
 
 			ds, err = os.Open(dsFilename)
 			Expect(err).NotTo(HaveOccurred())
-
 		})
 
 		Context("Valid XCCDF and DS with remediations", func() {

@@ -12,14 +12,14 @@ import (
 const SuiteLabel = "compliance.openshift.io/suite"
 
 // SuiteScriptLabel indicates that the object is a script belonging to the
-// compliance suite controller
+// compliance suite controller.
 const SuiteScriptLabel = "compliance.openshift.io/suite-script"
 
 // SuiteFinalizer is a finalizer for ComplianceSuites. It gets automatically
 // added by the ComplianceSuite controller in order to delete resources.
 const SuiteFinalizer = "suite.finalizers.compliance.openshift.io"
 
-// ComplianceScanSpecWrapper provides a ComplianceScanSpec and a Name
+// ComplianceScanSpecWrapper provides a ComplianceScanSpec and a Name.
 // +k8s:openapi-gen=true
 type ComplianceScanSpecWrapper struct {
 	ComplianceScanSpec `json:",inline"`
@@ -49,7 +49,7 @@ func (sw *ComplianceScanSpecWrapper) ScanSpecDiffers(other *ComplianceScan) bool
 	return !reflect.DeepEqual(swCopy.ComplianceScanSpec, other.Spec)
 }
 
-// ComplianceScanStatusWrapper provides a ComplianceScanStatus and a Name
+// ComplianceScanStatusWrapper provides a ComplianceScanStatus and a Name.
 // +k8s:openapi-gen=true
 type ComplianceScanStatusWrapper struct {
 	ComplianceScanStatus `json:",inline"`
@@ -59,7 +59,7 @@ type ComplianceScanStatusWrapper struct {
 	Name string `json:"name,omitempty"`
 }
 
-// ComplianceSuiteSettings groups together settings of a ComplianceSuite
+// ComplianceSuiteSettings groups together settings of a ComplianceSuite.
 // +k8s:openapi-gen=true
 type ComplianceSuiteSettings struct {
 	// Defines whether or not the remediations should be applied automatically
@@ -70,7 +70,7 @@ type ComplianceSuiteSettings struct {
 	Schedule string `json:"schedule,omitempty"`
 }
 
-// ComplianceSuiteSpec defines the desired state of ComplianceSuite
+// ComplianceSuiteSpec defines the desired state of ComplianceSuite.
 // +k8s:openapi-gen=true
 type ComplianceSuiteSpec struct {
 	ComplianceSuiteSettings `json:",inline"`
@@ -79,7 +79,7 @@ type ComplianceSuiteSpec struct {
 	Scans []ComplianceScanSpecWrapper `json:"scans"`
 }
 
-// ComplianceSuiteStatus defines the observed state of ComplianceSuite
+// ComplianceSuiteStatus defines the observed state of ComplianceSuite.
 // +k8s:openapi-gen=true
 type ComplianceSuiteStatus struct {
 	// +listType=atomic
@@ -110,7 +110,7 @@ type ComplianceSuite struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ComplianceSuiteList contains a list of ComplianceSuite
+// ComplianceSuiteList contains a list of ComplianceSuite.
 type ComplianceSuiteList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -123,7 +123,7 @@ func init() {
 
 // ScanStatusWrapperFromScan returns a ComplianceScanStatusWrapper object
 // (used by the ComplianceSuite object) in order to display the status of
-// a scan
+// a scan.
 func ScanStatusWrapperFromScan(s *ComplianceScan) ComplianceScanStatusWrapper {
 	return ComplianceScanStatusWrapper{
 		Name:                 s.Name,

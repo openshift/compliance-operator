@@ -15,7 +15,15 @@ import (
 	"time"
 
 	ocpapi "github.com/openshift/api"
+	configv1 "github.com/openshift/api/config/v1"
 	imagev1 "github.com/openshift/api/image/v1"
+	"github.com/openshift/compliance-operator/pkg/apis"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/complianceremediation"
+	compsuitectrl "github.com/openshift/compliance-operator/pkg/controller/compliancesuite"
+	"github.com/openshift/compliance-operator/pkg/utils"
+	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	appsv1 "k8s.io/api/apps/v1"
@@ -32,23 +40,18 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/compliance-operator/pkg/apis"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/complianceremediation"
-	compsuitectrl "github.com/openshift/compliance-operator/pkg/controller/compliancesuite"
-	"github.com/openshift/compliance-operator/pkg/utils"
-	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
-var contentImagePath string
-var shouldLogContainerOutput bool
-var brokenContentImagePath string
+var (
+	contentImagePath         string
+	shouldLogContainerOutput bool
+	brokenContentImagePath   string
+)
 
-var rhcosPb *compv1alpha1.ProfileBundle
-var ocp4Pb *compv1alpha1.ProfileBundle
+var (
+	rhcosPb *compv1alpha1.ProfileBundle
+	ocp4Pb  *compv1alpha1.ProfileBundle
+)
 
 type ObjectResouceVersioner interface {
 	runtime.Object
@@ -253,7 +256,8 @@ func executeTests(t *testing.T, tests ...testExecution) {
 // NOTE: Whenever we add new types to the operator, we need to register them here for the e2e tests.
 func setupTestRequirements(t *testing.T) *framework.Context {
 	// compliance-operator objects
-	coObjs := [3]runtime.Object{&compv1alpha1.ComplianceScanList{},
+	coObjs := [3]runtime.Object{
+		&compv1alpha1.ComplianceScanList{},
 		&compv1alpha1.ComplianceRemediationList{},
 		&compv1alpha1.ComplianceSuiteList{},
 	}
@@ -599,7 +603,7 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 			return false, errors.New("not enough scan statuses")
 		}
 
-		//Examine the scan status both in the suite status and the scan
+		// Examine the scan status both in the suite status and the scan
 		for _, scanStatus := range suite.Status.ScanStatuses {
 			if scanStatus.Phase != targetStatus {
 				return false, fmt.Errorf("suite in status %s but scan wrapper %s in status %s", targetStatus, scanStatus.Name, scanStatus.Phase)
@@ -678,7 +682,7 @@ func suiteErrorMessageMatchesRegex(t *testing.T, f *framework.Framework, namespa
 	return nil
 }
 
-// getNodesWithSelector lists nodes according to a specific selector
+// getNodesWithSelector lists nodes according to a specific selector.
 func getNodesWithSelector(f *framework.Framework, labelselector map[string]string) []corev1.Node {
 	var nodes corev1.NodeList
 	lo := &client.ListOptions{
@@ -703,7 +707,7 @@ func getPodsForScan(f *framework.Framework, scanName string) ([]corev1.Pod, erro
 	return pods.Items, nil
 }
 
-// getConfigMapsFromScan lists the configmaps from the specified openscap scan instance
+// getConfigMapsFromScan lists the configmaps from the specified openscap scan instance.
 func getConfigMapsFromScan(f *framework.Framework, scaninstance *compv1alpha1.ComplianceScan) []corev1.ConfigMap {
 	var configmaps corev1.ConfigMapList
 	labelselector := map[string]string{
@@ -772,7 +776,7 @@ func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string)
 }
 
 func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scanName, roleLabel string, remNameList []string) error {
-	var scanSuiteMapNames = make(map[string]bool)
+	scanSuiteMapNames := make(map[string]bool)
 	var scanSuiteRemediations []compv1alpha1.ComplianceRemediation
 
 	// FIXME: This is a temporary hack. At the moment, the ARF parser is too slow
@@ -795,7 +799,6 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 		E2ELogf(t, "expected remediations found!")
 		return true, nil
 	})
-
 	if err != nil {
 		E2EErrorf(t, "Error waiting for remediations to appear")
 		return err
@@ -809,8 +812,10 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 	return nil
 }
 
-type machineConfigActionFunc func() error
-type poolPredicate func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error)
+type (
+	machineConfigActionFunc func() error
+	poolPredicate           func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error)
+)
 
 // waitForMachinePoolUpdate retrieves the original version of a MCP, then performs an
 // action passed in as a parameter and then waits until a MCP passes a predicate
@@ -906,7 +911,6 @@ func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
 		E2ELogf(t, "All machines updated")
 		return true, nil
 	})
-
 	if err != nil {
 		return err
 	}
@@ -918,7 +922,7 @@ func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
 // config from a pool that is passed through a parameter as well. A typical use-case is when a node is unlabeled
 // from a pool, in that case we need to wait until MCO makes the node use the other available pool. Only then it
 // is safe to remove the pool the node was labeled with, otherwise the node might still on next reboot use the
-// pool that was removed and this would mean the node transitions into Degraded state
+// pool that was removed and this would mean the node transitions into Degraded state.
 func waitForNodesToHaveARenderedPool(t *testing.T, f *framework.Framework, nodes []corev1.Node, poolName string) error {
 	pool := &mcfgv1.MachineConfigPool{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
@@ -1290,7 +1294,7 @@ func createReadyMachineConfigPoolSubset(t *testing.T, f *framework.Framework, ol
 }
 
 // picks a random machine from an existing pool and creates a subset of the pool with
-// one machine
+// one machine.
 func createMachineConfigPoolSubset(t *testing.T, f *framework.Framework, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
 	// retrieve the old pool
 	oldPool := &mcfgv1.MachineConfigPool{}
@@ -1310,7 +1314,7 @@ func createMachineConfigPoolSubset(t *testing.T, f *framework.Framework, oldPool
 	return createMachineConfigPool(t, f, oldPoolName, newPoolName, poolNodes[:1])
 }
 
-// creates a new pool named newPoolName from a list of nodes
+// creates a new pool named newPoolName from a list of nodes.
 func createMachineConfigPool(t *testing.T, f *framework.Framework, oldPoolName, newPoolName string, nodes []corev1.Node) (*mcfgv1.MachineConfigPool, error) {
 	newPoolNodeLabel := fmt.Sprintf("node-role.kubernetes.io/%s", newPoolName)
 
@@ -1400,7 +1404,7 @@ func waitForPoolCondition(t *testing.T, f *framework.Framework, conditionType mc
 	})
 }
 
-// isMachineConfigPoolConditionTrue returns true when the conditionType is present and set to `ConditionTrue`
+// isMachineConfigPoolConditionTrue returns true when the conditionType is present and set to `ConditionTrue`.
 func isMachineConfigPoolConditionTrue(conditions []mcfgv1.MachineConfigPoolCondition, conditionType mcfgv1.MachineConfigPoolConditionType) bool {
 	return IsMachineConfigPoolConditionPresentAndEqual(conditions, conditionType, corev1.ConditionTrue)
 }
@@ -1817,7 +1821,7 @@ func privCommandTuplePodOnHost(namespace, name, nodeName, commandPre string, com
 }
 
 // Creates a file /etc/securetty on the pod in an init container, then sleeps. The function returns the pod which
-// the caller can later delete, at that point, the file would be removed
+// the caller can later delete, at that point, the file would be removed.
 func createAndRemoveEtcSecurettyPod(namespace, name, nodeName string) *corev1.Pod {
 	return privCommandTuplePodOnHost(namespace, name, nodeName, "touch /hostroot/etc/securetty", []string{"rm", "-f", "/hostroot/etc/securetty"})
 }
@@ -1826,7 +1830,7 @@ func waitForPod(podCallback wait.ConditionFunc) error {
 	return wait.PollImmediate(retryInterval, timeout, podCallback)
 }
 
-// initContainerComplated returns a ConditionFunc that passes if all init containers have succeeded
+// initContainerComplated returns a ConditionFunc that passes if all init containers have succeeded.
 func initContainerCompleted(t *testing.T, c kubernetes.Interface, name, namespace string) wait.ConditionFunc {
 	return func() (bool, error) {
 		pod, err := c.CoreV1().Pods(namespace).Get(goctx.TODO(), name, metav1.GetOptions{})
@@ -1879,7 +1883,7 @@ func runPod(t *testing.T, f *framework.Framework, namespace string, podToRun *co
 }
 
 // createAndRemoveEtcSecurettyOnNode creates a pod that creates the file /etc/securetty on node, returns the pod
-// object for the caller to delete at which point the pod, before exiting, removes the file
+// object for the caller to delete at which point the pod, before exiting, removes the file.
 func createAndRemoveEtcSecurettyOnNode(t *testing.T, f *framework.Framework, namespace, name, nodeName string) (*corev1.Pod, error) {
 	return runPod(t, f, namespace, createAndRemoveEtcSecurettyPod(namespace, name, nodeName))
 }

@@ -16,7 +16,6 @@ import (
 )
 
 var _ = Describe("Testing scansettingbinding controller", func() {
-
 	var (
 		reconciler ReconcileScanSettingBinding
 
@@ -136,7 +135,8 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			v1.OwnerReference{
 				Name:       pBundleRhcos.Name,
 				Kind:       pBundleRhcos.Kind,
-				APIVersion: pBundleRhcos.APIVersion})
+				APIVersion: pBundleRhcos.APIVersion,
+			})
 		err = client.Create(context.TODO(), profRhcosE8)
 		Expect(err).To(BeNil())
 
@@ -150,7 +150,8 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			v1.OwnerReference{
 				Name:       profRhcosE8.Name,
 				Kind:       profRhcosE8.Kind,
-				APIVersion: profRhcosE8.APIVersion})
+				APIVersion: profRhcosE8.APIVersion,
+			})
 		err = client.Create(context.TODO(), tpRhcosE8)
 		Expect(err).To(BeNil())
 
@@ -398,5 +399,4 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			Expect(err).ToNot(BeNil())
 		})
 	})
-
 })

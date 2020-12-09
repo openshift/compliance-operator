@@ -59,7 +59,7 @@ func GetFirstNodeRole(nodeSelector map[string]string) string {
 }
 
 // AnyMcfgPoolLabelMatches verifies if the given nodeSelector matches the nodeSelector
-// in any of the given MachineConfigPools
+// in any of the given MachineConfigPools.
 func AnyMcfgPoolLabelMatches(nodeSelector map[string]string, poolList *mcfgv1.MachineConfigPoolList) bool {
 	for _, pool := range poolList.Items {
 		if McfgPoolLabelMatches(nodeSelector, &pool) {
@@ -69,7 +69,7 @@ func AnyMcfgPoolLabelMatches(nodeSelector map[string]string, poolList *mcfgv1.Ma
 	return false
 }
 
-// McfgPoolLabelMatches verifies if the given nodeSelector matches the given MachineConfigPool's nodeSelector
+// McfgPoolLabelMatches verifies if the given nodeSelector matches the given MachineConfigPool's nodeSelector.
 func McfgPoolLabelMatches(nodeSelector map[string]string, pool *mcfgv1.MachineConfigPool) bool {
 	if nodeSelector == nil {
 		return false

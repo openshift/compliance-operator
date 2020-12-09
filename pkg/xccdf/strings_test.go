@@ -6,7 +6,6 @@ import (
 )
 
 var _ = Describe("Testing parsing XML", func() {
-
 	Context("Descriptions", func() {
 		It("renders the description", func() {
 			desc := `<xccdf-1.2:description xml:lang="en-US">To configure Audit daemon to issue an explicit flush to disk command
