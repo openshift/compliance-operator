@@ -1,10 +1,11 @@
 package utils
 
 import (
+	"math"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"math"
 )
 
 // ParseResultContextItem wraps ParseResult with some metadata that need to be added
@@ -121,7 +122,7 @@ func (prCtx *ParseResultContext) addParsedResults(source string, newResults []*P
 	// Make sure all previously consistent items were touched, IOW we didn't receive
 	// fewer items by moving all previously untouched items to the inconsistent list
 	for _, consistentResult := range prCtx.consistent {
-		if consistentResult.processed == true {
+		if consistentResult.processed {
 			continue
 		}
 		// Deleting an item from a map while iterating over it is safe, see https://golang.org/doc/effective_go.html#for

@@ -673,7 +673,7 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 		log.Error(err, "Failed to get private tailoring ConfigMap", "ConfigMap.Name", privName, "ConfigMap.Namespace", privNs)
 		return err
 	}
-	privData, _ := privCM.Data["tailoring.xml"]
+	privData := privCM.Data["tailoring.xml"]
 
 	// privCM needs update
 	if privData != origData {
@@ -717,11 +717,7 @@ func scanResultReady(cm *corev1.ConfigMap) bool {
 	}
 
 	_, ok := cm.Annotations[compv1alpha1.CmScanResultAnnotation]
-	if !ok {
-		return false
-	}
-
-	return true
+	return ok
 }
 
 func getScanResult(cm *corev1.ConfigMap) (compv1alpha1.ComplianceScanStatusResult, error) {

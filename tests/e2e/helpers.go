@@ -861,7 +861,7 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 		// Check if the pool has finished updating yet. If the pool was paused, we just check that
 		// the generation was increased and wait for machines to reboot separately
 		if (pool.Status.ObservedGeneration != poolPre.Status.ObservedGeneration) &&
-			pool.Spec.Paused == true || ((pool.Status.UpdatedMachineCount == pool.Status.MachineCount) &&
+			pool.Spec.Paused || ((pool.Status.UpdatedMachineCount == pool.Status.MachineCount) &&
 			(pool.Status.UnavailableMachineCount == 0)) {
 			E2ELogf(t, "The pool has updated")
 			return true, nil
@@ -978,7 +978,7 @@ func applyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, n
 		// When checking if a MC is applied to a pool, we can't check the pool status
 		// when the pool is paused..
 		source := pool.Status.Configuration.Source
-		if pool.Spec.Paused == true {
+		if pool.Spec.Paused {
 			source = pool.Spec.Configuration.Source
 		}
 
@@ -1109,7 +1109,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 	predicate := func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error) {
 		// If the remediation that we deselect is NOT the last one, it is expected
 		// that the MC would still be present. Check for appropriate annotation
-		if lastRemediation == false {
+		if !lastRemediation {
 			mc := &mcfgv1.MachineConfig{}
 			err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: rem.GetMcName()}, mc)
 			if err != nil {
@@ -1179,7 +1179,7 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 		// When checking if a MC is applied to a pool, we can't check the pool status
 		// when the pool is paused..
 		source := pool.Status.Configuration.Source
-		if pool.Spec.Paused == true {
+		if pool.Spec.Paused {
 			source = pool.Spec.Configuration.Source
 		}
 
@@ -1841,7 +1841,7 @@ func initContainerCompleted(t *testing.T, c kubernetes.Interface, name, namespac
 		for _, initStatus := range pod.Status.InitContainerStatuses {
 			E2ELog(t, initStatus)
 			// the init container must have passed the readiness probe
-			if initStatus.Ready == false {
+			if !initStatus.Ready {
 				E2ELog(t, "Init container not ready yet")
 				return false, nil
 			}
@@ -1943,7 +1943,7 @@ func writeToArtifactsDir(dir, scan, pod, container, log string) error {
 }
 
 func logContainerOutput(t *testing.T, f *framework.Framework, namespace, name string) {
-	if shouldLogContainerOutput == false {
+	if !shouldLogContainerOutput {
 		return
 	}
 

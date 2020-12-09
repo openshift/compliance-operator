@@ -307,7 +307,7 @@ func getApplicableMcList(r *ReconcileComplianceRemediation, instance *compv1alph
 
 	// If the one being reconciled is supposed to be applied as well, add it to the list
 
-	if instance.Spec.Apply == true {
+	if instance.Spec.Apply {
 		scan := &compv1alpha1.ComplianceScan{}
 		scanKey := types.NamespacedName{Name: instance.Labels[compv1alpha1.ComplianceScanLabel], Namespace: instance.Namespace}
 		if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
@@ -525,9 +525,7 @@ func ensureRemediationAnnotationIsNotSet(mc *mcfgv1.MachineConfig, rem *compv1al
 		// No need to do anything
 		return
 	}
-	if _, ok := mc.Annotations[getRemediationAnnotationKey(rem.Name)]; ok {
-		delete(mc.Annotations, getRemediationAnnotationKey(rem.Name))
-	}
+	delete(mc.Annotations, getRemediationAnnotationKey(rem.Name))
 }
 
 func MCHasRemediationAnnotation(mc *mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) bool {

@@ -205,7 +205,7 @@ func annotateCMWithScanResult(cm *v1.ConfigMap, cmParsedResults []*utils.ParseRe
 			}
 		}
 
-		if gotPass == false {
+		if !gotPass {
 			scanResult = compv1alpha1.ResultNotApplicable
 			errMsg = "The scan did not produce any results, maybe an OS/platform mismatch?"
 		}

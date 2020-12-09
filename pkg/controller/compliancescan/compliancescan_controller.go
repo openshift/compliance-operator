@@ -841,7 +841,7 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 		}
 
 		cmHasResult := scanResultReady(foundCM)
-		if cmHasResult == false {
+		if !cmHasResult {
 			logger.Info("Scan results not ready, retrying. If the issue persists, restart or recreate the scan", "ComplianceScan.Name", instance.Name)
 			isReady = false
 			break
@@ -874,7 +874,7 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 			}
 
 			cmHasResult := scanResultReady(foundCM)
-			if cmHasResult == false {
+			if !cmHasResult {
 				logger.Info("Scan results not ready, retrying. If the issue persists, restart or recreate the scan", "ComplianceScan.Name", instance.Name)
 				isReady = false
 				continue

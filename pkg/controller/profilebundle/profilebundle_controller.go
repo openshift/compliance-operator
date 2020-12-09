@@ -406,7 +406,7 @@ func podStartupError(pod *corev1.Pod) bool {
 	// Check if the init container couldn't even run because the content image
 	// was wrong
 	for _, initStatus := range pod.Status.InitContainerStatuses {
-		if initStatus.Ready == true {
+		if initStatus.Ready {
 			// in case there was a transient error before we reconciled,
 			// just shortcut the loop and return false
 			break

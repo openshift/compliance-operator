@@ -83,7 +83,6 @@ func (v *Variable) validateType(val string) error {
 		if len(val) == 0 {
 			err = errors.New("value can't be empty")
 		}
-		break
 	}
 
 	return err

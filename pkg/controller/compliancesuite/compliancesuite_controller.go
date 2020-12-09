@@ -254,7 +254,7 @@ func (r *ReconcileComplianceSuite) reconcileScanStatus(suite *compv1alpha1.Compl
 
 func (r *ReconcileComplianceSuite) reconcileScanSpec(scanWrap *compv1alpha1.ComplianceScanSpecWrapper, origScan *compv1alpha1.ComplianceScan, logger logr.Logger) (bool, error) {
 	// Do we need to update the scan?
-	if scanWrap.ScanSpecDiffers(origScan) == false {
+	if !scanWrap.ScanSpecDiffers(origScan) {
 		logger.Info("Scan is up to date", "ComplianceScan.Name", origScan.Name)
 		return false, nil
 	}

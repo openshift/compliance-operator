@@ -316,7 +316,7 @@ func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, [
 
 func (c *scapContentDataStream) SaveWarningsIfAny(warnings []string, outputFile string) error {
 	// No warnings to persist
-	if warnings == nil || len(warnings) == 0 {
+	if len(warnings) == 0 {
 		return nil
 	}
 	DBG("Persisting warnings to output file")
