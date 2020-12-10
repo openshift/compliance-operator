@@ -325,6 +325,7 @@ deploy-local: namespace image-to-cluster deploy-crds ## Deploy the operator from
 	$(SED) 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	@oc apply -n $(NAMESPACE) -f deploy/
 	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
+	@oc set triggers -n $(NAMESPACE) deployment/compliance-operator --from-image openshift/compliance-operator:latest -c compliance-operator
 
 .PHONY: deploy-crds
 deploy-crds:
