@@ -36,7 +36,6 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/compliance-operator/pkg/apis"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/complianceremediation"
 	compsuitectrl "github.com/openshift/compliance-operator/pkg/controller/compliancesuite"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
@@ -756,7 +755,7 @@ func assertHasCheck(f *framework.Framework, suiteName, scanName string, check co
 	return nil
 }
 
-func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string) []compv1alpha1.ComplianceRemediation {
+func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string) ([]compv1alpha1.ComplianceRemediation, error) {
 	var scanSuiteRemediations compv1alpha1.ComplianceRemediationList
 
 	scanSuiteSelector := make(map[string]string)
@@ -767,8 +766,10 @@ func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string)
 		LabelSelector: labels.SelectorFromSet(scanSuiteSelector),
 	}
 
-	f.Client.List(goctx.TODO(), &scanSuiteRemediations, &listOpts)
-	return scanSuiteRemediations.Items
+	if err := f.Client.List(goctx.TODO(), &scanSuiteRemediations, &listOpts); err != nil {
+		return nil, err
+	}
+	return scanSuiteRemediations.Items, nil
 }
 
 func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scanName, roleLabel string, remNameList []string) error {
@@ -780,8 +781,13 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 	// to signify somehow that the remediations were already processed, but in the
 	// meantime, poll for 5 minutes while the remediations are being created
 	err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
-		scanSuiteRemediations = getRemediationsFromScan(f, suiteName, scanName)
-		for _, rem := range scanSuiteRemediations {
+		var listErr error
+		scanSuiteRemediations, listErr = getRemediationsFromScan(f, suiteName, scanName)
+		if listErr != nil {
+			E2ELogf(t, "Error listing remediations. Retrying: %s", listErr)
+		}
+		for idx := range scanSuiteRemediations {
+			rem := &scanSuiteRemediations[idx]
 			scanSuiteMapNames[rem.Name] = true
 		}
 
@@ -799,12 +805,6 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 	if err != nil {
 		E2EErrorf(t, "Error waiting for remediations to appear")
 		return err
-	}
-
-	for _, rem := range scanSuiteRemediations {
-		if rem.Labels[mcfgv1.MachineConfigRoleLabelKey] != roleLabel {
-			return fmt.Errorf("expected that scan %s is labeled for role %s", scanName, roleLabel)
-		}
 	}
 	return nil
 }
@@ -1087,7 +1087,7 @@ func remediationIsObsolete(t *testing.T, f *framework.Framework, namespace, name
 	return nil, false
 }
 
-func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, name, pool string, lastRemediation bool) error {
+func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, name, pool string) error {
 	rem := &compv1alpha1.ComplianceRemediation{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
 	if err != nil {
@@ -1107,23 +1107,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 	}
 
 	predicate := func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error) {
-		// If the remediation that we deselect is NOT the last one, it is expected
-		// that the MC would still be present. Check for appropriate annotation
-		if lastRemediation == false {
-			mc := &mcfgv1.MachineConfig{}
-			err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: rem.GetMcName()}, mc)
-			if err != nil {
-				E2ELogf(t, "Error while getting relevant MC, returning false: %v", err)
-				return false, nil
-			}
-
-			// If the MC doesn't have the appropriate annotation, we keep
-			// going...
-			return !complianceremediation.MCHasRemediationAnnotation(mc, rem), nil
-		}
-
-		// On the other hand, if the remediation we deselect WAS the last one, we want
-		// to check that the MC created by the operator went away. In that case, let's
+		// We want to check that the MC created by the operator went away. Let's
 		// poll the pool until we no longer see the remediation in the status
 		for _, mc := range pool.Status.Configuration.Source {
 			if mc.Name == rem.GetMcName() {
@@ -2049,4 +2033,33 @@ func updateImageStreamTag(f *framework.Framework, iSName, ns, imgPath string) er
 	// Updated tracked image reference
 	stream.Spec.Tags[0].From.Name = imgPath
 	return f.Client.Update(goctx.TODO(), stream)
+}
+
+func updateSuiteContentImage(t *testing.T, f *framework.Framework, newImg, suiteName, suiteNs string) error {
+	var lastErr error
+	timeoutErr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		suite := &compv1alpha1.ComplianceSuite{}
+		// Now update the suite with a different image that contains different remediations
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: suiteName, Namespace: suiteNs}, suite)
+		if lastErr != nil {
+			E2ELogf(t, "Got error while trying to get suite %s. Retrying... - %s", suiteName, lastErr)
+			return false, nil
+		}
+		modSuite := suite.DeepCopy()
+		modSuite.Spec.Scans[0].ContentImage = newImg
+		lastErr = f.Client.Update(goctx.TODO(), modSuite)
+		if lastErr != nil {
+			E2ELogf(t, "Got error while trying to update suite %s. Retrying... - %s", suiteName, lastErr)
+			return false, nil
+		}
+		return true, nil
+	})
+
+	if timeoutErr != nil {
+		return fmt.Errorf("couldn't update suite's content image. Timed out: %w", timeoutErr)
+	}
+	if lastErr != nil {
+		return fmt.Errorf("couldn't update suite's content image. Errored out: %w", lastErr)
+	}
+	return nil
 }

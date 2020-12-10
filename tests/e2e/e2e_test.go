@@ -2222,28 +2222,22 @@ func TestE2E(t *testing.T) {
 				}
 
 				// Get the resulting MC
-				mcName := types.NamespacedName{Name: fmt.Sprintf("75-%s-%s", workerScanName, suiteName)}
+				mcName := types.NamespacedName{Name: fmt.Sprintf("75-%s", workersNoEmptyPassRemName)}
 				mcBoth := &mcfgv1.MachineConfig{}
 				err = f.Client.Get(goctx.TODO(), mcName, mcBoth)
 				E2ELogf(t, "MC %s exists", mcName.Name)
 
 				// Revert one remediation. The MC should stay, but its generation should bump
 				E2ELogf(t, "Will revert remediation %s", workersNoEmptyPassRemName)
-				err = unApplyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName, false)
+				err = unApplyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName)
 				if err != nil {
 					E2ELogf(t, "WARNING: Got an error while unapplying remediation '%s': %v", workersNoEmptyPassRemName, err)
 				}
 				E2ELogf(t, "Remediation %s reverted", workersNoEmptyPassRemName)
-				mcOne := &mcfgv1.MachineConfig{}
-				err = f.Client.Get(goctx.TODO(), mcName, mcOne)
-
-				if mcOne.Generation == mcBoth.Generation {
-					E2EErrorf(t, "Expected that the MC generation changes. Got: %d, Expected: %d", mcOne.Generation, mcBoth.Generation)
-				}
 
 				// When we unapply the second remediation, the MC should be deleted, too
 				E2ELogf(t, "Will revert remediation %s", workersNoRootLoginsRemName)
-				err = unApplyRemediationAndCheck(t, f, namespace, workersNoRootLoginsRemName, testPoolName, true)
+				err = unApplyRemediationAndCheck(t, f, namespace, workersNoRootLoginsRemName, testPoolName)
 				E2ELogf(t, "Remediation %s reverted", workersNoEmptyPassRemName)
 
 				E2ELogf(t, "No remediation-based MCs should exist now")
@@ -2655,17 +2649,10 @@ func TestE2E(t *testing.T) {
 				}
 
 				// Now update the suite with a different image that contains different remediations
-				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: origSuiteName, Namespace: namespace}, origSuite)
-				if err != nil {
+				if err := updateSuiteContentImage(t, f, modImage, origSuiteName, namespace); err != nil {
 					return err
 				}
-				modSuite := origSuite.DeepCopy()
-				modSuite.Spec.Scans[0].ContentImage = modImage
-				err = f.Client.Update(goctx.TODO(), modSuite)
-				if err != nil {
-					return err
-				}
-				E2ELogf(t, "Suite %s updated with a new image", modSuite.Name)
+				E2ELogf(t, "Suite %s updated with a new image", origSuiteName)
 
 				err = reRunScan(t, f, workerScanName, namespace)
 				if err != nil {
@@ -2687,7 +2674,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				E2ELog(t, "Will remove obsolete data from remediation")
-				renderedMcName := fmt.Sprintf("75-%s-%s", workerScanName, origSuiteName)
+				renderedMcName := fmt.Sprintf("75-%s", workersNoEmptyPassRemName)
 				err = removeObsoleteRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, renderedMcName, testPoolName)
 				if err != nil {
 					return err
@@ -2710,7 +2697,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				// Finally clean up by removing the remediation and waiting for the nodes to reboot one more time
-				err = unApplyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName, true)
+				err = unApplyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName)
 				if err != nil {
 					return err
 				}
