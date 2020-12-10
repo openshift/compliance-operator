@@ -43,7 +43,6 @@ import (
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
 const (
@@ -294,12 +293,6 @@ func getRemediationLabels(scan *compv1alpha1.ComplianceScan, obj runtime.Object)
 	labels := make(map[string]string)
 	labels[compv1alpha1.ComplianceScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels[compv1alpha1.SuiteLabel]
-
-	// FIXME(jaosorior): Figure out a more pluggable way of adding these sorts of special cases
-	if obj.GetObjectKind().GroupVersionKind().Kind == "MachineConfig" {
-		labels[mcfgv1.MachineConfigRoleLabelKey] = utils.GetFirstNodeRole(scan.Spec.NodeSelector)
-		return labels
-	}
 
 	return labels
 }
