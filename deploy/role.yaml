@@ -327,6 +327,16 @@ metadata:
   name: api-resource-collector
 rules:
 - apiGroups:
+  - operator.openshift.io
+  resources:
+  - ingresscontrollers
+  - kubeapiservers
+  - openshiftapiservers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - config.openshift.io
   resources:
   - operatorhubs
