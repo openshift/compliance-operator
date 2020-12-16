@@ -368,7 +368,7 @@ push: image
 .PHONY: push-index
 push-index: index-image
 	# index image
-	$(RUNTIME) push $(INDEX_IMAGE_PATH):$(TAG)
+	$(RUNTIME) push $(INDEX_IMAGE_PATH):latest
 
 .PHONY: check-operator-version
 check-operator-version:
