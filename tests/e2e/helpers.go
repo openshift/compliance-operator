@@ -99,6 +99,10 @@ func E2EErrorf(t *testing.T, format string, args ...interface{}) {
 	t.Errorf(fmt.Sprintf("E2E-FAILURE: %s: %s", time.Now().Format(time.RFC3339), format), args...)
 }
 
+func E2EFatalf(t *testing.T, format string, args ...interface{}) {
+	t.Fatalf(fmt.Sprintf("E2E-FAILURE: %s: %s", time.Now().Format(time.RFC3339), format), args...)
+}
+
 func getObjNameFromTest(t *testing.T) string {
 	fullTestName := t.Name()
 	regexForCapitals := regexp.MustCompile(`[A-Z]`)
@@ -367,13 +371,8 @@ func waitForProfileBundleStatus(t *testing.T, f *framework.Framework, namespace,
 		E2ELogf(t, "Waiting for run of %s ProfileBundle (%s)\n", name, pb.Status.DataStreamStatus)
 		return false, nil
 	})
-	// Error in function call
-	if lastErr != nil {
-		return lastErr
-	}
-	// Timeout
-	if timeouterr != nil {
-		return timeouterr
+	if err := processErrorOrTimeout(lastErr, timeouterr, "waiting for ProfileBundle status"); err != nil {
+		return err
 	}
 	E2ELogf(t, "ProfileBundle ready (%s)\n", pb.Status.DataStreamStatus)
 	return nil
@@ -381,12 +380,12 @@ func waitForProfileBundleStatus(t *testing.T, f *framework.Framework, namespace,
 
 // waitForScanStatus will poll until the compliancescan that we're lookingfor reaches a certain status, or until
 // a timeout is reached.
-func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus compv1alpha1.ComplianceScanStatusPhase) error {
+func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus compv1alpha1.ComplianceScanStatusPhase) {
 	exampleComplianceScan := &compv1alpha1.ComplianceScan{}
 	var lastErr error
 	defer logContainerOutput(t, f, namespace, name)
 	// retry and ignore errors until timeout
-	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+	timeoutErr := wait.Poll(retryInterval, timeout, func() (bool, error) {
 		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, exampleComplianceScan)
 		if lastErr != nil {
 			if apierrors.IsNotFound(lastErr) {
@@ -403,16 +402,10 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 		E2ELogf(t, "Waiting for run of %s compliancescan (%s)\n", name, exampleComplianceScan.Status.Phase)
 		return false, nil
 	})
-	// Error in function call
-	if lastErr != nil {
-		return lastErr
-	}
-	// Timeout
-	if timeouterr != nil {
-		return timeouterr
-	}
+
+	assertNoErrorNorTimeout(t, lastErr, timeoutErr, "waiting for compliance status")
+
 	E2ELogf(t, "ComplianceScan ready (%s)\n", exampleComplianceScan.Status.Phase)
-	return nil
 }
 
 // waitForReScanStatus will poll until the compliancescan that we're lookingfor reaches a certain status for a re-scan, or until
@@ -604,13 +597,10 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 				return false, fmt.Errorf("suite in status %s but scan wrapper %s in status %s", targetStatus, scanStatus.Name, scanStatus.Phase)
 			}
 
-			lastErr = waitForScanStatus(t, f, namespace, scanStatus.Name, targetStatus)
-			if lastErr != nil {
-				// If the status was present in the suite, then /any/ error
-				// should fail the test as the scans should be read /from/
-				// the scan itself
-				return true, fmt.Errorf("suite in status %s but scan object %s in status %s", targetStatus, scanStatus.Name, scanStatus.Phase)
-			}
+			// If the status was present in the suite, then /any/ error
+			// should fail the test as the scans should be read /from/
+			// the scan itself
+			waitForScanStatus(t, f, namespace, scanStatus.Name, targetStatus)
 		}
 
 		return true, nil
@@ -883,7 +873,7 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 
 // waitForNodesToBeReady waits until all the nodes in the cluster have
 // reached the expected machineConfig.
-func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
+func waitForNodesToBeReady(t *testing.T, f *framework.Framework, errorMessage string) {
 	err := wait.PollImmediate(machineOperationRetryInterval, machineOperationTimeout, func() (bool, error) {
 		var nodes corev1.NodeList
 
@@ -908,10 +898,8 @@ func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
 	})
 
 	if err != nil {
-		return err
+		E2EFatalf(t, "%s: %s", errorMessage, err)
 	}
-
-	return nil
 }
 
 // waitForNodesToHaveARenderedPool wait until all nodes passed through a parameter transition to a rendered
@@ -1071,11 +1059,41 @@ func removeObsoleteRemediationAndCheck(t *testing.T, f *framework.Framework, nam
 	return nil
 }
 
+func assertRemediationIsObsolete(t *testing.T, f *framework.Framework, namespace, name string) {
+	err, isObsolete := remediationIsObsolete(t, f, namespace, name)
+	if err != nil {
+		E2EFatalf(t, "%s", err)
+	}
+	if !isObsolete {
+		E2EFatalf(t, "expected that the remediation is obsolete")
+	}
+}
+
+func assertRemediationIsCurrent(t *testing.T, f *framework.Framework, namespace, name string) {
+	err, isObsolete := remediationIsObsolete(t, f, namespace, name)
+	if err != nil {
+		E2EFatalf(t, "%s", err)
+	}
+	if isObsolete {
+		E2EFatalf(t, "expected that the remediation is not obsolete")
+	}
+}
+
 func remediationIsObsolete(t *testing.T, f *framework.Framework, namespace, name string) (error, bool) {
 	rem := &compv1alpha1.ComplianceRemediation{}
-	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
-	if err != nil {
-		return err, false
+	var lastErr error
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
+		if lastErr != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	if lastErr != nil {
+		return fmt.Errorf("Got error trying to get remediation's obsolescence: %w", lastErr), false
+	}
+	if timeouterr != nil {
+		return fmt.Errorf("Timed out trying to get remediation's obsolescence: %w", lastErr), false
 	}
 	E2ELogf(t, "Remediation %s found", name)
 
@@ -1130,7 +1148,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 	return nil
 }
 
-func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, remName, remNamespace string, pool *mcfgv1.MachineConfigPool) error {
+func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, remName, remNamespace string, pool *mcfgv1.MachineConfigPool) {
 	rem := &compv1alpha1.ComplianceRemediation{}
 	var lastErr error
 	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
@@ -1146,14 +1164,7 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 		E2ELogf(t, "Found remediation: %s\n", remName)
 		return true, nil
 	})
-	// Error in function call
-	if lastErr != nil {
-		return lastErr
-	}
-	// Timeout
-	if timeouterr != nil {
-		return timeouterr
-	}
+	assertNoErrorNorTimeout(t, lastErr, timeouterr, "getting remediation before auto-applying it")
 
 	preNoop := func() error {
 		return nil
@@ -1181,37 +1192,32 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 
 	err := waitForMachinePoolUpdate(t, f, pool.Name, preNoop, predicate, pool)
 	if err != nil {
-		E2EErrorf(t, "Failed to wait for pool to update after applying MC: %v", err)
-		return err
+		E2EFatalf(t, "Failed to wait for pool to update after applying MC: %v", err)
 	}
 
 	E2ELogf(t, "Machines updated with remediation")
-	err = waitForNodesToBeReady(t, f)
-	if err != nil {
-		E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
-		return err
-	}
+	waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after auto-applying remediation")
 
 	E2ELogf(t, "Remediation applied to machines and machines rebooted")
-	return nil
 }
 
-func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName string) error {
-	err := unPauseMachinePool(t, f, poolName)
-	if err != nil {
-		E2EErrorf(t, "Could not unpause the MC pool")
-		return err
+func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName string) {
+	if err := unPauseMachinePool(t, f, poolName); err != nil {
+		E2EFatalf(t, "Could not unpause the MC pool")
 	}
 
 	// When the pool updates, we need to wait for the machines to pick up the new rendered
 	// config
-	err = wait.PollImmediate(machineOperationRetryInterval, machineOperationTimeout, func() (bool, error) {
+	var lastErr error
+	timeoutErr := wait.PollImmediate(machineOperationRetryInterval, machineOperationTimeout, func() (bool, error) {
 		pool := &mcfgv1.MachineConfigPool{}
-		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
-		if err != nil {
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
+		if apierrors.IsNotFound(lastErr) {
+			E2EFatalf(t, "Could not find the pool post update")
+		} else if lastErr != nil {
 			// even not found is a hard error here
-			E2EErrorf(t, "Could not find the pool post update")
-			return false, err
+			E2ELogf(t, "Got error while getting MachineConfigPool. Retrying: %s", lastErr)
+			return false, nil
 		}
 
 		E2ELogf(t, "Will check for update, updated %d/%d unavailable %d",
@@ -1229,8 +1235,12 @@ func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName st
 			pool.Status.UnavailableMachineCount)
 		return false, nil
 	})
-
-	return err
+	if lastErr != nil {
+		E2EFatalf(t, "Got error waiting for MCP unpausing: %s", timeoutErr)
+	}
+	if timeoutErr != nil {
+		E2EFatalf(t, "Timed out waiting for MCP unpausing: %s", timeoutErr)
+	}
 }
 
 func pauseMachinePool(t *testing.T, f *framework.Framework, poolName string) error {
@@ -2060,6 +2070,24 @@ func updateSuiteContentImage(t *testing.T, f *framework.Framework, newImg, suite
 	}
 	if lastErr != nil {
 		return fmt.Errorf("couldn't update suite's content image. Errored out: %w", lastErr)
+	}
+	return nil
+}
+
+func assertNoErrorNorTimeout(t *testing.T, err, timeoutErr error, message string) {
+	if finalErr := processErrorOrTimeout(err, timeoutErr, message); finalErr != nil {
+		E2EFatalf(t, "%s", finalErr)
+	}
+}
+
+func processErrorOrTimeout(err, timeoutErr error, message string) error {
+	// Error in function call
+	if err != nil {
+		return fmt.Errorf("Got error when %s: %w", message, err)
+	}
+	// Timeout
+	if timeoutErr != nil {
+		return fmt.Errorf("Timed out when %s: %w", message, timeoutErr)
 	}
 	return nil
 }

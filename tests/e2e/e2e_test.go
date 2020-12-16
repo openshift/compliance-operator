@@ -420,10 +420,8 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultCompliant)
 				if err != nil {
@@ -461,10 +459,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				// We expect that a scan that is using all the rules wouldn't be compliant
 				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultNonCompliant)
@@ -522,10 +517,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultCompliant)
 				if err != nil {
@@ -557,10 +549,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultNonCompliant)
 				if err != nil {
@@ -622,10 +611,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultError)
 				if err != nil {
@@ -683,10 +669,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultError)
 				if err != nil {
@@ -749,10 +732,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-single-tailored-scan-succeeds", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-single-tailored-scan-succeeds", compv1alpha1.PhaseDone)
 
 				return scanResultIsExpected(t, f, namespace, "test-single-tailored-scan-succeeds", compv1alpha1.ResultCompliant)
 			},
@@ -809,10 +789,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, exampleComplianceScan.Name, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, exampleComplianceScan.Name, compv1alpha1.PhaseDone)
 
 				return scanResultIsExpected(t, f, namespace, exampleComplianceScan.Name, compv1alpha1.ResultCompliant)
 			},
@@ -844,10 +821,8 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-filtered-scan", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-filtered-scan", compv1alpha1.PhaseDone)
+
 				nodes := getNodesWithSelector(f, selectWorkers)
 				configmaps := getConfigMapsFromScan(f, testComplianceScan)
 				if len(nodes) != len(configmaps) {
@@ -886,10 +861,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultNotApplicable)
 			},
 		},
@@ -917,10 +889,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultError)
 			},
 		},
@@ -946,10 +915,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-scan-w-invalid-content", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-scan-w-invalid-content", compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, "test-scan-w-invalid-content", compv1alpha1.ResultError)
 			},
 		},
@@ -975,10 +941,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-scan-w-invalid-profile", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-scan-w-invalid-profile", compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, "test-scan-w-invalid-profile", compv1alpha1.ResultError)
 			},
 		},
@@ -1034,10 +997,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-malformed-tailored-scan-fails", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-malformed-tailored-scan-fails", compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, "test-malformed-tailored-scan-fails", compv1alpha1.ResultError)
 			},
 		},
@@ -1064,10 +1024,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-scan-w-empty-tailoring-cm", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-scan-w-empty-tailoring-cm", compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, "test-scan-w-empty-tailoring-cm", compv1alpha1.ResultError)
 			},
 		},
@@ -1098,10 +1055,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseLaunching)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseLaunching)
 
 				var resultErr error
 				// The status might still be NOT-AVAILABLE... we can wait a bit
@@ -1139,10 +1093,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				return scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultCompliant)
 			},
@@ -1170,10 +1121,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-missing-pod-scan", compv1alpha1.PhaseRunning)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-missing-pod-scan", compv1alpha1.PhaseRunning)
 				pods, err := getPodsForScan(f, "test-missing-pod-scan")
 				if err != nil {
 					return err
@@ -1189,10 +1137,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-missing-pod-scan", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-missing-pod-scan", compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, "test-missing-pod-scan", compv1alpha1.ResultCompliant)
 			},
 		},
@@ -2044,11 +1989,7 @@ func TestE2E(t *testing.T) {
 				// We need to check that the remediation is auto-applied and save
 				// the object so we can delete it later
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
-				err = waitForRemediationToBeAutoApplied(t, f, workersNoRootLoginsRemName, namespace, poolBeforeRemediation)
-				if err != nil {
-					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
-					return err
-				}
+				waitForRemediationToBeAutoApplied(t, f, workersNoRootLoginsRemName, namespace, poolBeforeRemediation)
 
 				// We can re-run the scan at this moment and check that it's now compliant
 				// and it's reflected in a CheckResult
@@ -2126,11 +2067,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				// ..as well as the nodes
-				err = waitForNodesToBeReady(t, f)
-				if err != nil {
-					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
-					return err
-				}
+				waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after applying MC")
 
 				E2ELogf(t, "The test succeeded!")
 				return nil
@@ -2210,16 +2147,9 @@ func TestE2E(t *testing.T) {
 				E2ELogf(t, "Remediation %s applied", workersNoEmptyPassRemName)
 
 				// unpause the MCP so that the remediation gets applied
-				err = unPauseMachinePoolAndWait(t, f, testPoolName)
-				if err != nil {
-					return err
-				}
+				unPauseMachinePoolAndWait(t, f, testPoolName)
 
-				err = waitForNodesToBeReady(t, f)
-				if err != nil {
-					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
-					return err
-				}
+				waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after applying MC")
 
 				// Get the resulting MC
 				mcName := types.NamespacedName{Name: fmt.Sprintf("75-%s", workersNoEmptyPassRemName)}
@@ -2642,11 +2572,7 @@ func TestE2E(t *testing.T) {
 				}
 				E2ELogf(t, "Remediation %s applied", workersNoEmptyPassRemName)
 
-				err = waitForNodesToBeReady(t, f)
-				if err != nil {
-					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
-					return err
-				}
+				waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after applying MC")
 
 				// Now update the suite with a different image that contains different remediations
 				if err := updateSuiteContentImage(t, f, modImage, origSuiteName, namespace); err != nil {
@@ -2665,13 +2591,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err, isObsolete := remediationIsObsolete(t, f, namespace, workersNoEmptyPassRemName)
-				if err != nil {
-					return err
-				}
-				if isObsolete == false {
-					return fmt.Errorf("expected that the remediation is obsolete")
-				}
+				assertRemediationIsObsolete(t, f, namespace, workersNoEmptyPassRemName)
 
 				E2ELog(t, "Will remove obsolete data from remediation")
 				renderedMcName := fmt.Sprintf("75-%s", workersNoEmptyPassRemName)
@@ -2680,21 +2600,10 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err = waitForNodesToBeReady(t, f)
-				if err != nil {
-					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
-					return err
-				}
+				waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after applying MC")
 
 				// Now the remediation is no longer obsolete
-				err, isObsolete = remediationIsObsolete(t, f, namespace, workersNoEmptyPassRemName)
-				if err != nil {
-					return err
-				}
-
-				if isObsolete == true {
-					return fmt.Errorf("expected that the remediation is no longer obsolete")
-				}
+				assertRemediationIsCurrent(t, f, namespace, workersNoEmptyPassRemName)
 
 				// Finally clean up by removing the remediation and waiting for the nodes to reboot one more time
 				err = unApplyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName)
@@ -2702,11 +2611,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err = waitForNodesToBeReady(t, f)
-				if err != nil {
-					E2EErrorf(t, "Failed to wait for nodes to come back up after unapplying MC: %v", err)
-					return err
-				}
+				waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after unapplying MC")
 
 				return nil
 			},
