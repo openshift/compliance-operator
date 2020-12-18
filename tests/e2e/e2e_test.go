@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	configv1 "github.com/openshift/api/config/v1"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
+	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -2601,6 +2603,83 @@ func TestE2E(t *testing.T) {
 
 				waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after unapplying MC")
 
+				return nil
+			},
+		},
+		testExecution{
+			Name:       "TestProfileBundleDefaultIsKept",
+			IsParallel: false,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				const otherImage = "quay.io/jhrozek/ocp4-openscap-content@sha256:a1709f5150b17a9560a5732fe48a89f07bffc72c0832aa8c49ee5504510ae687"
+				var bctx = goctx.Background()
+
+				ocpPb, err := getReadyProfileBundle(t, f, "ocp4", namespace)
+				if err != nil {
+					E2EFatalf(t, "error getting ocp4 profile: %s", err)
+				}
+
+				origImage := ocpPb.Spec.ContentImage
+
+				ocpPbCopy := ocpPb.DeepCopy()
+				ocpPbCopy.Spec.ContentImage = otherImage
+				ocpPbCopy.Spec.ContentFile = rhcosContentFile
+				if updateErr := f.Client.Update(bctx, ocpPbCopy); updateErr != nil {
+					E2EFatalf(t, "error updating default ocp4 profile: %s", err)
+				}
+
+				if err := waitForProfileBundleStatus(t, f, namespace, "ocp4", compv1alpha1.DataStreamPending); err != nil {
+					E2EFatalf(t, "ocp4 update didn't trigger a PENDING state: %s", err)
+				}
+
+				// Now wait for the processing to finish
+				if err := waitForProfileBundleStatus(t, f, namespace, "ocp4", compv1alpha1.DataStreamValid); err != nil {
+					E2EFatalf(t, "ocp4 update didn't trigger a PENDING state: %s", err)
+				}
+
+				// Delete compliance operator pods
+				// This will trigger a reconciliation of the profile bundle
+				// This is what would happen on an operator update.
+
+				inNs := client.InNamespace(namespace)
+				withLabel := client.MatchingLabels{
+					"name": "compliance-operator",
+				}
+				if err := f.Client.DeleteAllOf(bctx, &corev1.Pod{}, inNs, withLabel); err != nil {
+					return err
+				}
+
+				// Wait for the operator deletion to happen
+				time.Sleep(retryInterval)
+
+				err = e2eutil.WaitForOperatorDeployment(t, f.KubeClient, namespace,
+					"compliance-operator", 1, retryInterval, timeout)
+				if err != nil {
+					E2EFatalf(t, "failed waiting for compliance-operator to come back up: %s", err)
+				}
+
+				var lastErr error
+				pbkey := types.NamespacedName{Name: "ocp4", Namespace: namespace}
+				timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+					pb := &compv1alpha1.ProfileBundle{}
+					if lastErr := f.Client.Get(bctx, pbkey, pb); lastErr != nil {
+						E2ELogf(t, "error getting ocp4 PB. Retrying: %s", err)
+						return false, nil
+					}
+					if pb.Spec.ContentImage != origImage {
+						E2ELogf(t, "PB ContentImage not updated yet: Got %s - Expected %s", pb.Spec.ContentImage, origImage)
+						return false, nil
+					}
+					E2ELogf(t, "PB ContentImage up-to-date")
+					return true, nil
+				})
+				if err := processErrorOrTimeout(lastErr, timeouterr, "waiting for ProfileBundle to update"); err != nil {
+					return err
+				}
+
+				ocpPb, err = getReadyProfileBundle(t, f, "ocp4", namespace)
+				if err != nil {
+					E2EFatalf(t, "error getting valid and up-to-date PB: %s", err)
+				}
 				return nil
 			},
 		},
