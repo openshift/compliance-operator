@@ -823,7 +823,7 @@ func TestE2E(t *testing.T) {
 				}
 				waitForScanStatus(t, f, namespace, "test-filtered-scan", compv1alpha1.PhaseDone)
 
-				nodes := getNodesWithSelector(f, selectWorkers)
+				nodes := getNodesWithSelectorOrFail(t, f, selectWorkers)
 				configmaps := getConfigMapsFromScan(f, testComplianceScan)
 				if len(nodes) != len(configmaps) {
 					return fmt.Errorf(
@@ -1723,7 +1723,7 @@ func TestE2E(t *testing.T) {
 			Name:       "TestTolerations",
 			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
-				workerNodes := getNodesWithSelector(f, map[string]string{
+				workerNodes := getNodesWithSelectorOrFail(t, f, map[string]string{
 					"node-role.kubernetes.io/worker": "",
 				})
 
@@ -1792,7 +1792,7 @@ func TestE2E(t *testing.T) {
 				workerNodesLabel := map[string]string{
 					"node-role.kubernetes.io/worker": "",
 				}
-				workerNodes := getNodesWithSelector(f, workerNodesLabel)
+				workerNodes := getNodesWithSelectorOrFail(t, f, workerNodesLabel)
 
 				taintedNode := &workerNodes[0]
 				taintKey := "co-e2e"
@@ -1961,13 +1961,9 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				err := mcTctx.createE2EPool()
-				if err != nil {
-					E2EErrorf(t, "Cannot create subpool for this test")
-					return err
-				}
+				mcTctx.ensureE2EPool()
 
-				err = f.Client.Create(goctx.TODO(), exampleComplianceSuite, getCleanupOpts(ctx))
+				err := f.Client.Create(goctx.TODO(), exampleComplianceSuite, getCleanupOpts(ctx))
 				if err != nil {
 					return err
 				}
@@ -2108,13 +2104,9 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				err := mcTctx.createE2EPool()
-				if err != nil {
-					E2EErrorf(t, "Cannot create subpool for this test")
-					return err
-				}
+				mcTctx.ensureE2EPool()
 
-				err = f.Client.Create(goctx.TODO(), exampleComplianceSuite, getCleanupOpts(ctx))
+				err := f.Client.Create(goctx.TODO(), exampleComplianceSuite, getCleanupOpts(ctx))
 				if err != nil {
 					return err
 				}
@@ -2217,7 +2209,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				workerNodes := getNodesWithSelector(f, selectWorkers)
+				workerNodes := getNodesWithSelectorOrFail(t, f, selectWorkers)
 				pod, err := createAndRemoveEtcSecurettyOnNode(t, f, namespace, "create-etc-securetty", workerNodes[0].Labels["kubernetes.io/hostname"])
 				if err != nil {
 					return err
@@ -2548,13 +2540,9 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				err := mcTctx.createE2EPool()
-				if err != nil {
-					E2EErrorf(t, "Cannot create subpool for this test")
-					return err
-				}
+				mcTctx.ensureE2EPool()
 
-				err = f.Client.Create(goctx.TODO(), origSuite, getCleanupOpts(ctx))
+				err := f.Client.Create(goctx.TODO(), origSuite, getCleanupOpts(ctx))
 				if err != nil {
 					return err
 				}

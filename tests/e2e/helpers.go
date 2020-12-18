@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	backoff "github.com/cenkalti/backoff/v3"
 	ocpapi "github.com/openshift/api"
 	imagev1 "github.com/openshift/api/image/v1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
@@ -48,6 +49,8 @@ var brokenContentImagePath string
 
 var rhcosPb *compv1alpha1.ProfileBundle
 var ocp4Pb *compv1alpha1.ProfileBundle
+
+var defaultBackoff = backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries)
 
 type ObjectResouceVersioner interface {
 	runtime.Object
@@ -132,7 +135,7 @@ func (c *mcTestCtx) cleanupTrackedPools() {
 	for _, p := range c.pools {
 		// Then find all nodes that are labeled with this pool and remove the label
 		// Search the nodes with this label
-		poolNodes := getNodesWithSelector(c.f, p.Spec.NodeSelector.MatchLabels)
+		poolNodes := getNodesWithSelectorOrFail(c.t, c.f, p.Spec.NodeSelector.MatchLabels)
 		rmPoolLabel := utils.GetFirstNodeRoleLabel(p.Spec.NodeSelector.MatchLabels)
 
 		err := unLabelNodes(c.t, c.f, rmPoolLabel, poolNodes)
@@ -173,15 +176,12 @@ func (c *mcTestCtx) trackPool(pool *mcfgv1.MachineConfigPool) {
 	E2ELogf(c.t, "Tracking pool %s\n", pool.Name)
 }
 
-func (c *mcTestCtx) createE2EPool() error {
+func (c *mcTestCtx) ensureE2EPool() {
 	pool, err := createReadyMachineConfigPoolSubset(c.t, c.f, workerPoolName, testPoolName)
-	if apierrors.IsAlreadyExists(err) {
-		return nil
-	} else if err != nil {
-		return err
+	if err != nil {
+		E2EFatalf(c.t, "error ensuring that test e2e pool exists: %s", err)
 	}
 	c.trackPool(pool)
-	return nil
 }
 
 // executeTest sets up everything that a e2e test needs to run, and executes the test.
@@ -668,13 +668,28 @@ func suiteErrorMessageMatchesRegex(t *testing.T, f *framework.Framework, namespa
 }
 
 // getNodesWithSelector lists nodes according to a specific selector
-func getNodesWithSelector(f *framework.Framework, labelselector map[string]string) []corev1.Node {
+func getNodesWithSelector(f *framework.Framework, labelselector map[string]string) ([]corev1.Node, error) {
 	var nodes corev1.NodeList
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(labelselector),
 	}
-	f.Client.List(goctx.TODO(), &nodes, lo)
-	return nodes.Items
+	listErr := backoff.Retry(
+		func() error {
+			return f.Client.List(goctx.TODO(), &nodes, lo)
+		},
+		defaultBackoff)
+	if listErr != nil {
+		return nodes.Items, fmt.Errorf("couldn't list nodes with selector %s: %w", labelselector, listErr)
+	}
+	return nodes.Items, nil
+}
+
+func getNodesWithSelectorOrFail(t *testing.T, f *framework.Framework, labelselector map[string]string) []corev1.Node {
+	nodes, err := getNodesWithSelector(f, labelselector)
+	if err != nil {
+		E2EFatalf(t, "couldn't get nodes with selector %s: %w", labelselector, err)
+	}
+	return nodes
 }
 
 func getPodsForScan(f *framework.Framework, scanName string) ([]corev1.Pod, error) {
@@ -1288,14 +1303,29 @@ func createReadyMachineConfigPoolSubset(t *testing.T, f *framework.Framework, ol
 func createMachineConfigPoolSubset(t *testing.T, f *framework.Framework, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
 	// retrieve the old pool
 	oldPool := &mcfgv1.MachineConfigPool{}
-	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: oldPoolName}, oldPool)
-	if err != nil {
-		E2EErrorf(t, "Could not find the pool to modify")
-		return nil, err
+	getErr := backoff.RetryNotify(
+		func() error {
+			err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: oldPoolName}, oldPool)
+			if apierrors.IsNotFound(err) {
+				// Can't recover from this
+				E2EFatalf(t, "Could not find the pool to modify")
+			}
+			// might be a transcient error
+			return err
+		},
+		defaultBackoff,
+		func(err error, interval time.Duration) {
+			E2ELogf(t, "error while getting MachineConfig pool to create sub-pool from: %s. Retrying after %s", err, interval)
+		})
+	if getErr != nil {
+		return nil, fmt.Errorf("couldn't get MachineConfigPool to create sub-pool from: %w", getErr)
 	}
 
 	// list the nodes matching the node selector
-	poolNodes := getNodesWithSelector(f, oldPool.Spec.NodeSelector.MatchLabels)
+	poolNodes, getnodesErr := getNodesWithSelector(f, oldPool.Spec.NodeSelector.MatchLabels)
+	if getnodesErr != nil {
+		return nil, getnodesErr
+	}
 	if len(poolNodes) == 0 {
 		return nil, errors.New("no nodes found with the old pool selector")
 	}
@@ -1313,7 +1343,7 @@ func createMachineConfigPool(t *testing.T, f *framework.Framework, oldPoolName, 
 		return nil, err
 	}
 
-	return createMCPObject(f, newPoolNodeLabel, oldPoolName, newPoolName)
+	return createMCPObject(t, f, newPoolNodeLabel, oldPoolName, newPoolName)
 }
 
 func labelNodes(t *testing.T, f *framework.Framework, newPoolNodeLabel string, nodes []corev1.Node) error {
@@ -1322,10 +1352,17 @@ func labelNodes(t *testing.T, f *framework.Framework, newPoolNodeLabel string, n
 		nodeCopy.Labels[newPoolNodeLabel] = ""
 
 		E2ELogf(t, "Adding label %s to node %s\n", newPoolNodeLabel, nodeCopy.Name)
-		err := f.Client.Update(goctx.TODO(), nodeCopy)
-		if err != nil {
+		updateErr := backoff.RetryNotify(
+			func() error {
+				return f.Client.Update(goctx.TODO(), nodeCopy)
+			},
+			defaultBackoff,
+			func(err error, interval time.Duration) {
+				E2ELogf(t, "error while labeling node: %s. Retrying after %s", err, interval)
+			})
+		if updateErr != nil {
 			E2ELogf(t, "Could not label node %s with %s\n", nodeCopy.Name, newPoolNodeLabel)
-			return err
+			return fmt.Errorf("couldn't label node: %w", updateErr)
 		}
 	}
 
@@ -1348,7 +1385,7 @@ func unLabelNodes(t *testing.T, f *framework.Framework, rmPoolNodeLabel string, 
 	return nil
 }
 
-func createMCPObject(f *framework.Framework, newPoolNodeLabel, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
+func createMCPObject(t *testing.T, f *framework.Framework, newPoolNodeLabel, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
 	nodeSelectorMatchLabel := make(map[string]string)
 	nodeSelectorMatchLabel[newPoolNodeLabel] = ""
 
@@ -1372,8 +1409,22 @@ func createMCPObject(f *framework.Framework, newPoolNodeLabel, oldPoolName, newP
 
 	// We create but don't clean up, we'll call a function for this since we need to
 	// re-label hosts first.
-	err := f.Client.Create(goctx.TODO(), newPool, nil)
-	return newPool, err
+	createErr := backoff.RetryNotify(
+		func() error {
+			err := f.Client.Create(goctx.TODO(), newPool, nil)
+			if apierrors.IsAlreadyExists(err) {
+				return nil
+			}
+			return err
+		},
+		defaultBackoff,
+		func(err error, interval time.Duration) {
+			E2ELogf(t, "error while labeling node: %s. Retrying after %s", err, interval)
+		})
+	if createErr != nil {
+		return newPool, fmt.Errorf("couldn't create MCP: %w", createErr)
+	}
+	return newPool, nil
 }
 
 func waitForPoolCondition(t *testing.T, f *framework.Framework, conditionType mcfgv1.MachineConfigPoolConditionType, newPoolName string) error {
