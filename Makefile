@@ -76,7 +76,7 @@ else ifeq ($(OS_NAME), Darwin)
     OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-x86_64-apple-darwin
 endif
 
-OPM_VERSION=v1.13.8
+OPM_VERSION=v1.15.2
 ifeq ($(OS_NAME), Linux)
     OPM_URL=https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/linux-amd64-opm
 else ifeq ($(OS_NAME), Darwin)
@@ -138,7 +138,7 @@ bundle-image:
 
 .PHONY: index-image
 index-image: opm
-	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(TAG) -f $(INDEX_IMAGE_PATH):$(PREVIOUS_OPERATOR_VERSION) -t $(INDEX_IMAGE_PATH):$(TAG) -c podman
+	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(TAG) -f $(INDEX_IMAGE_PATH):latest -t $(INDEX_IMAGE_PATH):latest -c $(RUNTIME) --overwrite-latest
 
 .PHONY: test-broken-content-image
 test-broken-content-image:
@@ -325,6 +325,7 @@ deploy-local: namespace image-to-cluster deploy-crds ## Deploy the operator from
 	$(SED) 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	@oc apply -n $(NAMESPACE) -f deploy/
 	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
+	@oc set triggers -n $(NAMESPACE) deployment/compliance-operator --from-image openshift/compliance-operator:latest -c compliance-operator
 
 .PHONY: deploy-crds
 deploy-crds:
@@ -367,7 +368,7 @@ push: image
 .PHONY: push-index
 push-index: index-image
 	# index image
-	$(RUNTIME) push $(INDEX_IMAGE_PATH):$(TAG)
+	$(RUNTIME) push $(INDEX_IMAGE_PATH):latest
 
 .PHONY: check-operator-version
 check-operator-version:
@@ -410,4 +411,3 @@ git-release: package-version-to-tag
 release: release-tag-image bundle push push-index undo-deploy-tag-image git-release ## Do an official release (Requires permissions)
 	# This will ensure that we also push to the latest tag
 	$(MAKE) push TAG=latest
-	$(MAKE) push-index TAG=latest
