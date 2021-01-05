@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	backoff "github.com/cenkalti/backoff/v3"
 	ocpapi "github.com/openshift/api"
 	imagev1 "github.com/openshift/api/image/v1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
@@ -36,7 +37,6 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/compliance-operator/pkg/apis"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/complianceremediation"
 	compsuitectrl "github.com/openshift/compliance-operator/pkg/controller/compliancesuite"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
@@ -49,6 +49,8 @@ var brokenContentImagePath string
 
 var rhcosPb *compv1alpha1.ProfileBundle
 var ocp4Pb *compv1alpha1.ProfileBundle
+
+var defaultBackoff = backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries)
 
 type ObjectResouceVersioner interface {
 	runtime.Object
@@ -100,6 +102,10 @@ func E2EErrorf(t *testing.T, format string, args ...interface{}) {
 	t.Errorf(fmt.Sprintf("E2E-FAILURE: %s: %s", time.Now().Format(time.RFC3339), format), args...)
 }
 
+func E2EFatalf(t *testing.T, format string, args ...interface{}) {
+	t.Fatalf(fmt.Sprintf("E2E-FAILURE: %s: %s", time.Now().Format(time.RFC3339), format), args...)
+}
+
 func getObjNameFromTest(t *testing.T) string {
 	fullTestName := t.Name()
 	regexForCapitals := regexp.MustCompile(`[A-Z]`)
@@ -129,7 +135,7 @@ func (c *mcTestCtx) cleanupTrackedPools() {
 	for _, p := range c.pools {
 		// Then find all nodes that are labeled with this pool and remove the label
 		// Search the nodes with this label
-		poolNodes := getNodesWithSelector(c.f, p.Spec.NodeSelector.MatchLabels)
+		poolNodes := getNodesWithSelectorOrFail(c.t, c.f, p.Spec.NodeSelector.MatchLabels)
 		rmPoolLabel := utils.GetFirstNodeRoleLabel(p.Spec.NodeSelector.MatchLabels)
 
 		err := unLabelNodes(c.t, c.f, rmPoolLabel, poolNodes)
@@ -170,15 +176,12 @@ func (c *mcTestCtx) trackPool(pool *mcfgv1.MachineConfigPool) {
 	E2ELogf(c.t, "Tracking pool %s\n", pool.Name)
 }
 
-func (c *mcTestCtx) createE2EPool() error {
+func (c *mcTestCtx) ensureE2EPool() {
 	pool, err := createReadyMachineConfigPoolSubset(c.t, c.f, workerPoolName, testPoolName)
-	if apierrors.IsAlreadyExists(err) {
-		return nil
-	} else if err != nil {
-		return err
+	if err != nil {
+		E2EFatalf(c.t, "error ensuring that test e2e pool exists: %s", err)
 	}
 	c.trackPool(pool)
-	return nil
 }
 
 // executeTest sets up everything that a e2e test needs to run, and executes the test.
@@ -368,13 +371,8 @@ func waitForProfileBundleStatus(t *testing.T, f *framework.Framework, namespace,
 		E2ELogf(t, "Waiting for run of %s ProfileBundle (%s)\n", name, pb.Status.DataStreamStatus)
 		return false, nil
 	})
-	// Error in function call
-	if lastErr != nil {
-		return lastErr
-	}
-	// Timeout
-	if timeouterr != nil {
-		return timeouterr
+	if err := processErrorOrTimeout(lastErr, timeouterr, "waiting for ProfileBundle status"); err != nil {
+		return err
 	}
 	E2ELogf(t, "ProfileBundle ready (%s)\n", pb.Status.DataStreamStatus)
 	return nil
@@ -382,12 +380,12 @@ func waitForProfileBundleStatus(t *testing.T, f *framework.Framework, namespace,
 
 // waitForScanStatus will poll until the compliancescan that we're lookingfor reaches a certain status, or until
 // a timeout is reached.
-func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus compv1alpha1.ComplianceScanStatusPhase) error {
+func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name string, targetStatus compv1alpha1.ComplianceScanStatusPhase) {
 	exampleComplianceScan := &compv1alpha1.ComplianceScan{}
 	var lastErr error
 	defer logContainerOutput(t, f, namespace, name)
 	// retry and ignore errors until timeout
-	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+	timeoutErr := wait.Poll(retryInterval, timeout, func() (bool, error) {
 		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, exampleComplianceScan)
 		if lastErr != nil {
 			if apierrors.IsNotFound(lastErr) {
@@ -404,16 +402,10 @@ func waitForScanStatus(t *testing.T, f *framework.Framework, namespace, name str
 		E2ELogf(t, "Waiting for run of %s compliancescan (%s)\n", name, exampleComplianceScan.Status.Phase)
 		return false, nil
 	})
-	// Error in function call
-	if lastErr != nil {
-		return lastErr
-	}
-	// Timeout
-	if timeouterr != nil {
-		return timeouterr
-	}
+
+	assertNoErrorNorTimeout(t, lastErr, timeoutErr, "waiting for compliance status")
+
 	E2ELogf(t, "ComplianceScan ready (%s)\n", exampleComplianceScan.Status.Phase)
-	return nil
 }
 
 // waitForReScanStatus will poll until the compliancescan that we're lookingfor reaches a certain status for a re-scan, or until
@@ -605,13 +597,10 @@ func waitForSuiteScansStatus(t *testing.T, f *framework.Framework, namespace, na
 				return false, fmt.Errorf("suite in status %s but scan wrapper %s in status %s", targetStatus, scanStatus.Name, scanStatus.Phase)
 			}
 
-			lastErr = waitForScanStatus(t, f, namespace, scanStatus.Name, targetStatus)
-			if lastErr != nil {
-				// If the status was present in the suite, then /any/ error
-				// should fail the test as the scans should be read /from/
-				// the scan itself
-				return true, fmt.Errorf("suite in status %s but scan object %s in status %s", targetStatus, scanStatus.Name, scanStatus.Phase)
-			}
+			// If the status was present in the suite, then /any/ error
+			// should fail the test as the scans should be read /from/
+			// the scan itself
+			waitForScanStatus(t, f, namespace, scanStatus.Name, targetStatus)
 		}
 
 		return true, nil
@@ -679,13 +668,28 @@ func suiteErrorMessageMatchesRegex(t *testing.T, f *framework.Framework, namespa
 }
 
 // getNodesWithSelector lists nodes according to a specific selector
-func getNodesWithSelector(f *framework.Framework, labelselector map[string]string) []corev1.Node {
+func getNodesWithSelector(f *framework.Framework, labelselector map[string]string) ([]corev1.Node, error) {
 	var nodes corev1.NodeList
 	lo := &client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(labelselector),
 	}
-	f.Client.List(goctx.TODO(), &nodes, lo)
-	return nodes.Items
+	listErr := backoff.Retry(
+		func() error {
+			return f.Client.List(goctx.TODO(), &nodes, lo)
+		},
+		defaultBackoff)
+	if listErr != nil {
+		return nodes.Items, fmt.Errorf("couldn't list nodes with selector %s: %w", labelselector, listErr)
+	}
+	return nodes.Items, nil
+}
+
+func getNodesWithSelectorOrFail(t *testing.T, f *framework.Framework, labelselector map[string]string) []corev1.Node {
+	nodes, err := getNodesWithSelector(f, labelselector)
+	if err != nil {
+		E2EFatalf(t, "couldn't get nodes with selector %s: %w", labelselector, err)
+	}
+	return nodes
 }
 
 func getPodsForScan(f *framework.Framework, scanName string) ([]corev1.Pod, error) {
@@ -756,7 +760,7 @@ func assertHasCheck(f *framework.Framework, suiteName, scanName string, check co
 	return nil
 }
 
-func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string) []compv1alpha1.ComplianceRemediation {
+func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string) ([]compv1alpha1.ComplianceRemediation, error) {
 	var scanSuiteRemediations compv1alpha1.ComplianceRemediationList
 
 	scanSuiteSelector := make(map[string]string)
@@ -767,8 +771,10 @@ func getRemediationsFromScan(f *framework.Framework, suiteName, scanName string)
 		LabelSelector: labels.SelectorFromSet(scanSuiteSelector),
 	}
 
-	f.Client.List(goctx.TODO(), &scanSuiteRemediations, &listOpts)
-	return scanSuiteRemediations.Items
+	if err := f.Client.List(goctx.TODO(), &scanSuiteRemediations, &listOpts); err != nil {
+		return nil, err
+	}
+	return scanSuiteRemediations.Items, nil
 }
 
 func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scanName, roleLabel string, remNameList []string) error {
@@ -780,8 +786,13 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 	// to signify somehow that the remediations were already processed, but in the
 	// meantime, poll for 5 minutes while the remediations are being created
 	err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
-		scanSuiteRemediations = getRemediationsFromScan(f, suiteName, scanName)
-		for _, rem := range scanSuiteRemediations {
+		var listErr error
+		scanSuiteRemediations, listErr = getRemediationsFromScan(f, suiteName, scanName)
+		if listErr != nil {
+			E2ELogf(t, "Error listing remediations. Retrying: %s", listErr)
+		}
+		for idx := range scanSuiteRemediations {
+			rem := &scanSuiteRemediations[idx]
 			scanSuiteMapNames[rem.Name] = true
 		}
 
@@ -799,12 +810,6 @@ func assertHasRemediations(t *testing.T, f *framework.Framework, suiteName, scan
 	if err != nil {
 		E2EErrorf(t, "Error waiting for remediations to appear")
 		return err
-	}
-
-	for _, rem := range scanSuiteRemediations {
-		if rem.Labels[mcfgv1.MachineConfigRoleLabelKey] != roleLabel {
-			return fmt.Errorf("expected that scan %s is labeled for role %s", scanName, roleLabel)
-		}
 	}
 	return nil
 }
@@ -883,7 +888,7 @@ func waitForMachinePoolUpdate(t *testing.T, f *framework.Framework, name string,
 
 // waitForNodesToBeReady waits until all the nodes in the cluster have
 // reached the expected machineConfig.
-func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
+func waitForNodesToBeReady(t *testing.T, f *framework.Framework, errorMessage string) {
 	err := wait.PollImmediate(machineOperationRetryInterval, machineOperationTimeout, func() (bool, error) {
 		var nodes corev1.NodeList
 
@@ -908,10 +913,8 @@ func waitForNodesToBeReady(t *testing.T, f *framework.Framework) error {
 	})
 
 	if err != nil {
-		return err
+		E2EFatalf(t, "%s: %s", errorMessage, err)
 	}
-
-	return nil
 }
 
 // waitForNodesToHaveARenderedPool wait until all nodes passed through a parameter transition to a rendered
@@ -1071,11 +1074,41 @@ func removeObsoleteRemediationAndCheck(t *testing.T, f *framework.Framework, nam
 	return nil
 }
 
+func assertRemediationIsObsolete(t *testing.T, f *framework.Framework, namespace, name string) {
+	err, isObsolete := remediationIsObsolete(t, f, namespace, name)
+	if err != nil {
+		E2EFatalf(t, "%s", err)
+	}
+	if !isObsolete {
+		E2EFatalf(t, "expected that the remediation is obsolete")
+	}
+}
+
+func assertRemediationIsCurrent(t *testing.T, f *framework.Framework, namespace, name string) {
+	err, isObsolete := remediationIsObsolete(t, f, namespace, name)
+	if err != nil {
+		E2EFatalf(t, "%s", err)
+	}
+	if isObsolete {
+		E2EFatalf(t, "expected that the remediation is not obsolete")
+	}
+}
+
 func remediationIsObsolete(t *testing.T, f *framework.Framework, namespace, name string) (error, bool) {
 	rem := &compv1alpha1.ComplianceRemediation{}
-	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
-	if err != nil {
-		return err, false
+	var lastErr error
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
+		if lastErr != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	if lastErr != nil {
+		return fmt.Errorf("Got error trying to get remediation's obsolescence: %w", lastErr), false
+	}
+	if timeouterr != nil {
+		return fmt.Errorf("Timed out trying to get remediation's obsolescence: %w", lastErr), false
 	}
 	E2ELogf(t, "Remediation %s found", name)
 
@@ -1087,7 +1120,7 @@ func remediationIsObsolete(t *testing.T, f *framework.Framework, namespace, name
 	return nil, false
 }
 
-func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, name, pool string, lastRemediation bool) error {
+func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace, name, pool string) error {
 	rem := &compv1alpha1.ComplianceRemediation{}
 	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, rem)
 	if err != nil {
@@ -1107,23 +1140,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 	}
 
 	predicate := func(t *testing.T, pool *mcfgv1.MachineConfigPool) (bool, error) {
-		// If the remediation that we deselect is NOT the last one, it is expected
-		// that the MC would still be present. Check for appropriate annotation
-		if lastRemediation == false {
-			mc := &mcfgv1.MachineConfig{}
-			err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: rem.GetMcName()}, mc)
-			if err != nil {
-				E2ELogf(t, "Error while getting relevant MC, returning false: %v", err)
-				return false, nil
-			}
-
-			// If the MC doesn't have the appropriate annotation, we keep
-			// going...
-			return !complianceremediation.MCHasRemediationAnnotation(mc, rem), nil
-		}
-
-		// On the other hand, if the remediation we deselect WAS the last one, we want
-		// to check that the MC created by the operator went away. In that case, let's
+		// We want to check that the MC created by the operator went away. Let's
 		// poll the pool until we no longer see the remediation in the status
 		for _, mc := range pool.Status.Configuration.Source {
 			if mc.Name == rem.GetMcName() {
@@ -1146,7 +1163,7 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 	return nil
 }
 
-func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, remName, remNamespace string, pool *mcfgv1.MachineConfigPool) error {
+func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, remName, remNamespace string, pool *mcfgv1.MachineConfigPool) {
 	rem := &compv1alpha1.ComplianceRemediation{}
 	var lastErr error
 	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
@@ -1162,14 +1179,7 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 		E2ELogf(t, "Found remediation: %s\n", remName)
 		return true, nil
 	})
-	// Error in function call
-	if lastErr != nil {
-		return lastErr
-	}
-	// Timeout
-	if timeouterr != nil {
-		return timeouterr
-	}
+	assertNoErrorNorTimeout(t, lastErr, timeouterr, "getting remediation before auto-applying it")
 
 	preNoop := func() error {
 		return nil
@@ -1197,37 +1207,32 @@ func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, rem
 
 	err := waitForMachinePoolUpdate(t, f, pool.Name, preNoop, predicate, pool)
 	if err != nil {
-		E2EErrorf(t, "Failed to wait for pool to update after applying MC: %v", err)
-		return err
+		E2EFatalf(t, "Failed to wait for pool to update after applying MC: %v", err)
 	}
 
 	E2ELogf(t, "Machines updated with remediation")
-	err = waitForNodesToBeReady(t, f)
-	if err != nil {
-		E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
-		return err
-	}
+	waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after auto-applying remediation")
 
 	E2ELogf(t, "Remediation applied to machines and machines rebooted")
-	return nil
 }
 
-func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName string) error {
-	err := unPauseMachinePool(t, f, poolName)
-	if err != nil {
-		E2EErrorf(t, "Could not unpause the MC pool")
-		return err
+func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName string) {
+	if err := unPauseMachinePool(t, f, poolName); err != nil {
+		E2EFatalf(t, "Could not unpause the MC pool")
 	}
 
 	// When the pool updates, we need to wait for the machines to pick up the new rendered
 	// config
-	err = wait.PollImmediate(machineOperationRetryInterval, machineOperationTimeout, func() (bool, error) {
+	var lastErr error
+	timeoutErr := wait.PollImmediate(machineOperationRetryInterval, machineOperationTimeout, func() (bool, error) {
 		pool := &mcfgv1.MachineConfigPool{}
-		err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
-		if err != nil {
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: poolName}, pool)
+		if apierrors.IsNotFound(lastErr) {
+			E2EFatalf(t, "Could not find the pool post update")
+		} else if lastErr != nil {
 			// even not found is a hard error here
-			E2EErrorf(t, "Could not find the pool post update")
-			return false, err
+			E2ELogf(t, "Got error while getting MachineConfigPool. Retrying: %s", lastErr)
+			return false, nil
 		}
 
 		E2ELogf(t, "Will check for update, updated %d/%d unavailable %d",
@@ -1245,8 +1250,12 @@ func unPauseMachinePoolAndWait(t *testing.T, f *framework.Framework, poolName st
 			pool.Status.UnavailableMachineCount)
 		return false, nil
 	})
-
-	return err
+	if lastErr != nil {
+		E2EFatalf(t, "Got error waiting for MCP unpausing: %s", timeoutErr)
+	}
+	if timeoutErr != nil {
+		E2EFatalf(t, "Timed out waiting for MCP unpausing: %s", timeoutErr)
+	}
 }
 
 func pauseMachinePool(t *testing.T, f *framework.Framework, poolName string) error {
@@ -1294,14 +1303,29 @@ func createReadyMachineConfigPoolSubset(t *testing.T, f *framework.Framework, ol
 func createMachineConfigPoolSubset(t *testing.T, f *framework.Framework, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
 	// retrieve the old pool
 	oldPool := &mcfgv1.MachineConfigPool{}
-	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: oldPoolName}, oldPool)
-	if err != nil {
-		E2EErrorf(t, "Could not find the pool to modify")
-		return nil, err
+	getErr := backoff.RetryNotify(
+		func() error {
+			err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: oldPoolName}, oldPool)
+			if apierrors.IsNotFound(err) {
+				// Can't recover from this
+				E2EFatalf(t, "Could not find the pool to modify")
+			}
+			// might be a transcient error
+			return err
+		},
+		defaultBackoff,
+		func(err error, interval time.Duration) {
+			E2ELogf(t, "error while getting MachineConfig pool to create sub-pool from: %s. Retrying after %s", err, interval)
+		})
+	if getErr != nil {
+		return nil, fmt.Errorf("couldn't get MachineConfigPool to create sub-pool from: %w", getErr)
 	}
 
 	// list the nodes matching the node selector
-	poolNodes := getNodesWithSelector(f, oldPool.Spec.NodeSelector.MatchLabels)
+	poolNodes, getnodesErr := getNodesWithSelector(f, oldPool.Spec.NodeSelector.MatchLabels)
+	if getnodesErr != nil {
+		return nil, getnodesErr
+	}
 	if len(poolNodes) == 0 {
 		return nil, errors.New("no nodes found with the old pool selector")
 	}
@@ -1319,7 +1343,7 @@ func createMachineConfigPool(t *testing.T, f *framework.Framework, oldPoolName, 
 		return nil, err
 	}
 
-	return createMCPObject(f, newPoolNodeLabel, oldPoolName, newPoolName)
+	return createMCPObject(t, f, newPoolNodeLabel, oldPoolName, newPoolName)
 }
 
 func labelNodes(t *testing.T, f *framework.Framework, newPoolNodeLabel string, nodes []corev1.Node) error {
@@ -1328,10 +1352,17 @@ func labelNodes(t *testing.T, f *framework.Framework, newPoolNodeLabel string, n
 		nodeCopy.Labels[newPoolNodeLabel] = ""
 
 		E2ELogf(t, "Adding label %s to node %s\n", newPoolNodeLabel, nodeCopy.Name)
-		err := f.Client.Update(goctx.TODO(), nodeCopy)
-		if err != nil {
+		updateErr := backoff.RetryNotify(
+			func() error {
+				return f.Client.Update(goctx.TODO(), nodeCopy)
+			},
+			defaultBackoff,
+			func(err error, interval time.Duration) {
+				E2ELogf(t, "error while labeling node: %s. Retrying after %s", err, interval)
+			})
+		if updateErr != nil {
 			E2ELogf(t, "Could not label node %s with %s\n", nodeCopy.Name, newPoolNodeLabel)
-			return err
+			return fmt.Errorf("couldn't label node: %w", updateErr)
 		}
 	}
 
@@ -1354,7 +1385,7 @@ func unLabelNodes(t *testing.T, f *framework.Framework, rmPoolNodeLabel string, 
 	return nil
 }
 
-func createMCPObject(f *framework.Framework, newPoolNodeLabel, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
+func createMCPObject(t *testing.T, f *framework.Framework, newPoolNodeLabel, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
 	nodeSelectorMatchLabel := make(map[string]string)
 	nodeSelectorMatchLabel[newPoolNodeLabel] = ""
 
@@ -1378,8 +1409,22 @@ func createMCPObject(f *framework.Framework, newPoolNodeLabel, oldPoolName, newP
 
 	// We create but don't clean up, we'll call a function for this since we need to
 	// re-label hosts first.
-	err := f.Client.Create(goctx.TODO(), newPool, nil)
-	return newPool, err
+	createErr := backoff.RetryNotify(
+		func() error {
+			err := f.Client.Create(goctx.TODO(), newPool, nil)
+			if apierrors.IsAlreadyExists(err) {
+				return nil
+			}
+			return err
+		},
+		defaultBackoff,
+		func(err error, interval time.Duration) {
+			E2ELogf(t, "error while labeling node: %s. Retrying after %s", err, interval)
+		})
+	if createErr != nil {
+		return newPool, fmt.Errorf("couldn't create MCP: %w", createErr)
+	}
+	return newPool, nil
 }
 
 func waitForPoolCondition(t *testing.T, f *framework.Framework, conditionType mcfgv1.MachineConfigPoolConditionType, newPoolName string) error {
@@ -2049,4 +2094,51 @@ func updateImageStreamTag(f *framework.Framework, iSName, ns, imgPath string) er
 	// Updated tracked image reference
 	stream.Spec.Tags[0].From.Name = imgPath
 	return f.Client.Update(goctx.TODO(), stream)
+}
+
+func updateSuiteContentImage(t *testing.T, f *framework.Framework, newImg, suiteName, suiteNs string) error {
+	var lastErr error
+	timeoutErr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		suite := &compv1alpha1.ComplianceSuite{}
+		// Now update the suite with a different image that contains different remediations
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: suiteName, Namespace: suiteNs}, suite)
+		if lastErr != nil {
+			E2ELogf(t, "Got error while trying to get suite %s. Retrying... - %s", suiteName, lastErr)
+			return false, nil
+		}
+		modSuite := suite.DeepCopy()
+		modSuite.Spec.Scans[0].ContentImage = newImg
+		lastErr = f.Client.Update(goctx.TODO(), modSuite)
+		if lastErr != nil {
+			E2ELogf(t, "Got error while trying to update suite %s. Retrying... - %s", suiteName, lastErr)
+			return false, nil
+		}
+		return true, nil
+	})
+
+	if timeoutErr != nil {
+		return fmt.Errorf("couldn't update suite's content image. Timed out: %w", timeoutErr)
+	}
+	if lastErr != nil {
+		return fmt.Errorf("couldn't update suite's content image. Errored out: %w", lastErr)
+	}
+	return nil
+}
+
+func assertNoErrorNorTimeout(t *testing.T, err, timeoutErr error, message string) {
+	if finalErr := processErrorOrTimeout(err, timeoutErr, message); finalErr != nil {
+		E2EFatalf(t, "%s", finalErr)
+	}
+}
+
+func processErrorOrTimeout(err, timeoutErr error, message string) error {
+	// Error in function call
+	if err != nil {
+		return fmt.Errorf("Got error when %s: %w", message, err)
+	}
+	// Timeout
+	if timeoutErr != nil {
+		return fmt.Errorf("Timed out when %s: %w", message, timeoutErr)
+	}
+	return nil
 }

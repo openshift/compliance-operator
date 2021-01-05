@@ -118,6 +118,11 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		return reconcile.Result{}, r.profileBundleDeleteHandler(instance, reqLogger)
 	}
 
+	err = r.deleteNonNamespacedWorkload(instance, reqLogger)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
 	annotations := map[string]string{}
 	isISTag, isTagImageRef, err := r.pointsToISTag(instance.Spec.ContentImage)
 	if err != nil {
@@ -148,7 +153,6 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 	// Define a new Pod object
 	depl := newWorkloadForBundle(instance, effectiveImage)
 
-	// Check if this Pod already exists
 	found := &appsv1.Deployment{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: depl.Name, Namespace: depl.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
@@ -280,6 +284,44 @@ func (r *ReconcileProfileBundle) pointsToISTag(contentImageRef string) (bool, st
 
 }
 
+// This is temporary code that handles updates from version
+// that didn't include https://github.com/openshift/compliance-operator/pull/467
+func (r *ReconcileProfileBundle) deleteNonNamespacedWorkload(pb *compliancev1alpha1.ProfileBundle, logger logr.Logger) error {
+	oldDeployName := types.NamespacedName{
+		Name:      pb.Name + "-pp",
+		Namespace: common.GetComplianceOperatorNamespace(),
+	}
+	nonNamespacedFound := &appsv1.Deployment{}
+	err := r.client.Get(context.TODO(), oldDeployName, nonNamespacedFound)
+	if errors.IsNotFound(err) {
+		// no such old deployment exists
+		return nil
+	}
+	if err != nil {
+		logger.Error(err, "Couldn't retrieve old deployment", "oldDeployNamespacedName", oldDeployName)
+		return err
+	}
+
+	if !hasWorkloadLabels(nonNamespacedFound, pb) {
+		logger.Info("Not deleting deployment that doesn't have the expected labels", "oldDeployNamespacedName", oldDeployName)
+		return nil
+	}
+
+	logger.Info("Deleting old deployment", "oldDeployNamespacedName", oldDeployName)
+	err = r.client.Delete(context.TODO(), nonNamespacedFound)
+	if errors.IsNotFound(err) {
+		err = nil
+	}
+
+	if err != nil {
+		logger.Error(err, "Couldn't delete old deployment", "oldDeployNamespacedName", oldDeployName)
+		return err
+	}
+
+	// now the error can only be IsNotFound -> no old deploy exists
+	return nil
+}
+
 // Gets the namespace for the image stream tag. If none is given, it'll use the operator's namespace
 func getISTagNamespace(ref reference.DockerImageReference) string {
 	if ref.Namespace != "" {
@@ -295,6 +337,19 @@ func getWorkloadLabels(pb *compliancev1alpha1.ProfileBundle) map[string]string {
 	}
 }
 
+func hasWorkloadLabels(obj metav1.Object, pb *compliancev1alpha1.ProfileBundle) bool {
+	labels := obj.GetLabels()
+	if labels == nil {
+		return false
+	}
+
+	if labels["profile-bundle"] == pb.Name && labels["workload"] == "profileparser" {
+		return true
+	}
+
+	return false
+}
+
 // This annotation
 func getISTagAnnotation(isTagName, isTagNamespace string) map[string]string {
 	annotationFmt := `[{"from":{"kind":"ImageStreamTag","name":"%s","namespace":"%s"},"fieldPath":"spec.template.spec.initContainers[?(@.name==\"content-container\")].image"}]`
@@ -304,7 +359,6 @@ func getISTagAnnotation(isTagName, isTagNamespace string) map[string]string {
 	}
 }
 
-// newPodForBundle returns a busybox pod with the same name/namespace as the cr
 func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *appsv1.Deployment {
 	falseP := false
 	trueP := true

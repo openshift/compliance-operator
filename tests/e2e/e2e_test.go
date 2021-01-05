@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	configv1 "github.com/openshift/api/config/v1"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
+	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -420,10 +422,8 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultCompliant)
 				if err != nil {
@@ -461,10 +461,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				// We expect that a scan that is using all the rules wouldn't be compliant
 				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultNonCompliant)
@@ -522,10 +519,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultCompliant)
 				if err != nil {
@@ -557,10 +551,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultNonCompliant)
 				if err != nil {
@@ -622,10 +613,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultError)
 				if err != nil {
@@ -683,10 +671,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultError)
 				if err != nil {
@@ -749,10 +734,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-single-tailored-scan-succeeds", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-single-tailored-scan-succeeds", compv1alpha1.PhaseDone)
 
 				return scanResultIsExpected(t, f, namespace, "test-single-tailored-scan-succeeds", compv1alpha1.ResultCompliant)
 			},
@@ -809,10 +791,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, exampleComplianceScan.Name, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, exampleComplianceScan.Name, compv1alpha1.PhaseDone)
 
 				return scanResultIsExpected(t, f, namespace, exampleComplianceScan.Name, compv1alpha1.ResultCompliant)
 			},
@@ -844,11 +823,9 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-filtered-scan", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
-				nodes := getNodesWithSelector(f, selectWorkers)
+				waitForScanStatus(t, f, namespace, "test-filtered-scan", compv1alpha1.PhaseDone)
+
+				nodes := getNodesWithSelectorOrFail(t, f, selectWorkers)
 				configmaps := getConfigMapsFromScan(f, testComplianceScan)
 				if len(nodes) != len(configmaps) {
 					return fmt.Errorf(
@@ -886,10 +863,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultNotApplicable)
 			},
 		},
@@ -917,10 +891,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultError)
 			},
 		},
@@ -946,10 +917,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-scan-w-invalid-content", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-scan-w-invalid-content", compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, "test-scan-w-invalid-content", compv1alpha1.ResultError)
 			},
 		},
@@ -975,10 +943,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-scan-w-invalid-profile", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-scan-w-invalid-profile", compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, "test-scan-w-invalid-profile", compv1alpha1.ResultError)
 			},
 		},
@@ -1034,10 +999,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-malformed-tailored-scan-fails", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-malformed-tailored-scan-fails", compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, "test-malformed-tailored-scan-fails", compv1alpha1.ResultError)
 			},
 		},
@@ -1064,10 +1026,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-scan-w-empty-tailoring-cm", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-scan-w-empty-tailoring-cm", compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, "test-scan-w-empty-tailoring-cm", compv1alpha1.ResultError)
 			},
 		},
@@ -1098,10 +1057,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseLaunching)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseLaunching)
 
 				var resultErr error
 				// The status might still be NOT-AVAILABLE... we can wait a bit
@@ -1139,10 +1095,7 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err = waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
 
 				return scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultCompliant)
 			},
@@ -1170,10 +1123,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-missing-pod-scan", compv1alpha1.PhaseRunning)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-missing-pod-scan", compv1alpha1.PhaseRunning)
 				pods, err := getPodsForScan(f, "test-missing-pod-scan")
 				if err != nil {
 					return err
@@ -1189,10 +1139,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = waitForScanStatus(t, f, namespace, "test-missing-pod-scan", compv1alpha1.PhaseDone)
-				if err != nil {
-					return err
-				}
+				waitForScanStatus(t, f, namespace, "test-missing-pod-scan", compv1alpha1.PhaseDone)
 				return scanResultIsExpected(t, f, namespace, "test-missing-pod-scan", compv1alpha1.ResultCompliant)
 			},
 		},
@@ -1778,7 +1725,7 @@ func TestE2E(t *testing.T) {
 			Name:       "TestTolerations",
 			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
-				workerNodes := getNodesWithSelector(f, map[string]string{
+				workerNodes := getNodesWithSelectorOrFail(t, f, map[string]string{
 					"node-role.kubernetes.io/worker": "",
 				})
 
@@ -1847,7 +1794,7 @@ func TestE2E(t *testing.T) {
 				workerNodesLabel := map[string]string{
 					"node-role.kubernetes.io/worker": "",
 				}
-				workerNodes := getNodesWithSelector(f, workerNodesLabel)
+				workerNodes := getNodesWithSelectorOrFail(t, f, workerNodesLabel)
 
 				taintedNode := &workerNodes[0]
 				taintKey := "co-e2e"
@@ -2016,13 +1963,9 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				err := mcTctx.createE2EPool()
-				if err != nil {
-					E2EErrorf(t, "Cannot create subpool for this test")
-					return err
-				}
+				mcTctx.ensureE2EPool()
 
-				err = f.Client.Create(goctx.TODO(), exampleComplianceSuite, getCleanupOpts(ctx))
+				err := f.Client.Create(goctx.TODO(), exampleComplianceSuite, getCleanupOpts(ctx))
 				if err != nil {
 					return err
 				}
@@ -2044,11 +1987,7 @@ func TestE2E(t *testing.T) {
 				// We need to check that the remediation is auto-applied and save
 				// the object so we can delete it later
 				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
-				err = waitForRemediationToBeAutoApplied(t, f, workersNoRootLoginsRemName, namespace, poolBeforeRemediation)
-				if err != nil {
-					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
-					return err
-				}
+				waitForRemediationToBeAutoApplied(t, f, workersNoRootLoginsRemName, namespace, poolBeforeRemediation)
 
 				// We can re-run the scan at this moment and check that it's now compliant
 				// and it's reflected in a CheckResult
@@ -2126,11 +2065,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				// ..as well as the nodes
-				err = waitForNodesToBeReady(t, f)
-				if err != nil {
-					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
-					return err
-				}
+				waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after applying MC")
 
 				E2ELogf(t, "The test succeeded!")
 				return nil
@@ -2171,13 +2106,9 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				err := mcTctx.createE2EPool()
-				if err != nil {
-					E2EErrorf(t, "Cannot create subpool for this test")
-					return err
-				}
+				mcTctx.ensureE2EPool()
 
-				err = f.Client.Create(goctx.TODO(), exampleComplianceSuite, getCleanupOpts(ctx))
+				err := f.Client.Create(goctx.TODO(), exampleComplianceSuite, getCleanupOpts(ctx))
 				if err != nil {
 					return err
 				}
@@ -2210,40 +2141,27 @@ func TestE2E(t *testing.T) {
 				E2ELogf(t, "Remediation %s applied", workersNoEmptyPassRemName)
 
 				// unpause the MCP so that the remediation gets applied
-				err = unPauseMachinePoolAndWait(t, f, testPoolName)
-				if err != nil {
-					return err
-				}
+				unPauseMachinePoolAndWait(t, f, testPoolName)
 
-				err = waitForNodesToBeReady(t, f)
-				if err != nil {
-					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
-					return err
-				}
+				waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after applying MC")
 
 				// Get the resulting MC
-				mcName := types.NamespacedName{Name: fmt.Sprintf("75-%s-%s", workerScanName, suiteName)}
+				mcName := types.NamespacedName{Name: fmt.Sprintf("75-%s", workersNoEmptyPassRemName)}
 				mcBoth := &mcfgv1.MachineConfig{}
 				err = f.Client.Get(goctx.TODO(), mcName, mcBoth)
 				E2ELogf(t, "MC %s exists", mcName.Name)
 
 				// Revert one remediation. The MC should stay, but its generation should bump
 				E2ELogf(t, "Will revert remediation %s", workersNoEmptyPassRemName)
-				err = unApplyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName, false)
+				err = unApplyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName)
 				if err != nil {
 					E2ELogf(t, "WARNING: Got an error while unapplying remediation '%s': %v", workersNoEmptyPassRemName, err)
 				}
 				E2ELogf(t, "Remediation %s reverted", workersNoEmptyPassRemName)
-				mcOne := &mcfgv1.MachineConfig{}
-				err = f.Client.Get(goctx.TODO(), mcName, mcOne)
-
-				if mcOne.Generation == mcBoth.Generation {
-					E2EErrorf(t, "Expected that the MC generation changes. Got: %d, Expected: %d", mcOne.Generation, mcBoth.Generation)
-				}
 
 				// When we unapply the second remediation, the MC should be deleted, too
 				E2ELogf(t, "Will revert remediation %s", workersNoRootLoginsRemName)
-				err = unApplyRemediationAndCheck(t, f, namespace, workersNoRootLoginsRemName, testPoolName, true)
+				err = unApplyRemediationAndCheck(t, f, namespace, workersNoRootLoginsRemName, testPoolName)
 				E2ELogf(t, "Remediation %s reverted", workersNoEmptyPassRemName)
 
 				E2ELogf(t, "No remediation-based MCs should exist now")
@@ -2293,7 +2211,7 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				workerNodes := getNodesWithSelector(f, selectWorkers)
+				workerNodes := getNodesWithSelectorOrFail(t, f, selectWorkers)
 				pod, err := createAndRemoveEtcSecurettyOnNode(t, f, namespace, "create-etc-securetty", workerNodes[0].Labels["kubernetes.io/hostname"])
 				if err != nil {
 					return err
@@ -2624,13 +2542,9 @@ func TestE2E(t *testing.T) {
 					},
 				}
 
-				err := mcTctx.createE2EPool()
-				if err != nil {
-					E2EErrorf(t, "Cannot create subpool for this test")
-					return err
-				}
+				mcTctx.ensureE2EPool()
 
-				err = f.Client.Create(goctx.TODO(), origSuite, getCleanupOpts(ctx))
+				err := f.Client.Create(goctx.TODO(), origSuite, getCleanupOpts(ctx))
 				if err != nil {
 					return err
 				}
@@ -2648,24 +2562,13 @@ func TestE2E(t *testing.T) {
 				}
 				E2ELogf(t, "Remediation %s applied", workersNoEmptyPassRemName)
 
-				err = waitForNodesToBeReady(t, f)
-				if err != nil {
-					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
-					return err
-				}
+				waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after applying MC")
 
 				// Now update the suite with a different image that contains different remediations
-				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: origSuiteName, Namespace: namespace}, origSuite)
-				if err != nil {
+				if err := updateSuiteContentImage(t, f, modImage, origSuiteName, namespace); err != nil {
 					return err
 				}
-				modSuite := origSuite.DeepCopy()
-				modSuite.Spec.Scans[0].ContentImage = modImage
-				err = f.Client.Update(goctx.TODO(), modSuite)
-				if err != nil {
-					return err
-				}
-				E2ELogf(t, "Suite %s updated with a new image", modSuite.Name)
+				E2ELogf(t, "Suite %s updated with a new image", origSuiteName)
 
 				err = reRunScan(t, f, workerScanName, namespace)
 				if err != nil {
@@ -2678,49 +2581,105 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
-				err, isObsolete := remediationIsObsolete(t, f, namespace, workersNoEmptyPassRemName)
-				if err != nil {
-					return err
-				}
-				if isObsolete == false {
-					return fmt.Errorf("expected that the remediation is obsolete")
-				}
+				assertRemediationIsObsolete(t, f, namespace, workersNoEmptyPassRemName)
 
 				E2ELog(t, "Will remove obsolete data from remediation")
-				renderedMcName := fmt.Sprintf("75-%s-%s", workerScanName, origSuiteName)
+				renderedMcName := fmt.Sprintf("75-%s", workersNoEmptyPassRemName)
 				err = removeObsoleteRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, renderedMcName, testPoolName)
 				if err != nil {
 					return err
 				}
 
-				err = waitForNodesToBeReady(t, f)
-				if err != nil {
-					E2EErrorf(t, "Failed to wait for nodes to come back up after applying MC: %v", err)
-					return err
-				}
+				waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after applying MC")
 
 				// Now the remediation is no longer obsolete
-				err, isObsolete = remediationIsObsolete(t, f, namespace, workersNoEmptyPassRemName)
-				if err != nil {
-					return err
-				}
-
-				if isObsolete == true {
-					return fmt.Errorf("expected that the remediation is no longer obsolete")
-				}
+				assertRemediationIsCurrent(t, f, namespace, workersNoEmptyPassRemName)
 
 				// Finally clean up by removing the remediation and waiting for the nodes to reboot one more time
-				err = unApplyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName, true)
+				err = unApplyRemediationAndCheck(t, f, namespace, workersNoEmptyPassRemName, testPoolName)
 				if err != nil {
 					return err
 				}
 
-				err = waitForNodesToBeReady(t, f)
+				waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after unapplying MC")
+
+				return nil
+			},
+		},
+		testExecution{
+			Name:       "TestProfileBundleDefaultIsKept",
+			IsParallel: false,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				const otherImage = "quay.io/jhrozek/ocp4-openscap-content@sha256:a1709f5150b17a9560a5732fe48a89f07bffc72c0832aa8c49ee5504510ae687"
+				var bctx = goctx.Background()
+
+				ocpPb, err := getReadyProfileBundle(t, f, "ocp4", namespace)
 				if err != nil {
-					E2EErrorf(t, "Failed to wait for nodes to come back up after unapplying MC: %v", err)
+					E2EFatalf(t, "error getting ocp4 profile: %s", err)
+				}
+
+				origImage := ocpPb.Spec.ContentImage
+
+				ocpPbCopy := ocpPb.DeepCopy()
+				ocpPbCopy.Spec.ContentImage = otherImage
+				ocpPbCopy.Spec.ContentFile = rhcosContentFile
+				if updateErr := f.Client.Update(bctx, ocpPbCopy); updateErr != nil {
+					E2EFatalf(t, "error updating default ocp4 profile: %s", err)
+				}
+
+				if err := waitForProfileBundleStatus(t, f, namespace, "ocp4", compv1alpha1.DataStreamPending); err != nil {
+					E2EFatalf(t, "ocp4 update didn't trigger a PENDING state: %s", err)
+				}
+
+				// Now wait for the processing to finish
+				if err := waitForProfileBundleStatus(t, f, namespace, "ocp4", compv1alpha1.DataStreamValid); err != nil {
+					E2EFatalf(t, "ocp4 update didn't trigger a PENDING state: %s", err)
+				}
+
+				// Delete compliance operator pods
+				// This will trigger a reconciliation of the profile bundle
+				// This is what would happen on an operator update.
+
+				inNs := client.InNamespace(namespace)
+				withLabel := client.MatchingLabels{
+					"name": "compliance-operator",
+				}
+				if err := f.Client.DeleteAllOf(bctx, &corev1.Pod{}, inNs, withLabel); err != nil {
 					return err
 				}
 
+				// Wait for the operator deletion to happen
+				time.Sleep(retryInterval)
+
+				err = e2eutil.WaitForOperatorDeployment(t, f.KubeClient, namespace,
+					"compliance-operator", 1, retryInterval, timeout)
+				if err != nil {
+					E2EFatalf(t, "failed waiting for compliance-operator to come back up: %s", err)
+				}
+
+				var lastErr error
+				pbkey := types.NamespacedName{Name: "ocp4", Namespace: namespace}
+				timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+					pb := &compv1alpha1.ProfileBundle{}
+					if lastErr := f.Client.Get(bctx, pbkey, pb); lastErr != nil {
+						E2ELogf(t, "error getting ocp4 PB. Retrying: %s", err)
+						return false, nil
+					}
+					if pb.Spec.ContentImage != origImage {
+						E2ELogf(t, "PB ContentImage not updated yet: Got %s - Expected %s", pb.Spec.ContentImage, origImage)
+						return false, nil
+					}
+					E2ELogf(t, "PB ContentImage up-to-date")
+					return true, nil
+				})
+				if err := processErrorOrTimeout(lastErr, timeouterr, "waiting for ProfileBundle to update"); err != nil {
+					return err
+				}
+
+				ocpPb, err = getReadyProfileBundle(t, f, "ocp4", namespace)
+				if err != nil {
+					E2EFatalf(t, "error getting valid and up-to-date PB: %s", err)
+				}
 				return nil
 			},
 		},

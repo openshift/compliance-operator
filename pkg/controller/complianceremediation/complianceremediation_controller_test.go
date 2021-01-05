@@ -2,15 +2,16 @@ package complianceremediation
 
 import (
 	"context"
-	"fmt"
-	"reflect"
 
-	"github.com/clarketm/json"
-	igntypes "github.com/coreos/ignition/config/v2_2/types"
+	"github.com/go-logr/logr"
+	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	"go.uber.org/zap"
+	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -18,76 +19,26 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/openshift/compliance-operator/pkg/apis"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
-
-func isRemInList(mcList []*mcfgv1.MachineConfig, rem *compv1alpha1.ComplianceRemediation) bool {
-	remMc, _ := utils.ParseMachineConfig(rem, rem.Spec.Current.Object)
-	for _, mc := range mcList {
-		if same := reflect.DeepEqual(mc.Spec, remMc.Spec); same == true {
-			return true
-		}
-	}
-
-	return false
-}
-
-func getMockedRemediation(name string, labels map[string]string, applied bool, status compv1alpha1.RemediationApplicationState) *compv1alpha1.ComplianceRemediation {
-	files := []igntypes.File{
-		{
-			Node: igntypes.Node{
-				Path: "/" + name,
-			},
-		},
-	}
-
-	ign := igntypes.Config{
-		Storage: igntypes.Storage{
-			Files: files,
-		},
-	}
-	rawIgn, _ := json.Marshal(ign)
-	mc := &mcfgv1.MachineConfig{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "MachineConfig",
-			APIVersion: mcfgapi.GroupName + "/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{},
-		Spec: mcfgv1.MachineConfigSpec{
-			Config: runtime.RawExtension{
-				Raw: rawIgn,
-			},
-		},
-	}
-	unstructuredobj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(mc)
-	obj := &unstructured.Unstructured{Object: unstructuredobj}
-	return &compv1alpha1.ComplianceRemediation{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
-			Labels: labels,
-		},
-		Spec: compv1alpha1.ComplianceRemediationSpec{
-			ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
-				Apply: applied,
-			},
-			Current: compv1alpha1.ComplianceRemediationPayload{
-				Object: obj,
-			},
-		},
-		Status: compv1alpha1.ComplianceRemediationStatus{
-			ApplicationState: status,
-		},
-	}
-}
 
 var _ = Describe("Testing complianceremediation controller", func() {
 
 	var (
-		complianceremediationinstance *compv1alpha1.ComplianceRemediation
-		reconciler                    ReconcileComplianceRemediation
-		testRemLabels                 map[string]string
+		remediationinstance *compv1alpha1.ComplianceRemediation
+		scanInstance        *compv1alpha1.ComplianceScan
+		reconciler          *ReconcileComplianceRemediation
+		testRemLabels       map[string]string
+		logger              logr.Logger
 	)
+
+	itShouldNotReconcile := func() {
+		It("should not reconcile the remediation", func() {
+			err := reconciler.reconcileRemediation(remediationinstance, logger)
+			Expect(err).ToNot(BeNil())
+		})
+	}
 
 	BeforeEach(func() {
 		objs := []runtime.Object{}
@@ -95,10 +46,24 @@ var _ = Describe("Testing complianceremediation controller", func() {
 		testRemLabels = make(map[string]string)
 		testRemLabels[compv1alpha1.SuiteLabel] = "mySuite"
 		testRemLabels[compv1alpha1.ComplianceScanLabel] = "myScan"
-		testRemLabels[mcfgv1.MachineConfigRoleLabelKey] = "myRole"
+
+		nodeLabels := map[string]string{
+			mcfgv1.MachineConfigRoleLabelKey: "myRole",
+		}
+
+		mcp := &mcfgv1.MachineConfigPool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "my-pool",
+			},
+			Spec: mcfgv1.MachineConfigPoolSpec{
+				NodeSelector: &metav1.LabelSelector{
+					MatchLabels: nodeLabels,
+				},
+			},
+		}
 
 		// test instance
-		complianceremediationinstance = &compv1alpha1.ComplianceRemediation{
+		remediationinstance = &compv1alpha1.ComplianceRemediation{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   "testRem",
 				Labels: testRemLabels,
@@ -109,96 +74,266 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				},
 			},
 		}
-		objs = append(objs, complianceremediationinstance)
+		scanInstance = &compv1alpha1.ComplianceScan{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "myScan",
+			},
+			Spec: compv1alpha1.ComplianceScanSpec{
+				NodeSelector: nodeLabels,
+			},
+		}
+		objs = append(objs, remediationinstance, scanInstance, mcp)
 
-		scheme := scheme.Scheme
-		scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion, complianceremediationinstance)
-		scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion, &compv1alpha1.ComplianceRemediationList{})
+		cscheme := scheme.Scheme
+		err := apis.AddToScheme(cscheme)
+		Expect(err).To(BeNil())
+		err = mcfgapi.Install(cscheme)
+		Expect(err).To(BeNil())
 
-		client := fake.NewFakeClientWithScheme(scheme, objs...)
-		reconciler = ReconcileComplianceRemediation{client: client, scheme: scheme}
+		client := fake.NewFakeClientWithScheme(cscheme, objs...)
+		reconciler = &ReconcileComplianceRemediation{client: client, scheme: cscheme}
+		zaplog, _ := zap.NewDevelopment()
+		logger = zapr.NewLogger(zaplog)
 	})
 
-	Context("only a single remediation", func() {
-		It("should return an empty list if nothing matches", func() {
-			machineconfigs, err := getAppliedMcRemediations(&reconciler, complianceremediationinstance)
-			Expect(len(machineconfigs)).To(BeZero())
-			Expect(err).To(BeNil())
-		})
-	})
-
-	Context("Multiple matching remediations", func() {
-		existingRemediations := make([]*compv1alpha1.ComplianceRemediation, 0)
-		const numExisting = 10
-
+	Context("applying remediations", func() {
 		BeforeEach(func() {
-			for i := 0; i < numExisting; i++ {
-				name := fmt.Sprintf("existingRemediation-%02d", i)
-				rem := getMockedRemediation(name, testRemLabels, true, compv1alpha1.RemediationApplied)
-				err := reconciler.client.Create(context.TODO(), rem)
-				Expect(err).To(BeNil())
-				existingRemediations = append(existingRemediations, rem)
-			}
+			remediationinstance.Spec.Apply = true
+			reconciler.client.Update(context.TODO(), remediationinstance)
 		})
 
-		AfterEach(func() {
-			for i := 0; i < numExisting; i++ {
-				name := fmt.Sprintf("existingRemediation-%02d", i)
+		Context("with a nil object", itShouldNotReconcile)
 
-				toDelete := compv1alpha1.ComplianceRemediation{}
-				err := reconciler.client.Get(context.TODO(), types.NamespacedName{Name: name}, &toDelete)
-				Expect(err).To(BeNil())
-
-				err = reconciler.client.Delete(context.TODO(), &toDelete)
-				Expect(err).To(BeNil())
-			}
-		})
-
-		It("should find them all them all", func() {
-			machineConfigs, err := getAppliedMcRemediations(&reconciler, complianceremediationinstance)
-			Expect(len(machineConfigs)).To(Equal(numExisting))
-			Expect(err).To(BeNil())
-
-			for _, rem := range existingRemediations {
-				ok := isRemInList(machineConfigs, rem)
-				Expect(ok).To(BeTrue())
-			}
-		})
-
-		It("should skip those that are not applied", func() {
-			notApplied := existingRemediations[1]
-			notApplied.Status.ApplicationState = compv1alpha1.RemediationNotApplied
-			err := reconciler.client.Update(context.TODO(), notApplied)
-			Expect(err).To(BeNil())
-
-			machineConfigs, err := getAppliedMcRemediations(&reconciler, complianceremediationinstance)
-			Expect(len(machineConfigs)).To(Equal(numExisting - 1))
-			Expect(err).To(BeNil())
-
-			for _, rem := range existingRemediations {
-				ok := isRemInList(machineConfigs, rem)
-				if rem.Name == notApplied.Name {
-					Expect(ok).To(BeFalse())
-				} else {
-					Expect(ok).To(BeTrue())
+		Context("with current ConfigMap remediation object", func() {
+			BeforeEach(func() {
+				cm := &corev1.ConfigMap{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "ConfigMap",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "my-cm",
+						Namespace: "test-ns",
+					},
+					Data: map[string]string{
+						"key": "val",
+					},
 				}
-			}
+				unstructuredCM, err := runtime.DefaultUnstructuredConverter.ToUnstructured(cm)
+				Expect(err).ToNot(HaveOccurred())
+				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
+					Object: unstructuredCM,
+				}
+				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should reconcile the current remediation", func() {
+				By("running a reconcile loop")
+
+				err := reconciler.reconcileRemediation(remediationinstance, logger)
+				Expect(err).To(BeNil())
+
+				By("the remediation should be applied")
+				foundCM := &corev1.ConfigMap{}
+				err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(foundCM.GetName()).To(Equal("my-cm"))
+				Expect(foundCM.Data["key"]).To(Equal("val"))
+			})
+		})
+
+		Context("with current MachineConfig remediation object", func() {
+			BeforeEach(func() {
+				mc := &mcfgv1.MachineConfig{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "MachineConfig",
+						APIVersion: mcfgapi.GroupName + "/v1",
+					},
+					// We specifically add no ObjectMeta since this will be
+					// added by the operator
+					Spec: mcfgv1.MachineConfigSpec{
+						FIPS: true,
+					},
+				}
+				unstructuredMC, err := runtime.DefaultUnstructuredConverter.ToUnstructured(mc)
+				Expect(err).ToNot(HaveOccurred())
+				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
+					Object: unstructuredMC,
+				}
+				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should reconcile the current remediation", func() {
+				By("running a reconcile loop")
+
+				err := reconciler.reconcileRemediation(remediationinstance, logger)
+				Expect(err).To(BeNil())
+
+				By("the remediation should be applied")
+				foundMC := &mcfgv1.MachineConfig{}
+				mcKey := types.NamespacedName{Name: remediationinstance.GetMcName()}
+				err = reconciler.client.Get(context.TODO(), mcKey, foundMC)
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		Context("with an outdated remediation object", func() {
+			BeforeEach(func() {
+				currentcm := &corev1.ConfigMap{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "ConfigMap",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "my-cm",
+						Namespace: "test-ns",
+					},
+					Data: map[string]string{
+						"currentkey": "currentval",
+					},
+				}
+				outdatedcm := &corev1.ConfigMap{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "ConfigMap",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "my-cm",
+						Namespace: "test-ns",
+					},
+					Data: map[string]string{
+						"outdatedkey": "outdatedval",
+					},
+				}
+				unstructuredCurrent, err := runtime.DefaultUnstructuredConverter.ToUnstructured(currentcm)
+				Expect(err).ToNot(HaveOccurred())
+				unstructuredOutdated, err := runtime.DefaultUnstructuredConverter.ToUnstructured(outdatedcm)
+				Expect(err).ToNot(HaveOccurred())
+				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
+					Object: unstructuredCurrent,
+				}
+				remediationinstance.Spec.Outdated.Object = &unstructured.Unstructured{
+					Object: unstructuredOutdated,
+				}
+				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should reconcile the outdated remediation", func() {
+				By("running a reconcile loop")
+
+				err := reconciler.reconcileRemediation(remediationinstance, logger)
+				Expect(err).To(BeNil())
+
+				By("the outdated remediation should be applied")
+				foundCM := &corev1.ConfigMap{}
+				err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(foundCM.GetName()).To(Equal("my-cm"))
+				Expect(foundCM.Data["outdatedkey"]).To(Equal("outdatedval"))
+			})
 		})
 	})
 
-	Context("getting remediation name annotations", func() {
-		It("should get non-cropped remediation name if it's short enough", func() {
-			annotationKey := getRemediationAnnotationKey("simple-remediation")
-			Expect(len(annotationKey)).ToNot(BeZero())
-			Expect(len(annotationKey)).To(BeNumerically("<", 64))
+	Context("un-applying remediations", func() {
+		BeforeEach(func() {
+			remediationinstance.Spec.Apply = false
+			err := reconciler.client.Update(context.TODO(), remediationinstance)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should get cropped remediation name if it's too long", func() {
-			annotationKey := getRemediationAnnotationKey(
-				"moderate-master-scan-1-sysctl-net-ipv4-icmp-echo-ignore-broadcasts123456789" +
-					"abcdefghijklmnopqrstuvwxyz")
-			Expect(len(annotationKey)).ToNot(BeZero())
-			Expect(len(annotationKey)).To(BeNumerically("<", 64))
+		Context("with a nil object", itShouldNotReconcile)
+
+		Context("with no existing remediation", func() {
+			Context("with a current remediation object", func() {
+				BeforeEach(func() {
+					cm := &corev1.ConfigMap{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "ConfigMap",
+							APIVersion: "v1",
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "my-cm",
+							Namespace: "test-ns",
+						},
+						Data: map[string]string{
+							"key": "val",
+						},
+					}
+					unstructuredCM, err := runtime.DefaultUnstructuredConverter.ToUnstructured(cm)
+					Expect(err).ToNot(HaveOccurred())
+					remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
+						Object: unstructuredCM,
+					}
+					err = reconciler.client.Update(context.TODO(), remediationinstance)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should do nothing", func() {
+					By("running a reconcile loop")
+
+					err := reconciler.reconcileRemediation(remediationinstance, logger)
+					Expect(err).To(BeNil())
+
+					By("the remediation should not be applied")
+					foundCM := &corev1.ConfigMap{}
+					err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
+					By("should return a NotFound error")
+					Expect(kerrors.IsNotFound(err)).To(BeTrue())
+				})
+			})
+		})
+
+		Context("with an existing remediation", func() {
+			Context("with a current remediation object", func() {
+				BeforeEach(func() {
+					cm := &corev1.ConfigMap{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "ConfigMap",
+							APIVersion: "v1",
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "my-cm",
+							Namespace: "test-ns",
+						},
+						Data: map[string]string{
+							"key": "val",
+						},
+					}
+					// Mark the object as created by the operator
+					compv1alpha1.AddRemediationAnnotation(cm)
+					unstructuredCM, err := runtime.DefaultUnstructuredConverter.ToUnstructured(cm)
+					Expect(err).ToNot(HaveOccurred())
+					remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
+						Object: unstructuredCM,
+					}
+					err = reconciler.client.Update(context.TODO(), remediationinstance)
+					Expect(err).NotTo(HaveOccurred())
+					err = reconciler.client.Create(context.TODO(), cm)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should delete the remediation", func() {
+					By("checking that the object is there")
+					foundCM := &corev1.ConfigMap{}
+					err := reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(foundCM.GetName()).To(Equal("my-cm"))
+					Expect(foundCM.Data["key"]).To(Equal("val"))
+
+					By("then running a reconcile loop")
+
+					err = reconciler.reconcileRemediation(remediationinstance, logger)
+					Expect(err).To(BeNil())
+
+					By("the remediation should be un-applied")
+					err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
+					By("should return a NotFound error")
+					Expect(kerrors.IsNotFound(err)).To(BeTrue())
+				})
+			})
 		})
 	})
 })

@@ -170,11 +170,13 @@ func RunOperator(cmd *cobra.Command, args []string) {
 	addMetrics(ctx, cfg)
 
 	if err := ensureDefaultProfileBundles(ctx, mgr.GetClient(), namespaceList); err != nil {
-		log.Error(err, "Error creating default ProfileBundles. Continuing anyway.")
+		log.Error(err, "Error creating default ProfileBundles.")
+		os.Exit(1)
 	}
 
 	if err := ensureDefaultScanSettings(ctx, mgr.GetClient(), namespaceList); err != nil {
-		log.Error(err, "Error creating default ScanSettings. Continuing anyway.")
+		log.Error(err, "Error creating default ScanSettings.")
+		os.Exit(1)
 	}
 
 	log.Info("Starting the Cmd.")
@@ -245,13 +247,26 @@ func ensureDefaultProfileBundles(ctx context.Context, crclient client.Client, na
 					ContentFile:  fmt.Sprintf("ssg-%s-ds.xml", prod),
 				},
 			}
-			err := crclient.Create(ctx, pb)
-			if !k8serrors.IsAlreadyExists(err) {
+			if err := ensureSupportedProfileBundle(ctx, crclient, pb); err != nil {
 				lastErr = err
 			}
 		}
 	}
 	return lastErr
+}
+
+func ensureSupportedProfileBundle(ctx context.Context, crclient client.Client, pb *compv1alpha1.ProfileBundle) error {
+	createErr := crclient.Create(ctx, pb)
+	if k8serrors.IsAlreadyExists(createErr) {
+		return crclient.Patch(ctx, pb, client.Merge)
+	} else if createErr != nil {
+		return createErr
+	}
+	return nil
+}
+
+func profileBundlesDiffer(ref, other *compv1alpha1.ProfileBundle) bool {
+	return ref.Spec.ContentFile != other.Spec.ContentFile || ref.Spec.ContentImage != other.Spec.ContentImage
 }
 
 func ensureDefaultScanSettings(ctx context.Context, crclient client.Client, namespaceList []string) error {
