@@ -85,7 +85,6 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 				Extends:     profRhcosE8.Name,
 				Title:       "testing TP",
 				Description: "some desc",
-				OutputType:  compv1alpha1.ConfigMapOutput,
 				DisableRules: []compv1alpha1.RuleReferenceSpec{
 					{
 						Name:      "rhcos4-no-empty-passwords",
