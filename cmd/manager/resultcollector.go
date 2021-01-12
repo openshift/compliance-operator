@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	goerrors "errors"
 	"flag"
 	"fmt"
 	"io"
@@ -54,6 +55,10 @@ var resultcollectorCmd = &cobra.Command{
 	Long:  "A tool to do an OpenSCAP scan from a pod.",
 	Run:   resultCollectorMain,
 }
+
+var (
+	timeoutErr = goerrors.New("Timed out waiting for results file")
+)
 
 func init() {
 	rootCmd.AddCommand(resultcollectorCmd)
@@ -141,43 +146,66 @@ func getOpenSCAPScanInstance(name, namespace string, client *complianceCrClient)
 	return scan, nil
 }
 
-func waitForResultsFile(filename string, timeout int64) *os.File {
+func resultsFileReady(fname string, fFound chan *os.File) (bool, error) {
+	// Note that we're cleaning the filename path above.
+	// Also note that the file is not being closed here and should
+	// be closed by the channel receiver.
+	// #nosec
+	file, err := os.Open(fname)
+	if err == nil {
+		fileinfo, statErr := file.Stat()
+		// Only try to use the file if it already has contents.
+		// This way we avoid race conditions between the side-car and
+		// this script.
+		if statErr == nil && fileinfo.Size() > 0 {
+			fFound <- file
+			return true, nil
+		} else {
+			return false, file.Close()
+		}
+	} else if !os.IsNotExist(err) {
+		log.Error(err, "Couldn't open results file")
+		// We mark this as "ready" as there's nothing else to do.
+		// This will stop the go-routine
+		return true, fmt.Errorf("couldn't open result file: %w", err)
+	}
+	return false, nil
+}
+
+func probeResultsFile(fname string, fFound chan *os.File, errs chan error) {
+	for {
+		ready, err := resultsFileReady(fname, fFound)
+		if err != nil {
+			errs <- err
+		}
+		if ready {
+			return
+		}
+		time.Sleep(1 * time.Second)
+	}
+}
+
+func waitForResultsFile(filename string, timeout int64) (*os.File, error) {
 	readFileTimeoutChan := make(chan *os.File, 1)
+	errs := make(chan error)
 	// G304 (CWE-22) is addressed by this.
 	cleanFileName := filepath.Clean(filename)
 
-	go func() {
-		for {
-			// Note that we're cleaning the filename path above.
-			// #nosec
-			file, err := os.Open(cleanFileName)
-			if err == nil {
-				fileinfo, err := file.Stat()
-				// Only try to use the file if it already has contents.
-				// This way we avoid race conditions between the side-car and
-				// this script.
-				if err == nil && fileinfo.Size() > 0 {
-					readFileTimeoutChan <- file
-				}
-			} else if !os.IsNotExist(err) {
-				log.Error(err, "Couldn't open results file")
-				os.Exit(1)
-			}
-			time.Sleep(1 * time.Second)
-		}
-	}()
+	go probeResultsFile(cleanFileName, readFileTimeoutChan, errs)
 
 	select {
 	case file := <-readFileTimeoutChan:
 		log.Info("Results file found, will upload it.", "resuts-file", filename)
-		return file
+		close(readFileTimeoutChan)
+		return file, nil
+	case err := <-errs:
+		outErr := fmt.Errorf("error reading result file: %w", err)
+		log.Error(outErr, "Timeout. Aborting.")
+		return nil, outErr
 	case <-time.After(time.Duration(timeout) * time.Second):
-		log.Error(fmt.Errorf("Timed out waiting for results file"), "Timeout. Aborting.")
-		os.Exit(1)
+		log.Error(timeoutErr, "Timeout. Aborting.")
+		return nil, timeoutErr
 	}
-
-	// We shouldn't get here.
-	return nil
 }
 
 func resultNeedsCompression(size int64) bool {
@@ -211,7 +239,10 @@ func readResultsFile(filename string, timeout int64) (*resultFileContents, error
 	var rfContents resultFileContents
 
 	cleanFileName := filepath.Clean(filename)
-	handle := waitForResultsFile(cleanFileName, timeout)
+	handle, err := waitForResultsFile(cleanFileName, timeout)
+	if err != nil {
+		os.Exit(1)
+	}
 	// #nosec
 	defer handle.Close()
 
