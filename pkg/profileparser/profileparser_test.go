@@ -598,3 +598,21 @@ var _ = Describe("Testing CPE string parsing in isolation", func() {
 		})
 	})
 })
+
+var _ = Describe("Performance", func() {
+	BeforeEach(func() {
+		Expect(pInput.contentDom).NotTo(BeNil())
+	})
+
+	Context("Testing parsing profiles", func() {
+		Measure("it should parse profiles efficiently", func(b Benchmarker) {
+			rtime := b.Time("runtime", func() {
+				err := ParseBundle(pInput.contentDom, pInput.pb, pInput.pcfg)
+				Expect(err).To(BeNil())
+			})
+
+			Ω(rtime.Seconds()).Should(BeNumerically("<", 1.0), "ParseProfilesAndDo() shouldn't take too long.")
+		}, 1000)
+
+	})
+})
