@@ -25,28 +25,6 @@ const (
 	tailoringNotFoundPrefix = "Tailoring ConfigMap not found: "
 )
 
-func (r *ReconcileComplianceScan) createScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
-	if instance.GetScanType() == compv1alpha1.ScanTypePlatform {
-		return r.createPlatformScanPod(instance, logger)
-	}
-	// ScanTypeNode
-	return r.createNodeScanPods(instance, nodes, logger)
-}
-
-func (r *ReconcileComplianceScan) createNodeScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
-	// On each eligible node..
-	for _, node := range nodes.Items {
-		// ..schedule a pod..
-		logger.Info("Creating a pod for node", "Pod.Name", node.Name)
-		pod := newScanPodForNode(instance, &node, logger)
-		if err := r.launchScanPod(instance, pod, logger); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (r *ReconcileComplianceScan) createPlatformScanPod(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	logger.Info("Creating a Platform scan pod")
 	pod := newPlatformScanPod(instance, logger)
@@ -478,9 +456,9 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 	}
 }
 
-func (r *ReconcileComplianceScan) deleteScanPods(instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) error {
+func (r *ReconcileComplianceScan) deleteScanPods(instance *compv1alpha1.ComplianceScan, nodes []corev1.Node, logger logr.Logger) error {
 	// On each eligible node..
-	for _, node := range nodes.Items {
+	for _, node := range nodes {
 		logger.Info("Deleting a pod on node", "node", node.Name)
 		pod := newScanPodForNode(instance, &node, logger)
 

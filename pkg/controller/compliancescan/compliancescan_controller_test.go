@@ -24,6 +24,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 
 	var (
 		compliancescaninstance *compv1alpha1.ComplianceScan
+		handler                scanTypeHandler
 		reconciler             ReconcileComplianceScan
 		logger                 logr.Logger
 		nodeinstance1          *corev1.Node
@@ -76,8 +77,66 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 
 		client := fake.NewFakeClientWithScheme(scheme, objs...)
 		reconciler = ReconcileComplianceScan{client: client, scheme: scheme}
+		var err error
+		handler, err = getScanTypeHandler(&reconciler, compliancescaninstance, logger)
+		Expect(err).To(BeNil())
+		_, err = handler.validate()
+		Expect(err).To(BeNil())
 	})
 
+	Context("On validations", func() {
+		Context("With missing phase", func() {
+			It("should update the compliancescan phase to pending", func() {
+				cont, err := reconciler.validate(compliancescaninstance, logger)
+				Expect(cont).To(BeFalse())
+				Expect(err).To(BeNil())
+
+				scan := &compv1alpha1.ComplianceScan{}
+				key := types.NamespacedName{
+					Name:      compliancescaninstance.Name,
+					Namespace: compliancescaninstance.Namespace,
+				}
+				reconciler.client.Get(context.TODO(), key, scan)
+				Expect(scan.Status.Phase).To(Equal(compv1alpha1.PhasePending))
+			})
+		})
+		Context("With missing RawResultStorage.Size", func() {
+			It("should update the compliancescan instance with the default size", func() {
+				compliancescaninstance.Spec.RawResultStorage.Size = ""
+				compliancescaninstance.Status.Phase = "PENDING"
+				cont, err := reconciler.validate(compliancescaninstance, logger)
+				Expect(cont).To(BeFalse())
+				Expect(err).To(BeNil())
+
+				scan := &compv1alpha1.ComplianceScan{}
+				key := types.NamespacedName{
+					Name:      compliancescaninstance.Name,
+					Namespace: compliancescaninstance.Namespace,
+				}
+				reconciler.client.Get(context.TODO(), key, scan)
+				Expect(scan.Spec.RawResultStorage.Size).To(Equal(compv1alpha1.DefaultRawStorageSize))
+			})
+		})
+
+		Context("With invalid RawResultStorage.Size", func() {
+			It("report an error and move to phase DONE", func() {
+				compliancescaninstance.Spec.RawResultStorage.Size = "invalid"
+				compliancescaninstance.Status.Phase = "PENDING"
+				cont, err := reconciler.validate(compliancescaninstance, logger)
+				Expect(cont).To(BeFalse())
+				Expect(err).To(BeNil())
+
+				scan := &compv1alpha1.ComplianceScan{}
+				key := types.NamespacedName{
+					Name:      compliancescaninstance.Name,
+					Namespace: compliancescaninstance.Namespace,
+				}
+				reconciler.client.Get(context.TODO(), key, scan)
+				Expect(scan.Status.Phase).To(Equal(compv1alpha1.PhaseDone))
+				Expect(scan.Status.Result).To(Equal(compv1alpha1.ResultError))
+			})
+		})
+	})
 	Context("On the PENDING phase", func() {
 		It("should update the compliancescan instance to phase LAUNCHING", func() {
 			result, err := reconciler.phasePendingHandler(compliancescaninstance, logger)
@@ -98,40 +157,6 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			})
 		})
 
-		Context("With missing RawResultStorage.Size", func() {
-			It("should update the compliancescan instance with the default size", func() {
-				compliancescaninstance.Spec.RawResultStorage.Size = ""
-				result, err := reconciler.phasePendingHandler(compliancescaninstance, logger)
-				Expect(result).NotTo(BeNil())
-				Expect(err).To(BeNil())
-
-				scan := &compv1alpha1.ComplianceScan{}
-				key := types.NamespacedName{
-					Name:      compliancescaninstance.Name,
-					Namespace: compliancescaninstance.Namespace,
-				}
-				reconciler.client.Get(context.TODO(), key, scan)
-				Expect(scan.Spec.RawResultStorage.Size).To(Equal(compv1alpha1.DefaultRawStorageSize))
-			})
-		})
-
-		Context("With invalid RawResultStorage.Size", func() {
-			It("report an error and move to phase DONE", func() {
-				compliancescaninstance.Spec.RawResultStorage.Size = "invalid"
-				result, err := reconciler.phasePendingHandler(compliancescaninstance, logger)
-				Expect(result).NotTo(BeNil())
-				Expect(err).To(BeNil())
-
-				scan := &compv1alpha1.ComplianceScan{}
-				key := types.NamespacedName{
-					Name:      compliancescaninstance.Name,
-					Namespace: compliancescaninstance.Namespace,
-				}
-				reconciler.client.Get(context.TODO(), key, scan)
-				Expect(scan.Status.Phase).To(Equal(compv1alpha1.PhaseDone))
-				Expect(scan.Status.Result).To(Equal(compv1alpha1.ResultError))
-			})
-		})
 	})
 
 	Context("On the LAUNCHING phase", func() {
@@ -141,7 +166,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
 		})
 		It("should create PVC and stay on the same phase", func() {
-			result, err := reconciler.phaseLaunchingHandler(compliancescaninstance, logger)
+			result, err := reconciler.phaseLaunchingHandler(handler, logger)
 			Expect(result).ToNot(BeNil())
 			Expect(err).To(BeNil())
 			Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseLaunching))
@@ -162,16 +187,10 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
 			})
 			It("should update the compliancescan instance to phase RUNNING", func() {
-				result, err := reconciler.phaseLaunchingHandler(compliancescaninstance, logger)
+				result, err := reconciler.phaseLaunchingHandler(handler, logger)
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
 				Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseRunning))
-
-				// We should have scheduled a pod per node
-				nodes, _ := getTargetNodes(&reconciler, compliancescaninstance)
-				var pods corev1.PodList
-				reconciler.client.List(context.TODO(), &pods)
-				Expect(len(pods.Items)).To(Equal(len(nodes.Items)))
 			})
 		})
 	})
@@ -179,7 +198,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 	Context("On the RUNNING phase", func() {
 		Context("With no pods in the cluster", func() {
 			It("should update the compliancescan instance to phase LAUNCHING", func() {
-				result, err := reconciler.phaseRunningHandler(compliancescaninstance, logger)
+				result, err := reconciler.phaseRunningHandler(handler, logger)
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
 				Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseLaunching))
@@ -213,7 +232,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			})
 
 			It("should stay in RUNNING state", func() {
-				result, err := reconciler.phaseRunningHandler(compliancescaninstance, logger)
+				result, err := reconciler.phaseRunningHandler(handler, logger)
 				pods := &corev1.PodList{}
 				reconciler.client.List(context.TODO(), pods)
 				for _, pod := range pods.Items {
@@ -258,7 +277,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			})
 
 			It("should move to AGGREGATING state", func() {
-				result, err := reconciler.phaseRunningHandler(compliancescaninstance, logger)
+				result, err := reconciler.phaseRunningHandler(handler, logger)
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
 				Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseAggregating))
@@ -292,7 +311,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			})
 			It("Should return success & preserve resources", func() {
 				var pods corev1.PodList
-				result, err := reconciler.phaseDoneHandler(compliancescaninstance, logger, dontDelete)
+				result, err := reconciler.phaseDoneHandler(handler, compliancescaninstance, logger, dontDelete)
 				reconciler.client.List(context.TODO(), &pods)
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
@@ -324,7 +343,7 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 			})
 			It("Should return success & clean up resources", func() {
 				var pods corev1.PodList
-				result, err := reconciler.phaseDoneHandler(compliancescaninstance, logger, doDelete)
+				result, err := reconciler.phaseDoneHandler(handler, compliancescaninstance, logger, doDelete)
 				reconciler.client.List(context.TODO(), &pods)
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
