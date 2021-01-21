@@ -930,7 +930,7 @@ func getConfigMapForNodeName(scanName, nodeName string) string {
 }
 
 func getInitContainerImage(scanSpec *compv1alpha1.ComplianceScanSpec, logger logr.Logger) string {
-	image := DefaultContentContainerImage
+	image := utils.GetComponentImage(utils.CONTENT)
 
 	if scanSpec.ContentImage != "" {
 		image = scanSpec.ContentImage
