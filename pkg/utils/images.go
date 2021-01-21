@@ -7,7 +7,7 @@ type ComplianceComponent uint
 const (
 	OPENSCAP = iota
 	OPERATOR
-	DEFAULT_PROFILE_BUNDLES
+	CONTENT
 )
 
 var componentDefaults = []struct {
