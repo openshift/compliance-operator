@@ -233,7 +233,7 @@ func addMetrics(ctx context.Context, cfg *rest.Config) {
 }
 
 func ensureDefaultProfileBundles(ctx context.Context, crclient client.Client, namespaceList []string) error {
-	pbimg := utils.GetComponentImage(utils.DEFAULT_PROFILE_BUNDLES)
+	pbimg := utils.GetComponentImage(utils.CONTENT)
 	var lastErr error
 	for _, prod := range defaultProducts {
 		for _, ns := range namespaceList {
