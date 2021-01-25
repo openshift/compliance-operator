@@ -386,20 +386,20 @@ func newScanForSuite(suite *compv1alpha1.ComplianceSuite, scanWrap *compv1alpha1
 // Reconcile the remediation application in the suite. Note that the suite that this takes is already
 // a copy, so it's safe to modify.
 func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) (reconcile.Result, error) {
-	// We don't need to do anything else unless we gotta enabled auto-apply
-	if !suite.Spec.AutoApplyRemediations {
+	// We don't need to do anything else unless auto-applied is enabled
+	if !suite.ShouldApplyRemediations() {
 		return reconcile.Result{}, nil
 	}
 
 	// Get all the remediations
-	var remList compv1alpha1.ComplianceRemediationList
+	remList := &compv1alpha1.ComplianceRemediationList{}
 	mcfgpools := &mcfgv1.MachineConfigPoolList{}
 	affectedMcfgPools := map[string]*mcfgv1.MachineConfigPool{}
 	listOpts := client.ListOptions{
 		LabelSelector: labels.SelectorFromSet(labels.Set{compv1alpha1.SuiteLabel: suite.Name}),
 	}
 
-	if err := r.client.List(context.TODO(), &remList, &listOpts); err != nil {
+	if err := r.client.List(context.TODO(), remList, &listOpts); err != nil {
 		log.Error(err, "Failed to list remediations")
 		return reconcile.Result{}, err
 	}
@@ -411,44 +411,22 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 
 	// Construct the list of the statuses
 	for _, rem := range remList.Items {
-		if suite.Spec.AutoApplyRemediations {
-			// get relevant scan
-			scan := &compv1alpha1.ComplianceScan{}
-			scanKey := types.NamespacedName{Name: rem.Labels[compv1alpha1.ComplianceScanLabel], Namespace: rem.Namespace}
-			if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
-				return reconcile.Result{}, err
-			}
-			if utils.IsMachineConfig(rem.Spec.Current.Object) {
-				// get affected pool
-				pool, affectedPoolExists := r.getAffectedMcfgPool(scan, mcfgpools)
-				// we only ned to operate on pools that are affected
-				if affectedPoolExists {
-					foundPool, poolIsTracked := affectedMcfgPools[pool.Name]
-					if !poolIsTracked {
-						foundPool = pool.DeepCopy()
-						affectedMcfgPools[pool.Name] = foundPool
-					}
-					// Only apply remediations once the scan is done. This hopefully ensures
-					// that we already have all the relevant remediations in place.
-					// We only care for remediations that haven't been applied
-					if scan.Status.Phase == compv1alpha1.PhaseDone &&
-						rem.Status.ApplicationState != compv1alpha1.RemediationApplied {
-						if err := r.applyMcfgRemediationAndPausePool(rem, foundPool, logger); err != nil {
-							return reconcile.Result{}, err
-						}
-					}
-				}
-			} else {
-				// Only apply remediations once the scan is done. This hopefully ensures
-				// that we already have all the relevant remediations in place.
-				// We only care for remediations that haven't been applied
-				if scan.Status.Phase == compv1alpha1.PhaseDone &&
-					rem.Status.ApplicationState != compv1alpha1.RemediationApplied {
-					if err := r.applyGenericRemediation(rem, logger); err != nil {
-						return reconcile.Result{}, err
-					}
-				}
-			}
+		// get relevant scan
+		scan := &compv1alpha1.ComplianceScan{}
+		scanKey := types.NamespacedName{Name: rem.Labels[compv1alpha1.ComplianceScanLabel], Namespace: rem.Namespace}
+		if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
+			return reconcile.Result{}, err
+		}
+
+		// Only apply remediations once the scan is done. This hopefully ensures
+		// that we already have all the relevant remediations in place.
+		// We only care for remediations that haven't been applied
+		if scan.Status.Phase != compv1alpha1.PhaseDone {
+			continue
+		}
+
+		if err := r.applyRemediation(rem, suite, scan, mcfgpools, affectedMcfgPools, logger); err != nil {
+			return reconcile.Result{}, err
 		}
 	}
 
@@ -459,15 +437,16 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 		return reconcile.Result{}, nil
 	}
 
+	logger.Info("All scans are in Done phase. Post-processing remediations")
 	// refresh remediationList
-	if err := r.client.List(context.TODO(), &remList, &listOpts); err != nil {
+	postProcessRemList := &compv1alpha1.ComplianceRemediationList{}
+	if err := r.client.List(context.TODO(), postProcessRemList, &listOpts); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// Check that all remediations have been applied yet. If not, cause an error
-	// and requeue.
-	for _, rem := range remList.Items {
-		if rem.Status.ApplicationState != compv1alpha1.RemediationApplied {
+	// Check that all remediations have been applied yet. If not, requeue.
+	for _, rem := range postProcessRemList.Items {
+		if !rem.IsApplied() {
 			logger.Info("Remediation not applied yet. Skipping post-processing", "ComplianceRemediation.Name", rem.Name)
 			return reconcile.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 		}
@@ -485,13 +464,61 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 			}
 		}
 	}
+
+	if suite.ApplyRemediationsAnnotationSet() || suite.RemoveOutdated() {
+		suiteCopy := suite.DeepCopy()
+		if suite.ApplyRemediationsAnnotationSet() {
+			delete(suiteCopy.Annotations, compv1alpha1.ApplyRemediationsAnnotation)
+		}
+		if suite.RemoveOutdated() {
+			delete(suiteCopy.Annotations, compv1alpha1.RemoveOutdatedAnnotation)
+		}
+		updateErr := r.client.Update(context.TODO(), suiteCopy)
+		return reconcile.Result{}, updateErr
+	}
 	return reconcile.Result{}, nil
 }
 
+func (r *ReconcileComplianceSuite) applyRemediation(rem compv1alpha1.ComplianceRemediation,
+	suite *compv1alpha1.ComplianceSuite,
+	scan *compv1alpha1.ComplianceScan,
+	mcfgpools *mcfgv1.MachineConfigPoolList,
+	affectedMcfgPools map[string]*mcfgv1.MachineConfigPool,
+	logger logr.Logger) error {
+
+	if utils.IsMachineConfig(rem.Spec.Current.Object) {
+		// get affected pool
+		pool, affectedPoolExists := r.getAffectedMcfgPool(scan, mcfgpools)
+		// we only need to operate on pools that are affected
+		if affectedPoolExists {
+			foundPool, poolIsTracked := affectedMcfgPools[pool.Name]
+			if !poolIsTracked {
+				foundPool = pool.DeepCopy()
+				affectedMcfgPools[pool.Name] = foundPool
+			}
+			if err := r.applyMcfgRemediationAndPausePool(rem, suite, foundPool, logger); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	if err := r.applyGenericRemediation(rem, suite, logger); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *ReconcileComplianceSuite) applyGenericRemediation(rem compv1alpha1.ComplianceRemediation,
+	suite *compv1alpha1.ComplianceSuite,
 	logger logr.Logger) error {
 	remCopy := rem.DeepCopy()
 	remCopy.Spec.Apply = true
+	if remediationNeedsOutdatedRemoval(remCopy, suite) {
+		logger.Info("Updating Outdated Remediation", "Remediation.Name", remCopy.Name)
+		remCopy.Spec.Outdated.Object = nil
+	}
 	logger.Info("Setting Remediation to applied", "ComplianceRemediation.Name", rem.Name)
 	if err := r.client.Update(context.TODO(), remCopy); err != nil {
 		return err
@@ -502,6 +529,7 @@ func (r *ReconcileComplianceSuite) applyGenericRemediation(rem compv1alpha1.Comp
 // This gets the remediation to be applied. Note that before being able to do that, the machineConfigPool is
 // paused in order to reduce restarts of nodes.
 func (r *ReconcileComplianceSuite) applyMcfgRemediationAndPausePool(rem compv1alpha1.ComplianceRemediation,
+	suite *compv1alpha1.ComplianceSuite,
 	pool *mcfgv1.MachineConfigPool, logger logr.Logger) error {
 	remCopy := rem.DeepCopy()
 	// Only pause pools where the pool wasn't paused before and
@@ -516,6 +544,10 @@ func (r *ReconcileComplianceSuite) applyMcfgRemediationAndPausePool(rem compv1al
 	}
 
 	remCopy.Spec.Apply = true
+	if remediationNeedsOutdatedRemoval(remCopy, suite) {
+		logger.Info("Updating Outdated Remediation", "Remediation.Name", remCopy.Name)
+		remCopy.Spec.Outdated.Object = nil
+	}
 	if err := r.client.Update(context.TODO(), remCopy); err != nil {
 		return err
 	}
@@ -529,4 +561,8 @@ func (r *ReconcileComplianceSuite) getAffectedMcfgPool(scan *compv1alpha1.Compli
 		}
 	}
 	return mcfgv1.MachineConfigPool{}, false
+}
+
+func remediationNeedsOutdatedRemoval(rem *compv1alpha1.ComplianceRemediation, suite *compv1alpha1.ComplianceSuite) bool {
+	return suite.RemoveOutdated() && rem.Status.ApplicationState == compv1alpha1.RemediationOutdated
 }
