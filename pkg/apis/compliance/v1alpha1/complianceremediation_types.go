@@ -123,6 +123,17 @@ func (r *ComplianceRemediation) AddOwnershipLabels(obj metav1.Object) {
 	obj.SetLabels(labels)
 }
 
+// IsApplied tells whether the ComplianceRemediation has been applied.
+// Note that a Remediation is considered applied if the state of it is
+// indeed applied, or if it has been requested to be applied but it has
+// become outdated
+func (r *ComplianceRemediation) IsApplied() bool {
+	applied := r.Status.ApplicationState == RemediationApplied
+	outDatedButApplied := r.Spec.Apply && r.Status.ApplicationState == RemediationOutdated
+
+	return applied || outDatedButApplied
+}
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ComplianceRemediationList contains a list of ComplianceRemediation

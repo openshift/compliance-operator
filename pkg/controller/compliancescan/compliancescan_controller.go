@@ -5,14 +5,12 @@ import (
 	goerrors "errors"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -133,38 +131,51 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 
 	// At this point, we make a copy of the instance, so we can modify it in the functions below.
 	scanToBeUpdated := instance.DeepCopy()
+	if cont, err := r.validate(instance, reqLogger); !cont || err != nil {
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
+	}
 
-	// If no phase set, default to pending (the initial phase):
-	if scanToBeUpdated.Status.Phase == "" {
-		scanToBeUpdated.Status.Phase = compv1alpha1.PhasePending
+	handler, err := getScanTypeHandler(r, scanToBeUpdated, reqLogger)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if cont, err := handler.validate(); !cont || err != nil {
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
 	}
 
 	switch scanToBeUpdated.Status.Phase {
 	case compv1alpha1.PhasePending:
 		return r.phasePendingHandler(scanToBeUpdated, reqLogger)
 	case compv1alpha1.PhaseLaunching:
-		return r.phaseLaunchingHandler(scanToBeUpdated, reqLogger)
+		return r.phaseLaunchingHandler(handler, reqLogger)
 	case compv1alpha1.PhaseRunning:
-		return r.phaseRunningHandler(scanToBeUpdated, reqLogger)
+		return r.phaseRunningHandler(handler, reqLogger)
 	case compv1alpha1.PhaseAggregating:
-		return r.phaseAggregatingHandler(scanToBeUpdated, reqLogger)
+		return r.phaseAggregatingHandler(handler, reqLogger)
 	case compv1alpha1.PhaseDone:
-		return r.phaseDoneHandler(scanToBeUpdated, reqLogger, dontDelete)
+		return r.phaseDoneHandler(handler, scanToBeUpdated, reqLogger, dontDelete)
 	}
 
 	// the default catch-all, just remove the request from the queue
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
-	logger.Info("Phase: Pending")
-
-	// Remove annotation if needed
-	if instance.NeedsRescan() {
+// validate does validation on the scan and sets some defaults. This is run before any phase to avoid
+// folks modifying the scan in the middle of it and the operator not erroring out early enough.
+func (r *ReconcileComplianceScan) validate(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (cont bool, valerr error) {
+	// If no phase set, default to pending (the initial phase):
+	if instance.Status.Phase == "" {
 		instanceCopy := instance.DeepCopy()
-		delete(instanceCopy.Annotations, compv1alpha1.ComplianceScanRescanAnnotation)
-		err := r.client.Update(context.TODO(), instanceCopy)
-		return reconcile.Result{}, err
+		instanceCopy.Status.Phase = compv1alpha1.PhasePending
+		updateErr := r.client.Status().Update(context.TODO(), instanceCopy)
+		return false, updateErr
 	}
 
 	// Set default scan type if missing
@@ -172,7 +183,7 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 		instanceCopy := instance.DeepCopy()
 		instanceCopy.Spec.ScanType = compv1alpha1.ScanTypeNode
 		err := r.client.Update(context.TODO(), instanceCopy)
-		return reconcile.Result{}, err
+		return false, err
 	}
 
 	// validate scan type
@@ -184,7 +195,7 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 		instanceCopy.Status.ErrorMessage = fmt.Sprintf("Scan type '%s' is not valid", instance.Spec.ScanType)
 		instanceCopy.Status.Phase = compv1alpha1.PhaseDone
 		updateErr := r.client.Status().Update(context.TODO(), instanceCopy)
-		return reconcile.Result{}, updateErr
+		return false, updateErr
 	}
 
 	// Set default storage if missing
@@ -192,14 +203,14 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 		instanceCopy := instance.DeepCopy()
 		instanceCopy.Spec.RawResultStorage.Size = compv1alpha1.DefaultRawStorageSize
 		err := r.client.Update(context.TODO(), instanceCopy)
-		return reconcile.Result{}, err
+		return false, err
 	}
 
 	if len(instance.Spec.RawResultStorage.PVAccessModes) == 0 {
 		instanceCopy := instance.DeepCopy()
 		instanceCopy.Spec.RawResultStorage.PVAccessModes = defaultAccessMode
 		err := r.client.Update(context.TODO(), instanceCopy)
-		return reconcile.Result{}, err
+		return false, err
 	}
 
 	//validate raw storage size
@@ -209,26 +220,21 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 		instanceCopy.Status.Result = compv1alpha1.ResultError
 		instanceCopy.Status.Phase = compv1alpha1.PhaseDone
 		err := r.client.Status().Update(context.TODO(), instanceCopy)
-		return reconcile.Result{}, err
+		return false, err
 	}
 
-	if instance.GetScanType() == compv1alpha1.ScanTypeNode {
-		var nodes corev1.NodeList
-		var err error
-		if nodes, err = getTargetNodes(r, instance); err != nil {
-			logger.Error(err, "Cannot get nodes")
-			return reconcile.Result{}, err
-		}
-		if len(nodes.Items) == 0 {
-			warning := "No nodes matched the nodeSelector"
-			logger.Info(warning)
-			r.recorder.Event(instance, corev1.EventTypeWarning, "NoMatchingNodes", warning)
-			instanceCopy := instance.DeepCopy()
-			instanceCopy.Status.Result = compv1alpha1.ResultNotApplicable
-			instanceCopy.Status.Phase = compv1alpha1.PhaseDone
-			err := r.updateStatusWithEvent(instanceCopy, logger)
-			return reconcile.Result{}, err
-		}
+	return true, nil
+}
+
+func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+	logger.Info("Phase: Pending")
+
+	// Remove annotation if needed
+	if instance.NeedsRescan() {
+		instanceCopy := instance.DeepCopy()
+		delete(instanceCopy.Annotations, compv1alpha1.ComplianceScanRescanAnnotation)
+		err := r.client.Update(context.TODO(), instanceCopy)
+		return reconcile.Result{}, err
 	}
 
 	// Update the scan instance, the next phase is running
@@ -246,55 +252,50 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
-	var nodes corev1.NodeList
+func (r *ReconcileComplianceScan) phaseLaunchingHandler(h scanTypeHandler, logger logr.Logger) (reconcile.Result, error) {
 	var err error
 
 	logger.Info("Phase: Launching")
 
-	err = createConfigMaps(r, scriptCmForScan(instance), envCmForScan(instance), envCmForPlatformScan(instance), instance)
+	scan := h.getScan()
+	err = createConfigMaps(r, scriptCmForScan(scan), envCmForScan(scan), envCmForPlatformScan(scan), scan)
 	if err != nil {
 		logger.Error(err, "Cannot create the configmaps")
 		return reconcile.Result{}, err
 	}
 
-	if nodes, err = getTargetNodes(r, instance); err != nil {
-		logger.Error(err, "Cannot get nodes")
-		return reconcile.Result{}, err
-	}
-
-	if err = r.handleRootCASecret(instance, logger); err != nil {
+	if err = r.handleRootCASecret(scan, logger); err != nil {
 		logger.Error(err, "Cannot create CA secret")
 		return reconcile.Result{}, err
 	}
 
-	if err = r.handleResultServerSecret(instance, logger); err != nil {
+	if err = r.handleResultServerSecret(scan, logger); err != nil {
 		logger.Error(err, "Cannot create result server cert secret")
 		return reconcile.Result{}, err
 	}
 
-	if err = r.handleResultClientSecret(instance, logger); err != nil {
+	if err = r.handleResultClientSecret(scan, logger); err != nil {
 		logger.Error(err, "Cannot create result client cert secret")
 		return reconcile.Result{}, err
 	}
 
-	if resume, err := r.handleRawResultsForScan(instance, logger); err != nil || !resume {
+	if resume, err := r.handleRawResultsForScan(scan, logger); err != nil || !resume {
 		if err != nil {
 			logger.Error(err, "Cannot create the PersistentVolumeClaims")
 		}
 		return reconcile.Result{}, err
 	}
 
-	if err = r.createResultServer(instance, logger); err != nil {
+	if err = r.createResultServer(scan, logger); err != nil {
 		logger.Error(err, "Cannot create result server")
 		return reconcile.Result{}, err
 	}
 
-	if err = r.createScanPods(instance, nodes, logger); err != nil {
+	if err = h.createScanWorkload(); err != nil {
 		if !common.IsRetriable(err) {
 			// Surface non-retriable errors to the CR
 			logger.Info("Updating scan status due to unretriable error")
-			scanCopy := instance.DeepCopy()
+			scanCopy := scan.DeepCopy()
 			scanCopy.Status.ErrorMessage = err.Error()
 			scanCopy.Status.Result = compv1alpha1.ResultError
 			scanCopy.Status.Phase = compv1alpha1.PhaseDone
@@ -307,8 +308,8 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *compv1alpha1.C
 	}
 
 	// if we got here, there are no new pods to be created, move to the next phase
-	instance.Status.Phase = compv1alpha1.PhaseRunning
-	err = r.client.Status().Update(context.TODO(), instance)
+	scan.Status.Phase = compv1alpha1.PhaseRunning
+	err = r.client.Status().Update(context.TODO(), scan)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -316,90 +317,23 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(instance *compv1alpha1.C
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
-	var nodes corev1.NodeList
-	var err error
-
+func (r *ReconcileComplianceScan) phaseRunningHandler(h scanTypeHandler, logger logr.Logger) (reconcile.Result, error) {
 	logger.Info("Phase: Running")
 
-	switch instance.GetScanType() {
-	case compv1alpha1.ScanTypePlatform:
-		running, err := isPlatformScanPodRunning(r, instance, logger)
-		if errors.IsNotFound(err) {
-			// Let's go back to the previous state and make sure all the nodes are covered.
-			logger.Info("Phase: Running: The platform scan pod is missing. Going to state LAUNCHING to make sure we launch it",
-				"compliancescan")
-			instance.Status.Phase = compv1alpha1.PhaseLaunching
-			err = r.client.Status().Update(context.TODO(), instance)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
-			return reconcile.Result{}, nil
-		} else if err != nil {
-			return reconcile.Result{}, err
-		}
+	running, err := h.handleRunningScan()
 
-		if running {
-			// The platform scan pod is still running, go back to queue.
-			return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, err
-		}
-	case compv1alpha1.ScanTypeNode:
-		if nodes, err = getTargetNodes(r, instance); err != nil {
-			logger.Error(err, "Cannot get nodes")
-			return reconcile.Result{}, err
-		}
-
-		if len(nodes.Items) == 0 {
-			logger.Info("Warning: No eligible nodes. Check the nodeSelector.")
-		}
-
-		// On each eligible node..
-		for _, node := range nodes.Items {
-			var unschedulableErr *podUnschedulableError
-			running, err := isPodRunningInNode(r, instance, &node, logger)
-			if errors.IsNotFound(err) {
-				// Let's go back to the previous state and make sure all the nodes are covered.
-				logger.Info("Phase: Running: A pod is missing. Going to state LAUNCHING to make sure we launch it",
-					"compliancescan", instance.ObjectMeta.Name, "node", node.Name)
-				instance.Status.Phase = compv1alpha1.PhaseLaunching
-				err = r.client.Status().Update(context.TODO(), instance)
-				if err != nil {
-					return reconcile.Result{}, err
-				}
-				return reconcile.Result{}, nil
-			} else if goerrors.As(err, &unschedulableErr) {
-				// Create custom error message for this pod that couldn't be scheduled
-				cmName := getConfigMapForNodeName(instance.Name, node.Name)
-				errorReader := strings.NewReader(err.Error())
-				cm := utils.GetResultConfigMap(instance, cmName, "error-msg", node.Name,
-					errorReader, false, common.PodUnschedulableExitCode, "")
-				cmKey := types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}
-				foundcm := corev1.ConfigMap{}
-				cmGetErr := r.client.Get(context.TODO(), cmKey, &foundcm)
-				if errors.IsNotFound(cmGetErr) {
-					if cmCreateErr := r.client.Create(context.TODO(), cm); cmCreateErr != nil {
-						if !errors.IsAlreadyExists(cmCreateErr) {
-							return reconcile.Result{}, cmCreateErr
-						}
-					}
-				} else if cmGetErr != nil {
-					return reconcile.Result{}, cmGetErr
-				}
-
-				// We're good, the CM that tells us about this error is already there
-			} else if err != nil {
-				return reconcile.Result{}, err
-			}
-			if running {
-				// at least one pod is still running, just go back to the queue
-				return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, err
-			}
-		}
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if running {
+		// The platform scan pod is still running, go back to queue.
+		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
 	}
 
+	scan := h.getScan()
 	// if we got here, there are no pods running, move to the Aggregating phase
-	instance.Status.Phase = compv1alpha1.PhaseAggregating
-	err = r.client.Status().Update(context.TODO(), instance)
+	scan.Status.Phase = compv1alpha1.PhaseAggregating
+	err = r.client.Status().Update(context.TODO(), scan)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -407,18 +341,10 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(instance *compv1alpha1.Com
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger) (reconcile.Result, error) {
+func (r *ReconcileComplianceScan) phaseAggregatingHandler(h scanTypeHandler, logger logr.Logger) (reconcile.Result, error) {
 	logger.Info("Phase: Aggregating")
-
-	var nodes corev1.NodeList
-	var err error
-
-	if nodes, err = getTargetNodes(r, instance); err != nil {
-		logger.Error(err, "Cannot get nodes")
-		return reconcile.Result{}, err
-	}
-
-	isReady, warnings, err := shouldLaunchAggregator(r, instance, nodes)
+	instance := h.getScan()
+	isReady, warnings, err := h.shouldLaunchAggregator()
 
 	if warnings != "" {
 		instance.Status.Warnings = warnings
@@ -464,7 +390,7 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1
 
 	logger.Info("Moving on to the Done phase")
 
-	result, isReady, err := gatherResults(r, instance, nodes, logger)
+	result, isReady, err := gatherResults(r, h)
 
 	// We only wait if there are no errors.
 	if err == nil && !isReady {
@@ -482,29 +408,17 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(instance *compv1alpha1
 	return reconcile.Result{}, err
 }
 
-func (r *ReconcileComplianceScan) phaseDoneHandler(instance *compv1alpha1.ComplianceScan, logger logr.Logger, doDelete bool) (reconcile.Result, error) {
-	var nodes corev1.NodeList
+func (r *ReconcileComplianceScan) phaseDoneHandler(h scanTypeHandler, instance *compv1alpha1.ComplianceScan, logger logr.Logger, doDelete bool) (reconcile.Result, error) {
 	var err error
 	logger.Info("Phase: Done")
 
 	// We need to remove resources before doing a re-scan
 	if doDelete || instance.NeedsRescan() {
 		logger.Info("Cleaning up scan's resources")
-		scantype, _ := instance.GetScanTypeIfValid()
-		switch scantype {
-		case compv1alpha1.ScanTypePlatform:
-			if err := r.deletePlatformScanPod(instance, logger); err != nil {
-				logger.Error(err, "Cannot delete platform scan pod")
-				return reconcile.Result{}, err
-			}
-		case compv1alpha1.ScanTypeNode:
-			if nodes, err = getTargetNodes(r, instance); err != nil {
-				logger.Error(err, "Cannot get nodes")
-				return reconcile.Result{}, err
-			}
-
-			if err := r.deleteScanPods(instance, nodes, logger); err != nil {
-				logger.Error(err, "Cannot delete scan pods")
+		// Don't try to clean up scan-type specific resources
+		// if it was an unknown scan type
+		if h != nil {
+			if err := h.cleanup(); err != nil {
 				return reconcile.Result{}, err
 			}
 		}
@@ -576,13 +490,18 @@ func (r *ReconcileComplianceScan) scanDeleteHandler(instance *compv1alpha1.Compl
 		logger.Info("The scan is being deleted")
 		scanToBeDeleted := instance.DeepCopy()
 
+		handler, err := getScanTypeHandler(r, scanToBeDeleted, logger)
+		if err != nil && !goerrors.Is(err, compv1alpha1.ErrUnkownScanType) {
+			return reconcile.Result{}, err
+		}
+
 		// Force remove rescan annotation since we're deleting the scan
 		if scanToBeDeleted.NeedsRescan() {
 			delete(scanToBeDeleted.Annotations, compv1alpha1.ComplianceScanRescanAnnotation)
 		}
 
 		// remove objects by forcing handling of phase DONE
-		if _, err := r.phaseDoneHandler(scanToBeDeleted, logger, doDelete); err != nil {
+		if _, err := r.phaseDoneHandler(handler, scanToBeDeleted, logger, doDelete); err != nil {
 			// if fail to delete the external dependency here, return with error
 			// so that it can be retried
 			return reconcile.Result{}, err
@@ -650,25 +569,6 @@ func (r *ReconcileComplianceScan) generateResultEventForScan(scan *compv1alpha1.
 			"The scan produced outdated remediations, please check for complianceremediation objects labeled with %s",
 			compv1alpha1.OutdatedRemediationLabel)
 	}
-}
-
-func getTargetNodes(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan) (corev1.NodeList, error) {
-	var nodes corev1.NodeList
-
-	switch instance.GetScanType() {
-	case compv1alpha1.ScanTypePlatform:
-		return nodes, nil // Nodes are only relevant to the node scan type. Return the empty node list otherwise.
-	case compv1alpha1.ScanTypeNode:
-		listOpts := client.ListOptions{
-			LabelSelector: labels.SelectorFromSet(instance.Spec.NodeSelector),
-		}
-
-		if err := r.client.List(context.TODO(), &nodes, &listOpts); err != nil {
-			return nodes, err
-		}
-	}
-
-	return nodes, nil
 }
 
 func (r *ReconcileComplianceScan) deleteScriptConfigMaps(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
@@ -767,134 +667,17 @@ func getNodeScanCM(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 	return foundCM, err
 }
 
-// shouldLaunchAggregator is a check that tests whether the scanner already failed
-// hard in which case there might not be a reason to launch the aggregator pod, e.g.
-// in cases the content cannot be loaded at all
-func shouldLaunchAggregator(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList) (bool, string, error) {
-	var warnings string
-	switch instance.GetScanType() {
-	case compv1alpha1.ScanTypePlatform:
-		foundCM, err := getPlatformScanCM(r, instance)
-
-		// Could be a transient error, so we requeue if there's any
-		// error here.
-		if err != nil {
-			return false, "", nil
-		}
-
-		warns, ok := foundCM.Data["warnings"]
-		if ok {
-			warnings = warns
-		}
-
-		// NOTE: err is only set if there is an error in the scan run
-		err = checkScanUnknownError(foundCM)
-		if err != nil {
-			return true, warnings, err
-		}
-	case compv1alpha1.ScanTypeNode:
-		for _, node := range nodes.Items {
-			foundCM, err := getNodeScanCM(r, instance, node.Name)
-
-			// Could be a transient error, so we requeue if there's any
-			// error here.
-			if err != nil {
-				return false, "", nil
-			}
-
-			warns, ok := foundCM.Data["warnings"]
-			if ok {
-				warnings = warns
-			}
-
-			// NOTE: err is only set if there is an error in the scan run
-			err = checkScanUnknownError(foundCM)
-			if err != nil {
-				return true, warnings, err
-			}
-		}
-	}
-
-	return true, warnings, nil
-}
-
 // gatherResults will iterate the nodes in the scan and get the results
 // for the OpenSCAP check. If the results haven't yet been persisted in
 // the relevant ConfigMap, the a requeue will be requested since the
 // results are not ready.
-func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.ComplianceScan, nodes corev1.NodeList, logger logr.Logger) (compv1alpha1.ComplianceScanStatusResult, bool, error) {
-	var lastNonCompliance compv1alpha1.ComplianceScanStatusResult
-	var result compv1alpha1.ComplianceScanStatusResult
-	compliant := true
-	isReady := true
+func gatherResults(r *ReconcileComplianceScan, h scanTypeHandler) (compv1alpha1.ComplianceScanStatusResult, bool, error) {
+	instance := h.getScan()
 
-	switch instance.GetScanType() {
-	case compv1alpha1.ScanTypePlatform:
-		foundCM, err := getPlatformScanCM(r, instance)
+	result, isReady, err := h.gatherResults()
 
-		// Could be a transient error, so we requeue if there's any
-		// error here.
-		if err != nil {
-			logger.Info("Platform scan has no result ConfigMap yet", "ComplianceScan.Name", instance.Name)
-			isReady = false
-			break
-		}
-
-		cmHasResult := scanResultReady(foundCM)
-		if cmHasResult == false {
-			logger.Info("Scan results not ready, retrying. If the issue persists, restart or recreate the scan", "ComplianceScan.Name", instance.Name)
-			isReady = false
-			break
-		}
-
-		// NOTE: err is only set if there is an error in the scan run
-		result, err = getScanResult(foundCM)
-
-		// we output the last result if it was an error
-		if result == compv1alpha1.ResultError {
-			logger.Info("Platform scan error", "errMsg", err)
-			return result, true, err
-		}
-		// Store the last non-compliance, so we can output that if
-		// there were no errors.
-		if result == compv1alpha1.ResultNonCompliant {
-			lastNonCompliance = result
-			compliant = false
-		}
-	case compv1alpha1.ScanTypeNode:
-		for _, node := range nodes.Items {
-			foundCM, err := getNodeScanCM(r, instance, node.Name)
-
-			// Could be a transient error, so we requeue if there's any
-			// error here.
-			if err != nil {
-				logger.Info("Node has no result ConfigMap yet", "node.Name", node.Name)
-				isReady = false
-				continue
-			}
-
-			cmHasResult := scanResultReady(foundCM)
-			if cmHasResult == false {
-				logger.Info("Scan results not ready, retrying. If the issue persists, restart or recreate the scan", "ComplianceScan.Name", instance.Name)
-				isReady = false
-				continue
-			}
-
-			// NOTE: err is only set if there is an error in the scan run
-			result, err = getScanResult(foundCM)
-
-			// we output the last result if it was an error
-			if result == compv1alpha1.ResultError {
-				logger.Info("Node scan error", "node.Name", node.Name, "errMsg", err)
-				return result, true, err
-			}
-			// Store the last non-compliance, so we can output that if
-			// there were no errors.
-			if result == compv1alpha1.ResultNonCompliant {
-				lastNonCompliance = result
-				compliant = false
-			}
-		}
+	if err != nil {
+		return result, isReady, err
 	}
 
 	// If there are any inconsistent results, always just return
@@ -913,9 +696,6 @@ func gatherResults(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 				compv1alpha1.ComplianceCheckInconsistentLabel)
 	}
 
-	if !compliant {
-		return lastNonCompliance, isReady, nil
-	}
 	return result, isReady, nil
 }
 
@@ -930,7 +710,7 @@ func getConfigMapForNodeName(scanName, nodeName string) string {
 }
 
 func getInitContainerImage(scanSpec *compv1alpha1.ComplianceScanSpec, logger logr.Logger) string {
-	image := DefaultContentContainerImage
+	image := utils.GetComponentImage(utils.CONTENT)
 
 	if scanSpec.ContentImage != "" {
 		image = scanSpec.ContentImage
