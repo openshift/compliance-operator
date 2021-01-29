@@ -134,6 +134,22 @@ func (r *ComplianceRemediation) IsApplied() bool {
 	return applied || outDatedButApplied
 }
 
+// AddOwnershipLabels labels an object to say it was created
+// by this operator and is owned by a specific scan and suite
+func (r *ComplianceRemediation) AddOwnershipLabels(obj metav1.Object) {
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	if r.GetScan() != "" {
+		labels[ComplianceScanLabel] = r.GetScan()
+	}
+	if r.GetSuite() != "" {
+		labels[ComplianceScanLabel] = r.GetSuite()
+	}
+	obj.SetLabels(labels)
+}
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ComplianceRemediationList contains a list of ComplianceRemediation
