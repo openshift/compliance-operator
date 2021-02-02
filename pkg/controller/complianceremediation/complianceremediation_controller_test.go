@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/openshift/compliance-operator/pkg/apis"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -233,6 +234,51 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(foundCM.GetName()).To(Equal("my-cm"))
 				Expect(foundCM.Data["outdatedkey"]).To(Equal("outdatedval"))
+			})
+		})
+
+		Context("with handled outdated remediation object", func() {
+			BeforeEach(func() {
+				remediationinstance.Labels[compv1alpha1.OutdatedRemediationLabel] = ""
+				currentcm := &corev1.ConfigMap{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "ConfigMap",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "my-cm",
+						Namespace: "test-ns",
+					},
+					Data: map[string]string{
+						"currentkey": "currentval",
+					},
+				}
+				unstructuredCurrent, err := runtime.DefaultUnstructuredConverter.ToUnstructured(currentcm)
+				Expect(err).ToNot(HaveOccurred())
+				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
+					Object: unstructuredCurrent,
+				}
+				// NOTE that the Outdated remediation object is nil, which
+				// reflects an admin having removed it.
+				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should remove the outdated remediation label", func() {
+				By("running a reconcile loop")
+
+				key := types.NamespacedName{Name: remediationinstance.GetName()}
+				req := reconcile.Request{
+					NamespacedName: key,
+				}
+				_, err := reconciler.Reconcile(req)
+				Expect(err).To(BeNil())
+
+				By("the outdated remediation label should not be there")
+				foundRem := &compv1alpha1.ComplianceRemediation{}
+				err = reconciler.client.Get(context.TODO(), key, foundRem)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(foundRem.Labels).NotTo(HaveKey(compv1alpha1.OutdatedRemediationLabel))
 			})
 		})
 	})

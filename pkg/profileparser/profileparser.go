@@ -426,70 +426,100 @@ func parseProductTypeAndName(idref string, defaultType cmpv1alpha1.ComplianceSca
 }
 
 func ParseVariablesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, nonce string, action func(v *cmpv1alpha1.Variable) error) error {
-	varObjs := contentDom.Root.Query("//Value")
-	for _, varObj := range varObjs {
-		hidden := varObj.GetAttributeValue("hidden")
-		if hidden == "true" {
-			// this is typically used for functions
-			continue
-		}
-
-		id := varObj.GetAttributeValue("id")
-		log.Info("Found variable", "id", id)
-
-		if id == "" {
-			return LogAndReturnError("no id in variable")
-		}
-		title := varObj.FindOneByName("title")
-		if title == nil {
-			return LogAndReturnError("no title in variable")
-		}
-
-		v := cmpv1alpha1.Variable{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Variable",
-				APIVersion: cmpv1alpha1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      xccdf.GetVariableNameFromID(id),
-				Namespace: pb.Namespace,
-			},
-			VariablePayload: cmpv1alpha1.VariablePayload{
-				ID:    id,
-				Title: title.Text,
-			},
-		}
-
-		description := varObj.FindOneByName("description")
-		if description != nil {
-			desc, err := xccdf.GetDescriptionFromXMLString(description.XML())
-			if err != nil {
-				log.Error(err, "couldn't parse a rule's description")
-				desc = ""
+	var wg sync.WaitGroup
+	processVar := func(vchan <-chan *xmldom.Node, errs chan error) {
+		for varObj := range vchan {
+			hidden := varObj.GetAttributeValue("hidden")
+			if hidden == "true" {
+				// this is typically used for functions
+				continue
 			}
-			v.Description = desc
+
+			id := varObj.GetAttributeValue("id")
+			log.Info("Found variable", "id", id)
+
+			if id == "" {
+				errs <- LogAndReturnError("no id in variable")
+				break
+			}
+			title := varObj.FindOneByName("title")
+			if title == nil {
+				errs <- LogAndReturnError("no title in variable")
+				break
+			}
+
+			v := cmpv1alpha1.Variable{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Variable",
+					APIVersion: cmpv1alpha1.SchemeGroupVersion.String(),
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      xccdf.GetVariableNameFromID(id),
+					Namespace: pb.Namespace,
+				},
+				VariablePayload: cmpv1alpha1.VariablePayload{
+					ID:    id,
+					Title: title.Text,
+				},
+			}
+
+			description := varObj.FindOneByName("description")
+			if description != nil {
+				desc, err := xccdf.GetDescriptionFromXMLString(description.XML())
+				if err != nil {
+					log.Error(err, "couldn't parse a rule's description")
+					desc = ""
+				}
+				v.Description = desc
+			}
+
+			v.Type = getVariableType(varObj)
+
+			// extract the value and optionally the allowed value list
+			err := parseVarValues(varObj, &v)
+			if err != nil {
+				log.Error(err, "couldn't set variable value")
+				// We continue even if there's an error.
+				continue
+			}
+
+			annotateWithNonce(&v, nonce)
+
+			err = action(&v)
+			if err != nil {
+				log.Error(err, "couldn't execute action for variable")
+				// We continue even if there's an error.
+				continue
+			}
 		}
-
-		v.Type = getVariableType(varObj)
-
-		// extract the value and optionally the allowed value list
-		err := parseVarValues(varObj, &v)
-		if err != nil {
-			log.Error(err, "couldn't set variable value")
-			// We continue even if there's an error.
-			continue
-		}
-
-		annotateWithNonce(&v, nonce)
-
-		err = action(&v)
-		if err != nil {
-			log.Error(err, "couldn't execute action for variable")
-			// We continue even if there's an error.
-			continue
-		}
+		wg.Done()
 	}
-	return nil
+
+	varchan := make(chan *xmldom.Node)
+	errchan := make(chan error)
+	waitchan := make(chan struct{})
+	varObjs := contentDom.Root.Query("//Value")
+	nworkers := 5
+	wg.Add(5)
+	for i := 0; i < nworkers; i++ {
+		go processVar(varchan, errchan)
+	}
+
+	go func() {
+		for _, varObj := range varObjs {
+			varchan <- varObj
+		}
+		close(varchan)
+		wg.Wait()
+		close(waitchan)
+	}()
+
+	select {
+	case <-waitchan:
+		return nil
+	case err := <-errchan:
+		return err
+	}
 }
 
 func parseVarValues(varNode *xmldom.Node, v *cmpv1alpha1.Variable) error {
@@ -515,118 +545,148 @@ func parseVarValues(varNode *xmldom.Node, v *cmpv1alpha1.Variable) error {
 }
 
 func ParseRulesAndDo(contentDom *xmldom.Document, stdParser *referenceParser, pb *cmpv1alpha1.ProfileBundle, nonce string, action func(p *cmpv1alpha1.Rule) error) error {
-	ruleObjs := contentDom.Root.Query("//Rule")
-	for _, ruleObj := range ruleObjs {
-		id := ruleObj.GetAttributeValue("id")
-		if id == "" {
-			return LogAndReturnError("no id in rule")
-		}
-		title := ruleObj.FindOneByName("title")
-		if title == nil {
-			return LogAndReturnError("no title in rule")
-		}
-		log.Info("Found rule", "id", id)
-
-		description := ruleObj.FindOneByName("description")
-		rationale := ruleObj.FindOneByName("rationale")
-		warning := ruleObj.FindOneByName("warning")
-		severity := ruleObj.GetAttributeValue("severity")
-
-		fixes := []cmpv1alpha1.FixDefinition{}
-		foundPlatformMap := make(map[string]bool)
-		fixNodeObjs := ruleObj.FindByName("fix")
-		for _, fixNodeObj := range fixNodeObjs {
-			if !isRelevantFix(fixNodeObj) {
-				continue
+	var wg sync.WaitGroup
+	processRule := func(rchan <-chan *xmldom.Node, errs chan error) {
+		for ruleObj := range rchan {
+			id := ruleObj.GetAttributeValue("id")
+			if id == "" {
+				errs <- LogAndReturnError("no id in rule")
+				break
 			}
-			platform := fixNodeObj.GetAttributeValue("platform")
-			if foundPlatformMap[platform] {
-				// We already have a remediation for this platform
-				continue
+			title := ruleObj.FindOneByName("title")
+			if title == nil {
+				errs <- LogAndReturnError("no title in rule")
+				break
+			}
+			log.Info("Found rule", "id", id)
+
+			description := ruleObj.FindOneByName("description")
+			rationale := ruleObj.FindOneByName("rationale")
+			warning := ruleObj.FindOneByName("warning")
+			severity := ruleObj.GetAttributeValue("severity")
+
+			fixes := []cmpv1alpha1.FixDefinition{}
+			foundPlatformMap := make(map[string]bool)
+			fixNodeObjs := ruleObj.FindByName("fix")
+			for _, fixNodeObj := range fixNodeObjs {
+				if !isRelevantFix(fixNodeObj) {
+					continue
+				}
+				platform := fixNodeObj.GetAttributeValue("platform")
+				if foundPlatformMap[platform] {
+					// We already have a remediation for this platform
+					continue
+				}
+
+				rawFixReader := strings.NewReader(fixNodeObj.Text)
+				fixKubeObj, err := readObjFromYAML(rawFixReader)
+				if err != nil {
+					log.Info("Couldn't parse Kubernetes object from fix")
+					continue
+				}
+
+				disruption := fixNodeObj.GetAttributeValue("disruption")
+
+				newFix := cmpv1alpha1.FixDefinition{
+					Disruption: disruption,
+					Platform:   platform,
+					FixObject:  fixKubeObj,
+				}
+				fixes = append(fixes, newFix)
+				foundPlatformMap[platform] = true
 			}
 
-			rawFixReader := strings.NewReader(fixNodeObj.Text)
-			fixKubeObj, err := readObjFromYAML(rawFixReader)
+			// note: stdParser is a global variable initialized in init()
+			annotations, err := stdParser.parseXmlNode(ruleObj)
 			if err != nil {
-				log.Info("Couldn't parse Kubernetes object from fix")
-				continue
+				log.Error(err, "couldn't annotate a rule")
+				// We continue even if there's an error.
 			}
 
-			disruption := fixNodeObj.GetAttributeValue("disruption")
-
-			newFix := cmpv1alpha1.FixDefinition{
-				Disruption: disruption,
-				Platform:   platform,
-				FixObject:  fixKubeObj,
+			p := cmpv1alpha1.Rule{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Rule",
+					APIVersion: cmpv1alpha1.SchemeGroupVersion.String(),
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        xccdf.GetRuleNameFromID(id),
+					Namespace:   pb.Namespace,
+					Annotations: annotations,
+				},
+				RulePayload: cmpv1alpha1.RulePayload{
+					ID:             id,
+					Title:          title.Text,
+					AvailableFixes: nil,
+				},
 			}
-			fixes = append(fixes, newFix)
-			foundPlatformMap[platform] = true
-		}
+			if description != nil {
+				desc, err := xccdf.GetDescriptionFromXMLString(description.XML())
+				if err != nil {
+					log.Error(err, "couldn't parse a rule's description")
+					desc = ""
+				}
+				p.Description = desc
+			}
+			if rationale != nil {
+				rat, err := xccdf.GetRationaleFromXMLString(rationale.XML())
+				if err != nil {
+					log.Error(err, "couldn't parse a rule's rationale")
+					rat = ""
+				}
+				p.Rationale = rat
+			}
+			if warning != nil {
+				warn, err := xccdf.GetWarningFromXMLString(warning.XML())
+				if err != nil {
+					log.Error(err, "couldn't parse a rule's warning")
+					warn = ""
+				}
+				p.Warning = warn
+			}
+			if severity != "" {
+				p.Severity = severity
+			}
+			if len(fixes) > 0 {
+				p.AvailableFixes = fixes
+			}
 
-		// note: stdParser is a global variable initialized in init()
-		annotations, err := stdParser.parseXmlNode(ruleObj)
-		if err != nil {
-			log.Error(err, "couldn't annotate a rule")
-			// We continue even if there's an error.
-		}
+			annotateWithNonce(&p, nonce)
 
-		p := cmpv1alpha1.Rule{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Rule",
-				APIVersion: cmpv1alpha1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        xccdf.GetRuleNameFromID(id),
-				Namespace:   pb.Namespace,
-				Annotations: annotations,
-			},
-			RulePayload: cmpv1alpha1.RulePayload{
-				ID:             id,
-				Title:          title.Text,
-				AvailableFixes: nil,
-			},
-		}
-		if description != nil {
-			desc, err := xccdf.GetDescriptionFromXMLString(description.XML())
+			err = action(&p)
 			if err != nil {
-				log.Error(err, "couldn't parse a rule's description")
-				desc = ""
+				log.Error(err, "couldn't execute action for rule")
+				// We continue even if there's an error.
 			}
-			p.Description = desc
-		}
-		if rationale != nil {
-			rat, err := xccdf.GetRationaleFromXMLString(rationale.XML())
-			if err != nil {
-				log.Error(err, "couldn't parse a rule's rationale")
-				rat = ""
-			}
-			p.Rationale = rat
-		}
-		if warning != nil {
-			warn, err := xccdf.GetWarningFromXMLString(warning.XML())
-			if err != nil {
-				log.Error(err, "couldn't parse a rule's warning")
-				warn = ""
-			}
-			p.Warning = warn
-		}
-		if severity != "" {
-			p.Severity = severity
-		}
-		if len(fixes) > 0 {
-			p.AvailableFixes = fixes
 		}
 
-		annotateWithNonce(&p, nonce)
-
-		err = action(&p)
-		if err != nil {
-			log.Error(err, "couldn't execute action for rule")
-			// We continue even if there's an error.
-		}
+		wg.Done()
 	}
 
-	return nil
+	rulechan := make(chan *xmldom.Node)
+	errchan := make(chan error)
+	waitchan := make(chan struct{})
+	ruleObjs := contentDom.Root.Query("//Rule")
+	nworkers := 5
+	wg.Add(5)
+	for i := 0; i < nworkers; i++ {
+		go processRule(rulechan, errchan)
+	}
+
+	go func() {
+		for _, varObj := range ruleObjs {
+			rulechan <- varObj
+		}
+		close(rulechan)
+		wg.Wait()
+		close(waitchan)
+	}()
+
+	select {
+	case <-waitchan:
+		return nil
+	case err := <-errchan:
+		return err
+	}
 }
 
 // Reads a YAML file and returns an unstructured object from it. This object

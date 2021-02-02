@@ -94,6 +94,16 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 		return reconcile.Result{}, err
 	}
 
+	if isNoLongerOutdated(remediationInstance) {
+		rCopy := remediationInstance.DeepCopy()
+		delete(rCopy.Labels, compv1alpha1.OutdatedRemediationLabel)
+		updateErr := r.client.Update(context.TODO(), rCopy)
+		if updateErr != nil {
+			return reconcile.Result{}, fmt.Errorf("removing outdated label: %w", updateErr)
+		}
+		return reconcile.Result{}, nil
+	}
+
 	if remediationInstance.Spec.Current.Object != nil {
 		reqLogger.Info("Reconciling remediation")
 		err = r.reconcileRemediation(remediationInstance, reqLogger)
@@ -287,4 +297,18 @@ func getApplicableObject(instance *compv1alpha1.ComplianceRemediation, logger lo
 	}
 	logger.Info("No object in remediation")
 	return nil
+}
+
+// Returns whether the remediation used to be outdated, but no longer is.
+func isNoLongerOutdated(r *compv1alpha1.ComplianceRemediation) bool {
+	labels := r.GetLabels()
+	if labels == nil {
+		return false
+	}
+	_, ok := labels[compv1alpha1.OutdatedRemediationLabel]
+	if !ok {
+		return false
+	}
+
+	return r.Spec.Outdated.Object == nil
 }
