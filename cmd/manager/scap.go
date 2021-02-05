@@ -286,7 +286,8 @@ func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, [
 			stream, err := req.Stream(context.TODO())
 			if meta.IsNoMatchError(err) || kerrors.IsForbidden(err) || kerrors.IsNotFound(err) {
 				DBG("Encountered non-fatal error to be persisted in the scan: %s", err)
-				warnings = append(warnings, err.Error())
+				objerr := fmt.Errorf("could not fetch %s: %w", uri, err)
+				warnings = append(warnings, objerr.Error())
 				return nil
 			} else if err != nil {
 				return err
