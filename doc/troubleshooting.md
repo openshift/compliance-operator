@@ -3,7 +3,8 @@ This document describes how to troubleshoot problems with the Compliance
 Operator. The information can be useful either to diagnose a problem or
 provide information in a bug report.
 
-Please refer to the README for general information about the API objects.
+Please refer to the README for general information about the operator and
+to a (CRD document)[crds.md] to learn more API objects.
 
 ## General tips
 
@@ -312,45 +313,26 @@ oc patch complianceremediations/rhcos4-e8-worker-audit-rules-dac-modification-ch
 
 The complianceremediation controller (`logger=remediationctrl`) reconciles
 the modified object. The result of the reconciliation is change of status of
-the remediation object that is reconciled, but also a change of the rendered
-per-suite `MachineConfig` object that contains all the applied remediations.
+the remediation object that is reconciled, but also the actual remediation
+object is created. For remediations that come from Node-type scans, the
+remediations are `MachineConfig` objects, one per remediation, for Platform-type
+scans, the remediadions can be any generic Kubernetes object (e.g. a ConfigMap).
 
-The `MachineConfig` object always begins with `75-` and is named after the
-scan and the suite, in our case it would be:
+The `MachineConfig` objects always begin with `75-` and are named after the
+`ComplianceRemediation` they come from, in our case:
 ```
 oc get mc | grep 75-
-75-rhcos4-e8-worker-my-companys-compliance-requirements                                                2.2.0             2m46s
+75-rhcos4-e8-master-audit-rules-dac-modification-chmod
+75-rhcos4-e8-master-audit-rules-dac-modification-chown
+75-rhcos4-e8-master-audit-rules-dac-modification-fchmod
+75-rhcos4-e8-master-audit-rules-dac-modification-fchmodat
+75-rhcos4-e8-master-audit-rules-dac-modification-fchown
 ```
-
-The remediations the MC currently consists of are listed in the MC's
-annotations:
-```
-oc describe mc/75-rhcos4-e8-worker-my-companys-compliance-requirements
-Name:         75-rhcos4-e8-worker-my-companys-compliance-requirements
-Labels:       machineconfiguration.openshift.io/role=worker
-Annotations:  remediation/rhcos4-e8-worker-audit-rules-dac-modification-chmod: 
-```
-
-The complianceremediation controller's algorithm works roughly like this:
-
-   * All currently applied remediations are read into an inital remediation
-     set
-   * If the reconciled remediation is supposed to be applied, it is added
-     to the set
-   * A `MachineConfig` object is rendered from the set and annotated with names
-     of remediations in the set. If the set is empty (the last remediation
-     was unapplied), the rendered MachineConfig object is removed.
-   * If and only if the rendered `MachineConfig` is different from the one
-     already applied in the cluster, the applied MC is updated (or created,
-     or deleted).
-   * Creating or modifying a MachineConfig object triggers a reboot of nodes
-     that match the `machineconfiguration.openshift.io/role` label - see the
-     MachineConfig Operator documentation for more details.
 
 The remediation loop ends once the rendered MachineConfig is updated, if needed,
 and the reconciled remediation object status is updated.
 
-In our case, applying the remediation would trigger a reboot. After that we can
+In our case, applying a remediation would trigger a reboot. After that we can
 annotate the scan to re-run it:
 ```
 oc annotate compliancescans/rhcos4-e8-worker compliance.openshift.io/rescan=

@@ -118,10 +118,8 @@ ocp4-cis          2m50s
 ocp4-cis-node     2m50s
 ocp4-e8           2m50s
 ocp4-moderate     2m50s
-ocp4-ncp          2m50s
 rhcos4-e8         2m46s
 rhcos4-moderate   2m46s
-rhcos4-ncp        2m46s
 ```
 
 ### Platform and Node scan types
@@ -225,10 +223,10 @@ to `true`:
 $ oc edit -n $NAMESPACE complianceremediation/workers-scan-no-direct-root-logins
 ```
 
-The operator then aggregates all applied remediations and create a
-`MachineConfig` object per scan. This `MachineConfig` object is rendered
-to a `MachinePool` and the `MachineConfigDeamon` running on nodes in that
-pool pushes the configuration to the nodes and reboots the nodes.
+The operator then creates a `MachineConfig` object per remediation. This
+`MachineConfig` object is rendered to a `MachinePool` and the
+`MachineConfigDeamon` running on nodes in that pool pushes the configuration
+to the nodes and reboots the nodes.
 
 You can watch the node status with:
 ```
