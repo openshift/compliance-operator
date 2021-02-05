@@ -159,11 +159,12 @@ metadata:
       ]
     capabilities: Seamless Upgrades
     categories: Monitoring,Security
-    olm.skipRange: '>=0.1.17 <0.1.25'
+    olm.skipRange: '>=0.1.17 <0.1.26'
     operatorframework.io/suggested-namespace: openshift-compliance
+    operators.openshift.io/infrastructure-features: '["Disconnected"]'
     repository: https://github.com/openshift/compliance-operator
     support: Red Hat Inc.
-  name: compliance-operator.v0.1.25
+  name: compliance-operator.v0.1.26
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -1056,10 +1057,10 @@ spec:
                 - name: RELATED_IMAGE_OPENSCAP
                   value: quay.io/compliance-operator/openscap-ocp:1.3.4
                 - name: RELATED_IMAGE_OPERATOR
-                  value: quay.io/compliance-operator/compliance-operator:0.1.25
+                  value: quay.io/compliance-operator/compliance-operator:0.1.26
                 - name: RELATED_IMAGE_PROFILE
                   value: quay.io/complianceascode/ocp4:latest
-                image: quay.io/compliance-operator/compliance-operator:0.1.25
+                image: quay.io/compliance-operator/compliance-operator:0.1.26
                 imagePullPolicy: Always
                 name: compliance-operator
                 resources: {}
@@ -1356,4 +1357,4 @@ spec:
   provider:
     name: Red Hat Inc.
     url: www.redhat.com
-  version: 0.1.25
+  version: 0.1.26
