@@ -118,7 +118,7 @@ func (r *ComplianceRemediation) AddOwnershipLabels(obj metav1.Object) {
 		labels[ComplianceScanLabel] = r.GetScan()
 	}
 	if r.GetSuite() != "" {
-		labels[ComplianceScanLabel] = r.GetSuite()
+		labels[SuiteLabel] = r.GetSuite()
 	}
 	obj.SetLabels(labels)
 }
