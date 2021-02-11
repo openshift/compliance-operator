@@ -231,6 +231,8 @@ Where:
 	* **FAIL**: Which indicates that the check ran to completion and failed.
 	* **INFO**: Which indicates that the check ran to completion and found
       something not severe enough to be considered error.
+	* **MANUAL**: Which indicates that the check does not have a way to
+        automatically assess success or failure and must be checked manually.
     * **INCONSISTENT**: Which indicates that different nodes report different
       results.
 	* **ERROR**: Which indicates that the check ran, but could not complete
