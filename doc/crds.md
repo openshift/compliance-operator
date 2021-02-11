@@ -213,6 +213,11 @@ description: |-
   authentication to privileged accounts. Users will first login, then escalate
   to privileged (root) access via su / sudo. This is required for FISMA Low
   and FISMA Moderate systems.
+instructions: |-
+  To ensure root may not directly login to the system over physical consoles,
+  run the following command:
+     cat /etc/securetty
+  If any output is returned, this is a finding.
 id: xccdf_org.ssgproject.content_rule_no_direct_root_logins
 severity: medium
 status: FAIL
@@ -221,7 +226,11 @@ status: FAIL
 Where:
 
 * **description**: Contains a description of what's being checked and why
-  that's being done.
+  that's being done. For checks that don't generate an automated remediation,
+  contains the steps to remediate the issue if it's failing.
+* **instructions**: How to evaluate if the rule status manually. If no automatic
+  test is present, the rule status will be MANUAL and the administrator should
+  follow these instructions.
 * **id**: Contains a reference to the XCCDF identifier of the rule as it is in
   the data-stream/content.
 * **severity**: Describes the severity of the check. The possible values are:
