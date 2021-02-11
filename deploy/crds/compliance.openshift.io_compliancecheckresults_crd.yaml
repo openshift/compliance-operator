@@ -35,6 +35,11 @@ spec:
           id:
             description: A unique identifier of a check
             type: string
+          instructions:
+            description: How to evaluate if the rule status manually. If no automatic
+              test is present, the rule status will be MANUAL and the administrator
+              should follow these instructions.
+            type: string
           kind:
             description: 'Kind is a string value representing the REST resource this
               object represents. Servers may infer this from the endpoint the client
