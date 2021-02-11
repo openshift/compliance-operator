@@ -41,6 +41,8 @@ const (
 	CheckResultFail ComplianceCheckStatus = "FAIL"
 	// The check ran to completion and found something not severe enough to be considered error
 	CheckResultInfo ComplianceCheckStatus = "INFO"
+	// The check ran to completion and found something not severe enough to be considered error
+	CheckResultManual ComplianceCheckStatus = "MANUAL"
 	// The check ran, but could not complete properly
 	CheckResultError ComplianceCheckStatus = "ERROR"
 	// The check didn't run because it is not applicable or not selected
