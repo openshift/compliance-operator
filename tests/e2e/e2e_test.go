@@ -1479,11 +1479,26 @@ func TestE2E(t *testing.T) {
 						Namespace: namespace,
 					},
 					ID:       "xccdf_org.ssgproject.content_rule_wireless_disable_in_bios",
-					Status:   compv1alpha1.CheckResultInfo,
+					Status:   compv1alpha1.CheckResultManual,
 					Severity: compv1alpha1.CheckResultSeverityUnknown, // yes, it's really uknown in the DS
 				}
 
 				err = assertHasCheck(f, suiteName, workerScanName, checkWifiInBios)
+				if err != nil {
+					return err
+				}
+
+				checkVsyscall := compv1alpha1.ComplianceCheckResult{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf("%s-coreos-vsyscall-kernel-argument", workerScanName),
+						Namespace: namespace,
+					},
+					ID:       "xccdf_org.ssgproject.content_rule_coreos_vsyscall_kernel_argument",
+					Status:   compv1alpha1.CheckResultInfo,
+					Severity: compv1alpha1.CheckResultSeverityMedium, // yes, it's really uknown in the DS
+				}
+
+				err = assertHasCheck(f, suiteName, workerScanName, checkVsyscall)
 				if err != nil {
 					return err
 				}

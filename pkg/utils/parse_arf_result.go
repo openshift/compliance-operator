@@ -187,11 +187,13 @@ func mapComplianceCheckResultStatus(result *xmldom.Node) (compv1alpha1.Complianc
 		// Unknown state is when the rule runs to completion, but then the results can't be interpreted
 	case "error", "unknown":
 		return compv1alpha1.CheckResultError, nil
-		// We map both notchecked and info to Info. Notchecked means the rule does not even have a check,
-		// and the administratos must inspect the rule manually (e.g. disable something in BIOS),
+		// Notchecked means the rule does not even have a check,
+		// and the administrators must inspect the rule manually (e.g. disable something in BIOS),
+	case "notchecked":
+		return compv1alpha1.CheckResultManual, nil
 		// informational means that the rule has a check which failed, but the severity is low, depending
 		// on the environment (e.g. disable USB support completely from the kernel cmdline)
-	case "notchecked", "informational":
+	case "informational":
 		return compv1alpha1.CheckResultInfo, nil
 		// We map notapplicable to Skipped. Notapplicable means the rule was selected
 		// but does not apply to the current configuration (e.g. arch-specific),
