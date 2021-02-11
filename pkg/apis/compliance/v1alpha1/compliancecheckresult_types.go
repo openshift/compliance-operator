@@ -81,6 +81,9 @@ type ComplianceCheckResult struct {
 	Severity ComplianceCheckResultSeverity `json:"severity"`
 	// A human-readable check description, what and why it does
 	Description string `json:"description,omitempty"`
+	// How to evaluate if the rule status manually. If no automatic test is present, the rule status will be MANUAL
+	// and the administrator should follow these instructions.
+	Instructions string `json:"instructions,omitempty"`
 }
 
 // IDToDNSFriendlyName gets the ID from the scan and returns a DNS

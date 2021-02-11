@@ -93,8 +93,9 @@ var _ = Describe("XCCDF parser", func() {
 
 		Context("First check metadata", func() {
 			const (
-				expID          = "xccdf_org.ssgproject.content_rule_selinux_policytype"
-				expDescription = "Configure SELinux Policy\n."
+				expID           = "xccdf_org.ssgproject.content_rule_selinux_policytype"
+				expDescription  = "Configure SELinux Policy\n."
+				expInstructions = "Check the file /etc/selinux/config and ensure the following line appears:\nSELINUXTYPE="
 			)
 
 			var (
@@ -121,6 +122,10 @@ var _ = Describe("XCCDF parser", func() {
 
 			It("Should have the expected description", func() {
 				Expect(check.Description).To(Equal(expDescription))
+			})
+
+			It("Should have the expected instructions", func() {
+				Expect(check.Instructions).To(Equal(expInstructions))
 			})
 		})
 
