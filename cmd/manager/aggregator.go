@@ -297,12 +297,15 @@ func getRemediationLabels(scan *compv1alpha1.ComplianceScan, obj runtime.Object)
 	return labels
 }
 
-func getCheckResultLabels(cr *compv1alpha1.ComplianceCheckResult, resultLabels map[string]string, scan *compv1alpha1.ComplianceScan) map[string]string {
+func getCheckResultLabels(pr *utils.ParseResult, resultLabels map[string]string, scan *compv1alpha1.ComplianceScan) map[string]string {
 	labels := make(map[string]string)
 	labels[compv1alpha1.ComplianceScanLabel] = scan.Name
 	labels[compv1alpha1.SuiteLabel] = scan.Labels[compv1alpha1.SuiteLabel]
-	labels[compv1alpha1.ComplianceCheckResultStatusLabel] = string(cr.Status)
-	labels[compv1alpha1.ComplianceCheckResultSeverityLabel] = string(cr.Severity)
+	labels[compv1alpha1.ComplianceCheckResultStatusLabel] = string(pr.CheckResult.Status)
+	labels[compv1alpha1.ComplianceCheckResultSeverityLabel] = string(pr.CheckResult.Severity)
+	if pr.Remediation != nil {
+		labels[compv1alpha1.ComplianceCheckResultHasRemediation] = ""
+	}
 
 	for k, v := range resultLabels {
 		labels[k] = v
@@ -337,7 +340,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			continue
 		}
 
-		checkResultLabels := getCheckResultLabels(pr.CheckResult, pr.Labels, scan)
+		checkResultLabels := getCheckResultLabels(&pr.ParseResult, pr.Labels, scan)
 		checkResultAnnotations := getCheckResultAnnotations(pr.CheckResult, pr.Annotations)
 
 		crkey := getObjKey(pr.CheckResult.GetName(), pr.CheckResult.GetNamespace())
