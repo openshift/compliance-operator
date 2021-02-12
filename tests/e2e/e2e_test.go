@@ -1487,11 +1487,15 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
+				assertCheckRemediation(f, checkWifiInBios.Name, checkWifiInBios.Namespace, false)
 
 				checkVsyscall := compv1alpha1.ComplianceCheckResult{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      fmt.Sprintf("%s-coreos-vsyscall-kernel-argument", workerScanName),
 						Namespace: namespace,
+						Labels: 	map[string]string{
+							compv1alpha1.ComplianceCheckResultHasRemediation: "",
+						},
 					},
 					ID:       "xccdf_org.ssgproject.content_rule_coreos_vsyscall_kernel_argument",
 					Status:   compv1alpha1.CheckResultInfo,
@@ -1502,6 +1506,8 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
+				// even INFO checks generate remediations, make sure the check was labeled appropriately
+				assertCheckRemediation(f, checkVsyscall.Name, checkVsyscall.Namespace, true)
 
 				return nil
 			},
