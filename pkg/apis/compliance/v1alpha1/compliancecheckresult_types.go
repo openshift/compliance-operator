@@ -14,6 +14,11 @@ type ComplianceCheckStatus string
 const ComplianceCheckResultStatusLabel = "compliance.openshift.io/check-status"
 const ComplianceCheckResultSeverityLabel = "compliance.openshift.io/check-severity"
 
+// ComplianceCheckResultLabel defines a label that will be included in the
+// ComplianceCheckResult objects. It indicates whether the result has an automated
+// remediation or not.
+const ComplianceCheckResultHasRemediation = "compliance.openshift.io/automated-remediation"
+
 // ComplianceCheckInconsistentLabel signifies that the check's results were not consistent
 // across the target nodes
 const ComplianceCheckInconsistentLabel = "compliance.openshift.io/inconsistent-check"
