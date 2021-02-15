@@ -1,4 +1,4 @@
-FROM registry.svc.ci.openshift.org/origin/4.6:base
+FROM registry.ci.openshift.org/origin/4.6:base
 
 LABEL \
     name="openscap-ocp" \
