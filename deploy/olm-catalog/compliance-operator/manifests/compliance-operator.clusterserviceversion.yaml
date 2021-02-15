@@ -160,6 +160,7 @@ metadata:
     capabilities: Seamless Upgrades
     categories: Monitoring,Security
     olm.skipRange: '>=0.1.17 <0.1.26'
+    operatorframework.io/cluster-monitoring: "true"
     operatorframework.io/suggested-namespace: openshift-compliance
     operators.openshift.io/infrastructure-features: '["Disconnected"]'
     repository: https://github.com/openshift/compliance-operator
