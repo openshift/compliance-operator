@@ -16,7 +16,7 @@ import (
 	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
-const resultserverSA = "default"
+const resultserverSA = "resultserver"
 
 // The result-server is a pod that listens for results from other pods and
 // stores them in a PVC.
