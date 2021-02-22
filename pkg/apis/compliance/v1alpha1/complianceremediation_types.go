@@ -12,23 +12,28 @@ import (
 type RemediationApplicationState string
 
 const (
-	RemediationNotApplied RemediationApplicationState = "NotApplied"
-	RemediationApplied    RemediationApplicationState = "Applied"
-	RemediationOutdated   RemediationApplicationState = "Outdated"
-	RemediationError      RemediationApplicationState = "Error"
+	RemediationPending             RemediationApplicationState = "Pending"
+	RemediationNotApplied          RemediationApplicationState = "NotApplied"
+	RemediationApplied             RemediationApplicationState = "Applied"
+	RemediationOutdated            RemediationApplicationState = "Outdated"
+	RemediationError               RemediationApplicationState = "Error"
+	RemediationMissingDependencies RemediationApplicationState = "MissingDependencies"
 )
 
 type RemediationType string
 
 const (
-	// The remediation wraps a MachineConfig payload
-	McRemediation RemediationType = "MachineConfig"
+	// The key of a ComplianceCheckResult that dependency annotations point to
+	ComplianceRemediationDependencyField = "id"
 )
 
 const (
 	// OutdatedRemediationLabel specifies that the remediation has been superseded by a newer version
 	OutdatedRemediationLabel               = "complianceoperator.openshift.io/outdated-remediation"
+	RemediationHasUnmetDependenciesLabel   = "compliance.openshift.io/has-unmet-dependencies"
 	RemediationCreatedByOperatorAnnotation = "compliance.openshift.io/remediation"
+	RemediationDependencyAnnotation        = "compliance.openshift.io/depends-on"
+	RemediationDependenciesMetAnnotation   = "compliance.openshift.io/dependencies-met"
 )
 
 type ComplianceRemediationSpecMeta struct {
@@ -130,8 +135,19 @@ func (r *ComplianceRemediation) AddOwnershipLabels(obj metav1.Object) {
 func (r *ComplianceRemediation) IsApplied() bool {
 	applied := r.Status.ApplicationState == RemediationApplied
 	outDatedButApplied := r.Spec.Apply && r.Status.ApplicationState == RemediationOutdated
+	appliedButUnmet := r.Spec.Apply && r.Status.ApplicationState == RemediationMissingDependencies
 
-	return applied || outDatedButApplied
+	return applied || outDatedButApplied || appliedButUnmet
+}
+
+func (r *ComplianceRemediation) HasUnmetDependencies() bool {
+	a := r.GetAnnotations()
+	if a == nil {
+		return false
+	}
+	_, hasDependencies := a[RemediationDependencyAnnotation]
+	_, dependenciesMet := a[RemediationDependenciesMetAnnotation]
+	return hasDependencies && !dependenciesMet
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
