@@ -265,10 +265,6 @@ func ensureSupportedProfileBundle(ctx context.Context, crclient client.Client, p
 	return nil
 }
 
-func profileBundlesDiffer(ref, other *compv1alpha1.ProfileBundle) bool {
-	return ref.Spec.ContentFile != other.Spec.ContentFile || ref.Spec.ContentImage != other.Spec.ContentImage
-}
-
 func ensureDefaultScanSettings(ctx context.Context, crclient client.Client, namespaceList []string) error {
 	var lastErr error
 	for _, ns := range namespaceList {
