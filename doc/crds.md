@@ -364,6 +364,22 @@ For instance:
 oc get complianceremediations -l compliance.openshift.io/suite=example-compliancesuite
 ```
 
+Not all `ComplianceCheckResult` objects create `ComplianceRemediation`
+objects, only those that can be remediated automatically do. A
+`ComplianceCheckResult` object has a related remediation if it's labeled
+with the `compliance.openshift.io/automated-remediation` label, the
+name of the remediation is the same as the name of the check. To list all
+failing checks that can be remediated automatically, call:
+```
+oc get compliancecheckresults -l 'compliance.openshift.io/check-status in (FAIL),compliance.openshift.io/automated-remediation'
+```
+and to list those that must be remediated manually:
+```
+oc get compliancecheckresults -l 'compliance.openshift.io/check-status in (FAIL),!compliance.openshift.io/automated-remediation'
+```
+The manual remediation steps are typically stored in the `ComplianceCheckResult`'s
+`description` attribute.
+
 ### The `ProfileBundle` object
 OpenSCAP content for consumption by the Compliance Operator is distributed
 as container images. In order to make it easier for users to discover what
