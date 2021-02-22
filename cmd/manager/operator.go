@@ -21,6 +21,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
@@ -158,6 +159,18 @@ func RunOperator(cmd *cobra.Command, args []string) {
 	if err := ocpapi.Install(mgrscheme); err != nil {
 		log.Info("Couldn't install OCP API. This is not fatal though.")
 		log.Error(err, "")
+	}
+
+	// Index the ID field of Checks
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &compv1alpha1.ComplianceCheckResult{}, compv1alpha1.ComplianceRemediationDependencyField, func(rawObj k8sruntime.Object) []string {
+		check, ok := rawObj.(*compv1alpha1.ComplianceCheckResult)
+		if !ok {
+			return []string{}
+		}
+		return []string{check.ID}
+	}); err != nil {
+		log.Error(err, "Error indexing the ID field of ComplianceCheckResult")
+		os.Exit(1)
 	}
 
 	// Setup all Controllers
