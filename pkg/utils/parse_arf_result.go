@@ -16,13 +16,13 @@ import (
 )
 
 const (
-	machineConfigFixType = "urn:xccdf:fix:script:ignition"
-	kubernetesFixType    = "urn:xccdf:fix:script:kubernetes"
-	ocilCheckType        = "http://scap.nist.gov/schema/ocil/2"
-	rulePrefix           = "xccdf_org.ssgproject.content_rule_"
-
-	questionnaireSuffix = "_ocil:questionnaire:1"
-	questionSuffix      = "_question:question:1"
+	machineConfigFixType    = "urn:xccdf:fix:script:ignition"
+	kubernetesFixType       = "urn:xccdf:fix:script:kubernetes"
+	ocilCheckType           = "http://scap.nist.gov/schema/ocil/2"
+	rulePrefix              = "xccdf_org.ssgproject.content_rule_"
+	questionnaireSuffix     = "_ocil:questionnaire:1"
+	questionSuffix          = "_question:question:1"
+	dependencyAnnotationKey = "complianceascode.io/depends-on"
 )
 
 // XMLDocument is a wrapper that keeps the interface XML-parser-agnostic
@@ -316,10 +316,17 @@ func remediationFromString(scheme *runtime.Scheme, name string, namespace string
 		return nil
 	}
 
+	annotations := make(map[string]string)
+
+	if hasDependencyAnnotation(obj) {
+		annotations = handleDependencyAnnotation(obj)
+	}
+
 	return &compv1alpha1.ComplianceRemediation{
 		ObjectMeta: v1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
+			Name:        name,
+			Namespace:   namespace,
+			Annotations: annotations,
 		},
 		Spec: compv1alpha1.ComplianceRemediationSpec{
 			ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
@@ -330,9 +337,38 @@ func remediationFromString(scheme *runtime.Scheme, name string, namespace string
 			},
 		},
 		Status: compv1alpha1.ComplianceRemediationStatus{
-			ApplicationState: compv1alpha1.RemediationNotApplied,
+			ApplicationState: compv1alpha1.RemediationPending,
 		},
 	}
+}
+
+func hasDependencyAnnotation(u *unstructured.Unstructured) bool {
+	annotations := u.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+
+	_, hasAnnotation := annotations[dependencyAnnotationKey]
+	return hasAnnotation
+}
+
+func handleDependencyAnnotation(u *unstructured.Unstructured) map[string]string {
+	outputAnnotations := make(map[string]string)
+
+	// We already assume this has some annotation
+	inAnns := u.GetAnnotations()
+
+	// parse
+	dependencies := inAnns[dependencyAnnotationKey]
+
+	// set dependencies
+	outputAnnotations[compv1alpha1.RemediationDependencyAnnotation] = dependencies
+
+	// reset metadata of output object
+	delete(inAnns, dependencyAnnotationKey)
+	u.SetAnnotations(inAnns)
+
+	return outputAnnotations
 }
 
 func rawObjectToUnstructured(scheme *runtime.Scheme, in string) (*unstructured.Unstructured, error) {
