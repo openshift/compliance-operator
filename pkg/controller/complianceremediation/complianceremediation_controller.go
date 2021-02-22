@@ -3,6 +3,11 @@ package complianceremediation
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/record"
 
 	"github.com/go-logr/logr"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -23,10 +28,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var log = logf.Log.WithName("remediationctrl")
+const ctrlName = "remediationctrl"
+
+var log = logf.Log.WithName(ctrlName)
 
 const (
 	remediationNameAnnotationKey = "remediation/"
+	defaultDependencyRequeueTime = time.Second * 20
 )
 
 // Add creates a new ComplianceRemediation Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -37,7 +45,7 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileComplianceRemediation{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+	return &ReconcileComplianceRemediation{client: mgr.GetClient(), scheme: mgr.GetScheme(), recorder: common.NewSafeRecorder(ctrlName, mgr)}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -64,8 +72,9 @@ var _ reconcile.Reconciler = &ReconcileComplianceRemediation{}
 type ReconcileComplianceRemediation struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
+	client   client.Client
+	scheme   *runtime.Scheme
+	recorder record.EventRecorder
 }
 
 // Reconcile reads that state of the cluster for a ComplianceRemediation object and makes changes based on the state read
@@ -74,24 +83,31 @@ type ReconcileComplianceRemediation struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	var err error
-
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling ComplianceRemediation")
 
 	// Fetch the ComplianceRemediation instance
 	remediationInstance := &compv1alpha1.ComplianceRemediation{}
-	err = r.client.Get(context.TODO(), request.NamespacedName, remediationInstance)
-	if err != nil {
-		if kerrors.IsNotFound(err) {
+	getErr := r.client.Get(context.TODO(), request.NamespacedName, remediationInstance)
+	if getErr != nil {
+		if kerrors.IsNotFound(getErr) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		reqLogger.Error(err, "Cannot retrieve remediation")
-		return reconcile.Result{}, err
+		reqLogger.Error(getErr, "Cannot retrieve remediation")
+		return reconcile.Result{}, getErr
+	}
+
+	if remediationInstance.Status.ApplicationState == "" {
+		rCopy := remediationInstance.DeepCopy()
+		rCopy.Status.ApplicationState = compv1alpha1.RemediationPending
+		if updErr := r.client.Status().Update(context.TODO(), rCopy); updErr != nil {
+			return reconcile.Result{}, updErr
+		}
+		return reconcile.Result{}, nil
 	}
 
 	if isNoLongerOutdated(remediationInstance) {
@@ -104,25 +120,32 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 		return reconcile.Result{}, nil
 	}
 
-	if remediationInstance.Spec.Current.Object != nil {
-		reqLogger.Info("Reconciling remediation")
-		err = r.reconcileRemediation(remediationInstance, reqLogger)
-	} else {
-		err = fmt.Errorf("No remediation specified. spec.object is empty")
+	if remediationInstance.Spec.Current.Object == nil {
+		err := fmt.Errorf("No remediation specified. spec.object is empty")
 		return common.ReturnWithRetriableError(reqLogger, common.WrapNonRetriableCtrlError(err))
+	}
+
+	var reconcileErr error
+	if remediationInstance.HasUnmetDependencies() {
+		res, depErr := r.handleUnmetDependencies(remediationInstance, reqLogger)
+		if res.Requeue || depErr != nil {
+			return res, depErr
+		}
+	} else {
+		reconcileErr = r.reconcileRemediation(remediationInstance, reqLogger)
 	}
 
 	// this would have been much nicer with go 1.13 using errors.Is()
 	// Only return if the error is retriable. Else, we persist it in the status
-	if err != nil && common.IsRetriable(err) {
-		return common.ReturnWithRetriableError(reqLogger, err)
+	if reconcileErr != nil && common.IsRetriable(reconcileErr) {
+		return common.ReturnWithRetriableError(reqLogger, reconcileErr)
 	}
 
 	// Second, we'll reconcile the status of the Remediation itself
-	err = r.reconcileRemediationStatus(remediationInstance, reqLogger, err)
+	statusErr := r.reconcileRemediationStatus(remediationInstance, reqLogger, reconcileErr)
 	// this would have been much nicer with go 1.13 using errors.Is()
-	if err != nil {
-		return common.ReturnWithRetriableError(reqLogger, err)
+	if statusErr != nil {
+		return common.ReturnWithRetriableError(reqLogger, statusErr)
 	}
 
 	reqLogger.Info("Done reconciling")
@@ -132,6 +155,8 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 // Gets a remediation and ensures the object exists in the cluster if the
 // remediation if applicable
 func (r *ReconcileComplianceRemediation) reconcileRemediation(instance *compv1alpha1.ComplianceRemediation, logger logr.Logger) error {
+	logger.Info("Reconciling remediation")
+
 	obj := getApplicableObject(instance, logger)
 	if obj == nil {
 		return common.NewNonRetriableCtrlError("Invalid Remediation: No object given")
@@ -228,25 +253,96 @@ func (r *ReconcileComplianceRemediation) deleteRemediation(remObj *unstructured.
 	return deleteErr
 }
 
+func (r *ReconcileComplianceRemediation) handleUnmetDependencies(rem *compv1alpha1.ComplianceRemediation, logger logr.Logger) (reconcile.Result, error) {
+	deps := rem.Annotations[compv1alpha1.RemediationDependencyAnnotation]
+	var nMissingDeps int
+
+	for _, dep := range strings.Split(deps, ",") {
+		handled, err := isRemDepHandled(r, rem, dep, logger)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		if !handled {
+			logger.Info("Remediation has unmet dependencies, cannot apply", "ComplianceRemediation.Name", rem.Name)
+			// Continue so that we can issue all events
+			nMissingDeps++
+		}
+	}
+
+	rCopy := rem.DeepCopy()
+	labels := rCopy.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
+	if nMissingDeps > 0 {
+		if _, ok := labels[compv1alpha1.RemediationHasUnmetDependenciesLabel]; !ok {
+			labels[compv1alpha1.RemediationHasUnmetDependenciesLabel] = ""
+			rCopy.SetLabels(labels)
+			err := r.client.Update(context.TODO(), rCopy)
+			if err != nil {
+				return reconcile.Result{}, fmt.Errorf("adding unmet dependencies label: %w", err)
+			}
+			return reconcile.Result{Requeue: true, RequeueAfter: defaultDependencyRequeueTime}, nil
+		}
+		return reconcile.Result{}, nil
+	}
+
+	logger.Info("Remediation has all its dependencies met", "ComplianceRemediation.Name", rem.Name)
+	rCopy.Annotations[compv1alpha1.RemediationDependenciesMetAnnotation] = ""
+	delete(rCopy.Labels, compv1alpha1.RemediationHasUnmetDependenciesLabel)
+	rCopy.SetLabels(labels)
+	err := r.client.Update(context.TODO(), rCopy)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("adding dependencies met annotation: %w", err)
+	}
+
+	return reconcile.Result{Requeue: true, RequeueAfter: defaultDependencyRequeueTime}, nil
+}
+
+func isRemDepHandled(r *ReconcileComplianceRemediation, rem *compv1alpha1.ComplianceRemediation, checkId string, logger logr.Logger) (bool, error) {
+	var checkList compv1alpha1.ComplianceCheckResultList
+
+	err := r.client.List(context.TODO(), &checkList, client.MatchingFields{"id": checkId})
+	if err != nil {
+		logger.Error(err, "Could not list checks by ID", compv1alpha1.ComplianceRemediationDependencyField, checkId)
+		return false, err
+	}
+
+	if len(checkList.Items) == 0 {
+		r.recorder.Eventf(rem, corev1.EventTypeWarning, "RemediationDependencyCannotBeMet",
+			"The marked dependency %s is missing and cannot be met as it's not part of the benchmark.", checkId)
+		logger.Info("Missing dependency cannot be satisfied", "ComplianceCheckResult.Name", checkId, "ComplianceRemediation.Name", rem.Name)
+		return false, nil
+	}
+
+	for _, check := range checkList.Items {
+		switch check.Status {
+		case compv1alpha1.CheckResultPass:
+			logger.Info("Dependency satisfied", "ComplianceCheckResult.Name", check.Name, "ComplianceRemediation.Name", rem.Name)
+			return true, nil
+		case compv1alpha1.CheckResultInfo, compv1alpha1.CheckResultFail:
+			// in general this should not be the case and infos should be standalone, but if it is, we should probably treat it like fail
+			logger.Info("Dependency not yet satisfied", "ComplianceCheckResult.Name", check.Name, "ComplianceRemediation.Name", rem.Name)
+			r.recorder.Eventf(rem, corev1.EventTypeNormal, "RemediationDependencyCannotBeMet",
+				"The dependency %s not met, please apply its remediations and retry", check.Name)
+			return false, nil
+		default:
+			r.recorder.Eventf(rem, corev1.EventTypeWarning, "RemediationDependencyCannotBeMet",
+				"The dependency %s cannot be met with status %s", check.Name, check.Status)
+			logger.Info("Dependency cannot be satisfied", "ComplianceCheckResult.Name", check.Name, "ComplianceRemediation.Name", rem.Name)
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 func (r *ReconcileComplianceRemediation) reconcileRemediationStatus(instance *compv1alpha1.ComplianceRemediation,
 	logger logr.Logger, errorApplying error) error {
 	instanceCopy := instance.DeepCopy()
-	if errorApplying != nil {
-		instanceCopy.Status.ApplicationState = compv1alpha1.RemediationError
-		instanceCopy.Status.ErrorMessage = errorApplying.Error()
-		logger.Info("Remediation had an error")
-	} else if instance.Spec.Apply {
-		if instanceCopy.Spec.Outdated.Object != nil {
-			instanceCopy.Status.ApplicationState = compv1alpha1.RemediationOutdated
-			logger.Info("Remediation remains outdated")
-		} else {
-			instanceCopy.Status.ApplicationState = compv1alpha1.RemediationApplied
-			logger.Info("Remediation will now be applied")
-		}
-	} else {
-		instanceCopy.Status.ApplicationState = compv1alpha1.RemediationNotApplied
-		logger.Info("Remediation will now be unapplied")
-	}
+
+	setRemediationStatus(instanceCopy, errorApplying, logger)
 
 	if err := r.client.Status().Update(context.TODO(), instanceCopy); err != nil {
 		logger.Error(err, "Failed to update the remediation status")
@@ -311,4 +407,34 @@ func isNoLongerOutdated(r *compv1alpha1.ComplianceRemediation) bool {
 	}
 
 	return r.Spec.Outdated.Object == nil
+}
+
+func setRemediationStatus(r *compv1alpha1.ComplianceRemediation, errorApplying error, logger logr.Logger) {
+	if errorApplying != nil {
+		logger.Info("Remediation had an error")
+		r.Status.ApplicationState = compv1alpha1.RemediationError
+		r.Status.ErrorMessage = errorApplying.Error()
+		return
+	}
+
+	if !r.Spec.Apply {
+		logger.Info("Remediation will now be unapplied")
+		r.Status.ApplicationState = compv1alpha1.RemediationNotApplied
+		return
+	}
+
+	if r.Spec.Outdated.Object != nil {
+		logger.Info("Remediation remains outdated")
+		r.Status.ApplicationState = compv1alpha1.RemediationOutdated
+		return
+	}
+
+	if r.HasUnmetDependencies() {
+		logger.Info("Remediation has un-met dependencies.")
+		r.Status.ApplicationState = compv1alpha1.RemediationMissingDependencies
+		return
+	}
+
+	logger.Info("Remediation will now be applied")
+	r.Status.ApplicationState = compv1alpha1.RemediationApplied
 }

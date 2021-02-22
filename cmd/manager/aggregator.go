@@ -383,7 +383,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 
 		// The state even if set in the object would have been overwritten by the call to
 		// spec update, so we keep the state separately in a variable
-		stateUpdate := pr.Remediation.Status.ApplicationState
+		stateUpdate := compv1alpha1.RemediationPending
 
 		remkey := getObjKey(pr.Remediation.GetName(), pr.Remediation.GetNamespace())
 		foundRemediation := &compv1alpha1.ComplianceRemediation{}
@@ -434,9 +434,9 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		}
 
 		// Update the status as needed
-		if stateUpdate == compv1alpha1.RemediationOutdated {
-			if err := updateRemediationState(crClient, pr.Remediation, stateUpdate); err != nil {
-				return nil
+		if remExists {
+			if err := updateRemediationStatus(crClient, pr.Remediation, stateUpdate); err != nil {
+				return err
 			}
 		}
 	}
@@ -444,24 +444,26 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 	return nil
 }
 
-func updateRemediationState(crClient *complianceCrClient, parsedRemediation *compv1alpha1.ComplianceRemediation, state compv1alpha1.RemediationApplicationState) error {
+func updateRemediationStatus(crClient *complianceCrClient, parsedRemediation *compv1alpha1.ComplianceRemediation, state compv1alpha1.RemediationApplicationState) error {
 	remkey := getObjKey(parsedRemediation.GetName(), parsedRemediation.GetNamespace())
 	foundRemediation := &compv1alpha1.ComplianceRemediation{}
 	// Copy type metadata so dynamic client copies data correctly
 	log.Info("Updating remediation status", "ComplianceRemediation.Name", remkey.Name,
 		"ComplianceRemediation.Namespace", remkey.Namespace)
-	if err := crClient.client.Get(context.TODO(), remkey, foundRemediation); err != nil {
-		return fmt.Errorf("cannot update remediation status %s: %v", parsedRemediation.Name, err)
 
-	}
-	foundRemediation.Status.ErrorMessage = ""
-	foundRemediation.Status.ApplicationState = state
-	err := crClient.client.Status().Update(context.TODO(), foundRemediation)
-	if err != nil {
-		return fmt.Errorf("cannot update remediation status %s: %v", parsedRemediation.Name, err)
-	}
+	return backoff.Retry(func() error {
+		if err := crClient.client.Get(context.TODO(), remkey, foundRemediation); err != nil {
+			return fmt.Errorf("cannot update remediation status %s: %v", parsedRemediation.Name, err)
 
-	return nil
+		}
+		foundRemediation.Status.ErrorMessage = ""
+		foundRemediation.Status.ApplicationState = state
+		err := crClient.client.Status().Update(context.TODO(), foundRemediation)
+		if err != nil {
+			return fmt.Errorf("cannot update remediation status %s: %v", parsedRemediation.Name, err)
+		}
+		return nil
+	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 }
 
 func getObjKey(name, ns string) types.NamespacedName {
