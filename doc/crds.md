@@ -246,7 +246,7 @@ Where:
       results.
 	* **ERROR**: Which indicates that the check ran, but could not complete
       properly.
-	* **SKIP**: Which indicates that the check didn't run because it is not
+	* **NOTAPPLICABLE**: Which indicates that the check didn't run because it is not
       applicable or not selected.
 
 This object is owned by the scan that created it, as seen in the
