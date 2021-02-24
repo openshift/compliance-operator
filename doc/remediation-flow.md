@@ -1,48 +1,46 @@
-## Remediation flow design
+# Remediation flow design
 This page describes the design and implementation of the remediation
 support in the compliance operator.
 
-### Goals
+## Goals
 We want to accomplish:
    * It is possible to scan the cluster for gaps in compliance
-        * This scan or scans would detect gaps in compliance
-   * The administrator is then able to review the remediations for the
-     gaps in compliance
-        * Some remediations would be fully automated, others would just provide
-          templates or guidance.
+   * The results of the scan are represented as `ComplianceCheckResult` CRs,
+     with an appropriate state (`fail`) that represents gaps in compliance
+   * The administrator is then able to review the `ComplianceCheckResult` objects
+     to view the scan results
+   * For those findings that can be remediated automatically, a `ComplianceRemediation`
+     object is created
+   * Findings that cannot be remediated automatically will include steps to
+     remediate in the `ComplianceCheckResult` object itself
    * Those remediations the administrator selects for applying would
      be automatically applied by the operator
-        * For the node-level remediations, this would happen by creating a
-          `MachineConfig` object
-        * Cluster-level remediations will be implemented as a next step.
-          The basic idea is to have another container that calls out to
-          the kubernetes and/or OpenShift APIs, fetches the needed artifacts
-          as JSON objects and then lets another OpenScap instance scan
-          the JSON objects.
-   * After the remediations are applied, the scan is re-run to reflect
+        * In general the remediations are generic Kubernetes objects, although
+          for Node-type scans, `MachineConfig` objects are commonly used
+   * After the remediations are applied, the scan can be re-run to reflect
      the updated state of the cluster
-   * The operator would also watch for API resources that affect compliance
-     (such as `MachineConfigs`) and re-run the scan if those are updated
 
-### High-level overview
+## High-level overview
 An OCP cluster consists of the Kubernetes engine running on nodes. From
 the compliance scan perspective, we would be scanning the nodes and the
-Kubernetes separately, because the nodes and the cluster would be scanned
+Kubernetes platform separately, because the nodes and the cluster would be scanned
 using a different compliance content and even a different scanner
-(`oscap-chroot` for the nodes' FS mounted in a volume, `oscap` for the
+(`oscap-chroot` for the nodes' host FS mounted in a volume, `oscap` for the
 cluster-level checks where the scanner would scan JSON artifacts gathered
 from the cluster using k8s or OpenShift API calls)
 
 The compliance of the cluster as a whole would be represented by an instance
 of a CR `ComplianceSuite`. A scan of either the nodes of the nodes or
 the cluster would be represented by a CR `ComplianceScan`, owned by the
-`ComplianceSuite`.  For each of the gaps, a `ComplianceRemediation` resource
+`ComplianceSuite`.  For each test in a `ComplianceScan`, a `ComplianceCheckResult`
+would be created, with metadata about the test such as result (pass/fail), severity
+or manual steps to test or remediate. Finally, for each of gaps that can be remediated
+automatically, a `ComplianceRemediation` resource
 carrying the actual remediation payload would be created. The administrator then
 reviews the remediations, selects those that should be applied by changing
 a value of the `apply` field. At that point, the remediation is picked up
-by the `complianceremediation` controller which merges all the applied
-remediations into a single per-scan `MachineConfig` object which is finally
-applied to the nodes by the MCO.
+by the `complianceremediation` and if the remediation can be applied, a Kubernetes
+object (or a more specialized `MachineConfig`) object is created.
 
 There might be multiple node-level scans, because the cluster might consist
 of different OSs, for example RHCOS for the master nodes and RHEL for the
@@ -61,14 +59,16 @@ spec:
   scans:
   - content: ssg-rhcos4-ds.xml
     name: workers-scan
+    scanType: Node
     nodeSelector:
       node-role.kubernetes.io/worker: ""
-    profile: xccdf_org.ssgproject.content_profile_coreos-ncp
+    profile: xccdf_org.ssgproject.content_profile_moderate
   - content: ssg-rhcos4-ds.xml
     name: masters-scan
+    scanType: Node
     nodeSelector:
       node-role.kubernetes.io/master: ""
-    profile: xccdf_org.ssgproject.content_profile_coreos-ncp
+    profile: xccdf_org.ssgproject.content_profile_moderate
 status:
   Phase: DONE
   Result: NON-COMPLIANT
@@ -100,61 +100,67 @@ metadata:
     name: example-compliancesuite
 spec:
   apply: false
-  object:
-    apiVersion: machineconfiguration.openshift.io/v1
-    kind: MachineConfig
-    spec:
-      fips: false
-      osImageURL: ""
-      kernelArguments:
-        - ""
-      config:
-        ignition:
-          version: 2.2.0
-        storage:
-          files:
-          - contents:
-              source: data:,
-            filesystem: root
-            mode: 0600
-            path: /etc/securetty
+  current:
+    object:
+      apiVersion: machineconfiguration.openshift.io/v1
+      kind: MachineConfig
+      spec:
+        fips: false
+        osImageURL: ""
+        kernelArguments:
+          - ""
+        config:
+          ignition:
+            version: 3.1.0
+          storage:
+            files:
+            - contents:
+                source: data:,
+              filesystem: root
+              mode: 0600
+              path: /etc/securetty
+    outdated: {} 
 ```
 
 ### The scan-remediate-repeat flow
 The general flow is common for the platform scan as well as the node
 scan.  How the remediations are represented and therefore how they are applied
-differs for node and platform scans.
+differs for node and platform scans. For more details on the flow, please
+refer to the (troubleshooting document)[troubleshooting.md].
 
 Coming from the administrator side, the admin would define the
-`ComplianceSuite` CR and add the scans. First, the `ComplianceScan` CR
-would be validated in the `pending` phase before the scan launches.  Then the
-scan executes and `openscap` produces its report. The scanner must parse the
-report and for each gap the scan identified create a `ComplianceRemediation`
-CR. The `ComplianceRemediation` CR would be owned by the `ComplianceSuite`
-so that if the suite gets deleted, the remediations would be as well.
+`ScanSettings` and `ScanSettingBindings` which generate a `ComplianceSuite`
+that itself unrolls into one or more `ComplianceScan` objects.
+After the scans finish, `ComplianceCheckResult` objects are generated for
+each test in the scan and a `ComplianceRemediation` object for every gap
+that can be remediated automatically.
 
-The `ComplianceRemediation` objects would link back to the suite with
+The `ComplianceRemediation` objects would link back to the `suite` with
 labels that identify the suite and the scan respectively. This way, the
 administrator would be able to get and inspect the remediations with the
 usual `oc` command, e.g.
 `oc get complianceremediations --selector compliance.openshift.io/suite=example-compliancesuite`.
 
+Just when the `ComplianceRemediation` is created, its status is set to `Pending`.
+By default, when the remediation is not applied yet, the `complianceremediationcontroller`
+would set the remediation state to `NotApplied`.
 Once the administrator reviews the remediations, they would set the `apply`
 field to `true`. At that point, the remediation controller would pick up
-the remediation and apply it.
+the remediation and apply it, changing its state to `Applied`.
 
-#### Applying node-level remediations
+#### Applying node remediations
 The remediation controller takes all the `ComplianceRemediation` objects that
-are applicable (`apply: true`) and merges it into a single `MachineConfig`
-object per scan. Because the `MachineConfig` objects are applied to
+are applicable (`apply: true`) and creates a Kubernetes object (for Node-level
+checks, usually a `MachineConfig` object whose name starts with `75-`)
+). Because the `MachineConfig` objects are applied to
 `MachinePool` objects with the help of labels, there needs to be a 1:1
 mapping between the `ComplianceScan` resource and the `MachinePool` resource.
 
-The merged remediation then would be created, replacing any previous
+The remediation payload then would be created, replacing any previous
 remediation that might have existed from a previous compliance scan run.
 When a new `MachineConfig` is created, the `machine-config-operator` renders
-the resulting per-pool machineconfig objects by combining all the applicable
-`MachinecConfigs` and passes the rendered result to the `machine-config-deamon`
+the resulting per-pool `MachineConfig` objects by combining all the applicable
+`MachineConfigs` and passes the rendered result to the `machine-config-deamon`
 running on the nodes that reboot and apply the rendered configuration. At this
 point, the scan results are no longer valid and the scan needs to be re-ran to
 asses compliance again.
@@ -166,24 +172,16 @@ would watch for the `MachineConfigPool` and reset the scan status when to `pendi
 then the `MachineConfigPool` is updating and then launch the scan again then the
 pool finishes updating.
 
-#### Applying cluster-level remediations
-TBD
+#### Applying platform remediations
+Same as Node remediations, just flip the `apply` attribute to `true`. Since platform
+remediations are often generic Kubernetes objects like `ConfigMaps`, no reboot is typically
+required and once the remediation status changes to `Applied`, you can re-run the scan
+to view the updated results.
 
-### Detecting changes that break compliance
-The cluster administrator might inadvertently change the cluster configuration
-and make the cluster non-compliant. The compliance operator should try to detect
-this and re-run the scans to be able to proactively warn about getting out of
-compliance.
+### Working with remediations
 
-#### On the node level
-Because the nodes should pretty much only be configured using `MachineConfig`
-resources, the `compliance-controller` could watch for `MachineConfig` objects
-and re-run the scans.
+#### Applying one remediation
 
-TODO: Optimize the scans based on the pool the MC is applied to or just re-run
-the whole thing?
-
-#### Working with remediations
 Run the operator first, then create the `ComplianceSuite` CR:
 
     oc create -f deploy/crds/compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
@@ -236,29 +234,76 @@ Would open an editor that will contain (simplified):
 spec:
   # Change to true
   apply: false
-  object:
-    apiVersion: machineconfiguration.openshift.io/v1
-    kind: MachineConfig
-    metadata:
-      labels:
-        machineconfiguration.openshift.io/role: worker
-      name: 50-worker-empty-securetty
+  current:
+    object:
+      apiVersion: machineconfiguration.openshift.io/v1
+      kind: MachineConfig
+      metadata:
+        labels:
+          machineconfiguration.openshift.io/role: worker
+        name: 50-worker-empty-securetty
 ```
 After you change `apply` to `true`, the `Remediations`  controller picks up
-the remediation, reads the MC out of it and applies the remediation as a merged MC.
+the remediation, reads the object out of it and applies the remediation.
+
 View the created MC with:
 
-    oc describe machineconfigs/75-workers-scan-example-compliancesuite
+    oc describe machineconfigs/75-upstream-rhcos4-moderate-worker-no-direct-root-logins
 
-Try also applying the other remediation:
+#### Applying multiple remediations
 
-    oc edit complianceremediations/workers-scan-no-empty-passwords
+It's possible to apply all of the remediations generated by a `ComplianceSuite` object
+in one go. To do this, one can simply annotate the `ComplianceSuite` as follows:
 
-And then view the merged MC again:
+```
+oc annotate compliancesuites/$SUITE_NAME compliance.openshift.io/apply-remediations=
+```
 
-    oc describe machineconfigs/75-workers-scan-example-compliancesuite
+This will iterate through all of the remediations generated by a `ComplianceSuite` and
+apply them. Note that this will only happen once the Suite is in the `Done` phase.
 
-You'll see that both remediations were merged into a single one. Now you'll probably
-want to wait until the MCs are applied and the nodes rebooted. Afterwards, delete
-the suite and start it again. You'll see that the checks that were previously failing
-are now passing and no new remediations are being proposed.
+#### Applying remediations automatically
+
+It's possible to tell the Compliance Operator that, if a remediation is created in a suite,
+it should attempt to apply it. This is done through the `autoApplyRemediations` flag which is
+available in both the `ScanSettings` and the `ComplianceSuite` itself. If this is enabled,
+the operator will apply the remediations belonging to a scan once the ComplianceSuite reaches
+the `Done` phase. To avoid multiple reboots, the Compliance Operator would pause the 
+
+#### Remediations with dependencies
+
+Some remediations might not be applied right away, but there are some remediations that require that a
+rule or check passes before applying.. Those are annotated with `compliance.openshift.io/depends-on`.
+An example of such remediation follows:
+
+```yaml
+apiVersion: compliance.openshift.io/v1alpha1
+kind: ComplianceRemediation
+metadata:
+  annotations:
+    compliance.openshift.io/depends-on: xccdf_org.ssgproject.content_rule_package_usbguard_installed
+...
+```
+
+Note that the dependencies are stored in the rule definitions in the
+[ComplianceAsCode](https://github.com/ComplianceAsCode/content)
+repository, and the kubernetes remediations should have an annotation
+called `complianceascode.io/depends-on` if a dependency needs to be expressed.
+
+Note that the `depends-on` annotation will contain the XCCDF ID from the rules that are expected
+to pass in order for the operator to apply the remediation. The dependency uses the XCCDF ID because
+this comes from the compliance content itself, and this is a constant that is available in that 
+context. The operator itself will detect this dependency, get the ComplianceCheckResult that
+with that ID, and will only apply the remediation if the rule passes. `FAIL` or an `INFO` state
+will not apply the rule.
+
+If this `ComplianceRemediation` is selected to be applied, but the dependencies
+cannot be resolved, the `ComplianceRemediation` object transitions into the
+`MissingDependencies` state. The operator will also add a label a the key of
+`compliance.openshift.io/has-unmet-dependencies` to help users filter remediations with dependencies
+in an easier manner. What dependencies are missing is then visible
+as events attached to the `ComplianceRemediation` object. Apply those remediation
+first and then re-run the scan to resolve the missing dependencies.
+
+A subsequent run of the `ComplianceSuite` will re-trigger the remediation's reconcile loop, and if the
+remediation's dependencies are met, the operator will finally apply and the object will be created.
