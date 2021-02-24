@@ -379,21 +379,33 @@ var _ = Describe("Testing ParseBundle", func() {
 var _ = Describe("Testing parse profiles", func() {
 	var (
 		profileList []cmpv1alpha1.Profile
+		profchan    chan cmpv1alpha1.Profile
 	)
 
 	BeforeEach(func() {
 		// make sure init() did its job
 		Expect(pInput.contentDom).NotTo(BeNil())
+		profchan = make(chan cmpv1alpha1.Profile, 500)
+		done := make(chan bool)
 
 		profileList = make([]cmpv1alpha1.Profile, 0)
 		profileAdder := func(r *cmpv1alpha1.Profile) error {
-			profileList = append(profileList, *r)
+			profchan <- *r
 			return nil
 		}
+
+		go func() {
+			for p := range profchan {
+				profileList = append(profileList, p)
+			}
+			close(done)
+		}()
 
 		nonce := names.SimpleNameGenerator.GenerateName("pb-")
 		err := ParseProfilesAndDo(pInput.contentDom, pInput.pb, nonce, profileAdder)
 		Expect(err).To(BeNil())
+		close(profchan)
+		<-done
 	})
 
 	Context("All profiles are parsed", func() {
@@ -455,21 +467,34 @@ var _ = Describe("Testing parse profiles", func() {
 var _ = Describe("Testing parse variables", func() {
 	var (
 		varList []cmpv1alpha1.Variable
+		varchan chan cmpv1alpha1.Variable
 	)
 
 	BeforeEach(func() {
 		// make sure init() did its job
 		Expect(pInput.contentDom).NotTo(BeNil())
+		varchan = make(chan cmpv1alpha1.Variable, 1000)
+		done := make(chan bool)
 
 		varList = make([]cmpv1alpha1.Variable, 0)
 		variableAdder := func(p *cmpv1alpha1.Variable) error {
-			varList = append(varList, *p)
+			varchan <- *p
 			return nil
 		}
+
+		go func() {
+			for v := range varchan {
+
+				varList = append(varList, v)
+			}
+			close(done)
+		}()
 
 		nonce := names.SimpleNameGenerator.GenerateName("pb-")
 		err := ParseVariablesAndDo(pInput.contentDom, pInput.pb, nonce, variableAdder)
 		Expect(err).To(BeNil())
+		close(varchan)
+		<-done
 	})
 
 	Context("Some variables are parsed", func() {
@@ -530,22 +555,35 @@ var _ = Describe("Testing parse variables", func() {
 var _ = Describe("Testing parse rules", func() {
 	var (
 		ruleList []cmpv1alpha1.Rule
+		rchan    chan cmpv1alpha1.Rule
 	)
 
 	BeforeEach(func() {
 		// make sure init() did its job
 		Expect(pInput.contentDom).NotTo(BeNil())
+		rchan = make(chan cmpv1alpha1.Rule, 1000)
+		done := make(chan bool)
 
-		ruleList = make([]cmpv1alpha1.Rule, 0)
+		ruleList = make([]cmpv1alpha1.Rule, 100)
 		ruleAdder := func(r *cmpv1alpha1.Rule) error {
-			ruleList = append(ruleList, *r)
+			rchan <- *r
 			return nil
 		}
+
+		go func() {
+			for r := range rchan {
+				ruleList = append(ruleList, r)
+			}
+			close(done)
+		}()
 
 		stdParser := newStandardParser()
 		nonce := names.SimpleNameGenerator.GenerateName("pb-")
 		err := ParseRulesAndDo(pInput.contentDom, stdParser, pInput.pb, nonce, ruleAdder)
 		Expect(err).To(BeNil())
+
+		close(rchan)
+		<-done
 	})
 
 	Context("Some rules are parsed", func() {
