@@ -51,7 +51,7 @@ const (
 	// The check ran, but could not complete properly
 	CheckResultError ComplianceCheckStatus = "ERROR"
 	// The check didn't run because it is not applicable or not selected
-	CheckResultSkipped ComplianceCheckStatus = "SKIP"
+	CheckResultNotApplicable ComplianceCheckStatus = "NOT-APPLICABLE"
 	// The check reports different results from different sources, typically cluster nodes
 	CheckResultInconsistent ComplianceCheckStatus = "INCONSISTENT"
 	// The check didn't yield a usable result
