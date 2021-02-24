@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -755,6 +756,39 @@ func assertHasCheck(f *framework.Framework, suiteName, scanName string, check co
 
 	if getCheck.Labels[compv1alpha1.ComplianceCheckResultStatusLabel] != string(getCheck.Status) {
 		return fmt.Errorf("did not find expected status name label %s, found %s", suiteName, getCheck.Labels[compv1alpha1.ComplianceCheckResultStatusLabel])
+	}
+
+	return nil
+}
+
+func assertCheckRemediation(f *framework.Framework, name, namespace string, shouldHaveRem bool) error {
+	var getCheck compv1alpha1.ComplianceCheckResult
+
+	err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, &getCheck)
+	if err != nil {
+		return err
+	}
+
+	_, hasRemLabel := getCheck.Labels[compv1alpha1.ComplianceCheckResultHasRemediation]
+	if hasRemLabel != shouldHaveRem {
+		return fmt.Errorf("unexpected label found: %v (expected: %s)", getCheck.Labels, strconv.FormatBool(shouldHaveRem))
+	}
+
+	// Also make sure a remediation with the same name exists (or not)
+	var getRem compv1alpha1.ComplianceRemediation
+	var hasRem bool
+
+	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, &getRem)
+	if apierrors.IsNotFound(err) {
+		hasRem = false
+	} else if err != nil {
+		return err
+	} else {
+		hasRem = true
+	}
+
+	if hasRemLabel != shouldHaveRem {
+		return fmt.Errorf("unexpected remediation object: expected: %s, found: %s", strconv.FormatBool(shouldHaveRem), strconv.FormatBool(hasRem))
 	}
 
 	return nil

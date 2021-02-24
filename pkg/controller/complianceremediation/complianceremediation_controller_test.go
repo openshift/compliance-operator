@@ -262,6 +262,10 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				// reflects an admin having removed it.
 				err = reconciler.client.Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
+				// mock that the remediation was applied
+				remediationinstance.Status.ApplicationState = compv1alpha1.RemediationApplied
+				err = reconciler.client.Status().Update(context.TODO(), remediationinstance)
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("should remove the outdated remediation label", func() {

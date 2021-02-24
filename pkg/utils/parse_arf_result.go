@@ -16,9 +16,13 @@ import (
 )
 
 const (
-	machineConfigFixType = "urn:xccdf:fix:script:ignition"
-	kubernetesFixType    = "urn:xccdf:fix:script:kubernetes"
-	rulePrefix           = "xccdf_org.ssgproject.content_rule_"
+	machineConfigFixType    = "urn:xccdf:fix:script:ignition"
+	kubernetesFixType       = "urn:xccdf:fix:script:kubernetes"
+	ocilCheckType           = "http://scap.nist.gov/schema/ocil/2"
+	rulePrefix              = "xccdf_org.ssgproject.content_rule_"
+	questionnaireSuffix     = "_ocil:questionnaire:1"
+	questionSuffix          = "_question:question:1"
+	dependencyAnnotationKey = "complianceascode.io/depends-on"
 )
 
 // XMLDocument is a wrapper that keeps the interface XML-parser-agnostic
@@ -32,21 +36,79 @@ type ParseResult struct {
 	Remediation *compv1alpha1.ComplianceRemediation
 }
 
-type ruleHashTable map[string]*xmldom.Node
+type nodeByIdHashTable map[string]*xmldom.Node
 
-func newRuleHashTable(dsDom *XMLDocument) ruleHashTable {
-	benchmarkDom := dsDom.Root.QueryOne("//component/Benchmark")
-	rules := benchmarkDom.Query("//Rule")
-
-	table := make(ruleHashTable)
-	for i := range rules {
-		ruleDefinition := rules[i]
+func newByIdHashTable(nodes []*xmldom.Node) nodeByIdHashTable {
+	table := make(nodeByIdHashTable)
+	for i := range nodes {
+		ruleDefinition := nodes[i]
 		ruleId := ruleDefinition.GetAttributeValue("id")
 
 		table[ruleId] = ruleDefinition
 	}
 
 	return table
+}
+
+func newHashTableFromRootAndQuery(dsDom *XMLDocument, root, query string) nodeByIdHashTable {
+	benchmarkDom := dsDom.Root.QueryOne(root)
+	rules := benchmarkDom.Query(query)
+	return newByIdHashTable(rules)
+}
+
+func newRuleHashTable(dsDom *XMLDocument) nodeByIdHashTable {
+	return newHashTableFromRootAndQuery(dsDom, "//component/Benchmark", "//Rule")
+}
+
+func newOcilQuestionTable(dsDom *XMLDocument) nodeByIdHashTable {
+	return newHashTableFromRootAndQuery(dsDom, "//component/ocil", "//boolean_question")
+}
+
+func getRuleOcilQuestionID(rule *xmldom.Node) string {
+	var ocilRefEl *xmldom.Node
+
+	for _, check := range rule.FindByName("check") {
+		if check.GetAttributeValue("system") == ocilCheckType {
+			ocilRefEl = check.FindOneByName("check-content-ref")
+			break
+		}
+	}
+
+	if ocilRefEl == nil {
+		return ""
+	}
+
+	questionnareName := ocilRefEl.GetAttributeValue("name")
+	if strings.HasSuffix(questionnareName, questionnaireSuffix) == false {
+		return ""
+	}
+
+	return strings.TrimSuffix(questionnareName, questionnaireSuffix) + questionSuffix
+}
+
+func getInstructionsForRule(rule *xmldom.Node, ocilTable nodeByIdHashTable) string {
+	// convert rule's questionnaire ID to question ID
+	ruleQuestionId := getRuleOcilQuestionID(rule)
+
+	// look up the node
+	questionNode, ok := ocilTable[ruleQuestionId]
+	if !ok {
+		return ""
+	}
+
+	// if not found, return empty string
+	textNode := questionNode.FindOneByName("question_text")
+	if textNode == nil {
+		return ""
+	}
+
+	// if found, strip the last line
+	textSlice := strings.Split(textNode.Text, "\n")
+	if len(textSlice) > 1 {
+		textSlice = textSlice[:len(textSlice)-1]
+	}
+
+	return strings.TrimSpace(strings.Join(textSlice, "\n"))
 }
 
 // ParseContent parses the DataStream and returns the XML document
@@ -67,6 +129,7 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 	}
 
 	ruleTable := newRuleHashTable(dsDom)
+	questionsTable := newOcilQuestionTable(dsDom)
 
 	results := resultsDom.Root.Query("//rule-result")
 	parsedResults := make([]*ParseResult, 0)
@@ -82,7 +145,8 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 			continue
 		}
 
-		resCheck, err := newComplianceCheckResult(result, resultRule, ruleIDRef, scanName, namespace)
+		instructions := getInstructionsForRule(resultRule, questionsTable)
+		resCheck, err := newComplianceCheckResult(result, resultRule, ruleIDRef, instructions, scanName, namespace)
 		if err != nil {
 			continue
 		}
@@ -102,7 +166,7 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 }
 
 // Returns a new complianceCheckResult if the check data is usable
-func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef, scanName, namespace string) (*compv1alpha1.ComplianceCheckResult, error) {
+func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef, instructions, scanName, namespace string) (*compv1alpha1.ComplianceCheckResult, error) {
 	name := nameFromId(scanName, ruleIdRef)
 	mappedStatus, err := mapComplianceCheckResultStatus(result)
 	if err != nil {
@@ -122,10 +186,11 @@ func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef,
 			Name:      name,
 			Namespace: namespace,
 		},
-		ID:          ruleIdRef,
-		Status:      mappedStatus,
-		Severity:    mappedSeverity,
-		Description: complianceCheckResultDescription(rule),
+		ID:           ruleIdRef,
+		Status:       mappedStatus,
+		Severity:     mappedSeverity,
+		Instructions: instructions,
+		Description:  complianceCheckResultDescription(rule),
 	}, nil
 }
 
@@ -187,11 +252,13 @@ func mapComplianceCheckResultStatus(result *xmldom.Node) (compv1alpha1.Complianc
 		// Unknown state is when the rule runs to completion, but then the results can't be interpreted
 	case "error", "unknown":
 		return compv1alpha1.CheckResultError, nil
-		// We map both notchecked and info to Info. Notchecked means the rule does not even have a check,
-		// and the administratos must inspect the rule manually (e.g. disable something in BIOS),
+		// Notchecked means the rule does not even have a check,
+		// and the administrators must inspect the rule manually (e.g. disable something in BIOS),
+	case "notchecked":
+		return compv1alpha1.CheckResultManual, nil
 		// informational means that the rule has a check which failed, but the severity is low, depending
 		// on the environment (e.g. disable USB support completely from the kernel cmdline)
-	case "notchecked", "informational":
+	case "informational":
 		return compv1alpha1.CheckResultInfo, nil
 		// We map notapplicable to Skipped. Notapplicable means the rule was selected
 		// but does not apply to the current configuration (e.g. arch-specific),
@@ -249,10 +316,17 @@ func remediationFromString(scheme *runtime.Scheme, name string, namespace string
 		return nil
 	}
 
+	annotations := make(map[string]string)
+
+	if hasDependencyAnnotation(obj) {
+		annotations = handleDependencyAnnotation(obj)
+	}
+
 	return &compv1alpha1.ComplianceRemediation{
 		ObjectMeta: v1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
+			Name:        name,
+			Namespace:   namespace,
+			Annotations: annotations,
 		},
 		Spec: compv1alpha1.ComplianceRemediationSpec{
 			ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
@@ -263,9 +337,38 @@ func remediationFromString(scheme *runtime.Scheme, name string, namespace string
 			},
 		},
 		Status: compv1alpha1.ComplianceRemediationStatus{
-			ApplicationState: compv1alpha1.RemediationNotApplied,
+			ApplicationState: compv1alpha1.RemediationPending,
 		},
 	}
+}
+
+func hasDependencyAnnotation(u *unstructured.Unstructured) bool {
+	annotations := u.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+
+	_, hasAnnotation := annotations[dependencyAnnotationKey]
+	return hasAnnotation
+}
+
+func handleDependencyAnnotation(u *unstructured.Unstructured) map[string]string {
+	outputAnnotations := make(map[string]string)
+
+	// We already assume this has some annotation
+	inAnns := u.GetAnnotations()
+
+	// parse
+	dependencies := inAnns[dependencyAnnotationKey]
+
+	// set dependencies
+	outputAnnotations[compv1alpha1.RemediationDependencyAnnotation] = dependencies
+
+	// reset metadata of output object
+	delete(inAnns, dependencyAnnotationKey)
+	u.SetAnnotations(inAnns)
+
+	return outputAnnotations
 }
 
 func rawObjectToUnstructured(scheme *runtime.Scheme, in string) (*unstructured.Unstructured, error) {

@@ -213,6 +213,11 @@ description: |-
   authentication to privileged accounts. Users will first login, then escalate
   to privileged (root) access via su / sudo. This is required for FISMA Low
   and FISMA Moderate systems.
+instructions: |-
+  To ensure root may not directly login to the system over physical consoles,
+  run the following command:
+     cat /etc/securetty
+  If any output is returned, this is a finding.
 id: xccdf_org.ssgproject.content_rule_no_direct_root_logins
 severity: medium
 status: FAIL
@@ -221,7 +226,11 @@ status: FAIL
 Where:
 
 * **description**: Contains a description of what's being checked and why
-  that's being done.
+  that's being done. For checks that don't generate an automated remediation,
+  contains the steps to remediate the issue if it's failing.
+* **instructions**: How to evaluate if the rule status manually. If no automatic
+  test is present, the rule status will be MANUAL and the administrator should
+  follow these instructions.
 * **id**: Contains a reference to the XCCDF identifier of the rule as it is in
   the data-stream/content.
 * **severity**: Describes the severity of the check. The possible values are:
@@ -231,6 +240,8 @@ Where:
 	* **FAIL**: Which indicates that the check ran to completion and failed.
 	* **INFO**: Which indicates that the check ran to completion and found
       something not severe enough to be considered error.
+	* **MANUAL**: Which indicates that the check does not have a way to
+        automatically assess success or failure and must be checked manually.
     * **INCONSISTENT**: Which indicates that different nodes report different
       results.
 	* **ERROR**: Which indicates that the check ran, but could not complete
@@ -303,33 +314,43 @@ metadata:
 spec:
   apply: false
   object:
-    apiVersion: machineconfiguration.openshift.io/v1
-    kind: MachineConfig
-    spec:
-      config:
-        ignition:
-          version: 2.2.0
-        storage:
-          files:
-          - contents:
-              source: data:,%2A%20%20%20%20%20hard%20%20%20core%20%20%20%200
-            filesystem: root
-            mode: 420
-            path: /etc/security/limits.d/75-disable_users_coredumps.conf
+    current:
+       apiVersion: machineconfiguration.openshift.io/v1
+       kind: MachineConfig
+       spec:
+         config:
+           ignition:
+             version: 2.2.0
+           storage:
+             files:
+             - contents:
+                 source: data:,%2A%20%20%20%20%20hard%20%20%20core%20%20%20%200
+               filesystem: root
+               mode: 420
+               path: /etc/security/limits.d/75-disable_users_coredumps.conf
+    outdated: {}
 ```
 
 Where:
 
 * **apply**: Indicates whether the remediation should be applied or not.
-* **object**: Contains the definition of the remediation, this object is
-  what needs to be created in the cluster in order to fix the issue.
+* **object.current**: Contains the definition of the remediation, this object is
+  what needs to be created in the cluster in order to fix the issue. Note that
+  if `object.outdated` exists, this is not necessarily what is currently applied
+  on the nodes due to the remediation being updated
+* **object.outdated**: The remediation that was previously parsed from an earlier
+  version of the content. The operator still retains the outdated objects to give
+  the administrator a chance to review the new remediations before applying them.
+  To take the new versions of the remediations to use, annotate the `ComplianceSuite`
+  with the `compliance.openshift.io/remove-outdated` annotation. See also the
+  troubleshooting document for more details.
 
 Normally the objects need to be full Kubernetes object definitions, however,
-there is a special case for `MachineConfig` objects. These are gathered per
-`MachineConfigPool` (which are encompassed by a scan) and are merged into a
-single object to avoid many cluster restarts. The compliance suite controller
-will also pause the pool while the remediations are gathered in order to give
-the remediations time to converge and speed up the remediation process.
+there is a special case for `MachineConfig` objects. These are applied
+per `MachineConfigPool` which are encompassed by a scan. The compliance
+suite controller will, if remediations are to be applied automatically,
+therefore pause the pool while the remediations are gathered in order to
+give the remediations time to converge and speed up the remediation process.
 
 This object is owned by the `ComplianceCheckResult` object, as seen in the
 `ownerReferences` field.
@@ -342,6 +363,22 @@ For instance:
 ```
 oc get complianceremediations -l compliance.openshift.io/suite=example-compliancesuite
 ```
+
+Not all `ComplianceCheckResult` objects create `ComplianceRemediation`
+objects, only those that can be remediated automatically do. A
+`ComplianceCheckResult` object has a related remediation if it's labeled
+with the `compliance.openshift.io/automated-remediation` label, the
+name of the remediation is the same as the name of the check. To list all
+failing checks that can be remediated automatically, call:
+```
+oc get compliancecheckresults -l 'compliance.openshift.io/check-status in (FAIL),compliance.openshift.io/automated-remediation'
+```
+and to list those that must be remediated manually:
+```
+oc get compliancecheckresults -l 'compliance.openshift.io/check-status in (FAIL),!compliance.openshift.io/automated-remediation'
+```
+The manual remediation steps are typically stored in the `ComplianceCheckResult`'s
+`description` attribute.
 
 ### The `ProfileBundle` object
 OpenSCAP content for consumption by the Compliance Operator is distributed
@@ -487,7 +524,8 @@ metadata:
   resourceVersion: "102322"
   selfLink: /apis/compliance.openshift.io/v1alpha1/namespaces/openshift-compliance/rules/rhcos4-wireless-disable-interfaces
   uid: 8debde1b-e2df-4058-a345-151905769187
-rationale: The use of wireless networking can introduce many different attack vectors
+  severity: medium
+  rationale: The use of wireless networking can introduce many different attack vectors
   into&#xA;the organization&#39;s network. Common attack vectors such as malicious
   association&#xA;and ad hoc networks will allow an attacker to spoof a wireless access
   point&#xA;(AP), allowing validated systems to connect to the malicious AP and enabling
