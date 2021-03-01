@@ -1,0 +1,12 @@
+name: Using the Compliance Operator
+
+modules:
+  activate:
+    - index
+    - exercises/01-compliance-operator.md
+    - exercises/02-installation.md
+    - exercises/03-creating-your-first-scan.md
+    - exercises/04-remediations.md
+    - exercises/05-tailoring-profiles.md
+    - exercises/06-troubleshooting.md
+    - finish
