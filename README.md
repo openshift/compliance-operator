@@ -332,3 +332,9 @@ Current testing has been done on OpenShift (OCP). The project is open to
 getting other platforms tested, so volunteers are needed for this.
 
 The current supported versions of OpenShift are 4.6 and up.
+
+Additional documentation
+========================
+
+See the [self-paced workshop](doc/tutorials/README.md) for a hands-on tutorial,
+including advanced topics such as content building.
