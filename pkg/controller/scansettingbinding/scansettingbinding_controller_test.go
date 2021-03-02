@@ -3,10 +3,12 @@ package scansettingbinding
 import (
 	"context"
 
+	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"go.uber.org/zap"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,8 +37,8 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 
 	BeforeEach(func() {
 		// Uncomment these lines if you need to debug the controller's output.
-		// dev, _ := zap.NewDevelopment()
-		// logger = zapr.NewLogger(dev)
+		dev, _ := zap.NewDevelopment()
+		log = zapr.NewLogger(dev)
 		objs := []runtime.Object{}
 
 		// test instance
@@ -196,8 +198,11 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 				},
 			}
 
+			ssb.Status.SetConditionPending()
+
 			err := reconciler.client.Create(context.TODO(), ssb)
 			Expect(err).To(BeNil())
+
 			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
@@ -214,11 +219,22 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			})
 			Expect(err).To(BeNil())
 
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ssb.Namespace,
+				Name:      ssb.Name,
+			}, ssb)
+			Expect(err).To(BeNil())
+			Expect(ssb.Status.Conditions.GetCondition("Ready")).ToNot(BeNil())
+			Expect(ssb.Status.Conditions.IsTrueFor("Ready")).To(BeTrue())
+
 			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
 			Expect(err).To(BeNil())
 
 			Expect(suite.Spec.Schedule).To(BeEquivalentTo(setting.Schedule))
 			Expect(suite.Spec.AutoApplyRemediations).To(BeTrue())
+
+			Expect(ssb.Status.OutputRef.Name).To(Equal(suite.Name))
+			Expect(*ssb.Status.OutputRef.APIGroup).To(Equal(suite.GroupVersionKind().Group))
 
 			expScanWorker := compv1alpha1.ComplianceScanSpecWrapper{
 				ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
@@ -274,6 +290,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 					APIGroup: setting.APIVersion,
 				},
 			}
+			ssb.Status.SetConditionPending()
 
 			err := reconciler.client.Create(context.TODO(), ssb)
 			Expect(err).To(BeNil())
@@ -293,6 +310,14 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			})
 			Expect(err).To(BeNil())
 
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ssb.Namespace,
+				Name:      ssb.Name,
+			}, ssb)
+			Expect(err).To(BeNil())
+			Expect(ssb.Status.Conditions.GetCondition("Ready")).ToNot(BeNil())
+			Expect(ssb.Status.Conditions.IsTrueFor("Ready")).To(BeTrue())
+
 			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
 			Expect(err).To(BeNil())
 
@@ -302,6 +327,9 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 
 			Expect(suite.Spec.Schedule).To(BeEquivalentTo(setting.Schedule))
 			Expect(suite.Spec.AutoApplyRemediations).To(BeTrue())
+
+			Expect(ssb.Status.OutputRef.Name).To(Equal(suite.Name))
+			Expect(*ssb.Status.OutputRef.APIGroup).To(Equal(suite.GroupVersionKind().Group))
 
 			expScanMaster := compv1alpha1.ComplianceScanSpecWrapper{
 				ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
@@ -374,6 +402,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 					},
 				},
 			}
+			ssb.Status.SetConditionPending()
 
 			err = reconciler.client.Create(context.TODO(), ssb)
 			Expect(err).To(BeNil())
@@ -392,6 +421,14 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 				},
 			})
 			Expect(err).To(BeNil())
+
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ssb.Namespace,
+				Name:      ssb.Name,
+			}, ssb)
+			Expect(err).To(BeNil())
+			Expect(ssb.Status.Conditions.GetCondition("Ready")).ToNot(BeNil())
+			Expect(ssb.Status.Conditions.IsTrueFor("Ready")).To(BeFalse())
 
 			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
 			Expect(err).ToNot(BeNil())
