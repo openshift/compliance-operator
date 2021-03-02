@@ -118,6 +118,20 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		return reconcile.Result{}, r.profileBundleDeleteHandler(instance, reqLogger)
 	}
 
+	// We should always start with an appropriate status
+	if instance.Status.DataStreamStatus == "" {
+		pb := instance.DeepCopy()
+		pb.Status.DataStreamStatus = compliancev1alpha1.DataStreamPending
+		pb.Status.SetConditionPending()
+		err = r.client.Status().Update(context.TODO(), pb)
+		if err != nil {
+			reqLogger.Error(err, "Couldn't update ProfileBundle status")
+			return reconcile.Result{}, err
+		}
+		// this was a fatal error, don't requeue
+		return reconcile.Result{}, nil
+	}
+
 	err = r.deleteNonNamespacedWorkload(instance, reqLogger)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -133,6 +147,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		pbCopy := instance.DeepCopy()
 		pbCopy.Status.DataStreamStatus = compliancev1alpha1.DataStreamInvalid
 		pbCopy.Status.ErrorMessage = err.Error()
+		pbCopy.Status.SetConditionInvalid()
 		err = r.client.Status().Update(context.TODO(), pbCopy)
 		if err != nil {
 			reqLogger.Error(err, "Couldn't update ProfileBundle status")
@@ -172,6 +187,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		pbCopy := instance.DeepCopy()
 		pbCopy.Status.DataStreamStatus = compliancev1alpha1.DataStreamPending
 		pbCopy.Status.ErrorMessage = ""
+		pbCopy.Status.SetConditionPending()
 		err = r.client.Status().Update(context.TODO(), pbCopy)
 		if err != nil {
 			reqLogger.Error(err, "Couldn't update ProfileBundle status")
@@ -213,7 +229,8 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		// report to status
 		pbCopy := instance.DeepCopy()
 		pbCopy.Status.DataStreamStatus = compliancev1alpha1.DataStreamInvalid
-		pbCopy.Status.ErrorMessage = "The init container failed to start. Check Status.ContentImage."
+		pbCopy.Status.ErrorMessage = "The init container failed to start. Verify Status.ContentImage."
+		pbCopy.Status.SetConditionInvalid()
 		err = r.client.Status().Update(context.TODO(), pbCopy)
 		if err != nil {
 			reqLogger.Error(err, "Couldn't update ProfileBundle status")
@@ -225,6 +242,19 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 
 	// Pod already exists and its init container at least ran - don't requeue
 	reqLogger.Info("Skip reconcile: Workload already up-to-date", "Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
+
+	// Handle upgrades
+	if instance.Status.DataStreamStatus == compliancev1alpha1.DataStreamValid &&
+		instance.Status.Conditions.GetCondition("Ready") == nil {
+		reqLogger.Info("Updating Profile Bundle condition to valid")
+		pbCopy := instance.DeepCopy()
+		pbCopy.Status.SetConditionReady()
+		err = r.client.Status().Update(context.TODO(), pbCopy)
+		if err != nil {
+			reqLogger.Error(err, "Couldn't update ProfileBundle status")
+			return reconcile.Result{}, err
+		}
+	}
 	return reconcile.Result{}, nil
 }
 
