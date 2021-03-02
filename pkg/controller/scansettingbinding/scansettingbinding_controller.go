@@ -116,6 +116,18 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 		return reconcile.Result{}, err
 	}
 
+	// We should always have a condition here
+	if instance.Status.Conditions.GetCondition("Ready") == nil {
+		ssb := instance.DeepCopy()
+		ssb.Status.SetConditionPending()
+		err := r.client.Status().Update(context.TODO(), ssb)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("Couldn't update ScanSettingBinding status: %s", err)
+		}
+		// this was a fatal error, don't requeue
+		return reconcile.Result{}, nil
+	}
+
 	suite := compliancev1alpha1.ComplianceSuite{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      instance.Name,
@@ -139,10 +151,14 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 		nodeProduct = getRelevantProduct(nodeProduct, product)
 
 		if isDifferentProduct(nodeProduct, product) {
-			r.Eventf(
-				instance, corev1.EventTypeWarning, "MultipleProducts",
-				"ScanSettingBinding defines multiple products: %s and %s", product, nodeProduct,
-			)
+			msg := fmt.Sprintf("ScanSettingBinding defines multiple products: %s and %s", product, nodeProduct)
+			r.Eventf(instance, corev1.EventTypeWarning, "MultipleProducts", msg)
+
+			ssb := instance.DeepCopy()
+			ssb.Status.SetConditionInvalid(msg)
+			if updateErr := r.client.Status().Update(context.TODO(), ssb); updateErr != nil {
+				return reconcile.Result{}, fmt.Errorf("couldn't update ScanSettingBinding condition: %w", updateErr)
+			}
 			// Don't requeue in this case, nothing we can do
 			return reconcile.Result{}, nil
 		}
@@ -167,13 +183,25 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 				instance, corev1.EventTypeNormal, "SuiteCreated",
 				"ComplianceSuite %s/%s created", suite.Namespace, suite.Name,
 			)
-		} else {
-			reqLogger.Error(err, "Suite failed to create", "suite.Name", suite.Name)
-			r.Eventf(
-				instance, corev1.EventTypeWarning, "SuiteNotCreated",
-				"ComplianceSuite %s/%s could not be created: %s", suite.Namespace, suite.Name, err,
-			)
+
+			ssb := instance.DeepCopy()
+			ssb.Status.SetConditionReady()
+			ssb.Status.OutputRef = &corev1.TypedLocalObjectReference{
+				APIGroup: &compliancev1alpha1.SchemeGroupVersion.Group,
+				Kind:     "ComplianceSuite",
+				Name:     suite.GetName(),
+			}
+			if updateErr := r.client.Status().Update(context.TODO(), ssb); updateErr != nil {
+				return reconcile.Result{}, fmt.Errorf("couldn't update ScanSettingBinding condition: %w", updateErr)
+			}
+			return reconcile.Result{}, nil
 		}
+
+		reqLogger.Error(err, "Suite failed to create", "suite.Name", suite.Name)
+		r.Eventf(
+			instance, corev1.EventTypeWarning, "SuiteNotCreated",
+			"ComplianceSuite %s/%s could not be created: %s", suite.Namespace, suite.Name, err,
+		)
 		return reconcile.Result{}, err
 	} else if err != nil {
 		return reconcile.Result{}, nil
@@ -197,6 +225,20 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 			)
 		}
 		return reconcile.Result{}, err
+	}
+
+	if scanSettingBindingStatusNeedsUpdate(instance) {
+		ssb := instance.DeepCopy()
+		ssb.Status.SetConditionReady()
+		group := found.GroupVersionKind().Group
+		ssb.Status.OutputRef = &corev1.TypedLocalObjectReference{
+			APIGroup: &group,
+			Kind:     found.GroupVersionKind().Kind,
+			Name:     found.GetName(),
+		}
+		if updateErr := r.client.Status().Update(context.TODO(), ssb); updateErr != nil {
+			return reconcile.Result{}, fmt.Errorf("couldn't update ScanSettingBinding condition: %w", updateErr)
+		}
 	} else {
 		reqLogger.Info("Suite does not need update", "suite.Name", suite.Name)
 	}
@@ -566,4 +608,8 @@ func isGvk(obj *unstructured.Unstructured, expectGvk *schema.GroupVersionKind) e
 func suiteNeedsUpdate(have, found *compliancev1alpha1.ComplianceSuite) bool {
 	// comparing spec would miss rename but we probably don't care
 	return !reflect.DeepEqual(have.Spec, found.Spec)
+}
+
+func scanSettingBindingStatusNeedsUpdate(ssb *compliancev1alpha1.ScanSettingBinding) bool {
+	return ssb.Status.Conditions.GetCondition("Ready") == nil || ssb.Status.OutputRef.Name == ""
 }
