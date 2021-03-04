@@ -8,6 +8,11 @@ spec:
     kind: ComplianceRemediation
     listKind: ComplianceRemediationList
     plural: complianceremediations
+    shortNames:
+    - cr
+    - remediations
+    - remediation
+    - rems
     singular: complianceremediation
   scope: Namespaced
   versions:

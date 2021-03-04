@@ -71,7 +71,7 @@ const (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ComplianceCheckResult represent a result of a single compliance "test"
-// +kubebuilder:resource:path=compliancecheckresults,scope=Namespaced
+// +kubebuilder:resource:path=compliancecheckresults,scope=Namespaced,shortName=ccr;checkresults;checkresult
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=`.status`
 // +kubebuilder:printcolumn:name="Severity",type="string",JSONPath=`.severity`
 type ComplianceCheckResult struct {
