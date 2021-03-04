@@ -9,6 +9,8 @@ spec:
     kind: Variable
     listKind: VariableList
     plural: variables
+    shortNames:
+    - var
     singular: variable
   scope: Namespaced
   versions:
