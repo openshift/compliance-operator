@@ -17,7 +17,7 @@ type NamedObjectReference struct {
 // ScanSettingBinding is the Schema for the scansettingbindings API
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=scansettingbindings,scope=Namespaced
+// +kubebuilder:resource:path=scansettingbindings,scope=Namespaced,shortName=ssb
 type ScanSettingBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

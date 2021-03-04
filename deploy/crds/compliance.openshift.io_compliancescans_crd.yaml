@@ -8,6 +8,9 @@ spec:
     kind: ComplianceScan
     listKind: ComplianceScanList
     plural: compliancescans
+    shortNames:
+    - scans
+    - scan
     singular: compliancescan
   scope: Namespaced
   versions:

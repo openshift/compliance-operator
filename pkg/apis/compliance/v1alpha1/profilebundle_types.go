@@ -55,7 +55,7 @@ type ProfileBundleStatus struct {
 
 // ProfileBundle is the Schema for the profilebundles API
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=profilebundles,scope=Namespaced
+// +kubebuilder:resource:path=profilebundles,scope=Namespaced,shortName=pb
 // +kubebuilder:printcolumn:name="ContentImage",type="string",JSONPath=`.spec.contentImage`
 // +kubebuilder:printcolumn:name="ContentFile",type="string",JSONPath=`.spec.contentFile`
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=`.status.dataStreamStatus`
