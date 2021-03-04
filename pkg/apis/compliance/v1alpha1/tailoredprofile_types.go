@@ -79,7 +79,7 @@ type OutputRef struct {
 
 // TailoredProfile is the Schema for the tailoredprofiles API
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=tailoredprofiles,scope=Namespaced
+// +kubebuilder:resource:path=tailoredprofiles,scope=Namespaced,shortName=tp;tprof
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=`.status.state`,description="State of the tailored profile"
 type TailoredProfile struct {
 	metav1.TypeMeta   `json:",inline"`

@@ -8,6 +8,8 @@ spec:
     kind: ScanSetting
     listKind: ScanSettingList
     plural: scansettings
+    shortNames:
+    - ss
     singular: scansetting
   scope: Namespaced
   versions:
