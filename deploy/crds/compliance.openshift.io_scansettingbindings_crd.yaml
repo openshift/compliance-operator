@@ -8,6 +8,8 @@ spec:
     kind: ScanSettingBinding
     listKind: ScanSettingBindingList
     plural: scansettingbindings
+    shortNames:
+    - ssb
     singular: scansettingbinding
   scope: Namespaced
   versions:

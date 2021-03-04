@@ -8,6 +8,8 @@ spec:
     kind: ProfileBundle
     listKind: ProfileBundleList
     plural: profilebundles
+    shortNames:
+    - pb
     singular: profilebundle
   scope: Namespaced
   versions:

@@ -110,7 +110,7 @@ type ComplianceSuiteStatus struct {
 // cluster. These should help deployers achieve a certain compliance target.
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=compliancesuites,scope=Namespaced
+// +kubebuilder:resource:path=compliancesuites,scope=Namespaced,shortName=suites;suite
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Result",type="string",JSONPath=`.status.result`
 type ComplianceSuite struct {
