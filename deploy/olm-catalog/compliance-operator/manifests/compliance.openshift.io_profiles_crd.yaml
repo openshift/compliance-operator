@@ -9,6 +9,9 @@ spec:
     kind: Profile
     listKind: ProfileList
     plural: profiles
+    shortNames:
+    - profs
+    - prof
     singular: profile
   scope: Namespaced
   versions:
