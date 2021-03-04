@@ -8,6 +8,9 @@ spec:
     kind: ComplianceSuite
     listKind: ComplianceSuiteList
     plural: compliancesuites
+    shortNames:
+    - suites
+    - suite
     singular: compliancesuite
   scope: Namespaced
   versions:

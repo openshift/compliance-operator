@@ -49,7 +49,7 @@ type VariablePayload struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Variable describes a tunable in the XCCDF profile
-// +kubebuilder:resource:path=variables,scope=Namespaced
+// +kubebuilder:resource:path=variables,scope=Namespaced,shortName=var
 type Variable struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

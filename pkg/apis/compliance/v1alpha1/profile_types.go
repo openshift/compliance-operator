@@ -40,7 +40,7 @@ type ProfilePayload struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Profile is the Schema for the profiles API
-// +kubebuilder:resource:path=profiles,scope=Namespaced
+// +kubebuilder:resource:path=profiles,scope=Namespaced,shortName=profs;prof
 type Profile struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
