@@ -78,7 +78,7 @@ type ComplianceRemediationStatus struct {
 // cluster to fix the found issues.
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=complianceremediations,scope=Namespaced
+// +kubebuilder:resource:path=complianceremediations,scope=Namespaced,shortName=cr;remediations;remediation;rems
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=`.status.applicationState`
 type ComplianceRemediation struct {
 	metav1.TypeMeta   `json:",inline"`

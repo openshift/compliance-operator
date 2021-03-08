@@ -8,7 +8,7 @@ import (
 
 // ScanSetting is the Schema for the scansettings API
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=scansettings,scope=Namespaced
+// +kubebuilder:resource:path=scansettings,scope=Namespaced,shortName=ss
 type ScanSetting struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

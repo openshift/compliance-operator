@@ -8,6 +8,10 @@ spec:
     kind: ComplianceCheckResult
     listKind: ComplianceCheckResultList
     plural: compliancecheckresults
+    shortNames:
+    - ccr
+    - checkresults
+    - checkresult
     singular: compliancecheckresult
   scope: Namespaced
   versions:

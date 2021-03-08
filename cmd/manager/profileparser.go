@@ -104,6 +104,7 @@ func updateProfileBundleStatus(pcfg *profileparser.ParserConfig, pb *cmpv1alpha1
 		pbCopy := pb.DeepCopy()
 		pbCopy.Status.DataStreamStatus = cmpv1alpha1.DataStreamInvalid
 		pbCopy.Status.ErrorMessage = err.Error()
+		pbCopy.Status.SetConditionInvalid()
 		err = pcfg.Client.Status().Update(context.TODO(), pbCopy)
 		if err != nil {
 			log.Error(err, "Couldn't update ProfileBundle status")
@@ -113,6 +114,7 @@ func updateProfileBundleStatus(pcfg *profileparser.ParserConfig, pb *cmpv1alpha1
 		// Never update a fetched object, always just a copy
 		pbCopy := pb.DeepCopy()
 		pbCopy.Status.DataStreamStatus = cmpv1alpha1.DataStreamValid
+		pbCopy.Status.SetConditionReady()
 		err = pcfg.Client.Status().Update(context.TODO(), pbCopy)
 		if err != nil {
 			log.Error(err, "Couldn't update ProfileBundle status")
