@@ -263,7 +263,7 @@ func mapComplianceCheckResultStatus(result *xmldom.Node) (compv1alpha1.Complianc
 		// We map notapplicable to Skipped. Notapplicable means the rule was selected
 		// but does not apply to the current configuration (e.g. arch-specific),
 	case "notapplicable":
-		return compv1alpha1.CheckResultSkipped, nil
+		return compv1alpha1.CheckResultNotApplicable, nil
 	case "notselected":
 		// We map notselected to nothing, as the test wasn't included in the benchmark
 		return compv1alpha1.CheckResultNoResult, nil

@@ -122,9 +122,36 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 		return reconcile.Result{}, r.suiteDeleteHandler(suite, reqLogger)
 	}
 
+	// We only update the status to pending if there isn't a result already.
+	if suite.Status.Phase == "" || (suite.Status.Conditions.GetCondition("Ready") == nil && !suite.IsResultAvailable()) {
+		sCopy := suite.DeepCopy()
+		sCopy.Status.Phase = compv1alpha1.PhasePending
+		sCopy.Status.SetConditionPending()
+		// ScanStatuses was initially marked as required. We create it here
+		// for cases whent he CRD is cached.
+		if sCopy.Status.ScanStatuses == nil {
+			sCopy.Status.ScanStatuses = make([]compv1alpha1.ComplianceScanStatusWrapper, 0)
+		}
+		updateErr := r.client.Status().Update(context.TODO(), sCopy)
+		if updateErr != nil {
+			return reconcile.Result{}, fmt.Errorf("Error setting initial status for suite: %w", updateErr)
+		}
+		return reconcile.Result{}, nil
+	}
+
 	if isValid, errorMsg := r.validateSuite(suite); !isValid {
 		// return immediately and don't schedule nor reconcile scans
 		return reconcile.Result{}, r.issueValidationError(suite, errorMsg, reqLogger)
+	}
+
+	if suite.Status.Conditions.GetCondition("Processing") == nil {
+		sCopy := suite.DeepCopy()
+		sCopy.Status.SetConditionsProcessing()
+		updateErr := r.client.Status().Update(context.TODO(), sCopy)
+		if updateErr != nil {
+			return reconcile.Result{}, fmt.Errorf("Error setting processing status for suite: %w", updateErr)
+		}
+		return reconcile.Result{}, nil
 	}
 
 	suiteCopy := suite.DeepCopy()
@@ -141,6 +168,12 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 	}
 
 	if suiteCopy.IsResultAvailable() {
+		sCopy := suite.DeepCopy()
+		sCopy.Status.SetConditionReady()
+		updateErr := r.client.Status().Update(context.TODO(), sCopy)
+		if updateErr != nil {
+			return reconcile.Result{}, fmt.Errorf("Error setting ready status for suite: %w", updateErr)
+		}
 		return res, r.reconcileScanRerunnerCronJob(suiteCopy, reqLogger)
 	}
 
@@ -186,6 +219,7 @@ func (r *ReconcileComplianceSuite) issueValidationError(suite *compv1alpha1.Comp
 	suiteCopy.Status.Phase = compv1alpha1.PhaseDone
 	suiteCopy.Status.Result = compv1alpha1.ResultError
 	suiteCopy.Status.ErrorMessage = enhancedMessage
+	suiteCopy.Status.SetConditionInvalid()
 	if suiteCopy.Status.ScanStatuses == nil {
 		suiteCopy.Status.ScanStatuses = make([]compv1alpha1.ComplianceScanStatusWrapper, 0)
 	}
@@ -305,6 +339,8 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 	} else if suite.Status.Result == compv1alpha1.ResultInconsistent {
 		suite.Status.ErrorMessage = fmt.Sprintf("results were not consistent, search for compliancecheckresults labeled with %s",
 			compv1alpha1.ComplianceCheckInconsistentLabel)
+	} else {
+		suite.Status.SetConditionsProcessing()
 	}
 
 	logger.Info("Updating scan status", "ComplianceScan.Name", modScanStatus.Name, "ComplianceScan.Phase", modScanStatus.Phase)
