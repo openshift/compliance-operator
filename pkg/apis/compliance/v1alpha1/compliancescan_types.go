@@ -248,6 +248,7 @@ type StorageReference struct {
 // that apply to a certain nodeSelector, or the cluster itself.
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:path=compliancescans,scope=Namespaced,shortName=scans;scan
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Result",type="string",JSONPath=`.status.result`
 type ComplianceScan struct {

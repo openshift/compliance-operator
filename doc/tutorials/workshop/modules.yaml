@@ -1,0 +1,21 @@
+config:
+  google_tracking_id: ''
+modules:
+  index:
+    name: Workshop Overview
+    exit_sign: Start Workshop
+  exercises/01-compliance-operator.md:
+    name: Operator Introduction & Prerequisites
+  exercises/02-installation.md:
+    name: Installing the operator
+  exercises/03-creating-your-first-scan.md:
+    name: Creating your first compliance scan
+  exercises/04-remediations.md:
+    name: Working with remediations
+  exercises/05-tailoring-profiles.md:
+    name: Tailoring profiles
+  exercises/06-troubleshooting.md:
+    name: Troubleshooting
+  finish:
+    name: Workshop Summary
+    exit_sign: Finish Workshop

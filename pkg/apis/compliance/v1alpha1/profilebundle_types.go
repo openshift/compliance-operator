@@ -1,6 +1,8 @@
 package v1alpha1
 
 import (
+	conditions "github.com/operator-framework/operator-sdk/pkg/status"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -43,13 +45,17 @@ type ProfileBundleStatus struct {
 	DataStreamStatus DataStreamStatusType `json:"dataStreamStatus,omitempty"`
 	// If there's an error in the datastream, it'll be presented here
 	ErrorMessage string `json:"errorMessage,omitempty"`
+	// Defines the conditions for the ProfileBundle. Valid conditions are:
+	//  - Ready: Indicates if the ProfileBundle is Ready parsing or not.
+	// +optional
+	Conditions conditions.Conditions `json:"conditions,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ProfileBundle is the Schema for the profilebundles API
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=profilebundles,scope=Namespaced
+// +kubebuilder:resource:path=profilebundles,scope=Namespaced,shortName=pb
 // +kubebuilder:printcolumn:name="ContentImage",type="string",JSONPath=`.spec.contentImage`
 // +kubebuilder:printcolumn:name="ContentFile",type="string",JSONPath=`.spec.contentFile`
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=`.status.dataStreamStatus`
@@ -68,6 +74,33 @@ type ProfileBundleList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ProfileBundle `json:"items"`
+}
+
+func (s *ProfileBundleStatus) SetConditionPending() {
+	s.Conditions.SetCondition(conditions.Condition{
+		Type:    "Ready",
+		Status:  corev1.ConditionFalse,
+		Reason:  "Pending",
+		Message: "The profile bundle is waiting to be parsed",
+	})
+}
+
+func (s *ProfileBundleStatus) SetConditionInvalid() {
+	s.Conditions.SetCondition(conditions.Condition{
+		Type:    "Ready",
+		Status:  corev1.ConditionFalse,
+		Reason:  "Invalid",
+		Message: "Couldn't parse profile bundle",
+	})
+}
+
+func (s *ProfileBundleStatus) SetConditionReady() {
+	s.Conditions.SetCondition(conditions.Condition{
+		Type:    "Ready",
+		Status:  corev1.ConditionTrue,
+		Reason:  "Valid",
+		Message: "Profile bundle successfully parsed",
+	})
 }
 
 func init() {

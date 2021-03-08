@@ -9,6 +9,9 @@ spec:
     kind: TailoredProfile
     listKind: TailoredProfileList
     plural: tailoredprofiles
+    shortNames:
+    - tp
+    - tprof
     singular: tailoredprofile
   scope: Namespaced
   versions:
