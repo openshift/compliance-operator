@@ -611,5 +611,5 @@ func suiteNeedsUpdate(have, found *compliancev1alpha1.ComplianceSuite) bool {
 }
 
 func scanSettingBindingStatusNeedsUpdate(ssb *compliancev1alpha1.ScanSettingBinding) bool {
-	return ssb.Status.Conditions.GetCondition("Ready") == nil || ssb.Status.OutputRef.Name == ""
+	return ssb.Status.Conditions.GetCondition("Ready") == nil || ssb.Status.OutputRef == nil || ssb.Status.OutputRef.Name == ""
 }
