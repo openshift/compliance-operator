@@ -501,12 +501,12 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 		}
 	}
 
-	if suite.ApplyRemediationsAnnotationSet() || suite.RemoveOutdated() {
+	if suite.ApplyRemediationsAnnotationSet() || suite.RemoveOutdatedAnnotationSet() {
 		suiteCopy := suite.DeepCopy()
 		if suite.ApplyRemediationsAnnotationSet() {
 			delete(suiteCopy.Annotations, compv1alpha1.ApplyRemediationsAnnotation)
 		}
-		if suite.RemoveOutdated() {
+		if suite.RemoveOutdatedAnnotationSet() {
 			delete(suiteCopy.Annotations, compv1alpha1.RemoveOutdatedAnnotation)
 		}
 		updateErr := r.client.Update(context.TODO(), suiteCopy)
@@ -600,5 +600,5 @@ func (r *ReconcileComplianceSuite) getAffectedMcfgPool(scan *compv1alpha1.Compli
 }
 
 func remediationNeedsOutdatedRemoval(rem *compv1alpha1.ComplianceRemediation, suite *compv1alpha1.ComplianceSuite) bool {
-	return suite.RemoveOutdated() && rem.Status.ApplicationState == compv1alpha1.RemediationOutdated
+	return suite.ShouldRemoveOutdated() && rem.Status.ApplicationState == compv1alpha1.RemediationOutdated
 }
