@@ -77,6 +77,9 @@ type ComplianceScanStatusWrapper struct {
 type ComplianceSuiteSettings struct {
 	// Defines whether or not the remediations should be applied automatically
 	AutoApplyRemediations bool `json:"autoApplyRemediations,omitempty"`
+	// Defines whether or not the remediations should be updated automatically.
+	// This is done by deleting the "outdated" object from the remediation.
+	AutoUpdateRemediations bool `json:"autoUpdateRemediations,omitempty"`
 	// Defines a schedule for the scans to run. This is in cronjob format.
 	// Note the scan will still be triggered immediately, and the scheduled
 	// scans will start running only after the initial results are ready.
@@ -202,6 +205,13 @@ func (s *ComplianceSuite) ShouldApplyRemediations() bool {
 	return s.ApplyRemediationsAnnotationSet()
 }
 
+func (s *ComplianceSuite) ShouldRemoveOutdated() bool {
+	if s.Spec.AutoUpdateRemediations {
+		return true
+	}
+	return s.RemoveOutdatedAnnotationSet()
+}
+
 func (s *ComplianceSuite) ApplyRemediationsAnnotationSet() bool {
 	annotations := s.GetAnnotations()
 	if annotations == nil {
@@ -211,7 +221,7 @@ func (s *ComplianceSuite) ApplyRemediationsAnnotationSet() bool {
 	return ok
 }
 
-func (s *ComplianceSuite) RemoveOutdated() bool {
+func (s *ComplianceSuite) RemoveOutdatedAnnotationSet() bool {
 	annotations := s.GetAnnotations()
 	if annotations == nil {
 		return false
