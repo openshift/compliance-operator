@@ -59,7 +59,11 @@ var (
 		"rhcos4",
 		"ocp4",
 	}
-	defaultScanSettingsName = "default"
+)
+
+const (
+	defaultScanSettingsName          = "default"
+	defaultAutoApplyScanSettingsName = "default-auto-apply"
 	// Run scan every day at 1am
 	defaultScanSettingsSchedule = "0 1 * * *"
 )
@@ -281,7 +285,7 @@ func ensureSupportedProfileBundle(ctx context.Context, crclient client.Client, p
 func ensureDefaultScanSettings(ctx context.Context, crclient client.Client, namespaceList []string) error {
 	var lastErr error
 	for _, ns := range namespaceList {
-		pb := &compv1alpha1.ScanSetting{
+		d := &compv1alpha1.ScanSetting{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      defaultScanSettingsName,
 				Namespace: ns,
@@ -294,9 +298,29 @@ func ensureDefaultScanSettings(ctx context.Context, crclient client.Client, name
 				"master",
 			},
 		}
-		err := crclient.Create(ctx, pb)
-		if !k8serrors.IsAlreadyExists(err) {
-			lastErr = err
+		derr := crclient.Create(ctx, d)
+		if !k8serrors.IsAlreadyExists(derr) {
+			lastErr = derr
+		}
+
+		a := &compv1alpha1.ScanSetting{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      defaultAutoApplyScanSettingsName,
+				Namespace: ns,
+			},
+			ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+				AutoApplyRemediations:  true,
+				AutoUpdateRemediations: true,
+				Schedule:               defaultScanSettingsSchedule,
+			},
+			Roles: []string{
+				"worker",
+				"master",
+			},
+		}
+		aerr := crclient.Create(ctx, a)
+		if !k8serrors.IsAlreadyExists(aerr) {
+			lastErr = aerr
 		}
 	}
 	return lastErr
