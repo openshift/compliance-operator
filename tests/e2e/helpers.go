@@ -2075,20 +2075,23 @@ func logContainerOutput(t *testing.T, f *framework.Framework, namespace, name st
 
 func reRunScan(t *testing.T, f *framework.Framework, scanName, namespace string) error {
 	scanKey := types.NamespacedName{Name: scanName, Namespace: namespace}
-	foundScan := &compv1alpha1.ComplianceScan{}
-	err := f.Client.Get(goctx.TODO(), scanKey, foundScan)
-	if err != nil {
-		return err
-	}
+	err := backoff.Retry(func() error {
+		foundScan := &compv1alpha1.ComplianceScan{}
+		geterr := f.Client.Get(goctx.TODO(), scanKey, foundScan)
+		if geterr != nil {
+			return geterr
+		}
 
-	scapCopy := foundScan.DeepCopy()
-	if scapCopy.Annotations == nil {
-		scapCopy.Annotations = make(map[string]string)
-	}
-	scapCopy.Annotations[compv1alpha1.ComplianceScanRescanAnnotation] = ""
-	err = f.Client.Update(goctx.TODO(), scapCopy)
+		scapCopy := foundScan.DeepCopy()
+		if scapCopy.Annotations == nil {
+			scapCopy.Annotations = make(map[string]string)
+		}
+		scapCopy.Annotations[compv1alpha1.ComplianceScanRescanAnnotation] = ""
+		return f.Client.Update(goctx.TODO(), scapCopy)
+	}, defaultBackoff)
+
 	if err != nil {
-		return err
+		return fmt.Errorf("couldn't update scan to re-launch it: %w", err)
 	}
 
 	E2ELogf(t, "Scan re-launched")
