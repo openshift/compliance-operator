@@ -28,6 +28,11 @@ spec:
             description: Defines whether or not the remediations should be applied
               automatically
             type: boolean
+          autoUpdateRemediations:
+            description: Defines whether or not the remediations should be updated
+              automatically. This is done by deleting the "outdated" object from the
+              remediation.
+            type: boolean
           debug:
             description: Enable debug logging of workloads and OpenSCAP
             type: boolean

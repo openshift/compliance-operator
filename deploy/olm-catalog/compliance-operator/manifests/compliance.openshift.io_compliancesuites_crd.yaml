@@ -48,6 +48,11 @@ spec:
                 description: Defines whether or not the remediations should be applied
                   automatically
                 type: boolean
+              autoUpdateRemediations:
+                description: Defines whether or not the remediations should be updated
+                  automatically. This is done by deleting the "outdated" object from
+                  the remediation.
+                type: boolean
               scans:
                 description: Contains a list of the scans to execute on the cluster
                 items:
