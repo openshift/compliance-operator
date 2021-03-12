@@ -737,6 +737,14 @@ func newStandardParser() *referenceParser {
 	if err != nil {
 		log.Error(err, "Could not register NIST-800-53 reference parser") // not much we can do here..
 	}
+	cocperr := p.registerStandard("CIS-OCP", `^https://www.cisecurity.org/benchmark/kubernetes/$`)
+	if cocperr != nil {
+		log.Error(cocperr, "Could not register CIS OpenShift reference parser") // not much we can do here..
+	}
+	crherr := p.registerStandard("CIS-RHEL", `^https://www.cisecurity.org/benchmark/red_hat_linux/$`)
+	if crherr != nil {
+		log.Error(crherr, "Could not register CIS Red Hat Linux reference parser") // not much we can do here..
+	}
 
 	p.registerFormatter(profileOperatorFormatter)
 	p.registerFormatter(rhacmFormatter)
