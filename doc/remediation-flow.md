@@ -167,7 +167,7 @@ asses compliance again.
 
 For the node scans, we could re-run the scan when a `MachineConfigPool` finishes
 updating, e.g. the pool is running the config rendered after our `MachineConfig`
-was updates and its state is `Updated: True`. In more detail, the `compliance-controller`
+was updated and its state is `Updated: True`. In more detail, the `compliance-controller`
 would watch for the `MachineConfigPool` and reset the scan status when to `pending`
 then the `MachineConfigPool` is updating and then launch the scan again then the
 pool finishes updating.
