@@ -657,9 +657,11 @@ provides a list of suites, the setting object provides settings for the suites a
 and places the node-level scans onto node roles. A single `ScanSetting` object can also
 be reused for multiple `ScanSettingBinding` objects.
 
-The following attributes can be set in the `ScanSettingBinding`:
+The following attributes can be set in the `ScanSetting:
 * **autoApplyRemediations**: Specifies if any remediations found from the
   scan(s) should be applied automatically.
+* **autoUpdateRemediations**: Defines whether or not the remediations
+  should be updated automatically in case the content updates.
 * **schedule**: Defines how often should the scan(s) be run in cron format.
 * **rawResultStorage.size**: Specifies the size of storage that should be asked
   for in order for the scan to store the raw results. (Defaults to 1Gi)
