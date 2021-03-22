@@ -498,7 +498,7 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 									corev1.ResourceCPU:    resource.MustParse("20m"),
 								},
 								Limits: corev1.ResourceList{
-									corev1.ResourceMemory: resource.MustParse("2Mi"),
+									corev1.ResourceMemory: resource.MustParse("15Mi"),
 									corev1.ResourceCPU:    resource.MustParse("50m"),
 								},
 							},
