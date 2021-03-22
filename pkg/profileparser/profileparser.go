@@ -11,9 +11,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
+	"github.com/antchfx/xmlquery"
 	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/xccdf"
-	"github.com/subchen/go-xmldom"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
@@ -53,7 +53,7 @@ func GetPrefixedName(pbName, objName string) string {
 	return pbName + "-" + objName
 }
 
-func ParseBundle(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, pcfg *ParserConfig) error {
+func ParseBundle(contentDom *xmlquery.Node, pb *cmpv1alpha1.ProfileBundle, pcfg *ParserConfig) error {
 	// One go routine per type
 	errors := make(chan error)
 	done := make(chan string)
@@ -264,13 +264,12 @@ func deleteIfNotCurrentDigest(client runtimeclient.Client, imageDigest string, i
 	return client.Delete(context.TODO(), item)
 }
 
-func getVariableType(varNode *xmldom.Node) cmpv1alpha1.VariableType {
-	typeAttr := varNode.GetAttribute("type")
-	if typeAttr == nil {
-		return cmpv1alpha1.VarTypeString
-	}
+func getVariableType(varNode *xmlquery.Node) cmpv1alpha1.VariableType {
+	typeAttr := varNode.SelectAttr("type")
 
-	switch typeAttr.Value {
+	switch typeAttr {
+	case "":
+		return cmpv1alpha1.VarTypeString
 	case "string":
 		return cmpv1alpha1.VarTypeString
 	case "number":
@@ -282,8 +281,8 @@ func getVariableType(varNode *xmldom.Node) cmpv1alpha1.VariableType {
 	return cmpv1alpha1.VarTypeString
 }
 
-func ParseProfilesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, nonce string, action func(p *cmpv1alpha1.Profile) error) error {
-	benchmarks := contentDom.Root.Query("//Benchmark")
+func ParseProfilesAndDo(contentDom *xmlquery.Node, pb *cmpv1alpha1.ProfileBundle, nonce string, action func(p *cmpv1alpha1.Profile) error) error {
+	benchmarks := xmlquery.Find(contentDom, "//xccdf-1.2:Benchmark")
 	for _, bench := range benchmarks {
 		productType, productName := getProductTypeAndName(bench, cmpv1alpha1.ScanTypeNode, "")
 		if err := parseProfileFromNode(bench, pb, productType, productName, nonce, action); err != nil {
@@ -294,19 +293,19 @@ func ParseProfilesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBund
 	return nil
 }
 
-func parseProfileFromNode(profileRoot *xmldom.Node, pb *cmpv1alpha1.ProfileBundle, defType cmpv1alpha1.ComplianceScanType, defName, nonce string, action func(p *cmpv1alpha1.Profile) error) error {
-	profileObjs := profileRoot.Query("//Profile")
+func parseProfileFromNode(profileRoot *xmlquery.Node, pb *cmpv1alpha1.ProfileBundle, defType cmpv1alpha1.ComplianceScanType, defName, nonce string, action func(p *cmpv1alpha1.Profile) error) error {
+	profileObjs := xmlquery.Find(profileRoot, "//xccdf-1.2:Profile")
 	for _, profileObj := range profileObjs {
 
-		id := profileObj.GetAttributeValue("id")
+		id := profileObj.SelectAttr("id")
 		if id == "" {
 			return LogAndReturnError("no id in profile")
 		}
-		title := profileObj.FindOneByName("title")
+		title := profileObj.SelectElement("xccdf-1.2:title")
 		if title == nil {
 			return LogAndReturnError("no title in profile")
 		}
-		description := profileObj.FindOneByName("description")
+		description := profileObj.SelectElement("xccdf-1.2:description")
 		if description == nil {
 			return LogAndReturnError("no description in profile")
 		}
@@ -316,15 +315,15 @@ func parseProfileFromNode(profileRoot *xmldom.Node, pb *cmpv1alpha1.ProfileBundl
 		productType, productName := getProductTypeAndName(profileObj, defType, defName)
 		log.Info("Platform info", "type", productType, "name", productName)
 
-		ruleObjs := profileObj.FindByName("select")
+		ruleObjs := profileObj.SelectElements("xccdf-1.2:select")
 		selectedrules := []cmpv1alpha1.ProfileRule{}
 		for _, ruleObj := range ruleObjs {
-			idref := ruleObj.GetAttributeValue("idref")
+			idref := ruleObj.SelectAttr("idref")
 			if idref == "" {
 				log.Info("no idref in rule")
 				continue
 			}
-			selected := ruleObj.GetAttributeValue("selected")
+			selected := ruleObj.SelectAttr("selected")
 			if selected == "true" {
 				ruleName := GetPrefixedName(pb.Name, xccdf.GetRuleNameFromID(idref))
 				selectedrules = append(selectedrules, cmpv1alpha1.NewProfileRule(ruleName))
@@ -332,9 +331,9 @@ func parseProfileFromNode(profileRoot *xmldom.Node, pb *cmpv1alpha1.ProfileBundl
 		}
 
 		selectedvalues := []cmpv1alpha1.ProfileValue{}
-		valueObjs := profileObj.FindByName("set-value")
+		valueObjs := profileObj.SelectElements("xccdf-1.2:set-value")
 		for _, valueObj := range valueObjs {
-			idref := valueObj.GetAttributeValue("idref")
+			idref := valueObj.SelectAttr("idref")
 			if idref == "" {
 				log.Info("no idref in rule")
 				continue
@@ -357,8 +356,8 @@ func parseProfileFromNode(profileRoot *xmldom.Node, pb *cmpv1alpha1.ProfileBundl
 			},
 			ProfilePayload: cmpv1alpha1.ProfilePayload{
 				ID:          id,
-				Title:       title.Text,
-				Description: description.Text,
+				Title:       title.InnerText(),
+				Description: description.OutputXML(false),
 				Rules:       selectedrules,
 				Values:      selectedvalues,
 			},
@@ -376,15 +375,13 @@ func parseProfileFromNode(profileRoot *xmldom.Node, pb *cmpv1alpha1.ProfileBundl
 	return nil
 }
 
-func getProductTypeAndName(root *xmldom.Node, defaultType cmpv1alpha1.ComplianceScanType, defaultName string) (cmpv1alpha1.ComplianceScanType, string) {
-	// Loop ourselves b/c we are only interested in direct children
-	for _, child := range root.Children {
-		if child.Name == "platform" {
-			return parseProductTypeAndName(child.GetAttributeValue("idref"), defaultType, defaultName)
-		}
-	}
+func getProductTypeAndName(root *xmlquery.Node, defaultType cmpv1alpha1.ComplianceScanType, defaultName string) (cmpv1alpha1.ComplianceScanType, string) {
+	p := root.SelectElement("xccdf-1.2:platform")
 
-	return defaultType, defaultName
+	if p == nil {
+		return defaultType, defaultName
+	}
+	return parseProductTypeAndName(p.SelectAttr("idref"), defaultType, defaultName)
 }
 
 func parseProductTypeAndName(idref string, defaultType cmpv1alpha1.ComplianceScanType, defaultName string) (cmpv1alpha1.ComplianceScanType, string) {
@@ -425,24 +422,24 @@ func parseProductTypeAndName(idref string, defaultType cmpv1alpha1.ComplianceSca
 	return productType, productName
 }
 
-func ParseVariablesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBundle, nonce string, action func(v *cmpv1alpha1.Variable) error) error {
+func ParseVariablesAndDo(contentDom *xmlquery.Node, pb *cmpv1alpha1.ProfileBundle, nonce string, action func(v *cmpv1alpha1.Variable) error) error {
 	var wg sync.WaitGroup
-	processVar := func(vchan <-chan *xmldom.Node, errs chan error) {
+	processVar := func(vchan <-chan *xmlquery.Node, errs chan error) {
 		for varObj := range vchan {
-			hidden := varObj.GetAttributeValue("hidden")
+			hidden := varObj.SelectAttr("hidden")
 			if hidden == "true" {
 				// this is typically used for functions
 				continue
 			}
 
-			id := varObj.GetAttributeValue("id")
+			id := varObj.SelectAttr("id")
 			log.Info("Found variable", "id", id)
 
 			if id == "" {
 				errs <- LogAndReturnError("no id in variable")
 				break
 			}
-			title := varObj.FindOneByName("title")
+			title := varObj.SelectElement("xccdf-1.2:title")
 			if title == nil {
 				errs <- LogAndReturnError("no title in variable")
 				break
@@ -459,18 +456,13 @@ func ParseVariablesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBun
 				},
 				VariablePayload: cmpv1alpha1.VariablePayload{
 					ID:    id,
-					Title: title.Text,
+					Title: title.InnerText(),
 				},
 			}
 
-			description := varObj.FindOneByName("description")
+			description := varObj.SelectElement("xccdf-1.2:description")
 			if description != nil {
-				desc, err := xccdf.GetDescriptionFromXMLString(description.XML())
-				if err != nil {
-					log.Error(err, "couldn't parse a rule's description")
-					desc = ""
-				}
-				v.Description = desc
+				v.Description = description.OutputXML(false)
 			}
 
 			v.Type = getVariableType(varObj)
@@ -495,10 +487,10 @@ func ParseVariablesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBun
 		wg.Done()
 	}
 
-	varchan := make(chan *xmldom.Node)
+	varchan := make(chan *xmlquery.Node)
 	errchan := make(chan error)
 	waitchan := make(chan struct{})
-	varObjs := contentDom.Root.Query("//Value")
+	varObjs := contentDom.SelectElements("//xccdf-1.2:Value")
 	nworkers := 5
 	wg.Add(5)
 	for i := 0; i < nworkers; i++ {
@@ -522,14 +514,14 @@ func ParseVariablesAndDo(contentDom *xmldom.Document, pb *cmpv1alpha1.ProfileBun
 	}
 }
 
-func parseVarValues(varNode *xmldom.Node, v *cmpv1alpha1.Variable) error {
-	for _, val := range varNode.FindByName("value") {
-		selector := val.GetAttribute("selector")
-		if selector != nil {
+func parseVarValues(varNode *xmlquery.Node, v *cmpv1alpha1.Variable) error {
+	for _, val := range varNode.SelectElements("//xccdf-1.2:value") {
+		selector := val.SelectAttr("selector")
+		if selector != "" {
 			// this is an enum choice
 			v.Selections = append(v.Selections, cmpv1alpha1.ValueSelection{
-				Description: selector.Value,
-				Value:       val.Text,
+				Description: selector,
+				Value:       val.OutputXML(false),
 			})
 			continue
 		}
@@ -538,54 +530,54 @@ func parseVarValues(varNode *xmldom.Node, v *cmpv1alpha1.Variable) error {
 		if v.Value != "" {
 			return fmt.Errorf("attempting to set multiple values for variable %s; already had %s", v.ID, v.Value)
 		}
-		v.Value = val.Text
+		v.Value = val.OutputXML(false)
 	}
 
 	return nil
 }
 
-func ParseRulesAndDo(contentDom *xmldom.Document, stdParser *referenceParser, pb *cmpv1alpha1.ProfileBundle, nonce string, action func(p *cmpv1alpha1.Rule) error) error {
+func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *cmpv1alpha1.ProfileBundle, nonce string, action func(p *cmpv1alpha1.Rule) error) error {
 	var wg sync.WaitGroup
-	processRule := func(rchan <-chan *xmldom.Node, errs chan error) {
+	processRule := func(rchan <-chan *xmlquery.Node, errs chan error) {
 		for ruleObj := range rchan {
-			id := ruleObj.GetAttributeValue("id")
+			id := ruleObj.SelectAttr("id")
 			if id == "" {
 				errs <- LogAndReturnError("no id in rule")
 				break
 			}
-			title := ruleObj.FindOneByName("title")
+			title := ruleObj.SelectElement("xccdf-1.2:title")
 			if title == nil {
 				errs <- LogAndReturnError("no title in rule")
 				break
 			}
 			log.Info("Found rule", "id", id)
 
-			description := ruleObj.FindOneByName("description")
-			rationale := ruleObj.FindOneByName("rationale")
-			warning := ruleObj.FindOneByName("warning")
-			severity := ruleObj.GetAttributeValue("severity")
+			description := ruleObj.SelectElement("xccdf-1.2:description")
+			rationale := ruleObj.SelectElement("xccdf-1.2:rationale")
+			warning := ruleObj.SelectElement("xccdf-1.2:warning")
+			severity := ruleObj.SelectAttr("severity")
 
 			fixes := []cmpv1alpha1.FixDefinition{}
 			foundPlatformMap := make(map[string]bool)
-			fixNodeObjs := ruleObj.FindByName("fix")
+			fixNodeObjs := ruleObj.SelectElements("xccdf-1.2:fix")
 			for _, fixNodeObj := range fixNodeObjs {
 				if !isRelevantFix(fixNodeObj) {
 					continue
 				}
-				platform := fixNodeObj.GetAttributeValue("platform")
+				platform := fixNodeObj.SelectAttr("platform")
 				if foundPlatformMap[platform] {
 					// We already have a remediation for this platform
 					continue
 				}
 
-				rawFixReader := strings.NewReader(fixNodeObj.Text)
+				rawFixReader := strings.NewReader(fixNodeObj.InnerText())
 				fixKubeObj, err := readObjFromYAML(rawFixReader)
 				if err != nil {
 					log.Info("Couldn't parse Kubernetes object from fix")
 					continue
 				}
 
-				disruption := fixNodeObj.GetAttributeValue("disruption")
+				disruption := fixNodeObj.SelectAttr("disruption")
 
 				newFix := cmpv1alpha1.FixDefinition{
 					Disruption: disruption,
@@ -615,33 +607,18 @@ func ParseRulesAndDo(contentDom *xmldom.Document, stdParser *referenceParser, pb
 				},
 				RulePayload: cmpv1alpha1.RulePayload{
 					ID:             id,
-					Title:          title.Text,
+					Title:          title.InnerText(),
 					AvailableFixes: nil,
 				},
 			}
 			if description != nil {
-				desc, err := xccdf.GetDescriptionFromXMLString(description.XML())
-				if err != nil {
-					log.Error(err, "couldn't parse a rule's description")
-					desc = ""
-				}
-				p.Description = desc
+				p.Description = description.OutputXML(false)
 			}
 			if rationale != nil {
-				rat, err := xccdf.GetRationaleFromXMLString(rationale.XML())
-				if err != nil {
-					log.Error(err, "couldn't parse a rule's rationale")
-					rat = ""
-				}
-				p.Rationale = rat
+				p.Rationale = rationale.OutputXML(false)
 			}
 			if warning != nil {
-				warn, err := xccdf.GetWarningFromXMLString(warning.XML())
-				if err != nil {
-					log.Error(err, "couldn't parse a rule's warning")
-					warn = ""
-				}
-				p.Warning = warn
+				p.Warning = warning.OutputXML(false)
 			}
 			if severity != "" {
 				p.Severity = severity
@@ -662,10 +639,10 @@ func ParseRulesAndDo(contentDom *xmldom.Document, stdParser *referenceParser, pb
 		wg.Done()
 	}
 
-	rulechan := make(chan *xmldom.Node)
+	rulechan := make(chan *xmlquery.Node)
 	errchan := make(chan error)
 	waitchan := make(chan struct{})
-	ruleObjs := contentDom.Root.Query("//Rule")
+	ruleObjs := xmlquery.Find(contentDom, "//xccdf-1.2:Rule")
 	nworkers := 5
 	wg.Add(5)
 	for i := 0; i < nworkers; i++ {
@@ -698,11 +675,11 @@ func readObjFromYAML(r io.Reader) (*unstructured.Unstructured, error) {
 	return obj, err
 }
 
-func isRelevantFix(fix *xmldom.Node) bool {
-	if fix.GetAttributeValue("system") == machineConfigFixType {
+func isRelevantFix(fix *xmlquery.Node) bool {
+	if fix.SelectAttr("system") == machineConfigFixType {
 		return true
 	}
-	if fix.GetAttributeValue("system") == kubernetesFixType {
+	if fix.SelectAttr("system") == kubernetesFixType {
 		return true
 	}
 	return false
@@ -770,11 +747,11 @@ func (p *referenceParser) registerFormatter(formatter annotationsFormatterFn) {
 	p.annotationFormatters = append(p.annotationFormatters, formatter)
 }
 
-func (p *referenceParser) parseXmlNode(ruleObj *xmldom.Node) (map[string]string, error) {
+func (p *referenceParser) parseXmlNode(ruleObj *xmlquery.Node) (map[string]string, error) {
 	ruleAnnotations := make(map[string]string)
 
-	for _, refEl := range ruleObj.FindByName("reference") {
-		href := refEl.GetAttributeValue("href")
+	for _, refEl := range ruleObj.SelectElements("xccdf-1.2:reference") {
+		href := refEl.SelectAttr("href")
 		if href == "" {
 			continue
 		}
@@ -785,7 +762,7 @@ func (p *referenceParser) parseXmlNode(ruleObj *xmldom.Node) (map[string]string,
 			}
 
 			for _, formatter := range p.annotationFormatters {
-				formatter(ruleAnnotations, std.Name, refEl.Text)
+				formatter(ruleAnnotations, std.Name, refEl.InnerText())
 			}
 		}
 	}

@@ -8,9 +8,9 @@ import (
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+	"github.com/antchfx/xmlquery"
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
-	"github.com/subchen/go-xmldom"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -42,11 +42,6 @@ func defineProfileParserFlags(cmd *cobra.Command) {
 	// Add flags registered by imported packages (e.g. glog and
 	// controller-runtime)
 	flags.AddGoFlagSet(flag.CommandLine)
-}
-
-// XMLDocument is a wrapper that keeps the interface XML-parser-agnostic
-type XMLDocument struct {
-	*xmldom.Document
 }
 
 func newParserConfig(cmd *cobra.Command) *profileparser.ParserConfig {
@@ -140,7 +135,7 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 	bufContentFile := bufio.NewReader(contentFile)
-	contentDom, err := xmldom.Parse(bufContentFile)
+	contentDom, err := xmlquery.Parse(bufContentFile)
 	if err != nil {
 		log.Error(err, "Couldn't read the content XML")
 		updateProfileBundleStatus(pcfg, pb, fmt.Errorf("Couldn't read content XML: %s", err))
