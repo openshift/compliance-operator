@@ -282,7 +282,7 @@ You can get all the check results from a suite by using the label
 For instance:
 
 ```
-oc get compliancesuites -l compliance.openshift.io/suite=example-compliancesuite
+oc get compliancecheckresults -l compliance.openshift.io/suite=example-compliancesuite
 ```
 
 ### The `ComplianceRemediation` object
