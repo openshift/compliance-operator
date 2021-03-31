@@ -423,3 +423,6 @@ One may use it as follows
 ```
 oc annotate compliancesuites/$SUITE_NAME compliance.openshift.io/remove-outdated=
 ```
+
+Alternatively, you can set the `autoUpdateRemediations` flag in a `ScanSetting`
+or a `ComplianceSuite` object to update the remediations automatically.
