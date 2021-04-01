@@ -2,12 +2,15 @@ package profileparser
 
 import (
 	"context"
+	"os"
 
+	"github.com/antchfx/xmlquery"
+	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	gomegatypes "github.com/onsi/gomega/types"
 	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/subchen/go-xmldom"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -96,7 +99,7 @@ func doesObjectExist(cli runtimeclient.Client, kind, namespace, name string) (er
 
 type parserInput struct {
 	pcfg       *ParserConfig
-	contentDom *xmldom.Document
+	contentDom *xmlquery.Node
 	pb         *cmpv1alpha1.ProfileBundle
 }
 
@@ -120,8 +123,8 @@ func newParserInput(name, namespace, contentImage, dsPath string, client runtime
 		Scheme:           scheme,
 	}
 
-	pi.contentDom, _ = xmldom.ParseFile(pi.pcfg.DataStreamPath)
-
+	f, _ := os.Open(pi.pcfg.DataStreamPath)
+	pi.contentDom, _ = xmlquery.Parse(f)
 	return pi
 }
 
@@ -579,6 +582,9 @@ var _ = Describe("Testing parse rules", func() {
 
 		stdParser := newStandardParser()
 		nonce := names.SimpleNameGenerator.GenerateName("pb-")
+		zaplog, _ := zap.NewDevelopment()
+		log = zapr.NewLogger(zaplog)
+
 		err := ParseRulesAndDo(pInput.contentDom, stdParser, pInput.pb, nonce, ruleAdder)
 		Expect(err).To(BeNil())
 

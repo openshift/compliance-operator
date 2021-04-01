@@ -191,6 +191,11 @@ NAME            PHASE     RESULT
 nist-moderate   RUNNING   NOT-AVAILABLE
 ```
 
+You can also make use of conditions to wait for a suite to produce results:
+```
+$ oc wait --for=condition=ready compliancesuite cis-compliancesuite
+```
+
 This subsequently creates the `ComplianceScan` objects for the suite.
 The `ComplianceScan` then creates scan pods that run on each node in
 the cluster. The scan pods execute `openscap-chroot` on every node and

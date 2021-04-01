@@ -1,8 +1,10 @@
 package xccdf
 
 import (
+	"strings"
+
+	"github.com/antchfx/xmlquery"
 	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/subchen/go-xmldom"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/ginkgo"
@@ -15,17 +17,17 @@ type tailoredValue struct {
 }
 
 func findVariablesInTailoring(tailoring string) ([]tailoredValue, error) {
-	tailoringDom, err := xmldom.ParseXML(tailoring)
+	tailoringDom, err := xmlquery.Parse(strings.NewReader(tailoring))
 	if err != nil {
 		return nil, err
 	}
 
 	tailoredVars := []tailoredValue{}
-	tailoringVarNodes := tailoringDom.Root.Query("//set-value")
+	tailoringVarNodes := tailoringDom.SelectElements("//xccdf-1.2:set-value")
 	for _, tVarNode := range tailoringVarNodes {
 		tailoredVars = append(tailoredVars, tailoredValue{
-			ID:    tVarNode.GetAttributeValue("idref"),
-			Value: tVarNode.Text,
+			ID:    tVarNode.SelectAttr("idref"),
+			Value: tVarNode.InnerText(),
 		})
 	}
 
