@@ -4,6 +4,8 @@ go 1.14
 
 require (
 	github.com/ajeddeloh/go-json v0.0.0-20200220154158-5ae607161559 // indirect
+	github.com/antchfx/xmlquery v1.3.5
+	github.com/antchfx/xpath v1.1.11 // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2
 	github.com/clarketm/json v1.14.1
 	github.com/coreos/ignition v0.35.0

@@ -1,17 +1,23 @@
-xpath
+XPath
 ====
 [![GoDoc](https://godoc.org/github.com/antchfx/xpath?status.svg)](https://godoc.org/github.com/antchfx/xpath)
 [![Coverage Status](https://coveralls.io/repos/github/antchfx/xpath/badge.svg?branch=master)](https://coveralls.io/github/antchfx/xpath?branch=master)
 [![Build Status](https://travis-ci.org/antchfx/xpath.svg?branch=master)](https://travis-ci.org/antchfx/xpath)
 [![Go Report Card](https://goreportcard.com/badge/github.com/antchfx/xpath)](https://goreportcard.com/report/github.com/antchfx/xpath)
 
-xpath is XPath package for Golang, support most of XPath features(syntax).
+XPath is Go package provides selecting nodes from XML, HTML or other documents using XPath expression.
 
-xquery
+Implementation
 ===
-[xquery](https://github.com/antchfx/xquery) package lets you extract data from HTML/XML documents using XPath, written in golang.
 
-### Features
+- [htmlquery](https://github.com/antchfx/htmlquery) - an XPath query package for HTML document
+
+- [xmlquery](https://github.com/antchfx/xmlquery) - an XPath query package for XML document.
+
+- [jsonquery](https://github.com/antchfx/jsonquery) - an XPath query package for JSON document
+
+Supported Features
+===
 
 #### The basic XPath patterns.
 
@@ -47,7 +53,10 @@ xquery
 
 - `//b` : Returns elements in the entire document matching b.
 
-- `a|b` : All nodes matching a or b.
+- `a|b` : All nodes matching a or b, union operation(not boolean or).
+
+- `(a, b, c)` : Evaluates each of its operands and concatenates the resulting sequences, in order, into a single result sequence
+
 
 #### Node Axes 
 
@@ -99,22 +108,66 @@ xquery
     * a div b	Divide
     * a mod b	Floating point mod, like Java.
 
+- `a or b` : Boolean `or` operation.
+
+- `a and b` : Boolean `and` operation.
+
 - `(expr)` : Parenthesized expressions.
 
-- `fun(arg1, ..., argn)` : Function calls.
+- `fun(arg1, ..., argn)` : Function calls:
 
-    * position()
-    * last()
-    * count(node-set)
-    * name()
-    * starts-with(string,string)
-    * normalize-space(string)
-    * substring(string,start[,length])
-    * not(expression)
-    * string-length([string])
-    * contains(string,string)
-    * come more
+| Function | Supported |
+| --- | --- |
+`boolean()`| ✓ |
+`ceiling()`| ✓ |
+`choose()`| ✗ |
+`concat()`| ✓ |
+`contains()`| ✓ |
+`count()`| ✓ |
+`current()`| ✗ |
+`document()`| ✗ |
+`element-available()`| ✗ |
+`ends-with()`| ✓ |
+`false()`| ✓ |
+`floor()`| ✓ |
+`format-number()`| ✗ |
+`function-available()`| ✗ |
+`generate-id()`| ✗ |
+`id()`| ✗ |
+`key()`| ✗ |
+`lang()`| ✗ |
+`last()`| ✓ |
+`local-name()`| ✓ |
+`matches()`| ✓ |
+`name()`| ✓ |
+`namespace-uri()`| ✓ |
+`normalize-space()`| ✓ |
+`not()`| ✓ |
+`number()`| ✓ |
+`position()`| ✓ |
+`replace()`| ✓ |
+`reverse()`| ✓ |
+`round()`| ✓ |
+`starts-with()`| ✓ |
+`string()`| ✓ |
+`string-length()`| ✓ |
+`substring()`| ✓ |
+`substring-after()`| ✓ |
+`substring-before()`| ✓ |
+`sum()`| ✓ |
+`system-property()`| ✗ |
+`translate()`| ✓ |
+`true()`| ✓ |
+`unparsed-entity-url()` | ✗ |
 
-- `a or b` : Boolean or.
+Changelogs
+===
 
-- `a and b` : Boolean and.
+2019-03-19 
+- optimize XPath `|` operation performance. [#33](https://github.com/antchfx/xpath/issues/33). Tips: suggest split into multiple subquery if you have a lot of `|` operations.
+
+2019-01-29
+-  improvement `normalize-space` function. [#32](https://github.com/antchfx/xpath/issues/32)
+
+2018-12-07
+-  supports XPath 2.0 Sequence expressions. [#30](https://github.com/antchfx/xpath/pull/30) by [@minherz](https://github.com/minherz).

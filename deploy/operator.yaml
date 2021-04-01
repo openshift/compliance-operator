@@ -23,6 +23,13 @@ spec:
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
+          resources:
+            requests:
+              memory: "20Mi"
+              cpu: "250m"
+            limits:
+              memory: "200Mi"
+              cpu: "500m"
           env:
             - name: WATCH_NAMESPACE
               valueFrom:

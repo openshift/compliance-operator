@@ -14,7 +14,11 @@ github.com/Azure/go-autorest/tracing
 # github.com/ajeddeloh/go-json v0.0.0-20200220154158-5ae607161559
 ## explicit
 github.com/ajeddeloh/go-json
-# github.com/antchfx/xpath v0.0.0-20170515025933-1f3266e77307
+# github.com/antchfx/xmlquery v1.3.5
+## explicit
+github.com/antchfx/xmlquery
+# github.com/antchfx/xpath v1.1.11
+## explicit
 github.com/antchfx/xpath
 # github.com/beorn7/perks v1.0.1
 github.com/beorn7/perks/quantile
