@@ -1365,8 +1365,10 @@ spec:
   - openscap
   - audit
   links:
-  - name: Compliance Operator
-    url: https://compliance-operator.domain
+  - name: Compliance Operator upstream repo
+    url: https://github.com/openshift/compliance-operator
+  - name: Compliance Operator documentation
+    url: https://docs.openshift.com/container-platform/4.7/security/compliance_operator/compliance-operator-understanding.html
   maintainers:
   - email: support@redhat.com
     name: Red Hat Support
