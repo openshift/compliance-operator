@@ -89,6 +89,9 @@ type ComplianceCheckResult struct {
 	// How to evaluate if the rule status manually. If no automatic test is present, the rule status will be MANUAL
 	// and the administrator should follow these instructions.
 	Instructions string `json:"instructions,omitempty"`
+	// Any warnings that the user should be aware about.
+	// +nullable
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // IDToDNSFriendlyName gets the ID from the scan and returns a DNS
