@@ -25,6 +25,13 @@ const (
 	dependencyAnnotationKey = "complianceascode.io/depends-on"
 )
 
+// Constants useful for parsing warnings
+const (
+	endPointTag    = "ocp-api-endpoint"
+	endPointTagEnd = endPointTag + "\">"
+	codeTag        = "</code>"
+)
+
 // XMLDocument is a wrapper that keeps the interface XML-parser-agnostic
 type XMLDocument struct {
 	*xmldom.Document
@@ -34,6 +41,25 @@ type ParseResult struct {
 	Id          string
 	CheckResult *compv1alpha1.ComplianceCheckResult
 	Remediation *compv1alpha1.ComplianceRemediation
+}
+
+// getPathsFromRuleWarning finds the API endpoint from in. The expected structure is:
+//
+//  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
+//  </code></warning>
+func GetPathFromWarningXML(in string) string {
+	apiIndex := strings.Index(in, endPointTag)
+	if apiIndex == -1 {
+		return ""
+	}
+
+	apiValueBeginIndex := apiIndex + len(endPointTagEnd)
+	apiValueEndIndex := strings.Index(in[apiValueBeginIndex:], codeTag)
+	if apiValueEndIndex == -1 {
+		return ""
+	}
+
+	return in[apiValueBeginIndex : apiValueBeginIndex+apiValueEndIndex]
 }
 
 type nodeByIdHashTable map[string]*xmldom.Node
@@ -191,6 +217,7 @@ func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef,
 		Severity:     mappedSeverity,
 		Instructions: instructions,
 		Description:  complianceCheckResultDescription(rule),
+		Warnings:     getWarningsForRule(rule),
 	}, nil
 }
 
@@ -209,6 +236,29 @@ func complianceCheckResultDescription(rule *xmldom.Node) string {
 		title = title + "\n"
 	}
 	return title + getSafeText(rule, "rationale")
+}
+
+func getWarningsForRule(rule *xmldom.Node) []string {
+	warningObjs := rule.FindByName("warning")
+
+	warnings := []string{}
+
+	for _, warn := range warningObjs {
+		if warn == nil {
+			continue
+		}
+		// We skip this warning if it's relevant
+		// to parsing the API paths.
+		if GetPathFromWarningXML(warn.XML()) != "" {
+			continue
+		}
+		warnings = append(warnings, warn.Text)
+	}
+
+	if len(warnings) == 0 {
+		return nil
+	}
+	return warnings
 }
 
 func mapComplianceCheckResultSeverity(result *xmldom.Node) (compv1alpha1.ComplianceCheckResultSeverity, error) {
