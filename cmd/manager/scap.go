@@ -160,30 +160,13 @@ func (c *scapContentDataStream) FigureResources(profile string) error {
 	return nil
 }
 
-const (
-	endPointTag    = "ocp-api-endpoint"
-	endPointTagEnd = endPointTag + "\">"
-	codeTag        = "</code>"
-)
-
 // getPathsFromRuleWarning finds the API endpoint from in. The expected structure is:
 //
 //  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
 //  </code></warning>
 func getPathFromWarningXML(in string) string {
 	DBG("%s", in)
-	apiIndex := strings.Index(in, endPointTag)
-	if apiIndex == -1 {
-		return ""
-	}
-
-	apiValueBeginIndex := apiIndex + len(endPointTagEnd)
-	apiValueEndIndex := strings.Index(in[apiValueBeginIndex:], codeTag)
-	if apiValueEndIndex == -1 {
-		return ""
-	}
-
-	return in[apiValueBeginIndex : apiValueBeginIndex+apiValueEndIndex]
+	return utils.GetPathFromWarningXML(in)
 }
 
 // Collect the resource paths for objects that this scan needs to obtain.
@@ -235,17 +218,28 @@ func getResourcePaths(profileDefs *utils.XMLDocument, ruleDefs *utils.XMLDocumen
 		}
 
 		// This node is called "warning" and contains the path info. It's not an actual "warning" for us here.
-		warning := found.GetChild("warning")
-		if warning == nil {
+		var warningFound bool
+		warningObjs := found.FindByName("warning")
+
+		for _, warn := range warningObjs {
+			if warn == nil {
+				continue
+			}
+			apiPath := getPathFromWarningXML(warn.XML())
+			if len(apiPath) == 0 {
+				continue
+			}
+			// We only care for the first occurrence that works
+			out = append(out, apiPath)
+			warningFound = true
+			break
+		}
+
+		if !warningFound {
 			DBG("Couldn't find 'warning' child of check %s", checkID)
 			continue
 		}
 
-		apiPath := getPathFromWarningXML(warning.XML())
-		if len(apiPath) == 0 {
-			continue
-		}
-		out = append(out, apiPath)
 	}
 
 	return out
