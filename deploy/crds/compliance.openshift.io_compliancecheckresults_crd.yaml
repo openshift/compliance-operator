@@ -57,6 +57,12 @@ spec:
           status:
             description: The result of a check
             type: string
+          warnings:
+            description: Any warnings that the user should be aware about.
+            items:
+              type: string
+            nullable: true
+            type: array
         required:
         - id
         - severity
