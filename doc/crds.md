@@ -235,6 +235,9 @@ Where:
   the data-stream/content.
 * **severity**: Describes the severity of the check. The possible values are:
   `unknown`, `info`, `low`, `medium`, `high`
+* **warnings**: A list of warnings that the user might want to look out for.
+  Often, if the result is marked at NOT-APPLICABLE, a relevant warning will
+  explain why.
 * **status**: Describes the result of the check. The possible values are:
 	* **PASS**: Which indicates that check ran to completion and passed.
 	* **FAIL**: Which indicates that the check ran to completion and failed.
