@@ -15,9 +15,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func getItemById(list []*ParseResultContextItem, id string) *ParseResultContextItem {
-	for _, item := range list {
-		if id == item.Id {
+func getItemById(list map[string]*ParseResultContextItem, id string) *ParseResultContextItem {
+	for idx, item := range list {
+		if id == idx {
 			return item
 		}
 	}
@@ -83,7 +83,6 @@ func checkWithRemediation(id, serviceName string) *ParseResult {
 	}
 
 	return &ParseResult{
-		Id:          id,
 		CheckResult: checkService,
 		Remediation: getRemediation(serviceName),
 	}
@@ -91,11 +90,11 @@ func checkWithRemediation(id, serviceName string) *ParseResult {
 
 var _ = Describe("Testing reconciling differing parse results", func() {
 	var (
-		list1 []*ParseResult
-		list2 []*ParseResult
-		list3 []*ParseResult
+		list1 map[string]*ParseResult
+		list2 map[string]*ParseResult
+		list3 map[string]*ParseResult
 
-		consistent []*ParseResultContextItem
+		consistent map[string]*ParseResultContextItem
 		reconciled *ParseResultContextItem
 		err        error
 
@@ -129,17 +128,17 @@ var _ = Describe("Testing reconciling differing parse results", func() {
 	}
 
 	BeforeEach(func() {
-		list1 = []*ParseResult{}
-		list2 = []*ParseResult{}
-		list3 = []*ParseResult{}
+		list1 = make(map[string]*ParseResult)
+		list2 = make(map[string]*ParseResult)
+		list3 = make(map[string]*ParseResult)
 
 		for i := 0; i < 3; i++ {
 			id := fmt.Sprintf("checkid_%d", i)
 			service := fmt.Sprintf("service_%d", i)
 
-			list1 = append(list1, checkWithRemediation(id, service))
-			list2 = append(list2, checkWithRemediation(id, service))
-			list3 = append(list3, checkWithRemediation(id, service))
+			list1[id] = checkWithRemediation(id, service)
+			list2[id] = checkWithRemediation(id, service)
+			list3[id] = checkWithRemediation(id, service)
 		}
 
 		prCtx = NewParseResultContext()
@@ -166,7 +165,7 @@ var _ = Describe("Testing reconciling differing parse results", func() {
 
 	Context("Handling inconsistent results", func() {
 		JustBeforeEach(func() {
-			list2[0].CheckResult.Status = compv1alpha1.CheckResultFail
+			list2["checkid_0"].CheckResult.Status = compv1alpha1.CheckResultFail
 		})
 
 		It("Indentifies the inconsistent result", func() {
@@ -197,7 +196,7 @@ var _ = Describe("Testing reconciling differing parse results", func() {
 
 	Context("Reconciling inconsistent results", func() {
 		JustBeforeEach(func() {
-			list2[0].CheckResult.Status = compv1alpha1.CheckResultFail
+			list2["checkid_0"].CheckResult.Status = compv1alpha1.CheckResultFail
 
 			ParseAndReconcile()
 			reconciled = getItemById(consistent, "checkid_0")
@@ -221,8 +220,8 @@ var _ = Describe("Testing reconciling differing parse results", func() {
 
 	Context("No common result", func() {
 		JustBeforeEach(func() {
-			list2[0].CheckResult.Status = compv1alpha1.CheckResultFail
-			list3[0].CheckResult.Status = compv1alpha1.CheckResultInfo
+			list2["checkid_0"].CheckResult.Status = compv1alpha1.CheckResultFail
+			list3["checkid_0"].CheckResult.Status = compv1alpha1.CheckResultInfo
 
 			ParseAndReconcile()
 			reconciled = getItemById(consistent, "checkid_0")
@@ -237,8 +236,8 @@ var _ = Describe("Testing reconciling differing parse results", func() {
 
 	Context("Result that prevents creating a remediation", func() {
 		JustBeforeEach(func() {
-			list2[0].CheckResult.Status = compv1alpha1.CheckResultError
-			list3[0].CheckResult.Status = compv1alpha1.CheckResultInfo
+			list2["checkid_0"].CheckResult.Status = compv1alpha1.CheckResultError
+			list3["checkid_0"].CheckResult.Status = compv1alpha1.CheckResultInfo
 
 			ParseAndReconcile()
 			reconciled = getItemById(consistent, "checkid_0")
@@ -253,7 +252,7 @@ var _ = Describe("Testing reconciling differing parse results", func() {
 
 	Context("If the remediations differ, the check result is ERROR", func() {
 		JustBeforeEach(func() {
-			list2[0].Remediation = getRemediation("anotherService")
+			list2["checkid_0"].Remediation = getRemediation("anotherService")
 
 			ParseAndReconcile()
 			reconciled = getItemById(consistent, "checkid_0")

@@ -133,7 +133,7 @@ func readCompressedData(compressed string) (*bzip2.Reader, error) {
 // Returns a triple of (array-of-ParseResults, source, error) where source identifies the entity whose
 // scan produced this configMap -- typically a nodeName for node scans. For platform scans, the source
 // is empty. The source is used later when reconciling inconsistent results
-func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*utils.ParseResult, string, error) {
+func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) (map[string]*utils.ParseResult, string, error) {
 	var scanReader io.Reader
 
 	_, ok := cm.Annotations[configMapRemediationsProcessed]
@@ -186,7 +186,7 @@ func getScanResult(cm *v1.ConfigMap) (compv1alpha1.ComplianceScanStatusResult, s
 	return compv1alpha1.ResultError, fmt.Sprintf("The ConfigMap '%s' was missing 'exit-code'", cm.Name)
 }
 
-func annotateCMWithScanResult(cm *v1.ConfigMap, cmParsedResults []*utils.ParseResult) *v1.ConfigMap {
+func annotateCMWithScanResult(cm *v1.ConfigMap, cmParsedResults map[string]*utils.ParseResult) *v1.ConfigMap {
 	scanResult, errMsg := getScanResult(cm)
 	if scanResult == compv1alpha1.ResultCompliant {
 		// Special case: If the OS didn't match at all and SCAP skipped all the tests,
@@ -325,7 +325,7 @@ func getCheckResultAnnotations(cr *compv1alpha1.ComplianceCheckResult, resultAnn
 	return annotations
 }
 
-func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, consistentResults []*utils.ParseResultContextItem) error {
+func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, consistentResults map[string]*utils.ParseResultContextItem) error {
 	log.Info("Will create result objects", "objects", len(consistentResults))
 	if len(consistentResults) == 0 {
 		log.Info("Nothing to create")

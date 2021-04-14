@@ -1,10 +1,11 @@
 package utils
 
 import (
+	"math"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"math"
 )
 
 // ParseResultContextItem wraps ParseResult with some metadata that need to be added
@@ -28,7 +29,6 @@ func newParseResultWithSources(pr *ParseResult, sources ...string) *ParseResultC
 			// We explicitly DeepCopy the CheckResult and the Remediation so that we don't
 			// hold any references to the slice of the original ParseResults and the slice
 			// can be garbage-collected
-			Id:          pr.Id,
 			CheckResult: pr.CheckResult.DeepCopy(),
 			Remediation: pr.Remediation.DeepCopy(),
 		},
@@ -53,7 +53,7 @@ func NewParseResultContext() *ParseResultContext {
 
 // ParseResultContext.AddResults adds a batch of results coming from the parser and partitions them into
 // either the consistent or the inconsistent list
-func (prCtx *ParseResultContext) AddResults(source string, parsedResList []*ParseResult) {
+func (prCtx *ParseResultContext) AddResults(source string, parsedResList map[string]*ParseResult) {
 	// If there is no source, the configMap is probably a platform scan map, in that case
 	// treat all the results as consistent.
 	if source == "" {
@@ -69,9 +69,9 @@ func (prCtx *ParseResultContext) AddResults(source string, parsedResList []*Pars
 	}
 }
 
-func (prCtx *ParseResultContext) addConsistentResults(source string, parsedResList []*ParseResult) {
-	for _, parsedRes := range parsedResList {
-		prCtx.consistent[parsedRes.Id] = newParseResultWithSources(parsedRes, source)
+func (prCtx *ParseResultContext) addConsistentResults(source string, parsedResList map[string]*ParseResult) {
+	for id, parsedRes := range parsedResList {
+		prCtx.consistent[id] = newParseResultWithSources(parsedRes, source)
 	}
 }
 
@@ -89,17 +89,17 @@ func (prCtx *ParseResultContext) addInconsistentResult(id string, pr *ParseResul
 
 // ParseResultContext.addParsedResults add a subsequent batch of results that must be examined
 // for consistency
-func (prCtx *ParseResultContext) addParsedResults(source string, newResults []*ParseResult) {
+func (prCtx *ParseResultContext) addParsedResults(source string, newResults map[string]*ParseResult) {
 	for _, consistentResult := range prCtx.consistent {
 		consistentResult.processed = false
 	}
 
-	for _, pr := range newResults {
-		consistentPr, ok := prCtx.consistent[pr.Id]
+	for id, pr := range newResults {
+		consistentPr, ok := prCtx.consistent[id]
 		if !ok {
 			// This either already inconsistent result or an extra
 			// this batch has an extra item, save it as a diff with (only so far) this source
-			prCtx.addInconsistentResult(pr.Id, pr, source)
+			prCtx.addInconsistentResult(id, pr, source)
 			continue
 		}
 		consistentPr.processed = true
@@ -108,9 +108,9 @@ func (prCtx *ParseResultContext) addParsedResults(source string, newResults []*P
 		if !ok {
 			// remove the check from consistent, add it to diff, but TWICE
 			// once for the sources from the consistent list and once for the new source
-			prCtx.addInconsistentResult(pr.Id, &consistentPr.ParseResult, consistentPr.sources...)
-			delete(prCtx.consistent, pr.Id)
-			prCtx.addInconsistentResult(pr.Id, pr, source)
+			prCtx.addInconsistentResult(id, &consistentPr.ParseResult, consistentPr.sources...)
+			delete(prCtx.consistent, id)
+			prCtx.addInconsistentResult(id, pr, source)
 			continue
 		}
 
@@ -120,13 +120,13 @@ func (prCtx *ParseResultContext) addParsedResults(source string, newResults []*P
 
 	// Make sure all previously consistent items were touched, IOW we didn't receive
 	// fewer items by moving all previously untouched items to the inconsistent list
-	for _, consistentResult := range prCtx.consistent {
+	for id, consistentResult := range prCtx.consistent {
 		if consistentResult.processed == true {
 			continue
 		}
 		// Deleting an item from a map while iterating over it is safe, see https://golang.org/doc/effective_go.html#for
-		prCtx.addInconsistentResult(consistentResult.Id, &consistentResult.ParseResult, consistentResult.sources...)
-		delete(prCtx.consistent, consistentResult.Id)
+		prCtx.addInconsistentResult(id, &consistentResult.ParseResult, consistentResult.sources...)
+		delete(prCtx.consistent, id)
 	}
 }
 
@@ -150,16 +150,10 @@ func (prCtx *ParseResultContext) reconcileInconsistentResults() {
 	}
 }
 
-func (prCtx *ParseResultContext) GetConsistentResults() []*ParseResultContextItem {
+func (prCtx *ParseResultContext) GetConsistentResults() map[string]*ParseResultContextItem {
 	prCtx.reconcileInconsistentResults()
 
-	consistentList := make([]*ParseResultContextItem, 0)
-
-	for _, item := range prCtx.consistent {
-		consistentList = append(consistentList, item)
-	}
-
-	return consistentList
+	return prCtx.consistent
 }
 
 func reconcileInconsistentResult(inconsistent []*ParseResultContextItem) *ParseResultContextItem {
@@ -171,7 +165,6 @@ func reconcileInconsistentResult(inconsistent []*ParseResultContextItem) *ParseR
 
 	pr := ParseResultContextItem{
 		ParseResult: ParseResult{
-			Id:          inconsistent[0].Id,
 			CheckResult: inconsistent[0].CheckResult.DeepCopy(),
 			Remediation: inconsistent[0].Remediation.DeepCopy(),
 		},

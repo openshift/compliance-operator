@@ -94,6 +94,24 @@ type ComplianceCheckResult struct {
 	Warnings []string `json:"warnings,omitempty"`
 }
 
+// CompareCheckResults returns the most relevant result out of two
+func CompareCheckResults(a ComplianceCheckStatus, b ComplianceCheckStatus) ComplianceCheckStatus {
+	orderedResults := make(map[ComplianceCheckStatus]int)
+	orderedResults[CheckResultError] = 0
+	orderedResults[CheckResultInconsistent] = 1
+	orderedResults[CheckResultFail] = 2
+	orderedResults[CheckResultPass] = 3
+	orderedResults[CheckResultInfo] = 4
+	orderedResults[CheckResultManual] = 5
+	orderedResults[CheckResultNotApplicable] = 6
+	orderedResults[CheckResultNoResult] = 7
+
+	if orderedResults[a] > orderedResults[b] {
+		return b
+	}
+	return a
+}
+
 // IDToDNSFriendlyName gets the ID from the scan and returns a DNS
 // friendly name
 func (ccr *ComplianceCheckResult) IDToDNSFriendlyName() string {

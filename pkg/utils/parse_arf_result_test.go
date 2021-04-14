@@ -10,13 +10,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 
-	ign2types "github.com/coreos/ignition/config/v2_2/types"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	mcfgcommon "github.com/openshift/machine-config-operator/pkg/controller/common"
 )
 
-func countResultItems(resultList []*ParseResult) (int, int) {
+func countResultItems(resultList map[string]*ParseResult) (int, int) {
 	if resultList == nil {
 		return 0, 0
 	}
@@ -52,7 +51,7 @@ var _ = Describe("XCCDF parser", func() {
 		schema          *runtime.Scheme
 		resultsFilename string
 		dsFilename      string
-		resultList      []*ParseResult
+		resultList      map[string]*ParseResult
 		nChecks         int
 		nRems           int
 		err             error
@@ -136,14 +135,14 @@ var _ = Describe("XCCDF parser", func() {
 			)
 
 			BeforeEach(func() {
+				expName = "testScan-no-direct-root-logins"
 				for i := range resultList {
-					if resultList[i].Remediation != nil {
+					if resultList[i].Remediation != nil && resultList[i].Remediation.Name == expName {
 						rem = resultList[i].Remediation
 						break
 					}
 				}
 				Expect(rem).ToNot(BeNil())
-				expName = "testScan-no-direct-root-logins"
 			})
 
 			It("Should have the expected name", func() {
@@ -161,7 +160,7 @@ var _ = Describe("XCCDF parser", func() {
 				BeforeEach(func() {
 					mcfg, _ := ParseMachineConfig(rem, rem.Spec.Current.Object)
 					ignRaw, _ := mcfgcommon.IgnParseWrapper(mcfg.Spec.Config.Raw)
-					parsedIgn := ignRaw.(ign2types.Config)
+					parsedIgn := ignRaw.(igntypes.Config)
 					mcFiles = parsedIgn.Storage.Files
 				})
 

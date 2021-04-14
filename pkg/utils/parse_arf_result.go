@@ -38,7 +38,6 @@ type XMLDocument struct {
 }
 
 type ParseResult struct {
-	Id          string
 	CheckResult *compv1alpha1.ComplianceCheckResult
 	Remediation *compv1alpha1.ComplianceRemediation
 }
@@ -147,7 +146,7 @@ func ParseContent(dsReader io.Reader) (*XMLDocument, error) {
 }
 
 func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, namespace string,
-	dsDom *XMLDocument, resultsReader io.Reader) ([]*ParseResult, error) {
+	dsDom *XMLDocument, resultsReader io.Reader) (map[string]*ParseResult, error) {
 
 	resultsDom, err := xmldom.Parse(resultsReader)
 	if err != nil {
@@ -158,34 +157,46 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 	questionsTable := newOcilQuestionTable(dsDom)
 
 	results := resultsDom.Root.Query("//rule-result")
-	parsedResults := make([]*ParseResult, 0)
+	parsedResults := make(map[string]*ParseResult)
 	for i := range results {
 		result := results[i]
 		ruleIDRef := result.GetAttributeValue("idref")
+		// No ID... Skip
 		if ruleIDRef == "" {
 			continue
 		}
 
 		resultRule := ruleTable[ruleIDRef]
+		// Unkown ID... Skip
 		if resultRule == nil {
+			continue
+		}
+
+		// This belongs to an already parsed result... Merge
+		if storedResult, ok := parsedResults[ruleIDRef]; ok {
+			err := mergeCheckResult(result, storedResult.CheckResult)
+			if err != nil {
+				continue
+			}
 			continue
 		}
 
 		instructions := getInstructionsForRule(resultRule, questionsTable)
 		resCheck, err := newComplianceCheckResult(result, resultRule, ruleIDRef, instructions, scanName, namespace)
+		// Couldn't parse result... Skip
 		if err != nil {
 			continue
 		}
 
-		if resCheck != nil {
-			pr := &ParseResult{
-				Id:          ruleIDRef,
-				CheckResult: resCheck,
-			}
-
-			pr.Remediation = newComplianceRemediation(scheme, scanName, namespace, resultRule)
-			parsedResults = append(parsedResults, pr)
+		pr := &ParseResult{
+			CheckResult: resCheck,
 		}
+
+		// We only need to parse the remediation once
+		pr.Remediation = newComplianceRemediation(scheme, scanName, namespace, resultRule)
+
+		// Found a new result, persist it in the hash
+		parsedResults[ruleIDRef] = pr
 	}
 
 	return parsedResults, nil
@@ -199,7 +210,7 @@ func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef,
 		return nil, err
 	}
 	if mappedStatus == compv1alpha1.CheckResultNoResult {
-		return nil, nil
+		return nil, errors.New("rule contained an empty result status")
 	}
 
 	mappedSeverity, err := mapComplianceCheckResultSeverity(rule)
@@ -219,6 +230,19 @@ func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef,
 		Description:  complianceCheckResultDescription(rule),
 		Warnings:     getWarningsForRule(rule),
 	}, nil
+}
+
+// Merges a new found result with a pre-existing one
+func mergeCheckResult(newResult *xmldom.Node, storedResult *compv1alpha1.ComplianceCheckResult) error {
+	mappedStatus, err := mapComplianceCheckResultStatus(newResult)
+	if err != nil {
+		return err
+	}
+
+	// TODO(jaosorior): Mark a failure somehow
+
+	storedResult.Status = compv1alpha1.CompareCheckResults(mappedStatus, storedResult.Status)
+	return nil
 }
 
 func getSafeText(nptr *xmldom.Node, elem string) string {
