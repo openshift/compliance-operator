@@ -36,6 +36,13 @@ spec:
           description:
             description: A human-readable check description, what and why it does
             type: string
+          failureInfo:
+            description: Collects failure information that can serve as evidence that's
+              helpful to understand what failed.
+            items:
+              type: string
+            nullable: true
+            type: array
           id:
             description: A unique identifier of a check
             type: string

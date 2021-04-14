@@ -92,6 +92,10 @@ type ComplianceCheckResult struct {
 	// Any warnings that the user should be aware about.
 	// +nullable
 	Warnings []string `json:"warnings,omitempty"`
+	// Collects failure information that can serve as evidence that's
+	// helpful to understand what failed.
+	// +nullable
+	FailureInfo []string `json:"failureInfo,omitempty"`
 }
 
 // CompareCheckResults returns the most relevant result out of two

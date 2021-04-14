@@ -33,6 +33,20 @@ const (
 	codeTag        = "</code>"
 )
 
+// check types
+const (
+	// Checks whether an endpoint is compliant with a specific policy.
+	ovalCheckTypeCompliance = "compliance"
+	// Checks whether specific software is installed on the endpoint.
+	ovalCheckTypeInventory = "inventory"
+	// OVAL Definitions that do not fall into one of the other defined classes.
+	ovalCheckTypeMiscellaneous = "miscellaneous"
+	// Checks whether a patch needs to be installed on an endpoint.
+	ovalCheckTypePatch = "patch"
+	// Checks whether an endpoint is vulnerable.
+	ovalCheckTypeVulnerability = "vulnerability"
+)
+
 var (
 	ErrEmptyStatus = errors.New("rule contained an empty result status")
 )
@@ -180,10 +194,17 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 
 		// This belongs to an already parsed result... Merge
 		if storedResult, ok := parsedResults[ruleIDRef]; ok {
+			if !ruleIsMultiCheck(resultRule) {
+				rlog.Info("Skipping rule result since it's already been parsed and it's not multi-check")
+				continue
+			}
+
 			err := mergeCheckResult(result, storedResult.CheckResult)
 			if err != nil {
 				rlog.Error(err, "Skipping rule due to merging error")
 			}
+
+			setFailureInfoIfNeeded(storedResult.CheckResult, result, resultRule, dsDom.Root, rlog)
 			continue
 		}
 
@@ -201,6 +222,8 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 		pr := &ParseResult{
 			CheckResult: resCheck,
 		}
+
+		setFailureInfoIfNeeded(resCheck, result, resultRule, dsDom.Root, rlog)
 
 		// We only need to parse the remediation once
 		pr.Remediation = newComplianceRemediation(scheme, scanName, namespace, resultRule)
@@ -293,6 +316,92 @@ func getWarningsForRule(rule *xmldom.Node) []string {
 		return nil
 	}
 	return warnings
+}
+
+func setFailureInfoIfNeeded(resCheck *compv1alpha1.ComplianceCheckResult, result, resultRule, root *xmldom.Node, l logr.Logger) {
+	// HACK(jaosorior): this only adds evidence for multi-check rules...
+	// This is because the only multi-check rule we're currently handling is
+	// security_patches_up_to_date, for which we can gather evidence.
+	// If we want to support gathering evidence for other checks, we can remove the
+	// multi-check verification below.
+	// This is skipped to save compute time.
+	if resCheck.Status == compv1alpha1.CheckResultFail && ruleIsMultiCheck(resultRule) {
+		def, defErr := getCheckDefinition(result, root)
+		if defErr != nil {
+			l.Error(defErr, "Couldn't get OVAL definition.")
+		} else {
+			// Currently, we only support evidence for "patch" checks
+			if strings.EqualFold(def.GetAttributeValue("class"), ovalCheckTypePatch) {
+				getFailureRefsForPatchClass(resCheck, def)
+			}
+		}
+	}
+}
+
+func getCheckDefinition(result *xmldom.Node, root *xmldom.Node) (*xmldom.Node, error) {
+	ccref := result.FindOneByName("check-content-ref")
+	if ccref == nil {
+		return nil, errors.New("didn't find 'check-content-ref' for result")
+	}
+	ccrefName := ccref.GetAttributeValue("name")
+	if ccrefName == "" {
+		return nil, errors.New("didn't find 'name' attribute in 'check-content-ref'")
+	}
+
+	reports := root.FindByName("report")
+	for _, report := range reports {
+		// Skip non-oval reports
+		if !strings.HasPrefix(report.GetAttributeValue("id"), "oval") {
+			continue
+		}
+
+		def := report.FindByID(ccrefName)
+		if !strings.Contains(def.Name, "definition") {
+			// There is something wrong with the OVAL and
+			// we can't get the appropriate definition
+			return nil, fmt.Errorf("OVAL check with ID '%s' isn't appropriate 'definition' object", ccrefName)
+		}
+		return def, nil
+	}
+
+	return nil, fmt.Errorf("OVAL check with ID '%s' not found", ccrefName)
+}
+
+func getFailureRefsForPatchClass(rescheck *compv1alpha1.ComplianceCheckResult, def *xmldom.Node) {
+	title := def.FindOneByName("title")
+	if title == nil {
+		return
+	}
+
+	output := title.Text
+	outrefs := make([]string, 0)
+	refs := def.FindByName("reference")
+
+	for _, ref := range refs {
+		refid := ref.GetAttributeValue("ref_id")
+		if refid != "" {
+			outrefs = append(outrefs, refid)
+		}
+	}
+
+	if len(outrefs) > 0 {
+		output += "\nReferences: " + strings.Join(outrefs, ",")
+	}
+
+	if rescheck.FailureInfo == nil {
+		rescheck.FailureInfo = make([]string, 0)
+	}
+	rescheck.FailureInfo = append(rescheck.FailureInfo, output)
+}
+
+// ruleIsMultiCheck: multi-check rules can output several results;
+// this allows us to handle that.
+func ruleIsMultiCheck(rule *xmldom.Node) bool {
+	check := rule.FindOneByName("check")
+	if check == nil {
+		return false
+	}
+	return check.GetAttributeValue("multi-check") == "true"
 }
 
 func mapComplianceCheckResultSeverity(result *xmldom.Node) (compv1alpha1.ComplianceCheckResultSeverity, error) {
