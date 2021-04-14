@@ -5,8 +5,10 @@ import (
 	"os"
 
 	igntypes "github.com/coreos/ignition/config/v2_2/types"
+	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 
@@ -74,7 +76,9 @@ var _ = Describe("XCCDF parser", func() {
 			Expect(err).NotTo(HaveOccurred())
 			dsDom, err := ParseContent(ds)
 			Expect(err).NotTo(HaveOccurred())
-			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+			dev, err := zap.NewDevelopment()
+			logger := zapr.NewLogger(dev)
+			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf, logger)
 			nChecks, nRems = countResultItems(resultList)
 		})
 
@@ -193,11 +197,13 @@ var _ = Describe("XCCDF parser", func() {
 		})
 
 		Context("Valid XCCDF and DS with remediations", func() {
+			dev, _ := zap.NewDevelopment()
+			logger := zapr.NewLogger(dev)
 			Measure("Should parse the XCCDF and DS without errors", func(b Benchmarker) {
 				runtime := b.Time("runtime", func() {
 					dsDom, err := ParseContent(ds)
 					Expect(err).NotTo(HaveOccurred())
-					resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+					resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf, logger)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(nRems).To(Equal(totalRemediations))
 					Expect(nChecks).To(Equal(totalChecks))

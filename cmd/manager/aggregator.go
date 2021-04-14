@@ -28,6 +28,7 @@ import (
 
 	backoff "github.com/cenkalti/backoff/v3"
 	"github.com/dsnet/compress/bzip2"
+	"github.com/go-logr/logr"
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
@@ -62,10 +63,12 @@ func init() {
 	defineAggregatorFlags(aggregatorCmd)
 }
 
-type aggregatorConfig struct {
+type aggregatorCtx struct {
 	Content   string
 	ScanName  string
 	Namespace string
+	l         logr.Logger
+	crClient  *complianceCrClient
 }
 
 func defineAggregatorFlags(cmd *cobra.Command) {
@@ -81,40 +84,40 @@ func defineAggregatorFlags(cmd *cobra.Command) {
 	flags.AddGoFlagSet(flag.CommandLine)
 }
 
-func parseAggregatorConfig(cmd *cobra.Command) *aggregatorConfig {
-	var conf aggregatorConfig
+func parseAggregatorConfig(cmd *cobra.Command) *aggregatorCtx {
+	var conf aggregatorCtx
 	conf.Content = getValidStringArg(cmd, "content")
 	conf.ScanName = getValidStringArg(cmd, "scan")
 	conf.Namespace = getValidStringArg(cmd, "namespace")
 
 	logf.SetLogger(zap.Logger())
-
+	conf.l = log.WithValues("ComplianceScan", conf.ScanName, "Namespace", conf.Namespace)
 	return &conf
 }
 
-func getScanConfigMaps(crClient *complianceCrClient, scan, namespace string) ([]v1.ConfigMap, error) {
+func (actx *aggregatorCtx) getScanConfigMaps(ns string) ([]v1.ConfigMap, error) {
 	cMapList := &v1.ConfigMapList{}
 	var err error
 
 	// Look for configMap with this scan label
-	inNs := client.InNamespace(namespace)
+	inNs := client.InNamespace(ns)
 	withLabel := client.MatchingLabels{
-		compv1alpha1.ComplianceScanLabel: scan,
+		compv1alpha1.ComplianceScanLabel: actx.ScanName,
 		compv1alpha1.ResultLabel:         "",
 	}
 
-	err = crClient.client.List(context.TODO(), cMapList, inNs, withLabel)
+	err = actx.crClient.client.List(context.TODO(), cMapList, inNs, withLabel)
 	if err != nil {
-		log.Error(err, "Error waiting for CMs of scan", "ComplianceScan.Name", scan)
+		actx.l.Error(err, "Error waiting for CMs of scan")
 		return nil, err
 	}
 
 	if len(cMapList.Items) == 0 {
-		log.Info("Scan has no results", "ComplianceScan.Name", scan)
+		actx.l.Info("Scan has no results")
 		return make([]v1.ConfigMap, 0), nil
 	}
 
-	log.Info("Scan has results", "ComplianceScan.Name", scan, "results-length", len(cMapList.Items))
+	actx.l.Info("Scan has results", "results-length", len(cMapList.Items))
 	return cMapList.Items, nil
 }
 
@@ -133,7 +136,7 @@ func readCompressedData(compressed string) (*bzip2.Reader, error) {
 // Returns a triple of (array-of-ParseResults, source, error) where source identifies the entity whose
 // scan produced this configMap -- typically a nodeName for node scans. For platform scans, the source
 // is empty. The source is used later when reconciling inconsistent results
-func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) (map[string]*utils.ParseResult, string, error) {
+func (actx *aggregatorCtx) parseResultRemediations(scheme *runtime.Scheme, content *utils.XMLDocument, cm *v1.ConfigMap) (map[string]*utils.ParseResult, string, error) {
 	var scanReader io.Reader
 
 	_, ok := cm.Annotations[configMapRemediationsProcessed]
@@ -163,7 +166,7 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string,
 	// This would return an empty string for a platform check that is handled later explicitly
 	nodeName := cm.Annotations["openscap-scan-result/node"]
 
-	table, err := utils.ParseResultsFromContentAndXccdf(scheme, scanName, namespace, content, scanReader)
+	table, err := utils.ParseResultsFromContentAndXccdf(scheme, actx.ScanName, actx.Namespace, content, scanReader, actx.l)
 	return table, nodeName, err
 }
 
@@ -239,11 +242,11 @@ type compResultIface interface {
 	runtime.Object
 }
 
-func createOrUpdateOneResult(crClient *complianceCrClient, owner metav1.Object, labels map[string]string, annotations map[string]string, exists bool, res compResultIface) error {
+func (actx *aggregatorCtx) createOrUpdateOneResult(owner metav1.Object, labels map[string]string, annotations map[string]string, exists bool, res compResultIface) error {
 	kind := res.GetObjectKind()
 
-	if err := controllerutil.SetControllerReference(owner, res, crClient.scheme); err != nil {
-		log.Error(err, "Failed to set ownership", "kind", kind.GroupVersionKind().Kind)
+	if err := controllerutil.SetControllerReference(owner, res, actx.crClient.scheme); err != nil {
+		actx.l.Error(err, "Failed to set ownership", "kind", kind.GroupVersionKind().Kind)
 		return err
 	}
 
@@ -257,20 +260,20 @@ func createOrUpdateOneResult(crClient *complianceCrClient, owner metav1.Object, 
 	err := backoff.Retry(func() error {
 		var err error
 		if !exists {
-			log.Info("Creating object", "kind", kind, "name", name)
-			err = crClient.client.Create(context.TODO(), res)
+			actx.l.Info("Creating object", "kind", kind, "name", name)
+			err = actx.crClient.client.Create(context.TODO(), res)
 		} else {
-			log.Info("Updating object", "kind", kind, "name", name)
-			err = crClient.client.Update(context.TODO(), res)
+			actx.l.Info("Updating object", "kind", kind, "name", name)
+			err = actx.crClient.client.Update(context.TODO(), res)
 		}
 		if err != nil && !errors.IsAlreadyExists(err) {
-			log.Error(err, "Retrying with a backoff because of an error while creating or updating object")
+			actx.l.Error(err, "Retrying with a backoff because of an error while creating or updating object")
 			return err
 		}
 		return nil
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 	if err != nil {
-		log.Error(err, "Failed to create an object", "kind", kind.GroupVersionKind().Kind)
+		actx.l.Error(err, "Failed to create an object", "kind", kind.GroupVersionKind().Kind)
 		return err
 	}
 	return nil
@@ -325,7 +328,7 @@ func getCheckResultAnnotations(cr *compv1alpha1.ComplianceCheckResult, resultAnn
 	return annotations
 }
 
-func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceScan, consistentResults map[string]*utils.ParseResultContextItem) error {
+func (actx *aggregatorCtx) createResults(scan *compv1alpha1.ComplianceScan, consistentResults map[string]*utils.ParseResultContextItem) error {
 	log.Info("Will create result objects", "objects", len(consistentResults))
 	if len(consistentResults) == 0 {
 		log.Info("Nothing to create")
@@ -349,13 +352,13 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		foundCheckResult.TypeMeta = pr.CheckResult.TypeMeta
 		log.Info("Getting ComplianceCheckResult", "ComplianceCheckResult.Name", crkey.Name,
 			"ComplianceCheckResult.Namespace", crkey.Namespace)
-		checkResultExists := getObjectIfFound(crClient, crkey, foundCheckResult)
+		checkResultExists := actx.getObjectIfFound(crkey, foundCheckResult)
 		if checkResultExists {
 			// Copy resource version and other metadata needed for update
 			foundCheckResult.ObjectMeta.DeepCopyInto(&pr.CheckResult.ObjectMeta)
 		}
 		// check is owned by the scan
-		if err := createOrUpdateOneResult(crClient, scan, checkResultLabels, checkResultAnnotations, checkResultExists, pr.CheckResult); err != nil {
+		if err := actx.createOrUpdateOneResult(scan, checkResultLabels, checkResultAnnotations, checkResultExists, pr.CheckResult); err != nil {
 			return fmt.Errorf("cannot create or update checkResult %s: %v", pr.CheckResult.Name, err)
 		}
 
@@ -373,7 +376,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			// Only issue event once.
 			if !remediationNotPossibleEventIssued {
 				log.Info(why)
-				crClient.recorder.Event(scan, v1.EventTypeWarning, "CannotRemediate", why)
+				actx.crClient.recorder.Event(scan, v1.EventTypeWarning, "CannotRemediate", why)
 				remediationNotPossibleEventIssued = true
 			}
 			continue
@@ -391,7 +394,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		foundRemediation.TypeMeta = pr.Remediation.TypeMeta
 		log.Info("Getting ComplianceRemediation", "ComplianceRemediation.Name", crkey.Name,
 			"ComplianceRemediation.Namespace", crkey.Namespace)
-		remExists := getObjectIfFound(crClient, remkey, foundRemediation)
+		remExists := actx.getObjectIfFound(remkey, foundRemediation)
 		if remExists {
 			// If the remediation is already applied and the status of the check is compliant, only update
 			// the remediation if the payload differs. Let's not create remediations for checks that are passing
@@ -429,13 +432,13 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		}
 
 		// remediation is owned by the check
-		if err := createOrUpdateOneResult(crClient, pr.CheckResult, remLabels, nil, remExists, pr.Remediation); err != nil {
+		if err := actx.createOrUpdateOneResult(pr.CheckResult, remLabels, nil, remExists, pr.Remediation); err != nil {
 			return fmt.Errorf("cannot create or update remediation %s: %v", pr.Remediation.Name, err)
 		}
 
 		// Update the status as needed
 		if remExists {
-			if err := updateRemediationStatus(crClient, pr.Remediation, stateUpdate); err != nil {
+			if err := actx.updateRemediationStatus(pr.Remediation, stateUpdate); err != nil {
 				return err
 			}
 		}
@@ -444,21 +447,21 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 	return nil
 }
 
-func updateRemediationStatus(crClient *complianceCrClient, parsedRemediation *compv1alpha1.ComplianceRemediation, state compv1alpha1.RemediationApplicationState) error {
+func (actx *aggregatorCtx) updateRemediationStatus(parsedRemediation *compv1alpha1.ComplianceRemediation, state compv1alpha1.RemediationApplicationState) error {
 	remkey := getObjKey(parsedRemediation.GetName(), parsedRemediation.GetNamespace())
 	foundRemediation := &compv1alpha1.ComplianceRemediation{}
 	// Copy type metadata so dynamic client copies data correctly
-	log.Info("Updating remediation status", "ComplianceRemediation.Name", remkey.Name,
+	actx.l.Info("Updating remediation status", "ComplianceRemediation.Name", remkey.Name,
 		"ComplianceRemediation.Namespace", remkey.Namespace)
 
 	return backoff.Retry(func() error {
-		if err := crClient.client.Get(context.TODO(), remkey, foundRemediation); err != nil {
+		if err := actx.crClient.client.Get(context.TODO(), remkey, foundRemediation); err != nil {
 			return fmt.Errorf("cannot update remediation status %s: %v", parsedRemediation.Name, err)
 
 		}
 		foundRemediation.Status.ErrorMessage = ""
 		foundRemediation.Status.ApplicationState = state
-		err := crClient.client.Status().Update(context.TODO(), foundRemediation)
+		err := actx.crClient.client.Status().Update(context.TODO(), foundRemediation)
 		if err != nil {
 			return fmt.Errorf("cannot update remediation status %s: %v", parsedRemediation.Name, err)
 		}
@@ -471,14 +474,14 @@ func getObjKey(name, ns string) types.NamespacedName {
 }
 
 // Returns whether or not an object exists, and updates the data in the obj.
-func getObjectIfFound(crClient *complianceCrClient, key types.NamespacedName, obj runtime.Object) bool {
+func (actx *aggregatorCtx) getObjectIfFound(key types.NamespacedName, obj runtime.Object) bool {
 	var found bool
 	err := backoff.Retry(func() error {
-		err := crClient.client.Get(context.TODO(), key, obj)
+		err := actx.crClient.client.Get(context.TODO(), key, obj)
 		if errors.IsNotFound(err) {
 			return nil
 		} else if err != nil {
-			log.Error(err, "Retrying with a backoff because of an error while getting object")
+			actx.l.Error(err, "Retrying with a backoff because of an error while getting object")
 			return err
 		}
 		found = true
@@ -486,13 +489,13 @@ func getObjectIfFound(crClient *complianceCrClient, key types.NamespacedName, ob
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 
 	if err != nil {
-		log.Error(err, "Couldn't get object", "Name", key.Name, "Namespace", key.Namespace)
+		actx.l.Error(err, "Couldn't get object", "Name", key.Name, "Namespace", key.Namespace)
 	}
 	return found
 }
 
 func aggregator(cmd *cobra.Command, args []string) {
-	aggregatorConf := parseAggregatorConfig(cmd)
+	actx := parseAggregatorConfig(cmd)
 
 	cfg, err := config.GetConfig()
 	if err != nil {
@@ -505,6 +508,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 		log.Error(err, "Cannot create kube client for compliance-operator types")
 		os.Exit(1)
 	}
+	actx.crClient = crclient
 
 	err = crclient.useEventRecorder("aggregator", cfg)
 	if err != nil {
@@ -514,25 +518,25 @@ func aggregator(cmd *cobra.Command, args []string) {
 
 	var scan = &compv1alpha1.ComplianceScan{}
 	err = crclient.client.Get(context.TODO(), types.NamespacedName{
-		Namespace: aggregatorConf.Namespace,
-		Name:      aggregatorConf.ScanName,
+		Namespace: actx.Namespace,
+		Name:      actx.ScanName,
 	}, scan)
 	if err != nil {
 		log.Error(err, "Cannot retrieve the scan instance",
-			"ComplianceScan.Name", aggregatorConf.ScanName,
-			"ComplianceScan.Namespace", aggregatorConf.Namespace,
+			"ComplianceScan.Name", actx.ScanName,
+			"ComplianceScan.Namespace", actx.Namespace,
 		)
 		os.Exit(1)
 	}
 
 	// Find all the configmaps for a scan
-	configMaps, err := getScanConfigMaps(crclient, aggregatorConf.ScanName, common.GetComplianceOperatorNamespace())
+	configMaps, err := actx.getScanConfigMaps(common.GetComplianceOperatorNamespace())
 	if err != nil {
 		log.Error(err, "getScanConfigMaps failed")
 		os.Exit(1)
 	}
 
-	contentFile, err := readContent(aggregatorConf.Content)
+	contentFile, err := readContent(actx.Content)
 	if err != nil {
 		log.Error(err, "Cannot read the content")
 		os.Exit(1)
@@ -551,16 +555,16 @@ func aggregator(cmd *cobra.Command, args []string) {
 	// For each configmap, create a list of remediations
 	for i := range configMaps {
 		cm := &configMaps[i]
-		log.Info("processing ConfigMap", "ConfigMap.Name", cm.Name)
+		actx.l.Info("processing ConfigMap", "ConfigMap.Name", cm.Name)
 
-		cmParsedResults, source, err := parseResultRemediations(crclient.scheme, aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, cm)
+		cmParsedResults, source, err := actx.parseResultRemediations(crclient.scheme, contentDom, cm)
 		if err != nil {
-			log.Error(err, "Cannot parse ConfigMap into remediations", "ConfigMap.Name", cm.Name)
+			actx.l.Error(err, "Cannot parse ConfigMap into remediations", "ConfigMap.Name", cm.Name)
 		} else if cmParsedResults == nil {
-			log.Info("Either no parsed results found in result or result already processed")
+			actx.l.Info("Either no parsed results found in result or result already processed")
 			continue
 		}
-		log.Info("ConfigMap contained parsed results", "ConfigMap.Name", cm.Name, "results", len(cmParsedResults))
+		actx.l.Info("ConfigMap contained parsed results", "ConfigMap.Name", cm.Name, "results", len(cmParsedResults))
 
 		prCtx.AddResults(source, cmParsedResults)
 		// If the CM was processed, annotate it with the result
@@ -573,18 +577,18 @@ func aggregator(cmd *cobra.Command, args []string) {
 	// At this point either scanRemediations is nil or contains a list
 	// of remediations for this scan
 	// Create the remediations
-	log.Info("Creating result objects")
-	if err := createResults(crclient, scan, consistentParsedResults); err != nil {
-		log.Error(err, "Could not create remediation objects")
+	actx.l.Info("Creating result objects")
+	if err := actx.createResults(scan, consistentParsedResults); err != nil {
+		actx.l.Error(err, "Could not create remediation objects")
 		os.Exit(1)
 	}
 
 	// Annotate configMaps, so we don't need to re-parse them
-	log.Info("Annotating ConfigMaps")
+	actx.l.Info("Annotating ConfigMaps")
 	for _, cm := range configMaps {
 		err = markConfigMapAsProcessed(crclient, &cm)
 		if err != nil {
-			log.Error(err, "Cannot annotate the ConfigMap")
+			actx.l.Error(err, "Cannot annotate the ConfigMap")
 			os.Exit(1)
 		}
 	}

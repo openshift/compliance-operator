@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/subchen/go-xmldom"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -30,6 +31,10 @@ const (
 	endPointTag    = "ocp-api-endpoint"
 	endPointTagEnd = endPointTag + "\">"
 	codeTag        = "</code>"
+)
+
+var (
+	ErrEmptyStatus = errors.New("rule contained an empty result status")
 )
 
 // XMLDocument is a wrapper that keeps the interface XML-parser-agnostic
@@ -146,8 +151,7 @@ func ParseContent(dsReader io.Reader) (*XMLDocument, error) {
 }
 
 func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, namespace string,
-	dsDom *XMLDocument, resultsReader io.Reader) (map[string]*ParseResult, error) {
-
+	dsDom *XMLDocument, resultsReader io.Reader, l logr.Logger) (map[string]*ParseResult, error) {
 	resultsDom, err := xmldom.Parse(resultsReader)
 	if err != nil {
 		return nil, err
@@ -161,14 +165,16 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 	for i := range results {
 		result := results[i]
 		ruleIDRef := result.GetAttributeValue("idref")
-		// No ID... Skip
 		if ruleIDRef == "" {
+			l.Info("Skipping rule without 'idref'")
 			continue
 		}
 
+		rlog := l.WithValues("rule-id", ruleIDRef)
+
 		resultRule := ruleTable[ruleIDRef]
-		// Unkown ID... Skip
 		if resultRule == nil {
+			rlog.Info("Skipping rule not found in data-stream")
 			continue
 		}
 
@@ -176,15 +182,19 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 		if storedResult, ok := parsedResults[ruleIDRef]; ok {
 			err := mergeCheckResult(result, storedResult.CheckResult)
 			if err != nil {
-				continue
+				rlog.Error(err, "Skipping rule due to merging error")
 			}
 			continue
 		}
 
 		instructions := getInstructionsForRule(resultRule, questionsTable)
 		resCheck, err := newComplianceCheckResult(result, resultRule, ruleIDRef, instructions, scanName, namespace)
-		// Couldn't parse result... Skip
+		if errors.Is(err, ErrEmptyStatus) {
+			// skip without logging. This is fine.
+			continue
+		}
 		if err != nil {
+			rlog.Error(err, "Skipping rule due to parsing error")
 			continue
 		}
 
@@ -210,7 +220,7 @@ func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef,
 		return nil, err
 	}
 	if mappedStatus == compv1alpha1.CheckResultNoResult {
-		return nil, errors.New("rule contained an empty result status")
+		return nil, ErrEmptyStatus
 	}
 
 	mappedSeverity, err := mapComplianceCheckResultSeverity(rule)
