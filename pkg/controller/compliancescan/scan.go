@@ -272,6 +272,9 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 			Name:      podName,
 			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels:    podLabels,
+			Annotations: map[string]string{
+				"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+			},
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: apiResourceCollectorSA,

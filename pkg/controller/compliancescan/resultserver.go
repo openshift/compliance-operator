@@ -127,6 +127,9 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
+					Annotations: map[string]string{
+						"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+					},
 				},
 				Spec: corev1.PodSpec{
 					// TODO(jaosorior): Should we schedule this in the master nodes only?
