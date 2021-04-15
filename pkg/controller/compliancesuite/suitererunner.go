@@ -117,6 +117,9 @@ func getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
 								compv1alpha1.SuiteScriptLabel: "",
 								"workload":                    "suitererunner",
 							},
+							Annotations: map[string]string{
+								"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+							},
 						},
 						Spec: corev1.PodSpec{
 							ServiceAccountName: rerunnerServiceAccount,

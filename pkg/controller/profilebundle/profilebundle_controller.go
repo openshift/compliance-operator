@@ -408,6 +408,9 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
+					Annotations: map[string]string{
+						"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+					},
 				},
 				Spec: corev1.PodSpec{
 					InitContainers: []corev1.Container{
