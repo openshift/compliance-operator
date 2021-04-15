@@ -155,6 +155,7 @@ type ComplianceScanSettings struct {
 	// resources could be, for instance, CVE feeds. This is useful for disconnected
 	// installations without access to a proxy.
 	NoExternalResources bool `json:"noExternalResources,omitempty"`
+	// It is recommended to set the proxy via the config.openshift.io/Proxy object
 	// Defines a proxy for the scan to get external resources from. This is useful for
 	// disconnected installations with access to a proxy.
 	HTTPSProxy string `json:"httpsProxy,omitempty"`
