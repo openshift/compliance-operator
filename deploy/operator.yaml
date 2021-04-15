@@ -11,6 +11,8 @@ spec:
     metadata:
       labels:
         name: compliance-operator
+      annotations:
+        workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
     spec:
       serviceAccountName: compliance-operator
       containers:
