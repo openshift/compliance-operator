@@ -28,9 +28,9 @@ type VariableValueSpec struct {
 type TailoredProfileSpec struct {
 	// Points to the name of the profile to extend
 	Extends string `json:"extends"`
-	// Overwrites the title of the extended profile (optional)
+	// Overwrites the title of the extended profile
 	Title string `json:"title,omitempty"`
-	// Overwrites the description of the extended profile (optional)
+	// Overwrites the description of the extended profile
 	Description string `json:"description,omitempty"`
 	// Enables the referenced rules
 	// +optional
