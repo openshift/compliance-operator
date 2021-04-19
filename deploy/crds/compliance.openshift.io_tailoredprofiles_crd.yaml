@@ -40,7 +40,7 @@ spec:
             description: TailoredProfileSpec defines the desired state of TailoredProfile
             properties:
               description:
-                description: Overwrites the description of the extended profile (optional)
+                description: Overwrites the description of the extended profile
                 type: string
               disableRules:
                 description: Disables the referenced rules
@@ -104,7 +104,7 @@ spec:
                 nullable: true
                 type: array
               title:
-                description: Overwrites the title of the extended profile (optional)
+                description: Overwrites the title of the extended profile
                 type: string
             required:
             - extends
