@@ -413,6 +413,16 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 					},
 				},
 				Spec: corev1.PodSpec{
+					NodeSelector: map[string]string{
+						"node-role.kubernetes.io/master": "",
+					},
+					Tolerations: []corev1.Toleration{
+						{
+							Key:      "node-role.kubernetes.io/master",
+							Operator: corev1.TolerationOpExists,
+							Effect:   corev1.TaintEffectNoSchedule,
+						},
+					},
 					InitContainers: []corev1.Container{
 						{
 							Name:  "content-container",

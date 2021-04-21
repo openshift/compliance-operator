@@ -42,6 +42,16 @@ func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Log
 			},
 		},
 		Spec: corev1.PodSpec{
+			NodeSelector: map[string]string{
+				"node-role.kubernetes.io/master": "",
+			},
+			Tolerations: []corev1.Toleration{
+				{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
 			ServiceAccountName: aggregatorSA,
 			InitContainers: []corev1.Container{
 				{

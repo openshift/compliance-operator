@@ -408,7 +408,13 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 			NodeSelector: map[string]string{
 				"node-role.kubernetes.io/master": "",
 			},
-			Tolerations:   scanInstance.Spec.ScanTolerations,
+			Tolerations: []corev1.Toleration{
+				{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
 			RestartPolicy: corev1.RestartPolicyOnFailure,
 			Volumes: []corev1.Volume{
 				{

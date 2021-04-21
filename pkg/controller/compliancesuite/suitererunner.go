@@ -122,6 +122,16 @@ func getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
 							},
 						},
 						Spec: corev1.PodSpec{
+							NodeSelector: map[string]string{
+								"node-role.kubernetes.io/master": "",
+							},
+							Tolerations: []corev1.Toleration{
+								{
+									Key:      "node-role.kubernetes.io/master",
+									Operator: corev1.TolerationOpExists,
+									Effect:   corev1.TaintEffectNoSchedule,
+								},
+							},
 							ServiceAccountName: rerunnerServiceAccount,
 							RestartPolicy:      corev1.RestartPolicyOnFailure,
 							Containers: []corev1.Container{
