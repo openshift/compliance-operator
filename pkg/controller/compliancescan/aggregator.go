@@ -37,6 +37,9 @@ func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Log
 			Name:      podName,
 			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels:    podLabels,
+			Annotations: map[string]string{
+				"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+			},
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: aggregatorSA,
