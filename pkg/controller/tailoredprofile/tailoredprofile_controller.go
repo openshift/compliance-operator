@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/xccdf"
 
-	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -21,6 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 var log = logf.Log.WithName("tailoredprofilectrl")
@@ -49,14 +51,14 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to primary resource TailoredProfile
-	err = c.Watch(&source.Kind{Type: &compliancev1alpha1.TailoredProfile{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &cmpv1alpha1.TailoredProfile{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
 	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
-		OwnerType:    &compliancev1alpha1.TailoredProfile{},
+		OwnerType:    &cmpv1alpha1.TailoredProfile{},
 	})
 	if err != nil {
 		return err
@@ -86,10 +88,10 @@ func (r *ReconcileTailoredProfile) Reconcile(request reconcile.Request) (reconci
 	reqLogger.Info("Reconciling TailoredProfile")
 
 	// Fetch the TailoredProfile instance
-	instance := &compliancev1alpha1.TailoredProfile{}
+	instance := &cmpv1alpha1.TailoredProfile{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
@@ -103,65 +105,38 @@ func (r *ReconcileTailoredProfile) Reconcile(request reconcile.Request) (reconci
 		return reconcile.Result{}, err
 	}
 
-	// Get the Profile being extended
-	p := &compliancev1alpha1.Profile{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Spec.Extends, Namespace: instance.Namespace}, p)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// the Profile object didn't exist. Surface the error.
-			err = r.updateTailoredProfileStatusError(instance, err)
-			if err != nil {
-				// error udpating status - requeue
-				return reconcile.Result{}, err
-			}
-			return reconcile.Result{}, nil
-		}
-		// could be a transient error that can be recovered from
+	p, pb, pbgetErr := r.getProfileInfoFromExtends(instance)
+	if pbgetErr != nil && !common.IsRetriable(pbgetErr) {
+		// the Profile or ProfileBundle objects didn't exist. Surface the error.
+		err = r.updateTailoredProfileStatusError(instance, pbgetErr)
 		return reconcile.Result{}, err
+	} else if pbgetErr != nil {
+		return reconcile.Result{}, pbgetErr
 	}
 
 	// Make TailoredProfile be owned by the Profile it extends. This way
 	// we can ensure garbage collection happens.
 	// This update will trigger a requeue with the new object.
-	if !isOwnedBy(instance, p) {
-		if err := controllerutil.SetControllerReference(p, instance, r.scheme); err != nil {
-			return reconcile.Result{}, err
-		}
-		err = r.client.Update(context.TODO(), instance)
-		return reconcile.Result{}, err
+	if needsControllerRef(instance) {
+		return r.setOwnership(instance, p)
 	}
 
-	pb, err := r.getProfileBundleFromProfile(p)
-	if err != nil {
-		return reconcile.Result{}, err
+	rules, ruleErr := r.getRulesFromSelections(instance, pb)
+	if ruleErr != nil && !common.IsRetriable(ruleErr) {
+		// Surface the error.
+		suerr := r.updateTailoredProfileStatusError(instance, ruleErr)
+		return reconcile.Result{}, suerr
+	} else if ruleErr != nil {
+		return reconcile.Result{}, ruleErr
 	}
 
-	rules, retriableErr, err := r.getRulesFromSelections(instance)
-	if err != nil {
-		if !retriableErr {
-			// Surface the error.
-			err = r.updateTailoredProfileStatusError(instance, err)
-			if err != nil {
-				// error udpating status - requeue
-				return reconcile.Result{}, err
-			}
-			return reconcile.Result{}, nil
-		}
-		return reconcile.Result{}, err
-	}
-
-	variables, retriableErr, err := r.getVariablesFromSelections(instance)
-	if err != nil {
-		if !retriableErr {
-			// Surface the error.
-			err = r.updateTailoredProfileStatusError(instance, err)
-			if err != nil {
-				// error udpating status - requeue
-				return reconcile.Result{}, err
-			}
-			return reconcile.Result{}, nil
-		}
-		return reconcile.Result{}, err
+	variables, varErr := r.getVariablesFromSelections(instance, pb)
+	if varErr != nil && !common.IsRetriable(varErr) {
+		// Surface the error.
+		suerr := r.updateTailoredProfileStatusError(instance, varErr)
+		return reconcile.Result{}, suerr
+	} else if varErr != nil {
+		return reconcile.Result{}, varErr
 	}
 
 	// Get tailored profile config map
@@ -177,7 +152,7 @@ func (r *ReconcileTailoredProfile) Reconcile(request reconcile.Request) (reconci
 
 // validates the given TailoredProfile. true means that we can continue since the
 // tailored profile is valid, false means that we can't.
-func (r *ReconcileTailoredProfile) validateTailoredProfile(tp *compliancev1alpha1.TailoredProfile) (bool, error) {
+func (r *ReconcileTailoredProfile) validateTailoredProfile(tp *cmpv1alpha1.TailoredProfile) (bool, error) {
 	// Validate TailoredProfile
 	if tp.Spec.Extends == "" {
 		err := r.updateTailoredProfileStatusError(tp, fmt.Errorf(".spec.extends can't be empty"))
@@ -191,56 +166,90 @@ func (r *ReconcileTailoredProfile) validateTailoredProfile(tp *compliancev1alpha
 	return true, nil
 }
 
-func (r *ReconcileTailoredProfile) getRulesFromSelections(tp *compliancev1alpha1.TailoredProfile) (map[string]*compliancev1alpha1.Rule, bool, error) {
-	rules := make(map[string]*compliancev1alpha1.Rule)
+// getProfileBundleFromExtends gets the Profile and ProfileBundleBundle where the rules come from
+// out of the profile that's being extended
+func (r *ReconcileTailoredProfile) getProfileInfoFromExtends(tp *cmpv1alpha1.TailoredProfile) (*cmpv1alpha1.Profile, *cmpv1alpha1.ProfileBundle, error) {
+	p := &cmpv1alpha1.Profile{}
+	// Get the Profile being extended
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: tp.Spec.Extends, Namespace: tp.Namespace}, p)
+	if kerrors.IsNotFound(err) {
+		return nil, nil, common.NewNonRetriableCtrlError("fetching profile to be extended: %w", err)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pb, err := r.getProfileBundleFrom("Profile", p)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return p, pb, nil
+}
+
+func (r *ReconcileTailoredProfile) getRulesFromSelections(tp *cmpv1alpha1.TailoredProfile, pb *cmpv1alpha1.ProfileBundle) (map[string]*cmpv1alpha1.Rule, error) {
+	rules := make(map[string]*cmpv1alpha1.Rule)
 	for _, selection := range append(tp.Spec.EnableRules, tp.Spec.DisableRules...) {
 		_, ok := rules[selection.Name]
 		if ok {
-			return nil, false, fmt.Errorf("Rule '%s' appears twice in selections (enableRules or disableRules)", selection.Name)
+			return nil, common.NewNonRetriableCtrlError("Rule '%s' appears twice in selections (enableRules or disableRules)", selection.Name)
 		}
-		rule := &compliancev1alpha1.Rule{}
+		rule := &cmpv1alpha1.Rule{}
 		ruleKey := types.NamespacedName{Name: selection.Name, Namespace: tp.Namespace}
 		err := r.client.Get(context.TODO(), ruleKey, rule)
 		if err != nil {
-			if errors.IsNotFound(err) {
-				return nil, false, err
+			if kerrors.IsNotFound(err) {
+				return nil, common.NewNonRetriableCtrlError("Fetching rule: %w", err)
 			}
-			return nil, true, err
+			return nil, err
 		}
+
+		// All variables should be part of the same ProfileBundle
+		if !isOwnedBy(rule, pb) {
+			return nil, common.NewNonRetriableCtrlError("rule %s not owned by expected ProfileBundle %s",
+				rule.GetName(), pb.GetName())
+		}
+
 		rules[selection.Name] = rule
 	}
-	return rules, false, nil
+	return rules, nil
 }
 
-func (r *ReconcileTailoredProfile) getVariablesFromSelections(tp *compliancev1alpha1.TailoredProfile) ([]*compliancev1alpha1.Variable, bool, error) {
-	variableList := []*compliancev1alpha1.Variable{}
+func (r *ReconcileTailoredProfile) getVariablesFromSelections(tp *cmpv1alpha1.TailoredProfile, pb *cmpv1alpha1.ProfileBundle) ([]*cmpv1alpha1.Variable, error) {
+	variableList := []*cmpv1alpha1.Variable{}
 	for _, setValues := range tp.Spec.SetValues {
-		variable := &compliancev1alpha1.Variable{}
+		variable := &cmpv1alpha1.Variable{}
 		varKey := types.NamespacedName{Name: setValues.Name, Namespace: tp.Namespace}
 		err := r.client.Get(context.TODO(), varKey, variable)
 		if err != nil {
-			if errors.IsNotFound(err) {
-				return nil, false, err
+			if kerrors.IsNotFound(err) {
+				return nil, common.NewNonRetriableCtrlError("fetching variable: %w", err)
 			}
-			return nil, true, err
+			return nil, err
+		}
+
+		// All variables should be part of the same ProfileBundle
+		if !isOwnedBy(variable, pb) {
+			return nil, common.NewNonRetriableCtrlError("variable %s not owned by expected ProfileBundle %s",
+				variable.GetName(), pb.GetName())
 		}
 
 		// try setting the variable, this also validates the value
 		err = variable.SetValue(setValues.Value)
 		if err != nil {
-			return nil, false, err
+			return nil, common.NewNonRetriableCtrlError("setting variable: %s", err)
 		}
 
 		variableList = append(variableList, variable)
 	}
-	return variableList, false, nil
+	return variableList, nil
 }
 
-func (r *ReconcileTailoredProfile) updateTailoredProfileStatusReady(tp *compliancev1alpha1.TailoredProfile, out metav1.Object) error {
+func (r *ReconcileTailoredProfile) updateTailoredProfileStatusReady(tp *cmpv1alpha1.TailoredProfile, out metav1.Object) error {
 	// Never update the original (update the copy)
 	tpCopy := tp.DeepCopy()
-	tpCopy.Status.State = compliancev1alpha1.TailoredProfileStateReady
-	tpCopy.Status.OutputRef = compliancev1alpha1.OutputRef{
+	tpCopy.Status.State = cmpv1alpha1.TailoredProfileStateReady
+	tpCopy.Status.OutputRef = cmpv1alpha1.OutputRef{
 		Name:      out.GetName(),
 		Namespace: out.GetNamespace(),
 	}
@@ -248,28 +257,28 @@ func (r *ReconcileTailoredProfile) updateTailoredProfileStatusReady(tp *complian
 	return r.client.Status().Update(context.TODO(), tpCopy)
 }
 
-func (r *ReconcileTailoredProfile) updateTailoredProfileStatusError(tp *compliancev1alpha1.TailoredProfile, err error) error {
+func (r *ReconcileTailoredProfile) updateTailoredProfileStatusError(tp *cmpv1alpha1.TailoredProfile, err error) error {
 	// Never update the original (update the copy)
 	tpCopy := tp.DeepCopy()
-	tpCopy.Status.State = compliancev1alpha1.TailoredProfileStateError
+	tpCopy.Status.State = cmpv1alpha1.TailoredProfileStateError
 	tpCopy.Status.ErrorMessage = err.Error()
 	return r.client.Status().Update(context.TODO(), tpCopy)
 }
 
-func (r *ReconcileTailoredProfile) getProfileBundleFromProfile(p *compliancev1alpha1.Profile) (*compliancev1alpha1.ProfileBundle, error) {
-	pbRef, err := getProfileBundleReferenceFromProfile(p)
+func (r *ReconcileTailoredProfile) getProfileBundleFrom(objtype string, o metav1.Object) (*cmpv1alpha1.ProfileBundle, error) {
+	pbRef, err := getProfileBundleReference(objtype, o)
 	if err != nil {
 		return nil, err
 	}
 
-	pb := compliancev1alpha1.ProfileBundle{}
+	pb := cmpv1alpha1.ProfileBundle{}
 	// we use the profile's namespace as either way the object's have to be in the same namespace
 	// in order for OwnerReferences to work
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pbRef.Name, Namespace: p.Namespace}, &pb)
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pbRef.Name, Namespace: o.GetNamespace()}, &pb)
 	return &pb, err
 }
 
-func (r *ReconcileTailoredProfile) ensureOutputObject(tp *compliancev1alpha1.TailoredProfile, tpcm *corev1.ConfigMap, pb *compliancev1alpha1.ProfileBundle, logger logr.Logger) (reconcile.Result, error) {
+func (r *ReconcileTailoredProfile) ensureOutputObject(tp *cmpv1alpha1.TailoredProfile, tpcm *corev1.ConfigMap, pb *cmpv1alpha1.ProfileBundle, logger logr.Logger) (reconcile.Result, error) {
 	// Set TailoredProfile instance as the owner and controller
 	if err := controllerutil.SetControllerReference(tp, tpcm, r.scheme); err != nil {
 		return reconcile.Result{}, err
@@ -278,7 +287,7 @@ func (r *ReconcileTailoredProfile) ensureOutputObject(tp *compliancev1alpha1.Tai
 	// Check if this ConfigMap already exists
 	found := &corev1.ConfigMap{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: tpcm.Name, Namespace: tpcm.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
+	if err != nil && kerrors.IsNotFound(err) {
 		// update status
 		err = r.updateTailoredProfileStatusReady(tp, tpcm)
 		if err != nil {
@@ -304,17 +313,25 @@ func (r *ReconcileTailoredProfile) ensureOutputObject(tp *compliancev1alpha1.Tai
 	return reconcile.Result{}, nil
 }
 
-func getProfileBundleReferenceFromProfile(p *compliancev1alpha1.Profile) (*metav1.OwnerReference, error) {
-	for _, ref := range p.GetOwnerReferences() {
-		if ref.Kind == "ProfileBundle" && ref.APIVersion == compliancev1alpha1.SchemeGroupVersion.String() {
+func (r *ReconcileTailoredProfile) setOwnership(tp *cmpv1alpha1.TailoredProfile, obj metav1.Object) (reconcile.Result, error) {
+	if err := controllerutil.SetControllerReference(obj, tp, r.scheme); err != nil {
+		return reconcile.Result{}, err
+	}
+	err := r.client.Update(context.TODO(), tp)
+	return reconcile.Result{}, err
+}
+
+func getProfileBundleReference(objtype string, o metav1.Object) (*metav1.OwnerReference, error) {
+	for _, ref := range o.GetOwnerReferences() {
+		if ref.Kind == "ProfileBundle" && ref.APIVersion == cmpv1alpha1.SchemeGroupVersion.String() {
 			return ref.DeepCopy(), nil
 		}
 	}
-	return nil, fmt.Errorf("Profile '%s' had no owning ProfileBundle", p.Name)
+	return nil, fmt.Errorf("%s '%s' had no owning ProfileBundle", objtype, o.GetName())
 }
 
 // newTailoredProfileCM creates a tailored profile XML inside a configmap
-func newTailoredProfileCM(tp *compliancev1alpha1.TailoredProfile) *corev1.ConfigMap {
+func newTailoredProfileCM(tp *cmpv1alpha1.TailoredProfile) *corev1.ConfigMap {
 	labels := map[string]string{
 		"tailored-profile": tp.Name,
 	}
@@ -334,10 +351,22 @@ func newTailoredProfileCM(tp *compliancev1alpha1.TailoredProfile) *corev1.Config
 	}
 }
 
+func needsControllerRef(obj metav1.Object) bool {
+	refs := obj.GetOwnerReferences()
+	for _, ref := range refs {
+		if ref.Controller != nil {
+			if *ref.Controller {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func isOwnedBy(obj, owner metav1.Object) bool {
 	refs := obj.GetOwnerReferences()
 	for _, ref := range refs {
-		if ref.UID == owner.GetUID() {
+		if ref.UID == owner.GetUID() && ref.Name == owner.GetName() {
 			return true
 		}
 	}
