@@ -14,8 +14,6 @@ require (
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/zapr v0.4.0
 	github.com/google/go-cmp v0.5.5
-	github.com/gorilla/mux v1.8.0 // indirect
-	github.com/nbutton23/zxcvbn-go v0.0.0-20210217022336-fa2cb2858354 // indirect
 	github.com/onsi/ginkgo v1.16.1
 	github.com/onsi/gomega v1.11.0
 	github.com/openshift/api v0.0.0-20200829102639-8a3a835f1acf
@@ -23,9 +21,7 @@ require (
 	github.com/openshift/machine-config-operator v0.0.1-0.20200913004441-7eba765c69c9
 	github.com/operator-framework/operator-sdk v0.19.4
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/securego/gosec v0.0.0-20200302134848-c998389da2ac
-	github.com/sergi/go-diff v1.1.0 // indirect
-	github.com/sirupsen/logrus v1.7.0 // indirect
+	github.com/securego/gosec/v2 v2.7.0
 	github.com/spf13/cobra v1.1.1
 	github.com/subchen/go-xmldom v1.1.2
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
