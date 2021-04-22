@@ -440,11 +440,11 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceMemory: resource.MustParse("10Mi"),
-									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceCPU:    resource.MustParse("10m"),
 								},
 								Limits: corev1.ResourceList{
 									corev1.ResourceMemory: resource.MustParse("50Mi"),
-									corev1.ResourceCPU:    resource.MustParse("250m"),
+									corev1.ResourceCPU:    resource.MustParse("50m"),
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -464,11 +464,11 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceMemory: resource.MustParse("20Mi"),
-									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceCPU:    resource.MustParse("10m"),
 								},
 								Limits: corev1.ResourceList{
 									corev1.ResourceMemory: resource.MustParse("200Mi"),
-									corev1.ResourceCPU:    resource.MustParse("1000m"),
+									corev1.ResourceCPU:    resource.MustParse("100m"),
 								},
 							},
 							Command: []string{
@@ -508,11 +508,11 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceMemory: resource.MustParse("1Mi"),
-									corev1.ResourceCPU:    resource.MustParse("20m"),
+									corev1.ResourceCPU:    resource.MustParse("10m"),
 								},
 								Limits: corev1.ResourceList{
 									corev1.ResourceMemory: resource.MustParse("15Mi"),
-									corev1.ResourceCPU:    resource.MustParse("50m"),
+									corev1.ResourceCPU:    resource.MustParse("10m"),
 								},
 							},
 						},

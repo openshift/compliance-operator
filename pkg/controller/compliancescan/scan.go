@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -90,6 +91,16 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 						AllowPrivilegeEscalation: &falseP,
 						ReadOnlyRootFilesystem:   &trueP,
 					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("10Mi"),
+							corev1.ResourceCPU:    resource.MustParse("10m"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("50Mi"),
+							corev1.ResourceCPU:    resource.MustParse("50m"),
+						},
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "content-dir",
@@ -122,6 +133,16 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 						AllowPrivilegeEscalation: &falseP,
 						ReadOnlyRootFilesystem:   &trueP,
 					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("20Mi"),
+							corev1.ResourceCPU:    resource.MustParse("10m"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("100Mi"),
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+						},
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "report-dir",
@@ -144,6 +165,16 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 						ReadOnlyRootFilesystem: &trueP,
 						// TODO(jaosorior): Figure out if the default
 						// seccomp profile is sufficient here.
+					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("50Mi"),
+							corev1.ResourceCPU:    resource.MustParse("10m"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("500Mi"),
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+						},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
@@ -292,6 +323,16 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 						AllowPrivilegeEscalation: &falseP,
 						ReadOnlyRootFilesystem:   &trueP,
 					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("10Mi"),
+							corev1.ResourceCPU:    resource.MustParse("10m"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("50Mi"),
+							corev1.ResourceCPU:    resource.MustParse("50m"),
+						},
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "content-dir",
@@ -307,6 +348,16 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 					SecurityContext: &corev1.SecurityContext{
 						AllowPrivilegeEscalation: &falseP,
 						ReadOnlyRootFilesystem:   &trueP,
+					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("20Mi"),
+							corev1.ResourceCPU:    resource.MustParse("10m"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("100Mi"),
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+						},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
@@ -349,6 +400,16 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 						AllowPrivilegeEscalation: &falseP,
 						ReadOnlyRootFilesystem:   &trueP,
 					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("20Mi"),
+							corev1.ResourceCPU:    resource.MustParse("10m"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("100Mi"),
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+						},
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "report-dir",
@@ -369,6 +430,16 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 					SecurityContext: &corev1.SecurityContext{
 						AllowPrivilegeEscalation: &falseP,
 						ReadOnlyRootFilesystem:   &trueP,
+					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("50Mi"),
+							corev1.ResourceCPU:    resource.MustParse("10m"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("500Mi"),
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+						},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
