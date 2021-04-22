@@ -451,7 +451,9 @@ func getMutualHttpsTransport(c *scapresultsConfig) (*http.Transport, error) {
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(ca)
 
-	tlsConfig := &tls.Config{}
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
 	// Configures TLS 1.2
 	tlsConfig = libgocrypto.SecureTLSConfig(tlsConfig)
 	tlsConfig.RootCAs = pool

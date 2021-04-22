@@ -467,9 +467,10 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 
 func (r *ReconcileComplianceScan) deleteScanPods(instance *compv1alpha1.ComplianceScan, nodes []corev1.Node, logger logr.Logger) error {
 	// On each eligible node..
-	for _, node := range nodes {
+	for idx := range nodes {
+		node := &nodes[idx]
 		logger.Info("Deleting a pod on node", "node", node.Name)
-		pod := newScanPodForNode(instance, &node, logger)
+		pod := newScanPodForNode(instance, node, logger)
 
 		// Delete it.
 		err := r.client.Delete(context.TODO(), pod)
