@@ -4,13 +4,12 @@ import (
 	"io"
 	"os"
 
-	igntypes "github.com/coreos/ignition/config/v2_2/types"
+	igntypes "github.com/coreos/ignition/v2/config/v3_1/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 
-	ign2types "github.com/coreos/ignition/config/v2_2/types"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	mcfgcommon "github.com/openshift/machine-config-operator/pkg/controller/common"
@@ -161,7 +160,7 @@ var _ = Describe("XCCDF parser", func() {
 				BeforeEach(func() {
 					mcfg, _ := ParseMachineConfig(rem, rem.Spec.Current.Object)
 					ignRaw, _ := mcfgcommon.IgnParseWrapper(mcfg.Spec.Config.Raw)
-					parsedIgn := ignRaw.(ign2types.Config)
+					parsedIgn := ignRaw.(igntypes.Config)
 					mcFiles = parsedIgn.Storage.Files
 				})
 
