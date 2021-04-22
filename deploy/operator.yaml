@@ -28,10 +28,10 @@ spec:
           resources:
             requests:
               memory: "20Mi"
-              cpu: "250m"
+              cpu: "10m"
             limits:
               memory: "200Mi"
-              cpu: "500m"
+              cpu: "100m"
           env:
             - name: WATCH_NAMESPACE
               valueFrom:
