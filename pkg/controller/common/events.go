@@ -61,14 +61,15 @@ func GenerateEventForResult(recorder record.EventRecorder, obj runtime.Object, o
 	if len(ownerRefs) == 0 {
 		return //there is nothing to do, since no owner is set
 	}
-	for _, ownerRef := range ownerRefs {
+	for idx := range ownerRefs {
+		ownerRef := &ownerRefs[idx]
 		// we are making an assumption that the GRC policy has a single owner, or we chose the first owner in the list
 		if string(ownerRef.UID) == "" {
 			continue //there is nothing to do, since no owner UID is set
 		}
 		// FIXME(jaosorior): Figure out a less hacky way to check this
 		if ownerRef.Kind == "Policy" {
-			pol := getParentPolicy(&ownerRef, objInfo.GetNamespace())
+			pol := getParentPolicy(ownerRef, objInfo.GetNamespace())
 			recorder.Event(
 				pol,
 				corev1.EventTypeNormal,

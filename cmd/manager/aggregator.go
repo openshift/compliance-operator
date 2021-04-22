@@ -581,8 +581,8 @@ func aggregator(cmd *cobra.Command, args []string) {
 
 	// Annotate configMaps, so we don't need to re-parse them
 	log.Info("Annotating ConfigMaps")
-	for _, cm := range configMaps {
-		err = markConfigMapAsProcessed(crclient, &cm)
+	for idx := range configMaps {
+		err = markConfigMapAsProcessed(crclient, &configMaps[idx])
 		if err != nil {
 			log.Error(err, "Cannot annotate the ConfigMap")
 			os.Exit(1)
