@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/clarketm/json"
-	igntypes "github.com/coreos/ignition/config/v2_2/types"
+	igntypes "github.com/coreos/ignition/v2/config/v3_1/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -26,12 +26,14 @@ func getItemById(list []*ParseResultContextItem, id string) *ParseResultContextI
 }
 
 func getRemediation(serviceName string) *compv1alpha1.ComplianceRemediation {
+	serviceStr := "let's pretend this is a service"
+	trueVal := true
 	ignConfig := igntypes.Config{
 		Systemd: igntypes.Systemd{
 			Units: []igntypes.Unit{
 				{
-					Contents: "let's pretend this is a service",
-					Enable:   true,
+					Contents: &serviceStr,
+					Enabled:  &trueVal,
 					Name:     serviceName,
 				},
 			},
