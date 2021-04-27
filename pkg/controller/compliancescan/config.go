@@ -2,6 +2,7 @@ package compliancescan
 
 import (
 	"context"
+	"os"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -247,8 +248,9 @@ func commonOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev1
 		cm.Data[OpenScapTailoringDirEnvName] = OpenScapTailoringDir
 	}
 
-	if scan.Spec.HTTPSProxy != "" {
-		cm.Data[HTTPSProxyEnvName] = scan.Spec.HTTPSProxy
+	proxy := getHttpsProxy(scan)
+	if proxy != "" {
+		cm.Data[HTTPSProxyEnvName] = proxy
 	}
 
 	if scan.Spec.NoExternalResources {
@@ -256,6 +258,14 @@ func commonOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev1
 	}
 
 	return cm
+}
+
+func getHttpsProxy(scan *compv1alpha1.ComplianceScan) string {
+	if scan.Spec.HTTPSProxy != "" {
+		return scan.Spec.HTTPSProxy
+	}
+
+	return os.Getenv("HTTPS_PROXY")
 }
 
 func defaultOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev1.ConfigMap {
