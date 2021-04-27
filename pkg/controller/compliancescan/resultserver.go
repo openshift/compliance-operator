@@ -127,9 +127,21 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
+					Annotations: map[string]string{
+						"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+					},
 				},
 				Spec: corev1.PodSpec{
-					// TODO(jaosorior): Should we schedule this in the master nodes only?
+					NodeSelector: map[string]string{
+						"node-role.kubernetes.io/master": "",
+					},
+					Tolerations: []corev1.Toleration{
+						{
+							Key:      "node-role.kubernetes.io/master",
+							Operator: corev1.TolerationOpExists,
+							Effect:   corev1.TaintEffectNoSchedule,
+						},
+					},
 					ServiceAccountName: resultserverSA,
 					Containers: []corev1.Container{
 						{

@@ -142,8 +142,8 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 	}
 
 	var nodeProduct string
-	for _, reference := range instance.Profiles {
-		scan, product, err := newCompScanFromBindingProfile(r, instance, &reference, log)
+	for i := range instance.Profiles {
+		scan, product, err := newCompScanFromBindingProfile(r, instance, &instance.Profiles[i], log)
 		if err != nil {
 			return common.ReturnWithRetriableError(reqLogger, err)
 		}

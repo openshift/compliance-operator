@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/robfig/cron"
+	cron "github.com/robfig/cron/v3"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -117,8 +117,21 @@ func getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
 								compv1alpha1.SuiteScriptLabel: "",
 								"workload":                    "suitererunner",
 							},
+							Annotations: map[string]string{
+								"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+							},
 						},
 						Spec: corev1.PodSpec{
+							NodeSelector: map[string]string{
+								"node-role.kubernetes.io/master": "",
+							},
+							Tolerations: []corev1.Toleration{
+								{
+									Key:      "node-role.kubernetes.io/master",
+									Operator: corev1.TolerationOpExists,
+									Effect:   corev1.TaintEffectNoSchedule,
+								},
+							},
 							ServiceAccountName: rerunnerServiceAccount,
 							RestartPolicy:      corev1.RestartPolicyOnFailure,
 							Containers: []corev1.Container{
@@ -137,11 +150,11 @@ func getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
 									Resources: corev1.ResourceRequirements{
 										Requests: corev1.ResourceList{
 											corev1.ResourceMemory: resource.MustParse("10Mi"),
-											corev1.ResourceCPU:    resource.MustParse("100m"),
+											corev1.ResourceCPU:    resource.MustParse("10m"),
 										},
 										Limits: corev1.ResourceList{
 											corev1.ResourceMemory: resource.MustParse("50Mi"),
-											corev1.ResourceCPU:    resource.MustParse("250m"),
+											corev1.ResourceCPU:    resource.MustParse("50m"),
 										},
 									},
 								},

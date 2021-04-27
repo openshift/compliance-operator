@@ -244,8 +244,8 @@ func deleteObsoleteItems(cli runtimeclient.Client, kind string, pbName, namespac
 	// a type. This might be inefficient with a large number of objects,
 	// if this ever becomes a performance problem, use labels instead
 	// with a short version of the hash
-	for _, item := range list.Items {
-		err := deleteIfNotCurrentDigest(cli, nonce, &item)
+	for i := range list.Items {
+		err := deleteIfNotCurrentDigest(cli, nonce, &list.Items[i])
 		if err != nil {
 			return err
 		}
