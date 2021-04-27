@@ -207,7 +207,7 @@ mod-verify:
 
 .PHONY: gosec
 gosec:
-	@$(GO) run github.com/securego/gosec/cmd/gosec -severity medium -confidence medium -quiet ./...
+	@$(GO) run github.com/securego/gosec/v2/cmd/gosec -severity medium -confidence medium -quiet ./...
 
 .PHONY: generate
 generate: operator-sdk ## Run operator-sdk's code generation (k8s and crds)

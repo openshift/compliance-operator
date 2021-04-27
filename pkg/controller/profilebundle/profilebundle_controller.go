@@ -408,8 +408,21 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
+					Annotations: map[string]string{
+						"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+					},
 				},
 				Spec: corev1.PodSpec{
+					NodeSelector: map[string]string{
+						"node-role.kubernetes.io/master": "",
+					},
+					Tolerations: []corev1.Toleration{
+						{
+							Key:      "node-role.kubernetes.io/master",
+							Operator: corev1.TolerationOpExists,
+							Effect:   corev1.TaintEffectNoSchedule,
+						},
+					},
 					InitContainers: []corev1.Container{
 						{
 							Name:  "content-container",
@@ -427,11 +440,11 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceMemory: resource.MustParse("10Mi"),
-									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceCPU:    resource.MustParse("10m"),
 								},
 								Limits: corev1.ResourceList{
 									corev1.ResourceMemory: resource.MustParse("50Mi"),
-									corev1.ResourceCPU:    resource.MustParse("250m"),
+									corev1.ResourceCPU:    resource.MustParse("50m"),
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -451,11 +464,11 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceMemory: resource.MustParse("20Mi"),
-									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceCPU:    resource.MustParse("10m"),
 								},
 								Limits: corev1.ResourceList{
 									corev1.ResourceMemory: resource.MustParse("200Mi"),
-									corev1.ResourceCPU:    resource.MustParse("1000m"),
+									corev1.ResourceCPU:    resource.MustParse("100m"),
 								},
 							},
 							Command: []string{
@@ -495,11 +508,11 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									corev1.ResourceMemory: resource.MustParse("1Mi"),
-									corev1.ResourceCPU:    resource.MustParse("20m"),
+									corev1.ResourceCPU:    resource.MustParse("10m"),
 								},
 								Limits: corev1.ResourceList{
 									corev1.ResourceMemory: resource.MustParse("15Mi"),
-									corev1.ResourceCPU:    resource.MustParse("50m"),
+									corev1.ResourceCPU:    resource.MustParse("10m"),
 								},
 							},
 						},

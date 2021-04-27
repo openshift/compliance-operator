@@ -37,8 +37,21 @@ func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Log
 			Name:      podName,
 			Namespace: common.GetComplianceOperatorNamespace(),
 			Labels:    podLabels,
+			Annotations: map[string]string{
+				"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+			},
 		},
 		Spec: corev1.PodSpec{
+			NodeSelector: map[string]string{
+				"node-role.kubernetes.io/master": "",
+			},
+			Tolerations: []corev1.Toleration{
+				{
+					Key:      "node-role.kubernetes.io/master",
+					Operator: corev1.TolerationOpExists,
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
 			ServiceAccountName: aggregatorSA,
 			InitContainers: []corev1.Container{
 				{

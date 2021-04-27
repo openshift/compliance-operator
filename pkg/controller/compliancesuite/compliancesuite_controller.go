@@ -227,13 +227,14 @@ func (r *ReconcileComplianceSuite) issueValidationError(suite *compv1alpha1.Comp
 }
 
 func (r *ReconcileComplianceSuite) reconcileScans(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) (bool, error) {
-	for _, scanWrap := range suite.Spec.Scans {
+	for idx := range suite.Spec.Scans {
+		scanWrap := &suite.Spec.Scans[idx]
 		scan := &compv1alpha1.ComplianceScan{}
 		err := r.client.Get(context.TODO(), types.NamespacedName{Name: scanWrap.Name, Namespace: suite.Namespace}, scan)
 		if err != nil && errors.IsNotFound(err) {
 			// If the scan was not found, launch it
 			logger.Info("Scan not found, launching..", "ComplianceScan.Name", scanWrap.Name)
-			if err = launchScanForSuite(r, suite, &scanWrap, logger); err != nil {
+			if err = launchScanForSuite(r, suite, scanWrap, logger); err != nil {
 				return false, err
 			}
 			logger.Info("Scan created", "ComplianceScan.Name", scanWrap.Name)
@@ -250,7 +251,7 @@ func (r *ReconcileComplianceSuite) reconcileScans(suite *compv1alpha1.Compliance
 		}
 
 		// Update the scan spec (last becuase it's a corner case)
-		rescheduleWithDelay, err := r.reconcileScanSpec(&scanWrap, scan, logger)
+		rescheduleWithDelay, err := r.reconcileScanSpec(scanWrap, scan, logger)
 		if rescheduleWithDelay || err != nil {
 			return rescheduleWithDelay, err
 		}
@@ -263,7 +264,8 @@ func (r *ReconcileComplianceSuite) reconcileScans(suite *compv1alpha1.Compliance
 
 func (r *ReconcileComplianceSuite) reconcileScanStatus(suite *compv1alpha1.ComplianceSuite, scan *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	// See if we already have a ScanStatusWrapper for this name
-	for idx, scanStatusWrap := range suite.Status.ScanStatuses {
+	for idx := range suite.Status.ScanStatuses {
+		scanStatusWrap := suite.Status.ScanStatuses[idx]
 		if scan.Name == scanStatusWrap.Name {
 			err := r.updateScanStatus(suite, idx, &scanStatusWrap, scan, logger)
 			if err != nil {
@@ -524,9 +526,9 @@ func (r *ReconcileComplianceSuite) applyRemediation(rem compv1alpha1.ComplianceR
 
 	if utils.IsMachineConfig(rem.Spec.Current.Object) {
 		// get affected pool
-		pool, affectedPoolExists := r.getAffectedMcfgPool(scan, mcfgpools)
+		pool := r.getAffectedMcfgPool(scan, mcfgpools)
 		// we only need to operate on pools that are affected
-		if affectedPoolExists {
+		if pool != nil {
 			foundPool, poolIsTracked := affectedMcfgPools[pool.Name]
 			if !poolIsTracked {
 				foundPool = pool.DeepCopy()
@@ -590,13 +592,14 @@ func (r *ReconcileComplianceSuite) applyMcfgRemediationAndPausePool(rem compv1al
 	return nil
 }
 
-func (r *ReconcileComplianceSuite) getAffectedMcfgPool(scan *compv1alpha1.ComplianceScan, mcfgpools *mcfgv1.MachineConfigPoolList) (mcfgv1.MachineConfigPool, bool) {
-	for _, pool := range mcfgpools.Items {
-		if utils.McfgPoolLabelMatches(scan.Spec.NodeSelector, &pool) {
-			return pool, true
+func (r *ReconcileComplianceSuite) getAffectedMcfgPool(scan *compv1alpha1.ComplianceScan, mcfgpools *mcfgv1.MachineConfigPoolList) *mcfgv1.MachineConfigPool {
+	for i := range mcfgpools.Items {
+		pool := &mcfgpools.Items[i]
+		if utils.McfgPoolLabelMatches(scan.Spec.NodeSelector, pool) {
+			return pool
 		}
 	}
-	return mcfgv1.MachineConfigPool{}, false
+	return nil
 }
 
 func remediationNeedsOutdatedRemoval(rem *compv1alpha1.ComplianceRemediation, suite *compv1alpha1.ComplianceSuite) bool {

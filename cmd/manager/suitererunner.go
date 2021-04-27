@@ -87,9 +87,9 @@ func RerunSuite(cmd *cobra.Command, args []string) {
 
 	fmt.Printf("Got %d scans from the ComplianceSuite '%s'\n", len(scans.Items), conf.Name)
 
-	for _, scan := range scans.Items {
-		currentScan := &scan
-		key := types.NamespacedName{Name: scan.GetName(), Namespace: scan.GetNamespace()}
+	for idx := range scans.Items {
+		currentScan := &scans.Items[idx]
+		key := types.NamespacedName{Name: currentScan.GetName(), Namespace: currentScan.GetNamespace()}
 		err := backoff.Retry(func() error {
 			var scanCopy *compv1alpha1.ComplianceScan
 			if currentScan == nil {
@@ -121,7 +121,7 @@ func RerunSuite(cmd *cobra.Command, args []string) {
 		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxScanUpdateRetries))
 
 		if err != nil {
-			fmt.Printf("Couldn't update scan '%s', err: %s\n", scan.Name, err)
+			fmt.Printf("Couldn't update scan '%s', err: %s\n", currentScan.Name, err)
 			os.Exit(1)
 		}
 	}
