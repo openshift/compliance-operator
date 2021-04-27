@@ -129,6 +129,7 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 					Labels: labels,
 					Annotations: map[string]string{
 						"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+						corev1.SeccompPodAnnotationKey:     corev1.SeccompProfileRuntimeDefault,
 					},
 				},
 				Spec: corev1.PodSpec{

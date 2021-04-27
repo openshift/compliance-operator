@@ -40,8 +40,7 @@ const (
 	// Tailoring constants
 	OpenScapTailoringDir = "/tailoring"
 
-	PlatformScanName                  = "api-checks"
-	PlatformScanResourceCollectorName = "api-resource-collector"
+	PlatformScanName = "api-checks"
 	// This coincides with the default ocp_data_root var in CaC.
 	PlatformScanDataRoot = "/kubernetes-api-resources"
 )

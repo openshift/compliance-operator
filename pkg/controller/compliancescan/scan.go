@@ -24,6 +24,15 @@ const (
 	apiResourceCollectorSA  = "api-resource-collector"
 	tailoringCMVolumeName   = "tailoring"
 	tailoringNotFoundPrefix = "Tailoring ConfigMap not found: "
+
+	// Container names
+	PlatformScanResourceCollectorName = "api-resource-collector"
+	contentCopierContainerName        = "content-container"
+	logCollectorContainerName         = "log-collector"
+
+	// Seccomp annotation keys
+	seccompKeyForContentContainer = corev1.SeccompContainerAnnotationKeyPrefix + contentCopierContainerName
+	seccompKeyForLogCollector     = corev1.SeccompContainerAnnotationKeyPrefix + logCollectorContainerName
 )
 
 func (r *ReconcileComplianceScan) createPlatformScanPod(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
@@ -73,13 +82,16 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 			Labels:    podLabels,
 			Annotations: map[string]string{
 				"openshift.io/scc": "privileged",
+				// Seccomp annotations
+				seccompKeyForContentContainer: corev1.SeccompProfileRuntimeDefault,
+				seccompKeyForLogCollector:     corev1.SeccompProfileRuntimeDefault,
 			},
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: resultscollectorSA,
 			InitContainers: []corev1.Container{
 				{
-					Name:  "content-container",
+					Name:  contentCopierContainerName,
 					Image: getInitContainerImage(&scanInstance.Spec, logger),
 					Command: []string{
 						"sh",
@@ -111,7 +123,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 			},
 			Containers: []corev1.Container{
 				{
-					Name:  "log-collector",
+					Name:  logCollectorContainerName,
 					Image: utils.GetComponentImage(utils.OPERATOR),
 					Command: []string{
 						"compliance-operator", "resultscollector",
@@ -305,13 +317,15 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 			Labels:    podLabels,
 			Annotations: map[string]string{
 				"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+				// Seccomp annotation
+				corev1.SeccompPodAnnotationKey: corev1.SeccompProfileRuntimeDefault,
 			},
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: apiResourceCollectorSA,
 			InitContainers: []corev1.Container{
 				{
-					Name:  "content-container",
+					Name:  contentCopierContainerName,
 					Image: getInitContainerImage(&scanInstance.Spec, logger),
 					Command: []string{
 						"sh",
@@ -378,7 +392,7 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 			},
 			Containers: []corev1.Container{
 				{
-					Name:  "log-collector",
+					Name:  logCollectorContainerName,
 					Image: utils.GetComponentImage(utils.OPERATOR),
 					Command: []string{
 						"compliance-operator", "resultscollector",
