@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/subchen/go-xmldom"
+	"github.com/antchfx/xmlquery"
 
 	"github.com/ghodss/yaml"
 
@@ -46,8 +46,8 @@ type scapContentDataStream struct {
 	// Client for Gets
 	client *kubernetes.Clientset
 	// Staging objects
-	dataStream *utils.XMLDocument
-	tailoring  *utils.XMLDocument
+	dataStream *xmlquery.Node
+	tailoring  *xmlquery.Node
 	resources  []string
 	found      map[string][]byte
 }
@@ -76,7 +76,7 @@ func (c *scapContentDataStream) LoadTailoring(path string) error {
 	return nil
 }
 
-func (c *scapContentDataStream) loadContent(path string) (*utils.XMLDocument, error) {
+func (c *scapContentDataStream) loadContent(path string) (*xmlquery.Node, error) {
 	f, err := openNonEmptyFile(path)
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func (c *scapContentDataStream) loadContent(path string) (*utils.XMLDocument, er
 	return parseContent(f)
 }
 
-func parseContent(f *os.File) (*utils.XMLDocument, error) {
+func parseContent(f *os.File) (*xmlquery.Node, error) {
 	return utils.ParseContent(bufio.NewReader(f))
 }
 
@@ -164,40 +164,43 @@ func (c *scapContentDataStream) FigureResources(profile string) error {
 //
 //  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
 //  </code></warning>
-func getPathFromWarningXML(in string) string {
-	DBG("%s", in)
+func getPathFromWarningXML(in *xmlquery.Node) string {
+	DBG("Parsing warning %s", in.OutputXML(false))
 	return utils.GetPathFromWarningXML(in)
 }
 
 // Collect the resource paths for objects that this scan needs to obtain.
 // The profile will have a series of "selected" checks that we grab all of the path info from.
-func getResourcePaths(profileDefs *utils.XMLDocument, ruleDefs *utils.XMLDocument, profile string) []string {
+func getResourcePaths(profileDefs *xmlquery.Node, ruleDefs *xmlquery.Node, profile string) []string {
 	out := []string{}
 	selectedChecks := []string{}
 
 	// First we find the Profile node, to locate the enabled checks.
 	DBG("Using profile %s", profile)
-	nodes := profileDefs.Root.Query("//Profile")
+	nodes := profileDefs.SelectElements("//xccdf-1.2:Profile")
+	if len(nodes) == 0 {
+		DBG("no profiles found in datastream")
+	}
 	for _, node := range nodes {
-		profileID := node.GetAttributeValue("id")
+		profileID := node.SelectAttr("id")
 		if profileID != profile {
 			continue
 		}
 
-		checks := node.GetChildren("select")
+		checks := node.SelectElements("//xccdf-1.2:select")
 		for _, check := range checks {
-			if check.GetAttributeValue("selected") != "true" {
+			if check.SelectAttr("selected") != "true" {
 				continue
 			}
 
-			if idRef := check.GetAttributeValue("idref"); idRef != "" {
+			if idRef := check.SelectAttr("idref"); idRef != "" {
 				DBG("selected: %v", idRef)
 				selectedChecks = append(selectedChecks, idRef)
 			}
 		}
 	}
 
-	checkDefinitions := ruleDefs.Root.Query("//Rule")
+	checkDefinitions := ruleDefs.SelectElements("//xccdf-1.2:Rule")
 	if len(checkDefinitions) == 0 {
 		DBG("WARNING: No rules to query (invalid datastream)")
 		return out
@@ -205,9 +208,9 @@ func getResourcePaths(profileDefs *utils.XMLDocument, ruleDefs *utils.XMLDocumen
 
 	// For each of our selected checks, collect the required path info.
 	for _, checkID := range selectedChecks {
-		var found *xmldom.Node
+		var found *xmlquery.Node
 		for _, rule := range checkDefinitions {
-			if rule.GetAttributeValue("id") == checkID {
+			if rule.SelectAttr("id") == checkID {
 				found = rule
 				break
 			}
@@ -219,13 +222,13 @@ func getResourcePaths(profileDefs *utils.XMLDocument, ruleDefs *utils.XMLDocumen
 
 		// This node is called "warning" and contains the path info. It's not an actual "warning" for us here.
 		var warningFound bool
-		warningObjs := found.FindByName("warning")
+		warningObjs := found.SelectElements("//xccdf-1.2:warning")
 
 		for _, warn := range warningObjs {
 			if warn == nil {
 				continue
 			}
-			apiPath := getPathFromWarningXML(warn.XML())
+			apiPath := getPathFromWarningXML(warn)
 			if len(apiPath) == 0 {
 				continue
 			}
@@ -245,15 +248,15 @@ func getResourcePaths(profileDefs *utils.XMLDocument, ruleDefs *utils.XMLDocumen
 	return out
 }
 
-func (c *scapContentDataStream) getExtendedProfileFromTailoring(ds *utils.XMLDocument, tailoredProfile string) string {
-	nodes := ds.Root.Query("//Profile")
+func (c *scapContentDataStream) getExtendedProfileFromTailoring(ds *xmlquery.Node, tailoredProfile string) string {
+	nodes := ds.SelectElements("//xccdf-1.2:Profile")
 	for _, node := range nodes {
-		tailoredProfileID := node.GetAttributeValue("id")
+		tailoredProfileID := node.SelectAttr("id")
 		if tailoredProfileID != tailoredProfile {
 			continue
 		}
 
-		profileID := node.GetAttributeValue("extends")
+		profileID := node.SelectAttr("extends")
 		if profileID != "" {
 			return profileID
 		}

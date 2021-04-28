@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/subchen/go-xmldom"
+	"github.com/antchfx/xmlquery"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,11 +32,6 @@ const (
 	codeTag        = "</code>"
 )
 
-// XMLDocument is a wrapper that keeps the interface XML-parser-agnostic
-type XMLDocument struct {
-	*xmldom.Document
-}
-
 type ParseResult struct {
 	Id          string
 	CheckResult *compv1alpha1.ComplianceCheckResult
@@ -47,28 +42,25 @@ type ParseResult struct {
 //
 //  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
 //  </code></warning>
-func GetPathFromWarningXML(in string) string {
-	apiIndex := strings.Index(in, endPointTag)
-	if apiIndex == -1 {
-		return ""
+func GetPathFromWarningXML(in *xmlquery.Node) string {
+	codeNodes := in.SelectElements("html:code")
+
+	for _, codeNode := range codeNodes {
+		if codeNode.SelectAttr("class") == endPointTag {
+			return codeNode.InnerText()
+		}
 	}
 
-	apiValueBeginIndex := apiIndex + len(endPointTagEnd)
-	apiValueEndIndex := strings.Index(in[apiValueBeginIndex:], codeTag)
-	if apiValueEndIndex == -1 {
-		return ""
-	}
-
-	return in[apiValueBeginIndex : apiValueBeginIndex+apiValueEndIndex]
+	return ""
 }
 
-type nodeByIdHashTable map[string]*xmldom.Node
+type nodeByIdHashTable map[string]*xmlquery.Node
 
-func newByIdHashTable(nodes []*xmldom.Node) nodeByIdHashTable {
+func newByIdHashTable(nodes []*xmlquery.Node) nodeByIdHashTable {
 	table := make(nodeByIdHashTable)
 	for i := range nodes {
 		ruleDefinition := nodes[i]
-		ruleId := ruleDefinition.GetAttributeValue("id")
+		ruleId := ruleDefinition.SelectAttr("id")
 
 		table[ruleId] = ruleDefinition
 	}
@@ -76,26 +68,26 @@ func newByIdHashTable(nodes []*xmldom.Node) nodeByIdHashTable {
 	return table
 }
 
-func newHashTableFromRootAndQuery(dsDom *XMLDocument, root, query string) nodeByIdHashTable {
-	benchmarkDom := dsDom.Root.QueryOne(root)
-	rules := benchmarkDom.Query(query)
+func newHashTableFromRootAndQuery(dsDom *xmlquery.Node, root, query string) nodeByIdHashTable {
+	benchmarkDom := dsDom.SelectElement(root)
+	rules := benchmarkDom.SelectElements(query)
 	return newByIdHashTable(rules)
 }
 
-func newRuleHashTable(dsDom *XMLDocument) nodeByIdHashTable {
-	return newHashTableFromRootAndQuery(dsDom, "//component/Benchmark", "//Rule")
+func newRuleHashTable(dsDom *xmlquery.Node) nodeByIdHashTable {
+	return newHashTableFromRootAndQuery(dsDom, "//ds:component/xccdf-1.2:Benchmark", "//xccdf-1.2:Rule")
 }
 
-func newOcilQuestionTable(dsDom *XMLDocument) nodeByIdHashTable {
-	return newHashTableFromRootAndQuery(dsDom, "//component/ocil", "//boolean_question")
+func newOcilQuestionTable(dsDom *xmlquery.Node) nodeByIdHashTable {
+	return newHashTableFromRootAndQuery(dsDom, "//ds:component/ocil:ocil", "//ocil:boolean_question")
 }
 
-func getRuleOcilQuestionID(rule *xmldom.Node) string {
-	var ocilRefEl *xmldom.Node
+func getRuleOcilQuestionID(rule *xmlquery.Node) string {
+	var ocilRefEl *xmlquery.Node
 
-	for _, check := range rule.FindByName("check") {
-		if check.GetAttributeValue("system") == ocilCheckType {
-			ocilRefEl = check.FindOneByName("check-content-ref")
+	for _, check := range rule.SelectElements("//xccdf-1.2:check") {
+		if check.SelectAttr("system") == ocilCheckType {
+			ocilRefEl = check.SelectElement("xccdf-1.2:check-content-ref")
 			break
 		}
 	}
@@ -104,7 +96,7 @@ func getRuleOcilQuestionID(rule *xmldom.Node) string {
 		return ""
 	}
 
-	questionnareName := ocilRefEl.GetAttributeValue("name")
+	questionnareName := ocilRefEl.SelectAttr("name")
 	if strings.HasSuffix(questionnareName, questionnaireSuffix) == false {
 		return ""
 	}
@@ -112,7 +104,7 @@ func getRuleOcilQuestionID(rule *xmldom.Node) string {
 	return strings.TrimSuffix(questionnareName, questionnaireSuffix) + questionSuffix
 }
 
-func getInstructionsForRule(rule *xmldom.Node, ocilTable nodeByIdHashTable) string {
+func getInstructionsForRule(rule *xmlquery.Node, ocilTable nodeByIdHashTable) string {
 	// convert rule's questionnaire ID to question ID
 	ruleQuestionId := getRuleOcilQuestionID(rule)
 
@@ -123,13 +115,13 @@ func getInstructionsForRule(rule *xmldom.Node, ocilTable nodeByIdHashTable) stri
 	}
 
 	// if not found, return empty string
-	textNode := questionNode.FindOneByName("question_text")
+	textNode := questionNode.SelectElement("ocil:question_text")
 	if textNode == nil {
 		return ""
 	}
 
 	// if found, strip the last line
-	textSlice := strings.Split(textNode.Text, "\n")
+	textSlice := strings.Split(strings.TrimSpace(textNode.InnerText()), "\n")
 	if len(textSlice) > 1 {
 		textSlice = textSlice[:len(textSlice)-1]
 	}
@@ -138,18 +130,18 @@ func getInstructionsForRule(rule *xmldom.Node, ocilTable nodeByIdHashTable) stri
 }
 
 // ParseContent parses the DataStream and returns the XML document
-func ParseContent(dsReader io.Reader) (*XMLDocument, error) {
-	dsDom, err := xmldom.Parse(dsReader)
+func ParseContent(dsReader io.Reader) (*xmlquery.Node, error) {
+	dsDom, err := xmlquery.Parse(dsReader)
 	if err != nil {
 		return nil, err
 	}
-	return &XMLDocument{dsDom}, nil
+	return dsDom, nil
 }
 
 func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, namespace string,
-	dsDom *XMLDocument, resultsReader io.Reader) ([]*ParseResult, error) {
+	dsDom *xmlquery.Node, resultsReader io.Reader) ([]*ParseResult, error) {
 
-	resultsDom, err := xmldom.Parse(resultsReader)
+	resultsDom, err := xmlquery.Parse(resultsReader)
 	if err != nil {
 		return nil, err
 	}
@@ -157,11 +149,11 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 	ruleTable := newRuleHashTable(dsDom)
 	questionsTable := newOcilQuestionTable(dsDom)
 
-	results := resultsDom.Root.Query("//rule-result")
+	results := resultsDom.SelectElements("//rule-result")
 	parsedResults := make([]*ParseResult, 0)
 	for i := range results {
 		result := results[i]
-		ruleIDRef := result.GetAttributeValue("idref")
+		ruleIDRef := result.SelectAttr("idref")
 		if ruleIDRef == "" {
 			continue
 		}
@@ -192,7 +184,7 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 }
 
 // Returns a new complianceCheckResult if the check data is usable
-func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef, instructions, scanName, namespace string) (*compv1alpha1.ComplianceCheckResult, error) {
+func newComplianceCheckResult(result *xmlquery.Node, rule *xmlquery.Node, ruleIdRef, instructions, scanName, namespace string) (*compv1alpha1.ComplianceCheckResult, error) {
 	name := nameFromId(scanName, ruleIdRef)
 	mappedStatus, err := mapComplianceCheckResultStatus(result)
 	if err != nil {
@@ -221,25 +213,25 @@ func newComplianceCheckResult(result *xmldom.Node, rule *xmldom.Node, ruleIdRef,
 	}, nil
 }
 
-func getSafeText(nptr *xmldom.Node, elem string) string {
-	elemNode := nptr.FindOneByName(elem)
+func getSafeText(nptr *xmlquery.Node, elem string) string {
+	elemNode := nptr.SelectElement(elem)
 	if elemNode == nil {
 		return ""
 	}
 
-	return elemNode.Text
+	return elemNode.InnerText()
 }
 
-func complianceCheckResultDescription(rule *xmldom.Node) string {
-	title := getSafeText(rule, "title")
+func complianceCheckResultDescription(rule *xmlquery.Node) string {
+	title := getSafeText(rule, "xccdf-1.2:title")
 	if title != "" {
 		title = title + "\n"
 	}
-	return title + getSafeText(rule, "rationale")
+	return title + getSafeText(rule, "xccdf-1.2:rationale")
 }
 
-func getWarningsForRule(rule *xmldom.Node) []string {
-	warningObjs := rule.FindByName("warning")
+func getWarningsForRule(rule *xmlquery.Node) []string {
+	warningObjs := rule.SelectElements("//xccdf-1.2:warning")
 
 	warnings := []string{}
 
@@ -249,10 +241,10 @@ func getWarningsForRule(rule *xmldom.Node) []string {
 		}
 		// We skip this warning if it's relevant
 		// to parsing the API paths.
-		if GetPathFromWarningXML(warn.XML()) != "" {
+		if GetPathFromWarningXML(warn) != "" {
 			continue
 		}
-		warnings = append(warnings, warn.Text)
+		warnings = append(warnings, warn.OutputXML(false))
 	}
 
 	if len(warnings) == 0 {
@@ -261,8 +253,8 @@ func getWarningsForRule(rule *xmldom.Node) []string {
 	return warnings
 }
 
-func mapComplianceCheckResultSeverity(result *xmldom.Node) (compv1alpha1.ComplianceCheckResultSeverity, error) {
-	severityAttr := result.GetAttributeValue("severity")
+func mapComplianceCheckResultSeverity(result *xmlquery.Node) (compv1alpha1.ComplianceCheckResultSeverity, error) {
+	severityAttr := result.SelectAttr("severity")
 	if severityAttr == "" {
 		return "", errors.New("result node has no 'severity' attribute")
 	}
@@ -285,15 +277,15 @@ func mapComplianceCheckResultSeverity(result *xmldom.Node) (compv1alpha1.Complia
 	return compv1alpha1.CheckResultSeverityUnknown, nil
 }
 
-func mapComplianceCheckResultStatus(result *xmldom.Node) (compv1alpha1.ComplianceCheckStatus, error) {
-	resultEl := result.FindOneByName("result")
+func mapComplianceCheckResultStatus(result *xmlquery.Node) (compv1alpha1.ComplianceCheckStatus, error) {
+	resultEl := result.SelectElement("result")
 	if resultEl == nil {
 		return "", errors.New("result node has no 'result' attribute")
 	}
 
 	// All states can be found at https://csrc.nist.gov/CSRC/media/Publications/nistir/7275/rev-4/final/documents/nistir-7275r4_updated-march-2012_clean.pdf
 	// section 6.6.4.2, table 26
-	switch resultEl.Text {
+	switch resultEl.InnerText() {
 	// The standard says that "Fixed means the rule failed initially but was then fixed"
 	case "pass", "fixed":
 		return compv1alpha1.CheckResultPass, nil
@@ -319,11 +311,11 @@ func mapComplianceCheckResultStatus(result *xmldom.Node) (compv1alpha1.Complianc
 		return compv1alpha1.CheckResultNoResult, nil
 	}
 
-	return compv1alpha1.CheckResultNoResult, fmt.Errorf("couldn't match %s to a known state", resultEl.Text)
+	return compv1alpha1.CheckResultNoResult, fmt.Errorf("couldn't match %s to a known state", resultEl.InnerText())
 }
 
-func newComplianceRemediation(scheme *runtime.Scheme, scanName, namespace string, rule *xmldom.Node) *compv1alpha1.ComplianceRemediation {
-	for _, fix := range rule.FindByName("fix") {
+func newComplianceRemediation(scheme *runtime.Scheme, scanName, namespace string, rule *xmlquery.Node) *compv1alpha1.ComplianceRemediation {
+	for _, fix := range rule.SelectElements("//xccdf-1.2:fix") {
 		if isRelevantFix(fix) {
 			return remediationFromFixElement(scheme, fix, scanName, namespace)
 		}
@@ -332,11 +324,11 @@ func newComplianceRemediation(scheme *runtime.Scheme, scanName, namespace string
 	return nil
 }
 
-func isRelevantFix(fix *xmldom.Node) bool {
-	if fix.GetAttributeValue("system") == machineConfigFixType {
+func isRelevantFix(fix *xmlquery.Node) bool {
+	if fix.SelectAttr("system") == machineConfigFixType {
 		return true
 	}
-	if fix.GetAttributeValue("system") == kubernetesFixType {
+	if fix.SelectAttr("system") == kubernetesFixType {
 		return true
 	}
 	return false
@@ -349,15 +341,16 @@ func nameFromId(scanName, ruleIdRef string) string {
 	return fmt.Sprintf("%s-%s", scanName, dnsFriendlyFixId)
 }
 
-func remediationFromFixElement(scheme *runtime.Scheme, fix *xmldom.Node, scanName, namespace string) *compv1alpha1.ComplianceRemediation {
-	fixId := fix.GetAttributeValue("id")
+func remediationFromFixElement(scheme *runtime.Scheme, fix *xmlquery.Node, scanName, namespace string) *compv1alpha1.ComplianceRemediation {
+	fixId := fix.SelectAttr("id")
 	if fixId == "" {
 		return nil
 	}
 
 	dnsFriendlyFixId := strings.ReplaceAll(fixId, "_", "-")
 	remName := fmt.Sprintf("%s-%s", scanName, dnsFriendlyFixId)
-	return remediationFromString(scheme, remName, namespace, fix.Text)
+	// TODO(OZZ) fix text
+	return remediationFromString(scheme, remName, namespace, fix.InnerText())
 }
 
 func remediationFromString(scheme *runtime.Scheme, name string, namespace string, fixContent string) *compv1alpha1.ComplianceRemediation {
