@@ -3,6 +3,7 @@ package profileparser
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/compliance-operator/pkg/utils"
 	"io"
 	"regexp"
 	"strings"
@@ -357,7 +358,7 @@ func parseProfileFromNode(profileRoot *xmlquery.Node, pb *cmpv1alpha1.ProfileBun
 			ProfilePayload: cmpv1alpha1.ProfilePayload{
 				ID:          id,
 				Title:       title.InnerText(),
-				Description: description.OutputXML(false),
+				Description: utils.XmlNodeAsMarkdown(description),
 				Rules:       selectedrules,
 				Values:      selectedvalues,
 			},
@@ -462,7 +463,7 @@ func ParseVariablesAndDo(contentDom *xmlquery.Node, pb *cmpv1alpha1.ProfileBundl
 
 			description := varObj.SelectElement("xccdf-1.2:description")
 			if description != nil {
-				v.Description = description.OutputXML(false)
+				v.Description = utils.XmlNodeAsMarkdown(description)
 			}
 
 			v.Type = getVariableType(varObj)
@@ -521,7 +522,7 @@ func parseVarValues(varNode *xmlquery.Node, v *cmpv1alpha1.Variable) error {
 			// this is an enum choice
 			v.Selections = append(v.Selections, cmpv1alpha1.ValueSelection{
 				Description: selector,
-				Value:       val.OutputXML(false),
+				Value:       utils.XmlNodeAsMarkdown(val),
 			})
 			continue
 		}
@@ -612,13 +613,13 @@ func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *
 				},
 			}
 			if description != nil {
-				p.Description = description.OutputXML(false)
+				p.Description = utils.XmlNodeAsMarkdown(description)
 			}
 			if rationale != nil {
-				p.Rationale = rationale.OutputXML(false)
+				p.Rationale = utils.XmlNodeAsMarkdown(rationale)
 			}
 			if warning != nil {
-				p.Warning = warning.OutputXML(false)
+				p.Warning = utils.XmlNodeAsMarkdown(warning)
 			}
 			if severity != "" {
 				p.Severity = severity

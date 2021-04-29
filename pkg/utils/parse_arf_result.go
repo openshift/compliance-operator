@@ -244,7 +244,7 @@ func getWarningsForRule(rule *xmlquery.Node) []string {
 		if GetPathFromWarningXML(warn) != "" {
 			continue
 		}
-		warnings = append(warnings, warn.OutputXML(false))
+		warnings = append(warnings, XmlNodeAsMarkdown(warn))
 	}
 
 	if len(warnings) == 0 {
