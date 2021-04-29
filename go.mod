@@ -23,7 +23,6 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/securego/gosec/v2 v2.7.0
 	github.com/spf13/cobra v1.1.1
-	github.com/subchen/go-xmldom v1.1.2
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	go.uber.org/zap v1.14.1
 	k8s.io/api v0.19.10
