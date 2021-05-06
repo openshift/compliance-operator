@@ -1096,3 +1096,12 @@ rules:
   - get
   - list
   - watch
+# Necessary for the reading resources for moderate benchmark
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - compliancesuites
+  verbs:
+  - get
+  - list
+  - watch
