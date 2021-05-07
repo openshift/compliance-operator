@@ -14,6 +14,7 @@ require (
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/zapr v0.4.0
 	github.com/google/go-cmp v0.5.5
+	github.com/jaytaylor/html2text v0.0.0-20200412013138-3577fbdbcff7
 	github.com/onsi/ginkgo v1.16.1
 	github.com/onsi/gomega v1.11.0
 	github.com/openshift/api v0.0.0-20200829102639-8a3a835f1acf
@@ -23,6 +24,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/securego/gosec/v2 v2.7.0
 	github.com/spf13/cobra v1.1.1
+	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	go.uber.org/zap v1.14.1
 	k8s.io/api v0.19.10

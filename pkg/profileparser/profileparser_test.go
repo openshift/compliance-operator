@@ -655,7 +655,7 @@ var _ = Describe("Performance", func() {
 				Expect(err).To(BeNil())
 			})
 
-			Ω(rtime.Seconds()).Should(BeNumerically("<", 1.0), "ParseProfilesAndDo() shouldn't take too long.")
+			Ω(rtime.Seconds()).Should(BeNumerically("<", 1.2), "ParseProfilesAndDo() shouldn't take too long.")
 		}, 1000)
 
 	})
