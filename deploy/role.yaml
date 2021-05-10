@@ -1105,3 +1105,11 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - machineconfiguration.openshift.io
+  resources:
+  - machineconfigs
+  verbs:
+  - get
+  - list
+  - watch
