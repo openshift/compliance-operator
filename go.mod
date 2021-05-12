@@ -26,7 +26,7 @@ require (
 	github.com/spf13/cobra v1.1.1
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
-	go.uber.org/zap v1.14.1
+	go.uber.org/zap v1.16.0
 	k8s.io/api v0.19.10
 	k8s.io/apimachinery v0.19.10
 	k8s.io/apiserver v0.19.10
