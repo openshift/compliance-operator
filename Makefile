@@ -399,9 +399,10 @@ undo-deploy-tag-image: package-version-to-tag
 	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH):$(TAG)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 
 .PHONY: git-release
-git-release: package-version-to-tag
+git-release: package-version-to-tag changelog
 	git checkout -b "release-v$(TAG)"
 	git add "deploy/olm-catalog/compliance-operator/"
+	git add "CHANGELOG.md"
 	git commit -m "Release v$(TAG)"
 	git tag "v$(TAG)"
 	git push origin "v$(TAG)"
@@ -411,3 +412,7 @@ git-release: package-version-to-tag
 release: release-tag-image bundle push push-index undo-deploy-tag-image git-release ## Do an official release (Requires permissions)
 	# This will ensure that we also push to the latest tag
 	$(MAKE) push TAG=latest
+
+.PHONY: changelog
+changelog:
+	@utils/update_changelog.sh "$(TAG)"
