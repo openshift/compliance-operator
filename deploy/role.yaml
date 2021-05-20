@@ -594,6 +594,7 @@ rules:
   - oauth.openshift.io
   resources:
   - oauthclientauthorizations
+  - oauthclients
   verbs:
   - get
   - list
@@ -1120,3 +1121,11 @@ rules:
   verbs:
   - get
   - watch
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - prometheusrules
+  verbs:
+  - get
+  - watch
+  - list
