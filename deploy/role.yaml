@@ -594,6 +594,7 @@ rules:
   - oauth.openshift.io
   resources:
   - oauthclientauthorizations
+  - oauthclients
   verbs:
   - get
   - list
