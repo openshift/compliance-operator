@@ -1115,12 +1115,13 @@ rules:
   - list
   - watch
 - apiGroups:
-  - "fileintegrity.openshift.io"
+  - fileintegrity.openshift.io
   resources:
   - fileintegrities
   verbs:
   - get
   - watch
+  - list
 - apiGroups:
   - monitoring.coreos.com
   resources:
