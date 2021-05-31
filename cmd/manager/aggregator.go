@@ -27,7 +27,7 @@ import (
 	"strings"
 
 	"github.com/antchfx/xmlquery"
-	backoff "github.com/cenkalti/backoff/v3"
+	backoff "github.com/cenkalti/backoff/v4"
 	"github.com/dsnet/compress/bzip2"
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
