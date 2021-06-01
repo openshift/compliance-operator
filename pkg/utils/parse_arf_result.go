@@ -27,9 +27,7 @@ const (
 
 // Constants useful for parsing warnings
 const (
-	endPointTag    = "ocp-api-endpoint"
-	endPointTagEnd = endPointTag + "\">"
-	codeTag        = "</code>"
+	endPointTag = "ocp-api-endpoint"
 )
 
 type ParseResult struct {
