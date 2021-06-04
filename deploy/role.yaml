@@ -159,11 +159,12 @@ rules:
   verbs:
   - get
   - list
-# These are needed for remediating objects for the CIS benchmark
+# These are needed for remediating objects
 - apiGroups:
   - config.openshift.io
   resources:
   - apiservers
+  - oauths
   resourceNames:
   - cluster
   verbs:
