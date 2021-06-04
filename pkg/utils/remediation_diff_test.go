@@ -25,7 +25,7 @@ func getItemById(list []*ParseResultContextItem, id string) *ParseResultContextI
 	return nil
 }
 
-func getRemediation(serviceName string) *compv1alpha1.ComplianceRemediation {
+func getRemediation(serviceName string) []*compv1alpha1.ComplianceRemediation {
 	serviceStr := "let's pretend this is a service"
 	trueVal := true
 	ignConfig := igntypes.Config{
@@ -59,7 +59,7 @@ func getRemediation(serviceName string) *compv1alpha1.ComplianceRemediation {
 	unstructuredobj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(mc)
 	obj := &unstructured.Unstructured{Object: unstructuredobj}
 
-	return &compv1alpha1.ComplianceRemediation{
+	rem := &compv1alpha1.ComplianceRemediation{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "remService",
 		},
@@ -72,6 +72,7 @@ func getRemediation(serviceName string) *compv1alpha1.ComplianceRemediation {
 			},
 		},
 	}
+	return []*compv1alpha1.ComplianceRemediation{rem}
 }
 
 func checkWithRemediation(id, serviceName string) *ParseResult {
@@ -85,9 +86,9 @@ func checkWithRemediation(id, serviceName string) *ParseResult {
 	}
 
 	return &ParseResult{
-		Id:          id,
-		CheckResult: checkService,
-		Remediation: getRemediation(serviceName),
+		Id:           id,
+		CheckResult:  checkService,
+		Remediations: getRemediation(serviceName),
 	}
 }
 
@@ -217,7 +218,7 @@ var _ = Describe("Testing reconciling differing parse results", func() {
 		})
 
 		It("Creates a remediation", func() {
-			Expect(reconciled.Remediation).ToNot(BeNil())
+			Expect(reconciled.Remediations).ToNot(BeNil())
 		})
 	})
 
@@ -233,7 +234,7 @@ var _ = Describe("Testing reconciling differing parse results", func() {
 		AssertReconcilesWithResults("source1:PASS,source2:FAIL,source3:INFO")
 
 		It("Creates a remediation", func() {
-			Expect(reconciled.Remediation).ToNot(BeNil())
+			Expect(reconciled.Remediations).ToNot(BeNil())
 		})
 	})
 
@@ -249,13 +250,13 @@ var _ = Describe("Testing reconciling differing parse results", func() {
 		AssertReconcilesWithResults("source1:PASS,source2:ERROR,source3:INFO")
 
 		It("Does NOT create a remediation because one of the checks errored out", func() {
-			Expect(reconciled.Remediation).To(BeNil())
+			Expect(reconciled.Remediations).To(BeNil())
 		})
 	})
 
 	Context("If the remediations differ, the check result is ERROR", func() {
 		JustBeforeEach(func() {
-			list2[0].Remediation = getRemediation("anotherService")
+			list2[0].Remediations = getRemediation("anotherService")
 
 			ParseAndReconcile()
 			reconciled = getItemById(consistent, "checkid_0")
@@ -268,7 +269,7 @@ var _ = Describe("Testing reconciling differing parse results", func() {
 		})
 
 		It("Does NOT create a remediation because one of the checks errored out", func() {
-			Expect(reconciled.Remediation).To(BeNil())
+			Expect(reconciled.Remediations).To(BeNil())
 		})
 	})
 })

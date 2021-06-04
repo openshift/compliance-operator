@@ -75,6 +75,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				},
 			},
 		}
+		remediationinstance.Spec.Type = compv1alpha1.ConfigurationRemediation
 		scanInstance = &compv1alpha1.ComplianceScan{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "myScan",

@@ -3,11 +3,11 @@ package profileparser
 import (
 	"context"
 	"fmt"
-	"github.com/openshift/compliance-operator/pkg/utils"
-	"io"
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/openshift/compliance-operator/pkg/utils"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/apiserver/pkg/storage/names"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -572,7 +571,7 @@ func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *
 				}
 
 				rawFixReader := strings.NewReader(fixNodeObj.InnerText())
-				fixKubeObj, err := readObjFromYAML(rawFixReader)
+				fixKubeObjs, err := utils.ReadObjectsFromYAML(rawFixReader)
 				if err != nil {
 					log.Info("Couldn't parse Kubernetes object from fix")
 					continue
@@ -580,12 +579,15 @@ func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *
 
 				disruption := fixNodeObj.SelectAttr("disruption")
 
-				newFix := cmpv1alpha1.FixDefinition{
-					Disruption: disruption,
-					Platform:   platform,
-					FixObject:  fixKubeObj,
+				for fixId := range fixKubeObjs {
+					fixKubeObj := fixKubeObjs[fixId]
+					newFix := cmpv1alpha1.FixDefinition{
+						Disruption: disruption,
+						Platform:   platform,
+						FixObject:  fixKubeObj,
+					}
+					fixes = append(fixes, newFix)
 				}
-				fixes = append(fixes, newFix)
 				foundPlatformMap[platform] = true
 			}
 
@@ -665,15 +667,6 @@ func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *
 	case err := <-errchan:
 		return err
 	}
-}
-
-// Reads a YAML file and returns an unstructured object from it. This object
-// can be taken into use by the dynamic client
-func readObjFromYAML(r io.Reader) (*unstructured.Unstructured, error) {
-	obj := &unstructured.Unstructured{}
-	dec := k8syaml.NewYAMLToJSONDecoder(r)
-	err := dec.Decode(obj)
-	return obj, err
 }
 
 func isRelevantFix(fix *xmlquery.Node) bool {

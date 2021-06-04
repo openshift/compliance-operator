@@ -2,6 +2,7 @@ package complianceremediation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -101,11 +102,20 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 		return reconcile.Result{}, getErr
 	}
 
+	if remediationInstance.Spec.Type == "" {
+		rCopy := remediationInstance.DeepCopy()
+		rCopy.Spec.Type = compv1alpha1.ConfigurationRemediation
+		if updErr := r.client.Update(context.TODO(), rCopy); updErr != nil {
+			return reconcile.Result{}, fmt.Errorf("updating default remediation type: %s", updErr)
+		}
+		return reconcile.Result{}, nil
+	}
+
 	if remediationInstance.Status.ApplicationState == "" {
 		rCopy := remediationInstance.DeepCopy()
 		rCopy.Status.ApplicationState = compv1alpha1.RemediationPending
 		if updErr := r.client.Status().Update(context.TODO(), rCopy); updErr != nil {
-			return reconcile.Result{}, updErr
+			return reconcile.Result{}, fmt.Errorf("updating default remediation application state: %s", updErr)
 		}
 		return reconcile.Result{}, nil
 	}
@@ -148,6 +158,10 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 		return common.ReturnWithRetriableError(reqLogger, statusErr)
 	}
 
+	if remediationInstance.Spec.Apply && remediationInstance.HasUnmetKubeDependencies() {
+		reqLogger.Info("Has unmet kubernetes object dependencies. Requeuing")
+		return reconcile.Result{Requeue: true, RequeueAfter: defaultDependencyRequeueTime}, nil
+	}
 	reqLogger.Info("Done reconciling")
 	return reconcile.Result{}, nil
 }
@@ -176,12 +190,12 @@ func (r *ReconcileComplianceRemediation) reconcileRemediation(instance *compv1al
 	if kerrors.IsForbidden(err) {
 		return common.NewNonRetriableCtrlError(
 			"Unable to get fix object from ComplianceRemediation. "+
-				"Please update the compliance-operator's permissions: %s", err)
-	} else if meta.IsNoMatchError(err) {
+				"Please update the compliance-operator's permissions: %w", err)
+	} else if runtime.IsNotRegisteredError(err) || meta.IsNoMatchError(err) {
 		// If the kind is not available in the cluster, we can't retry
 		return common.NewNonRetriableCtrlError(
 			"Unable to get fix object for ComplianceRemediation. "+
-				"Make sure the CRD is installed: %s", err)
+				"Make sure the CRD is installed: %w", err)
 	} else if kerrors.IsNotFound(err) {
 		if instance.Spec.Apply {
 			instance.AddOwnershipLabels(obj)
@@ -254,20 +268,24 @@ func (r *ReconcileComplianceRemediation) deleteRemediation(remObj *unstructured.
 }
 
 func (r *ReconcileComplianceRemediation) handleUnmetDependencies(rem *compv1alpha1.ComplianceRemediation, logger logr.Logger) (reconcile.Result, error) {
-	deps := rem.Annotations[compv1alpha1.RemediationDependencyAnnotation]
+	_, hasXccdfDeps := rem.Annotations[compv1alpha1.RemediationDependencyAnnotation]
+	_, hasKubeDeps := rem.Annotations[compv1alpha1.RemediationObjectDependencyAnnotation]
+
 	var nMissingDeps int
-
-	for _, dep := range strings.Split(deps, ",") {
-		handled, err := isRemDepHandled(r, rem, dep, logger)
-		if err != nil {
-			return reconcile.Result{}, err
+	if hasXccdfDeps {
+		var xccdfDepErr error
+		nMissingDeps, xccdfDepErr = r.countXCCDFUnmetDependencies(rem, logger)
+		if xccdfDepErr != nil {
+			return reconcile.Result{}, xccdfDepErr
 		}
-
-		if !handled {
-			logger.Info("Remediation has unmet dependencies, cannot apply", "ComplianceRemediation.Name", rem.Name)
-			// Continue so that we can issue all events
-			nMissingDeps++
+	} else if hasKubeDeps {
+		var kubeDepErr error
+		nMissingDeps, kubeDepErr = r.countKubeUnmetDependencies(rem, logger)
+		if kubeDepErr != nil {
+			return reconcile.Result{}, kubeDepErr
 		}
+	} else {
+		return reconcile.Result{}, fmt.Errorf("Remediation marked as dependant but no dependencies detected")
 	}
 
 	rCopy := rem.DeepCopy()
@@ -299,6 +317,63 @@ func (r *ReconcileComplianceRemediation) handleUnmetDependencies(rem *compv1alph
 	}
 
 	return reconcile.Result{Requeue: true, RequeueAfter: defaultDependencyRequeueTime}, nil
+}
+
+func (r *ReconcileComplianceRemediation) countXCCDFUnmetDependencies(rem *compv1alpha1.ComplianceRemediation, logger logr.Logger) (int, error) {
+	var nMissingDeps int
+	deps := rem.Annotations[compv1alpha1.RemediationDependencyAnnotation]
+
+	for _, dep := range strings.Split(deps, ",") {
+		handled, err := isRemDepHandled(r, rem, dep, logger)
+		if err != nil {
+			return 0, err
+		}
+
+		if !handled {
+			logger.Info("Remediation has unmet dependencies, cannot apply", "ComplianceRemediation.Name", rem.Name)
+			// Continue so that we can issue all events
+			nMissingDeps++
+		}
+	}
+	return nMissingDeps, nil
+}
+
+func (r *ReconcileComplianceRemediation) countKubeUnmetDependencies(rem *compv1alpha1.ComplianceRemediation, logger logr.Logger) (int, error) {
+	deps, parseErr := rem.ParseRemediationDependencyRefs()
+
+	if parseErr != nil {
+		return 0, common.NewNonRetriableCtrlError("error parsing: %w", parseErr)
+	}
+
+	var nMissingDeps int
+	for _, dep := range deps {
+		obj := getObjFromKubeDep(dep)
+		key := types.NamespacedName{Name: dep.Name}
+		if dep.Namespace != "" {
+			key.Namespace = dep.Namespace
+		}
+		if getErr := r.client.Get(context.TODO(), key, obj); getErr != nil {
+			if kerrors.IsNotFound(getErr) || meta.IsNoMatchError(getErr) || runtime.IsNotRegisteredError(getErr) {
+				logger.Info("Remediation is missing a kube dependency",
+					"APIVersion", dep.APIVersion, "Kind", dep.Kind,
+					"Name", dep.Name, "Namespace", dep.Namespace)
+				nMissingDeps++
+			} else if runtime.IsMissingKind(getErr) || runtime.IsMissingVersion(getErr) {
+				return 0, common.NewNonRetriableCtrlError("malformed kube object dependency: %w", getErr)
+			} else {
+				return 0, fmt.Errorf("error getting kube object dependency: %w", getErr)
+			}
+		}
+	}
+
+	return nMissingDeps, nil
+}
+
+func getObjFromKubeDep(dep compv1alpha1.RemediationObjectDependencyReference) runtime.Object {
+	obj := &unstructured.Unstructured{}
+	obj.SetKind(dep.Kind)
+	obj.SetAPIVersion(dep.APIVersion)
+	return obj
 }
 
 func isRemDepHandled(r *ReconcileComplianceRemediation, rem *compv1alpha1.ComplianceRemediation, checkId string, logger logr.Logger) (bool, error) {
@@ -342,7 +417,7 @@ func (r *ReconcileComplianceRemediation) reconcileRemediationStatus(instance *co
 	logger logr.Logger, errorApplying error) error {
 	instanceCopy := instance.DeepCopy()
 
-	setRemediationStatus(instanceCopy, errorApplying, logger)
+	r.setRemediationStatus(instanceCopy, errorApplying, logger)
 
 	if err := r.client.Status().Update(context.TODO(), instanceCopy); err != nil {
 		logger.Error(err, "Failed to update the remediation status")
@@ -409,32 +484,59 @@ func isNoLongerOutdated(r *compv1alpha1.ComplianceRemediation) bool {
 	return r.Spec.Outdated.Object == nil
 }
 
-func setRemediationStatus(r *compv1alpha1.ComplianceRemediation, errorApplying error, logger logr.Logger) {
+func (r *ReconcileComplianceRemediation) setRemediationStatus(rem *compv1alpha1.ComplianceRemediation, errorApplying error, logger logr.Logger) {
 	if errorApplying != nil {
-		logger.Info("Remediation had an error")
-		r.Status.ApplicationState = compv1alpha1.RemediationError
-		r.Status.ErrorMessage = errorApplying.Error()
+		if wasErrorOnOptionalRemediation(rem, errorApplying) {
+			logger.Info("Optional remediation couldn't be applied")
+			rem.Status.ApplicationState = compv1alpha1.RemediationNotApplied
+			r.recorder.Eventf(rem, corev1.EventTypeWarning, "OptionalDependencyNotApplied",
+				"Optional remediation couldn't be applied: %s", errorApplying)
+		} else {
+			logger.Info("Remediation had an error")
+			rem.Status.ApplicationState = compv1alpha1.RemediationError
+		}
+		rem.Status.ErrorMessage = errorApplying.Error()
 		return
 	}
 
-	if !r.Spec.Apply {
+	if !rem.Spec.Apply {
 		logger.Info("Remediation will now be unapplied")
-		r.Status.ApplicationState = compv1alpha1.RemediationNotApplied
+		rem.Status.ApplicationState = compv1alpha1.RemediationNotApplied
 		return
 	}
 
-	if r.Spec.Outdated.Object != nil {
+	if rem.Spec.Outdated.Object != nil {
 		logger.Info("Remediation remains outdated")
-		r.Status.ApplicationState = compv1alpha1.RemediationOutdated
+		rem.Status.ApplicationState = compv1alpha1.RemediationOutdated
 		return
 	}
 
-	if r.HasUnmetDependencies() {
+	if rem.HasUnmetDependencies() {
 		logger.Info("Remediation has un-met dependencies.")
-		r.Status.ApplicationState = compv1alpha1.RemediationMissingDependencies
+		rem.Status.ApplicationState = compv1alpha1.RemediationMissingDependencies
 		return
 	}
 
 	logger.Info("Remediation will now be applied")
-	r.Status.ApplicationState = compv1alpha1.RemediationApplied
+	rem.Status.ApplicationState = compv1alpha1.RemediationApplied
+}
+
+func wasErrorOnOptionalRemediation(r *compv1alpha1.ComplianceRemediation, errorApplying error) bool {
+	annotations := r.GetAnnotations()
+	// This wasn't an optional remediation. That's represented through
+	// an annotation
+	if annotations == nil {
+		return false
+	}
+
+	if _, ok := annotations[compv1alpha1.RemediationOptionalAnnotation]; !ok {
+		return false
+	}
+
+	wrapped := errors.Unwrap(errorApplying)
+	if wrapped == nil {
+		return false
+	}
+
+	return runtime.IsNotRegisteredError(wrapped) || meta.IsNoMatchError(wrapped)
 }

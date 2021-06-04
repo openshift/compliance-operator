@@ -278,7 +278,20 @@ func createOrUpdateOneResult(crClient *complianceCrClient, owner metav1.Object, 
 	return nil
 }
 
-func canCreateRemediation(scan *compv1alpha1.ComplianceScan, obj *unstructured.Unstructured) (bool, string) {
+func shouldSkipRemediation(scan *compv1alpha1.ComplianceScan, rem *compv1alpha1.ComplianceRemediation) (bool, string) {
+	if rem.Spec.Type == compv1alpha1.EnforcementRemediation {
+		if scan.RemediationEnforcementIsOff() {
+			return true, "Enforcement remediations are off"
+		}
+
+		if !scan.RemediationEnforcementTypeMatches(rem.GetEnforcementType()) {
+			return true, fmt.Sprintf("Remediation is of unselected type: %s", rem.GetEnforcementType())
+		}
+	}
+	return false, ""
+}
+
+func canCreateRemediationObject(scan *compv1alpha1.ComplianceScan, obj *unstructured.Unstructured) (bool, string) {
 	// FIXME(jaosorior): Figure out a more pluggable way of adding these sorts of special cases
 	if obj == nil || len(obj.Object) == 0 {
 		return false, "The remediaiton yaml file is empty"
@@ -309,7 +322,7 @@ func getCheckResultLabels(pr *utils.ParseResult, resultLabels map[string]string,
 	labels[compv1alpha1.SuiteLabel] = scan.Labels[compv1alpha1.SuiteLabel]
 	labels[compv1alpha1.ComplianceCheckResultStatusLabel] = string(pr.CheckResult.Status)
 	labels[compv1alpha1.ComplianceCheckResultSeverityLabel] = string(pr.CheckResult.Severity)
-	if pr.Remediation != nil {
+	if pr.Remediations != nil {
 		labels[compv1alpha1.ComplianceCheckResultHasRemediation] = ""
 	}
 
@@ -338,8 +351,6 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		return nil
 	}
 
-	var remediationNotPossibleEventIssued bool
-
 	for _, pr := range consistentResults {
 		if pr == nil || pr.CheckResult == nil {
 			log.Info("nil result or result.check, this shouldn't happen")
@@ -365,7 +376,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			return fmt.Errorf("cannot create or update checkResult %s: %v", pr.CheckResult.Name, err)
 		}
 
-		if pr.Remediation == nil ||
+		if pr.Remediations == nil ||
 			(pr.CheckResult.Status != compv1alpha1.CheckResultFail &&
 				pr.CheckResult.Status != compv1alpha1.CheckResultInfo &&
 				pr.CheckResult.Status != compv1alpha1.CheckResultPass && /* even passing remediations might need to be updated */
@@ -373,80 +384,93 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 			continue
 		}
 
-		remTargetObj := pr.Remediation.Spec.Current.Object
-
-		if canCreate, why := canCreateRemediation(scan, remTargetObj); !canCreate {
-			// Only issue event once.
-			if !remediationNotPossibleEventIssued {
-				log.Info(why, "Remediation", crkey.Name)
-				crClient.recorder.Event(scan, v1.EventTypeWarning, "CannotRemediate", why+" Remediation:"+crkey.Name)
-				remediationNotPossibleEventIssued = true
-			}
-			continue
-		}
-
-		remLabels := getRemediationLabels(scan, remTargetObj)
-
-		// The state even if set in the object would have been overwritten by the call to
-		// spec update, so we keep the state separately in a variable
-		stateUpdate := compv1alpha1.RemediationPending
-
-		remkey := getObjKey(pr.Remediation.GetName(), pr.Remediation.GetNamespace())
-		foundRemediation := &compv1alpha1.ComplianceRemediation{}
-		// Copy type metadata so dynamic client copies data correctly
-		foundRemediation.TypeMeta = pr.Remediation.TypeMeta
-		log.Info("Getting ComplianceRemediation", "ComplianceRemediation.Name", crkey.Name,
-			"ComplianceRemediation.Namespace", crkey.Namespace)
-		remExists := getObjectIfFound(crClient, remkey, foundRemediation)
-		if remExists {
-			// If the remediation is already applied and the status of the check is compliant, only update
-			// the remediation if the payload differs. Let's not create remediations for checks that are passing
-			// needlessly and let's not trigger the remediation controller needlessly
-			if foundRemediation.Status.ApplicationState == compv1alpha1.RemediationApplied ||
-				foundRemediation.Status.ApplicationState == compv1alpha1.RemediationOutdated {
-				if !foundRemediation.RemediationPayloadDiffers(pr.Remediation) {
-					log.Info("Not updating passing remediation that was the same between runs", "ComplianceRemediation.Name", foundRemediation.Name)
-					continue
-				}
-
-				// Applied remediation that differs must be updated, let's set the appropriate state
-				stateUpdate = compv1alpha1.RemediationOutdated
-				if foundRemediation.Status.ApplicationState == compv1alpha1.RemediationApplied {
-					// For applied remediations, the old state must be kept in the outdated field
-					// so that the admin can switch to the current state at their own pace
-					foundRemediation.Spec.Current.DeepCopyInto(&pr.Remediation.Spec.Outdated)
-				} else {
-					// For remediations that were already outdated, keep the outdated data there
-					foundRemediation.Spec.Outdated.DeepCopyInto(&pr.Remediation.Spec.Outdated)
-				}
-				// The application state must be preserved or else we'd un-apply the remediation
-				// once it's updated
-				pr.Remediation.Spec.Apply = foundRemediation.Spec.Apply
-				// Also label the outdated remediations so that the admin can find them
-				remLabels[compv1alpha1.OutdatedRemediationLabel] = ""
-			}
-
-			// Copy resource version and other metadata needed for update
-			foundRemediation.ObjectMeta.DeepCopyInto(&pr.Remediation.ObjectMeta)
-		} else if pr.CheckResult.Status == compv1alpha1.CheckResultPass {
-			// If the remediation was not created earlier (e.g. the check was always passing), don't bother
-			// creating it now
-			continue
-		}
-
-		// remediation is owned by the check
-		if err := createOrUpdateOneResult(crClient, pr.CheckResult, remLabels, nil, remExists, pr.Remediation); err != nil {
-			return fmt.Errorf("cannot create or update remediation %s: %v", pr.Remediation.Name, err)
-		}
-
-		// Update the status as needed
-		if remExists {
-			if err := updateRemediationStatus(crClient, pr.Remediation, stateUpdate); err != nil {
-				return err
+		for idx := range pr.Remediations {
+			rem := pr.Remediations[idx]
+			if remErr := handleRemediation(crClient, rem, pr.CheckResult, scan); remErr != nil {
+				return remErr
 			}
 		}
 	}
 
+	return nil
+}
+
+func handleRemediation(crClient *complianceCrClient, rem *compv1alpha1.ComplianceRemediation, cr *compv1alpha1.ComplianceCheckResult, scan *compv1alpha1.ComplianceScan) error {
+	crkey := getObjKey(cr.GetName(), cr.GetNamespace())
+	remTargetObj := rem.Spec.Current.Object
+	// Skipping is harmless
+	if skip, why := shouldSkipRemediation(scan, rem); skip {
+		log.Info(why, "Remediation", crkey.Name)
+		return nil
+	}
+
+	// this is a validation and should warn the user
+	if canCreate, why := canCreateRemediationObject(scan, remTargetObj); !canCreate {
+		log.Info(why, "Remediation", crkey.Name)
+		crClient.recorder.Event(scan, v1.EventTypeWarning, "CannotRemediate", why+" Remediation:"+crkey.Name)
+		return nil
+	}
+
+	remLabels := getRemediationLabels(scan, remTargetObj)
+
+	// The state even if set in the object would have been overwritten by the call to
+	// spec update, so we keep the state separately in a variable
+	stateUpdate := compv1alpha1.RemediationPending
+
+	remkey := getObjKey(rem.GetName(), rem.GetNamespace())
+	foundRemediation := &compv1alpha1.ComplianceRemediation{}
+	// Copy type metadata so dynamic client copies data correctly
+	foundRemediation.TypeMeta = rem.TypeMeta
+	log.Info("Getting ComplianceRemediation", "ComplianceRemediation.Name", crkey.Name,
+		"ComplianceRemediation.Namespace", crkey.Namespace)
+	remExists := getObjectIfFound(crClient, remkey, foundRemediation)
+	if remExists {
+		// If the remediation is already applied and the status of the check is compliant, only update
+		// the remediation if the payload differs. Let's not create remediations for checks that are passing
+		// needlessly and let's not trigger the remediation controller needlessly
+		if foundRemediation.Status.ApplicationState == compv1alpha1.RemediationApplied ||
+			foundRemediation.Status.ApplicationState == compv1alpha1.RemediationOutdated {
+			if !foundRemediation.RemediationPayloadDiffers(rem) {
+				log.Info("Not updating passing remediation that was the same between runs", "ComplianceRemediation.Name", foundRemediation.Name)
+				return nil
+			}
+
+			// Applied remediation that differs must be updated, let's set the appropriate state
+			stateUpdate = compv1alpha1.RemediationOutdated
+			if foundRemediation.Status.ApplicationState == compv1alpha1.RemediationApplied {
+				// For applied remediations, the old state must be kept in the outdated field
+				// so that the admin can switch to the current state at their own pace
+				foundRemediation.Spec.Current.DeepCopyInto(&rem.Spec.Outdated)
+			} else {
+				// For remediations that were already outdated, keep the outdated data there
+				foundRemediation.Spec.Outdated.DeepCopyInto(&rem.Spec.Outdated)
+			}
+			// The application state must be preserved or else we'd un-apply the remediation
+			// once it's updated
+			rem.Spec.Apply = foundRemediation.Spec.Apply
+			// Also label the outdated remediations so that the admin can find them
+			remLabels[compv1alpha1.OutdatedRemediationLabel] = ""
+		}
+
+		// Copy resource version and other metadata needed for update
+		foundRemediation.ObjectMeta.DeepCopyInto(&rem.ObjectMeta)
+	} else if cr.Status == compv1alpha1.CheckResultPass {
+		// If the remediation was not created earlier (e.g. the check was always passing), don't bother
+		// creating it now
+		return nil
+	}
+
+	// remediation is owned by the check
+	if err := createOrUpdateOneResult(crClient, cr, remLabels, nil, remExists, rem); err != nil {
+		return fmt.Errorf("cannot create or update remediation %s: %v", rem.Name, err)
+	}
+
+	// Update the status as needed
+	if remExists {
+		if err := updateRemediationStatus(crClient, rem, stateUpdate); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

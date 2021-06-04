@@ -173,6 +173,43 @@ rules:
   - watch
   - update
   - patch
+# Enforcement types
+- apiGroups:
+  - templates.gatekeeper.sh
+  resources:
+  - constrainttemplates
+  verbs:
+  - list
+  - get
+  - patch
+  - create
+  - watch
+  - update
+  - delete
+- apiGroups:
+  - config.gatekeeper.sh
+  resources:
+  - configs
+  verbs:
+  - list
+  - get
+  - patch
+  - create
+  - watch
+  - update
+  - delete
+- apiGroups:
+  - constraints.gatekeeper.sh
+  resources:
+  - "*"
+  verbs:
+  - list
+  - get
+  - patch
+  - create
+  - watch
+  - update
+  - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

@@ -164,6 +164,16 @@ type ComplianceScanSettings struct {
 	// workloads to run. Defaults to allowing scheduling on the master nodes.
 	// +kubebuilder:default={{key: "node-role.kubernetes.io/master", operator: "Exists", effect: "NoSchedule"}}
 	ScanTolerations []corev1.Toleration `json:"scanTolerations,omitempty"`
+
+	// Specifies what to do with remediations of Enforcement type. If left empty,
+	// this defaults to "off" which doesn't create nor apply any enforcement remediations.
+	// If set to "all" this creates any enforcement remediations it encounters.
+	// Subsequently, this can also be set to a specific type. e.g. setting it to
+	// "gatekeeper" will apply any enforcement remediations relevant to the
+	// Gatekeeper OPA system.
+	// These objects will annotated in the content itself with:
+	//     complianceascode.io/enforcement-type: <type>
+	RemediationEnforcement string `json:"remediationEnforcement,omitempty"`
 }
 
 // ComplianceScanSpec defines the desired state of ComplianceScan
@@ -296,6 +306,18 @@ func (cs *ComplianceScan) GetScanType() ComplianceScanType {
 		panic(err)
 	}
 	return scantype
+}
+
+// Returns whether remediation enforcement is off or not
+func (cs *ComplianceScan) RemediationEnforcementIsOff() bool {
+	return (strings.EqualFold(cs.Spec.RemediationEnforcement, RemediationEnforcementEmpty) ||
+		strings.EqualFold(cs.Spec.RemediationEnforcement, RemediationEnforcementOff))
+}
+
+// Returns whether remediation enforcement is off or not
+func (cs *ComplianceScan) RemediationEnforcementTypeMatches(etype string) bool {
+	return (strings.EqualFold(cs.Spec.RemediationEnforcement, RemediationEnforcementAll) ||
+		strings.EqualFold(cs.Spec.RemediationEnforcement, etype))
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
