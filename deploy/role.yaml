@@ -159,11 +159,12 @@ rules:
   verbs:
   - get
   - list
-# These are needed for remediating objects for the CIS benchmark
+# These are needed for remediating objects
 - apiGroups:
   - config.openshift.io
   resources:
   - apiservers
+  - oauths
   resourceNames:
   - cluster
   verbs:
@@ -594,6 +595,7 @@ rules:
   - oauth.openshift.io
   resources:
   - oauthclientauthorizations
+  - oauthclients
   verbs:
   - get
   - list
@@ -1096,3 +1098,36 @@ rules:
   - get
   - list
   - watch
+# Necessary for the reading resources for moderate benchmark
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - compliancesuites
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - machineconfiguration.openshift.io
+  resources:
+  - machineconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - fileintegrity.openshift.io
+  resources:
+  - fileintegrities
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - prometheusrules
+  verbs:
+  - get
+  - watch
+  - list

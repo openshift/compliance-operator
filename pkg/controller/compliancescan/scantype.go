@@ -124,10 +124,11 @@ func (nh *nodeScanTypeHandler) validate() (bool, error) {
 
 func (nh *nodeScanTypeHandler) createScanWorkload() error {
 	// On each eligible node..
-	for _, node := range nh.nodes {
+	for idx := range nh.nodes {
+		node := &nh.nodes[idx]
 		// ..schedule a pod..
 		nh.l.Info("Creating a pod for node", "Pod.Name", node.Name)
-		pod := newScanPodForNode(nh.scan, &node, nh.l)
+		pod := newScanPodForNode(nh.scan, node, nh.l)
 		if err := nh.r.launchScanPod(nh.scan, pod, nh.l); err != nil {
 			return err
 		}
@@ -137,9 +138,10 @@ func (nh *nodeScanTypeHandler) createScanWorkload() error {
 }
 
 func (nh *nodeScanTypeHandler) handleRunningScan() (bool, error) {
-	for _, node := range nh.nodes {
+	for idx := range nh.nodes {
+		node := &nh.nodes[idx]
 		var unschedulableErr *podUnschedulableError
-		running, err := isPodRunningInNode(nh.r, nh.scan, &node, nh.l)
+		running, err := isPodRunningInNode(nh.r, nh.scan, node, nh.l)
 		if errors.IsNotFound(err) {
 			// Let's go back to the previous state and make sure all the nodes are covered.
 			nh.l.Info("Phase: Running: A pod is missing. Going to state LAUNCHING to make sure we launch it",

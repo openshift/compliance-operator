@@ -34,7 +34,7 @@ import (
 	"sync"
 	"time"
 
-	backoff "github.com/cenkalti/backoff/v3"
+	backoff "github.com/cenkalti/backoff/v4"
 	"github.com/dsnet/compress/bzip2"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
@@ -451,7 +451,9 @@ func getMutualHttpsTransport(c *scapresultsConfig) (*http.Transport, error) {
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(ca)
 
-	tlsConfig := &tls.Config{}
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
 	// Configures TLS 1.2
 	tlsConfig = libgocrypto.SecureTLSConfig(tlsConfig)
 	tlsConfig.RootCAs = pool

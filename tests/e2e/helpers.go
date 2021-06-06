@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	backoff "github.com/cenkalti/backoff/v3"
+	backoff "github.com/cenkalti/backoff/v4"
 	ocpapi "github.com/openshift/api"
 	imagev1 "github.com/openshift/api/image/v1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"

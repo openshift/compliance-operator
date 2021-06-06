@@ -26,7 +26,8 @@ import (
 	"os"
 	"strings"
 
-	backoff "github.com/cenkalti/backoff/v3"
+	"github.com/antchfx/xmlquery"
+	backoff "github.com/cenkalti/backoff/v4"
 	"github.com/dsnet/compress/bzip2"
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
@@ -133,7 +134,7 @@ func readCompressedData(compressed string) (*bzip2.Reader, error) {
 // Returns a triple of (array-of-ParseResults, source, error) where source identifies the entity whose
 // scan produced this configMap -- typically a nodeName for node scans. For platform scans, the source
 // is empty. The source is used later when reconciling inconsistent results
-func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *utils.XMLDocument, cm *v1.ConfigMap) ([]*utils.ParseResult, string, error) {
+func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *xmlquery.Node, cm *v1.ConfigMap) ([]*utils.ParseResult, string, error) {
 	var scanReader io.Reader
 
 	_, ok := cm.Annotations[configMapRemediationsProcessed]
@@ -581,8 +582,8 @@ func aggregator(cmd *cobra.Command, args []string) {
 
 	// Annotate configMaps, so we don't need to re-parse them
 	log.Info("Annotating ConfigMaps")
-	for _, cm := range configMaps {
-		err = markConfigMapAsProcessed(crclient, &cm)
+	for idx := range configMaps {
+		err = markConfigMapAsProcessed(crclient, &configMaps[idx])
 		if err != nil {
 			log.Error(err, "Cannot annotate the ConfigMap")
 			os.Exit(1)

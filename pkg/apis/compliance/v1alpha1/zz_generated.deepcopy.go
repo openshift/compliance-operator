@@ -15,6 +15,11 @@ func (in *ComplianceCheckResult) DeepCopyInto(out *ComplianceCheckResult) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	if in.Warnings != nil {
+		in, out := &in.Warnings, &out.Warnings
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

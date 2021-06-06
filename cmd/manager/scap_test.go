@@ -3,19 +3,18 @@ package main
 import (
 	"os"
 
+	"github.com/antchfx/xmlquery"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var _ = Describe("Testing SCAP parsing and storage", func() {
 	// Turn to `true` if debugging
-	debugLog = false
+	debugLog = true
 
 	Context("Parsing SCAP Content", func() {
 		var dataStreamFile *os.File
-		var contentDS *utils.XMLDocument
+		var contentDS *xmlquery.Node
 
 		BeforeEach(func() {
 			var err error
@@ -26,26 +25,16 @@ var _ = Describe("Testing SCAP parsing and storage", func() {
 			dataStreamFile.Close()
 		})
 
-		It("Parses content without errors", func() {
+		It("Gets the appropriate resource URIs", func() {
+			By("parsing content without errors")
 			var err error
 			contentDS, err = parseContent(dataStreamFile)
 			Expect(err).To(BeNil())
-		})
 
-		It("Gets the appropriate resource URIs", func() {
+			By("parsing content for warnings")
 			expected := []string{"/apis/config.openshift.io/v1/oauths/cluster"}
 			got := getResourcePaths(contentDS, contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate")
 			Expect(got).To(Equal(expected))
-		})
-	})
-
-	Context("Parsing warnings", func() {
-		It("Gets an appropriate path from the datastream", func() {
-			expectedAPIPath := "/apis/config.openshift.io/v1/oauths/cluster"
-
-			warning := `<warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster</code><code class="ocp-dump-location"><sub idref="xccdf_org.ssgproject.content_value_ocp_data_root" use="legacy" />/idp.yml</code>file.</warning>`
-			api := getPathFromWarningXML(warning)
-			Expect(api).To(Equal(expectedAPIPath))
 		})
 	})
 

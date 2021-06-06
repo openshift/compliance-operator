@@ -1,5 +1,5 @@
 # Step one: build compliance-operator
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.15-openshift-4.6 AS builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.16-openshift-4.8 AS builder
 
 WORKDIR /go/src/github.com/openshift/compliance-operator
 
@@ -10,7 +10,7 @@ COPY . .
 RUN make manager
 
 # Step two: containerize compliance-operator
-FROM registry.ci.openshift.org/ocp/4.6:base
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
 ENV OPERATOR=/usr/local/bin/compliance-operator \
     USER_UID=1001 \

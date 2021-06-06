@@ -4,13 +4,12 @@ import (
 	"io"
 	"os"
 
-	igntypes "github.com/coreos/ignition/config/v2_2/types"
+	igntypes "github.com/coreos/ignition/v2/config/v3_1/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 
-	ign2types "github.com/coreos/ignition/config/v2_2/types"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	mcfgcommon "github.com/openshift/machine-config-operator/pkg/controller/common"
@@ -42,8 +41,8 @@ func countResultItems(resultList []*ParseResult) (int, int) {
 
 var _ = Describe("XCCDF parser", func() {
 	const (
-		totalRemediations = 8
-		totalChecks       = 235
+		totalRemediations = 183
+		totalChecks       = 229
 	)
 
 	var (
@@ -76,6 +75,7 @@ var _ = Describe("XCCDF parser", func() {
 			dsDom, err := ParseContent(ds)
 			Expect(err).NotTo(HaveOccurred())
 			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+			Expect(resultList).NotTo(BeEmpty())
 			nChecks, nRems = countResultItems(resultList)
 		})
 
@@ -83,10 +83,10 @@ var _ = Describe("XCCDF parser", func() {
 			It("Should parse the XCCDF without errors", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
-			It("Should return exactly five remediations", func() {
+			It("Should return expected remediations", func() {
 				Expect(nRems).To(Equal(totalRemediations))
 			})
-			It("Should return exactly 464 checks", func() {
+			It("Should return expected checks", func() {
 				Expect(nChecks).To(Equal(totalChecks))
 			})
 		})
@@ -94,7 +94,7 @@ var _ = Describe("XCCDF parser", func() {
 		Context("First check metadata", func() {
 			const (
 				expID           = "xccdf_org.ssgproject.content_rule_selinux_policytype"
-				expDescription  = "Configure SELinux Policy\n."
+				expDescription  = "Configure SELinux Policy"
 				expInstructions = "Check the file /etc/selinux/config and ensure the following line appears:\nSELINUXTYPE="
 			)
 
@@ -117,15 +117,15 @@ var _ = Describe("XCCDF parser", func() {
 			})
 
 			It("Should have the expected severity", func() {
-				Expect(check.Severity).To(Equal(compv1alpha1.CheckResultSeverityHigh))
+				Expect(check.Severity).To(Equal(compv1alpha1.CheckResultSeverityMedium))
 			})
 
 			It("Should have the expected description", func() {
-				Expect(check.Description).To(Equal(expDescription))
+				Expect(check.Description).To(HavePrefix(expDescription))
 			})
 
 			It("Should have the expected instructions", func() {
-				Expect(check.Instructions).To(Equal(expInstructions))
+				Expect(check.Instructions).To(HavePrefix(expInstructions))
 			})
 		})
 
@@ -161,7 +161,7 @@ var _ = Describe("XCCDF parser", func() {
 				BeforeEach(func() {
 					mcfg, _ := ParseMachineConfig(rem, rem.Spec.Current.Object)
 					ignRaw, _ := mcfgcommon.IgnParseWrapper(mcfg.Spec.Config.Raw)
-					parsedIgn := ignRaw.(ign2types.Config)
+					parsedIgn := ignRaw.(igntypes.Config)
 					mcFiles = parsedIgn.Storage.Files
 				})
 
