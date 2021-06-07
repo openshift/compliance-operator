@@ -32,7 +32,10 @@ var _ = Describe("Testing SCAP parsing and storage", func() {
 			Expect(err).To(BeNil())
 
 			By("parsing content for warnings")
-			expected := []string{"/apis/config.openshift.io/v1/oauths/cluster"}
+			expected := []string{
+				"/apis/config.openshift.io/v1/oauths/cluster",
+				"/api/v1/namespaces/openshift-kube-apiserver/configmaps/config",
+			}
 			got := getResourcePaths(contentDS, contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate")
 			Expect(got).To(Equal(expected))
 		})

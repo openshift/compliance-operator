@@ -164,7 +164,7 @@ func (c *scapContentDataStream) FigureResources(profile string) error {
 //
 //  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
 //  </code></warning>
-func getPathFromWarningXML(in *xmlquery.Node) string {
+func getPathFromWarningXML(in *xmlquery.Node) []string {
 	DBG("Parsing warning %s", in.OutputXML(false))
 	return utils.GetPathFromWarningXML(in)
 }
@@ -228,12 +228,12 @@ func getResourcePaths(profileDefs *xmlquery.Node, ruleDefs *xmlquery.Node, profi
 			if warn == nil {
 				continue
 			}
-			apiPath := getPathFromWarningXML(warn)
-			if len(apiPath) == 0 {
+			apiPaths := getPathFromWarningXML(warn)
+			if len(apiPaths) == 0 {
 				continue
 			}
 			// We only care for the first occurrence that works
-			out = append(out, apiPath)
+			out = append(out, apiPaths...)
 			warningFound = true
 			break
 		}

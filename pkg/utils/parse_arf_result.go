@@ -40,16 +40,34 @@ type ParseResult struct {
 //
 //  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
 //  </code></warning>
-func GetPathFromWarningXML(in *xmlquery.Node) string {
+func GetPathFromWarningXML(in *xmlquery.Node) []string {
+	apiPaths := []string{}
+
 	codeNodes := in.SelectElements("html:code")
 
 	for _, codeNode := range codeNodes {
 		if codeNode.SelectAttr("class") == endPointTag {
-			return codeNode.InnerText()
+			path := codeNode.InnerText()
+			if len(path) == 0 {
+				continue
+			}
+			apiPaths = append(apiPaths, path)
 		}
 	}
 
-	return ""
+	return apiPaths
+}
+
+func warningHasApiObjects(in *xmlquery.Node) bool {
+	codeNodes := in.SelectElements("html:code")
+
+	for _, codeNode := range codeNodes {
+		if codeNode.SelectAttr("class") == endPointTag {
+			return true
+		}
+	}
+
+	return false
 }
 
 type nodeByIdHashTable map[string]*xmlquery.Node
@@ -239,7 +257,7 @@ func getWarningsForRule(rule *xmlquery.Node) []string {
 		}
 		// We skip this warning if it's relevant
 		// to parsing the API paths.
-		if GetPathFromWarningXML(warn) != "" {
+		if warningHasApiObjects(warn) {
 			continue
 		}
 		warnings = append(warnings, XmlNodeAsMarkdown(warn))
