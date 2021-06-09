@@ -574,6 +574,22 @@ status:
   state: READY
 ```
 
+Another example that changes the value of a variable the content uses to check
+for a kubelet eviction limit is below:
+```yaml
+apiVersion: compliance.openshift.io/v1alpha1
+kind: TailoredProfile
+metadata:
+  name: cis-node-kubelet-memory
+spec:
+  extends: ocp4-moderate-node
+  title: CIS node with different kubelet memory limit
+  setValues:
+    - name: upstream-ocp4-var-kubelet-evictionhard-memory-available
+      rationale: Bump the kubelet hard eviction limit to 500MB
+      value: 500Mi
+```
+
 Notable attributes:
 
 * **spec.extends**: Name of the `Profile` object that this `TailoredProfile` builds upon
