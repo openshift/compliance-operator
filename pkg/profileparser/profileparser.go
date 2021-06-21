@@ -658,7 +658,12 @@ func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *
 				}
 			}
 			if warnings != nil {
-				p.Warning = strings.Join(warnings, "\n")
+				p.Warning, valueRendered, err = utils.RenderValues(utils.XmlNodeAsMarkdownPreRender(rationale, false), valuesList)
+				if err != nil {
+					log.Error(err, "couldn't render variable in rules")
+				} else if len(valueRendered) > 0 {
+					p.Annotations[cmpv1alpha1.RuleVariableAnnotationKey] = strings.ReplaceAll(strings.Join(valueRendered, ","), "_", "-")
+				}
 			}
 			if severity != "" {
 				p.Severity = severity

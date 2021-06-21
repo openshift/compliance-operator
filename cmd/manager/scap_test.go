@@ -49,8 +49,114 @@ var _ = Describe("Testing SCAP parsing and storage", func() {
 					DumpPath: "/api/v1/namespaces/openshift-kube-apiserver/configmaps/config",
 				},
 			}
-			got := getResourcePaths(contentDS, contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate")
+			got, _ := getResourcePaths(contentDS, contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate", nil)
 			Expect(got).To(Equal(expected))
+		})
+	})
+
+	Context("Parsing SCAP Content with runtime customization for OCP API resource", func() {
+		var dataStreamFile *os.File
+		var contentDS *xmlquery.Node
+
+		It("Gets the appropriate resource URIs", func() {
+			var err error
+			dataStreamFile, err = os.Open("../../tests/data/ssg-ocp4-ds-new-warning-variable.xml")
+			Expect(err).To(BeNil())
+
+			By("parsing content without errors")
+			contentDS, err = parseContent(dataStreamFile)
+			Expect(err).To(BeNil())
+
+			By("parsing content for warnings")
+			expected := []utils.ResourcePath{
+				{
+					ObjPath:  "/apis/config.openshift.io/v1/oauths/cluster",
+					DumpPath: "/apis/config.openshift.io/v1/oauths/cluster",
+				},
+				{
+					ObjPath:  "/api/v1/namespaces/master-mycluster1/configmaps/kas-config",
+					DumpPath: "/api/v1/namespaces/master-mycluster1/configmaps/kas-config",
+				},
+			}
+			got, _ := getResourcePaths(contentDS, contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate", nil)
+			Expect(got).To(Equal(expected))
+
+			dataStreamFile.Close()
+		})
+
+		It("Gets valid resource URIs even if some of the URL references contain non-existent variable reference", func() {
+			var err error
+			dataStreamFile, err = os.Open("../../tests/data/ssg-ocp4-ds-new-warning-variable-nonexistent.xml")
+			Expect(err).To(BeNil())
+
+			By("parsing content without errors")
+			contentDS, err = parseContent(dataStreamFile)
+			Expect(err).To(BeNil())
+
+			By("parsing content for warnings")
+			expected := []utils.ResourcePath{
+				{
+					ObjPath:  "/apis/config.openshift.io/v1/oauths/cluster",
+					DumpPath: "/apis/config.openshift.io/v1/oauths/cluster",
+				},
+			}
+			got, _ := getResourcePaths(contentDS, contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate", nil)
+			Expect(got).To(Equal(expected))
+			dataStreamFile.Close()
+		})
+
+		It("Gets valid resource URIs even if some of the URL references contain mal-formed go template", func() {
+			var err error
+			dataStreamFile, err = os.Open("../../tests/data/ssg-ocp4-ds-new-warning-variable-malformed.xml")
+			Expect(err).To(BeNil())
+
+			By("parsing content without errors")
+			contentDS, err = parseContent(dataStreamFile)
+			Expect(err).To(BeNil())
+
+			By("parsing content for warnings")
+			expected := []utils.ResourcePath{
+				{
+					ObjPath:  "/apis/config.openshift.io/v1/oauths/cluster",
+					DumpPath: "/apis/config.openshift.io/v1/oauths/cluster",
+				},
+			}
+			got, _ := getResourcePaths(contentDS, contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate", nil)
+			Expect(got).To(Equal(expected))
+			dataStreamFile.Close()
+		})
+
+		It("Gets the appropriate resource URIs customized in a tailored profile", func() {
+			var err error
+			dataStreamFile, err = os.Open("../../tests/data/ssg-ocp4-ds-new-warning-variable.xml")
+			Expect(err).To(BeNil())
+			tpDataStreamFile, err := os.Open("../../tests/data/tailored-profile.xml")
+			Expect(err).To(BeNil())
+
+			By("parsing base profile content without errors")
+			contentDS, err = parseContent(dataStreamFile)
+			Expect(err).To(BeNil())
+
+			By("parsing tailored profile content without errors")
+			tpContentDS, err := parseContent(tpDataStreamFile)
+			Expect(err).To(BeNil())
+
+			By("parsing content for warnings")
+			expected := []utils.ResourcePath{
+				{
+					ObjPath:  "/apis/config.openshift.io/v1/oauths/cluster",
+					DumpPath: "/apis/config.openshift.io/v1/oauths/cluster",
+				},
+				{
+					ObjPath:  "/api/v1/namespaces/customized/configmaps/kas-config",
+					DumpPath: "/api/v1/namespaces/customized/configmaps/kas-config",
+				},
+			}
+			_, valuesList := getResourcePaths(tpContentDS, contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate", nil)
+			got, _ := getResourcePaths(contentDS, contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate", valuesList)
+			Expect(got).To(Equal(expected))
+
+			dataStreamFile.Close()
 		})
 	})
 
