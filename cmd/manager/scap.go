@@ -18,6 +18,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -27,7 +28,7 @@ import (
 	"time"
 
 	"github.com/antchfx/xmlquery"
-
+	"github.com/itchyny/gojq"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/kubernetes"
@@ -133,7 +134,8 @@ func (c *scapContentDataStream) FigureResources(profile string) error {
 	// Always stage the clusteroperators/openshift-apiserver object for version detection.
 	found := []utils.ResourcePath{
 		{
-			ObjPath: "/apis/config.openshift.io/v1/clusteroperators/openshift-apiserver",
+			ObjPath:  "/apis/config.openshift.io/v1/clusteroperators/openshift-apiserver",
+			DumpPath: "/apis/config.openshift.io/v1/clusteroperators/openshift-apiserver",
 		},
 	}
 	effectiveProfile := profile
@@ -278,12 +280,13 @@ func (c *scapContentDataStream) FetchResources() ([]string, error) {
 func fetch(client *kubernetes.Clientset, objects []utils.ResourcePath) (map[string][]byte, []string, error) {
 	warnings := []string{}
 	results := map[string][]byte{}
+	ctx := context.Background()
 	for _, rpath := range objects {
 		err := func() error {
 			uri := rpath.ObjPath
 			LOG("Fetching URI: '%s'", uri)
 			req := client.RESTClient().Get().RequestURI(uri)
-			stream, err := req.Stream(context.TODO())
+			stream, err := req.Stream(ctx)
 			if meta.IsNoMatchError(err) || kerrors.IsForbidden(err) || kerrors.IsNotFound(err) {
 				DBG("Encountered non-fatal error to be persisted in the scan: %s", err)
 				objerr := fmt.Errorf("could not fetch %s: %w", uri, err)
@@ -301,7 +304,16 @@ func fetch(client *kubernetes.Clientset, objects []utils.ResourcePath) (map[stri
 				DBG("no data in request body")
 				return nil
 			}
-			results[uri] = body
+			if rpath.Filter != "" {
+				DBG("Applying filter '%s' to path '%s'", rpath.Filter, rpath.ObjPath)
+				filteredBody, filterErr := filter(ctx, body, rpath.Filter)
+				if filterErr != nil {
+					return fmt.Errorf("Couldn't filter: %w", filterErr)
+				}
+				results[rpath.DumpPath] = filteredBody
+			} else {
+				results[rpath.DumpPath] = body
+			}
 			return nil
 		}()
 		if err != nil {
@@ -309,6 +321,34 @@ func fetch(client *kubernetes.Clientset, objects []utils.ResourcePath) (map[stri
 		}
 	}
 	return results, warnings, nil
+}
+
+func filter(ctx context.Context, rawobj []byte, filter string) ([]byte, error) {
+	fltr, fltrErr := gojq.Parse(filter)
+	if fltrErr != nil {
+		return nil, fmt.Errorf("could not create filter '%s': %w", filter, fltrErr)
+	}
+	obj := map[string]interface{}{}
+	unmarshallErr := json.Unmarshal(rawobj, &obj)
+	if unmarshallErr != nil {
+		return nil, fmt.Errorf("Error unmarshalling json: %w", unmarshallErr)
+	}
+	iter := fltr.RunWithContext(ctx, obj)
+	v, ok := iter.Next()
+	if !ok {
+		DBG("No result from filter. This is an issue and an error will be returned.")
+		return nil, fmt.Errorf("couldn't get filtered object")
+	}
+	if err, ok := v.(error); ok {
+		DBG("Error while filtering: %s", err)
+		return nil, err
+	}
+
+	out, marshallErr := json.Marshal(&v)
+	if marshallErr != nil {
+		return nil, fmt.Errorf("Error marshalling json: %w", marshallErr)
+	}
+	return out, nil
 }
 
 func (c *scapContentDataStream) SaveWarningsIfAny(warnings []string, outputFile string) error {

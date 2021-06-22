@@ -27,7 +27,10 @@ const (
 
 // Constants useful for parsing warnings
 const (
-	endPointTag = "ocp-api-endpoint"
+	endPointTag           = "ocp-api-endpoint"
+	dumpLocationClass     = "ocp-dump-location"
+	filterTypeClass       = "ocp-api-filter"
+	filteredEndpointClass = "filtered"
 )
 
 type ParseResult struct {
@@ -37,8 +40,9 @@ type ParseResult struct {
 }
 
 type ResourcePath struct {
-	ObjPath string
-	Filter  string
+	ObjPath  string
+	DumpPath string
+	Filter   string
 }
 
 // getPathsFromRuleWarning finds the API endpoint from in. The expected structure is:
@@ -48,15 +52,26 @@ type ResourcePath struct {
 func GetPathFromWarningXML(in *xmlquery.Node) []ResourcePath {
 	apiPaths := []ResourcePath{}
 
-	codeNodes := in.SelectElements("html:code")
+	codeNodes := in.SelectElements("//html:code")
 
 	for _, codeNode := range codeNodes {
-		if codeNode.SelectAttr("class") == endPointTag {
+		if strings.Contains(codeNode.SelectAttr("class"), endPointTag) {
 			path := codeNode.InnerText()
 			if len(path) == 0 {
 				continue
 			}
-			apiPaths = append(apiPaths, ResourcePath{ObjPath: path})
+			dumpPath := path
+			var filter string
+			pathID := codeNode.SelectAttr("id")
+			if pathID != "" {
+				filterNode := in.SelectElement(fmt.Sprintf(`//*[@id="filter-%s"]`, pathID))
+				dumpNode := in.SelectElement(fmt.Sprintf(`//*[@id="dump-%s"]`, pathID))
+				if filterNode != nil && dumpNode != nil {
+					filter = filterNode.InnerText()
+					dumpPath = dumpNode.InnerText()
+				}
+			}
+			apiPaths = append(apiPaths, ResourcePath{ObjPath: path, DumpPath: dumpPath, Filter: filter})
 		}
 	}
 
