@@ -36,12 +36,17 @@ type ParseResult struct {
 	Remediation *compv1alpha1.ComplianceRemediation
 }
 
+type ResourcePath struct {
+	ObjPath string
+	Filter  string
+}
+
 // getPathsFromRuleWarning finds the API endpoint from in. The expected structure is:
 //
 //  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
 //  </code></warning>
-func GetPathFromWarningXML(in *xmlquery.Node) []string {
-	apiPaths := []string{}
+func GetPathFromWarningXML(in *xmlquery.Node) []ResourcePath {
+	apiPaths := []ResourcePath{}
 
 	codeNodes := in.SelectElements("html:code")
 
@@ -51,7 +56,7 @@ func GetPathFromWarningXML(in *xmlquery.Node) []string {
 			if len(path) == 0 {
 				continue
 			}
-			apiPaths = append(apiPaths, path)
+			apiPaths = append(apiPaths, ResourcePath{ObjPath: path})
 		}
 	}
 

@@ -46,7 +46,7 @@ type scapContentDataStream struct {
 	// Staging objects
 	dataStream *xmlquery.Node
 	tailoring  *xmlquery.Node
-	resources  []string
+	resources  []utils.ResourcePath
 	found      map[string][]byte
 }
 
@@ -131,7 +131,11 @@ func openNonEmptyFile(filename string) (*os.File, error) {
 
 func (c *scapContentDataStream) FigureResources(profile string) error {
 	// Always stage the clusteroperators/openshift-apiserver object for version detection.
-	found := []string{"/apis/config.openshift.io/v1/clusteroperators/openshift-apiserver"}
+	found := []utils.ResourcePath{
+		{
+			ObjPath: "/apis/config.openshift.io/v1/clusteroperators/openshift-apiserver",
+		},
+	}
 	effectiveProfile := profile
 
 	if c.tailoring != nil {
@@ -162,15 +166,15 @@ func (c *scapContentDataStream) FigureResources(profile string) error {
 //
 //  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
 //  </code></warning>
-func getPathFromWarningXML(in *xmlquery.Node) []string {
+func getPathFromWarningXML(in *xmlquery.Node) []utils.ResourcePath {
 	DBG("Parsing warning %s", in.OutputXML(false))
 	return utils.GetPathFromWarningXML(in)
 }
 
 // Collect the resource paths for objects that this scan needs to obtain.
 // The profile will have a series of "selected" checks that we grab all of the path info from.
-func getResourcePaths(profileDefs *xmlquery.Node, ruleDefs *xmlquery.Node, profile string) []string {
-	out := []string{}
+func getResourcePaths(profileDefs *xmlquery.Node, ruleDefs *xmlquery.Node, profile string) []utils.ResourcePath {
+	out := []utils.ResourcePath{}
 	selectedChecks := []string{}
 
 	// First we find the Profile node, to locate the enabled checks.
@@ -271,11 +275,12 @@ func (c *scapContentDataStream) FetchResources() ([]string, error) {
 	return warnings, nil
 }
 
-func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, []string, error) {
+func fetch(client *kubernetes.Clientset, objects []utils.ResourcePath) (map[string][]byte, []string, error) {
 	warnings := []string{}
 	results := map[string][]byte{}
-	for _, uri := range objects {
+	for _, rpath := range objects {
 		err := func() error {
+			uri := rpath.ObjPath
 			LOG("Fetching URI: '%s'", uri)
 			req := client.RESTClient().Get().RequestURI(uri)
 			stream, err := req.Stream(context.TODO())
