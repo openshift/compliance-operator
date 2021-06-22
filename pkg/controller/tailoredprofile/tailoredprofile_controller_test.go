@@ -348,6 +348,44 @@ var _ = Describe("TailoredprofileController", func() {
 			Expect(tp.Status.ErrorMessage).To(MatchRegexp(
 				`not found`))
 		})
+
+		It("no longer reports an error after fixing the rule", func() {
+			tpKey := types.NamespacedName{
+				Name:      tpName,
+				Namespace: namespace,
+			}
+
+			tp := &compv1alpha1.TailoredProfile{}
+			geterr := r.client.Get(ctx, tpKey, tp)
+			Expect(geterr).To(BeNil())
+
+			tp.Spec.EnableRules = []compv1alpha1.RuleReferenceSpec{
+				{
+					Name:      "rule-3",
+					Rationale: "Why not",
+				},
+			}
+
+			err := r.client.Update(ctx, tp)
+			Expect(err).To(BeNil())
+
+			tpReq := reconcile.Request{}
+			tpReq.Name = tpName
+			tpReq.Namespace = namespace
+
+			By("Reconciling the first time")
+			_, err = r.Reconcile(tpReq)
+			Expect(err).To(BeNil())
+
+			By("Reconciling a second time")
+			_, err = r.Reconcile(tpReq)
+
+			geterr = r.client.Get(ctx, tpKey, tp)
+			Expect(geterr).To(BeNil())
+
+			Expect(tp.Status.State).To(Equal(compv1alpha1.TailoredProfileStateReady))
+			Expect(tp.Status.ErrorMessage).To(BeEmpty())
+		})
 	})
 
 	When("Trying to reference an unexistent variable", func() {
