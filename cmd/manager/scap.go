@@ -28,8 +28,6 @@ import (
 
 	"github.com/antchfx/xmlquery"
 
-	"github.com/ghodss/yaml"
-
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/kubernetes"
@@ -298,11 +296,7 @@ func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, [
 				DBG("no data in request body")
 				return nil
 			}
-			yamlBody, err := yaml.JSONToYAML(body)
-			if err != nil {
-				return err
-			}
-			results[uri] = yamlBody
+			results[uri] = body
 			return nil
 		}()
 		if err != nil {
