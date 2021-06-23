@@ -42,7 +42,12 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileComplianceSuite{client: mgr.GetClient(), scheme: mgr.GetScheme(), recorder: mgr.GetEventRecorderFor("suitectrl")}
+	return &ReconcileComplianceSuite{
+		reader:   mgr.GetAPIReader(),
+		client:   mgr.GetClient(),
+		scheme:   mgr.GetScheme(),
+		recorder: mgr.GetEventRecorderFor("suitectrl"),
+	}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -76,6 +81,8 @@ var _ reconcile.Reconciler = &ReconcileComplianceSuite{}
 
 // ReconcileComplianceSuite reconciles a ComplianceSuite object
 type ReconcileComplianceSuite struct {
+	// Accesses the API server directly
+	reader client.Reader
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client   client.Client
@@ -491,7 +498,14 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 	}
 
 	// Only un-pause MachineConfigPools once the remediations have been applied
-	for _, pool := range affectedMcfgPools {
+	for idx := range affectedMcfgPools {
+		pool := affectedMcfgPools[idx]
+		poolKey := types.NamespacedName{Name: pool.GetName()}
+		// refresh pool reference directly from the API Server
+		if getErr := r.reader.Get(context.TODO(), poolKey, pool); getErr != nil {
+			logger.Error(getErr, "Could get newer machine config pool reference", "MachineConfigPool.Name", poolKey.Name)
+			return reconcile.Result{}, getErr
+		}
 		if pool.Spec.Paused {
 			logger.Info("Unpausing pool", "MachineConfigPool.Name", pool.Name)
 			poolCopy := pool.DeepCopy()
