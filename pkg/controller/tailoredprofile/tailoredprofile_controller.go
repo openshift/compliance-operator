@@ -249,6 +249,7 @@ func (r *ReconcileTailoredProfile) updateTailoredProfileStatusReady(tp *cmpv1alp
 	// Never update the original (update the copy)
 	tpCopy := tp.DeepCopy()
 	tpCopy.Status.State = cmpv1alpha1.TailoredProfileStateReady
+	tpCopy.Status.ErrorMessage = ""
 	tpCopy.Status.OutputRef = cmpv1alpha1.OutputRef{
 		Name:      out.GetName(),
 		Namespace: out.GetNamespace(),
