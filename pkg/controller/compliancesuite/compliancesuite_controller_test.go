@@ -89,7 +89,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 		Expect(err).To(BeNil())
 
 		client := fake.NewFakeClientWithScheme(cscheme, nodeScan.DeepCopy(), suite.DeepCopy())
-		reconciler = &ReconcileComplianceSuite{client: client, scheme: cscheme}
+		reconciler = &ReconcileComplianceSuite{reader: client, client: client, scheme: cscheme}
 		zaplog, _ := zap.NewDevelopment()
 		logger = zapr.NewLogger(zaplog)
 	})
