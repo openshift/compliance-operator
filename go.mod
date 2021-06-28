@@ -10,10 +10,11 @@ require (
 	github.com/clarketm/json v1.15.7
 	github.com/coreos/ignition/v2 v2.9.0
 	github.com/dsnet/compress v0.0.1
-	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
+	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32 // indirect
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/zapr v0.4.0
 	github.com/google/go-cmp v0.5.5
+	github.com/itchyny/gojq v0.12.4
 	github.com/jaytaylor/html2text v0.0.0-20200412013138-3577fbdbcff7
 	github.com/onsi/ginkgo v1.16.3
 	github.com/onsi/gomega v1.11.0

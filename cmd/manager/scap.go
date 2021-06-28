@@ -18,6 +18,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -27,9 +28,7 @@ import (
 	"time"
 
 	"github.com/antchfx/xmlquery"
-
-	"github.com/ghodss/yaml"
-
+	"github.com/itchyny/gojq"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/kubernetes"
@@ -48,7 +47,7 @@ type scapContentDataStream struct {
 	// Staging objects
 	dataStream *xmlquery.Node
 	tailoring  *xmlquery.Node
-	resources  []string
+	resources  []utils.ResourcePath
 	found      map[string][]byte
 }
 
@@ -133,7 +132,12 @@ func openNonEmptyFile(filename string) (*os.File, error) {
 
 func (c *scapContentDataStream) FigureResources(profile string) error {
 	// Always stage the clusteroperators/openshift-apiserver object for version detection.
-	found := []string{"/apis/config.openshift.io/v1/clusteroperators/openshift-apiserver"}
+	found := []utils.ResourcePath{
+		{
+			ObjPath:  "/apis/config.openshift.io/v1/clusteroperators/openshift-apiserver",
+			DumpPath: "/apis/config.openshift.io/v1/clusteroperators/openshift-apiserver",
+		},
+	}
 	effectiveProfile := profile
 
 	if c.tailoring != nil {
@@ -164,15 +168,15 @@ func (c *scapContentDataStream) FigureResources(profile string) error {
 //
 //  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
 //  </code></warning>
-func getPathFromWarningXML(in *xmlquery.Node) []string {
+func getPathFromWarningXML(in *xmlquery.Node) []utils.ResourcePath {
 	DBG("Parsing warning %s", in.OutputXML(false))
 	return utils.GetPathFromWarningXML(in)
 }
 
 // Collect the resource paths for objects that this scan needs to obtain.
 // The profile will have a series of "selected" checks that we grab all of the path info from.
-func getResourcePaths(profileDefs *xmlquery.Node, ruleDefs *xmlquery.Node, profile string) []string {
-	out := []string{}
+func getResourcePaths(profileDefs *xmlquery.Node, ruleDefs *xmlquery.Node, profile string) []utils.ResourcePath {
+	out := []utils.ResourcePath{}
 	selectedChecks := []string{}
 
 	// First we find the Profile node, to locate the enabled checks.
@@ -273,14 +277,16 @@ func (c *scapContentDataStream) FetchResources() ([]string, error) {
 	return warnings, nil
 }
 
-func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, []string, error) {
+func fetch(client *kubernetes.Clientset, objects []utils.ResourcePath) (map[string][]byte, []string, error) {
 	warnings := []string{}
 	results := map[string][]byte{}
-	for _, uri := range objects {
+	ctx := context.Background()
+	for _, rpath := range objects {
 		err := func() error {
+			uri := rpath.ObjPath
 			LOG("Fetching URI: '%s'", uri)
 			req := client.RESTClient().Get().RequestURI(uri)
-			stream, err := req.Stream(context.TODO())
+			stream, err := req.Stream(ctx)
 			if meta.IsNoMatchError(err) || kerrors.IsForbidden(err) || kerrors.IsNotFound(err) {
 				DBG("Encountered non-fatal error to be persisted in the scan: %s", err)
 				objerr := fmt.Errorf("could not fetch %s: %w", uri, err)
@@ -298,11 +304,16 @@ func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, [
 				DBG("no data in request body")
 				return nil
 			}
-			yamlBody, err := yaml.JSONToYAML(body)
-			if err != nil {
-				return err
+			if rpath.Filter != "" {
+				DBG("Applying filter '%s' to path '%s'", rpath.Filter, rpath.ObjPath)
+				filteredBody, filterErr := filter(ctx, body, rpath.Filter)
+				if filterErr != nil {
+					return fmt.Errorf("Couldn't filter: %w", filterErr)
+				}
+				results[rpath.DumpPath] = filteredBody
+			} else {
+				results[rpath.DumpPath] = body
 			}
-			results[uri] = yamlBody
 			return nil
 		}()
 		if err != nil {
@@ -310,6 +321,34 @@ func fetch(client *kubernetes.Clientset, objects []string) (map[string][]byte, [
 		}
 	}
 	return results, warnings, nil
+}
+
+func filter(ctx context.Context, rawobj []byte, filter string) ([]byte, error) {
+	fltr, fltrErr := gojq.Parse(filter)
+	if fltrErr != nil {
+		return nil, fmt.Errorf("could not create filter '%s': %w", filter, fltrErr)
+	}
+	obj := map[string]interface{}{}
+	unmarshallErr := json.Unmarshal(rawobj, &obj)
+	if unmarshallErr != nil {
+		return nil, fmt.Errorf("Error unmarshalling json: %w", unmarshallErr)
+	}
+	iter := fltr.RunWithContext(ctx, obj)
+	v, ok := iter.Next()
+	if !ok {
+		DBG("No result from filter. This is an issue and an error will be returned.")
+		return nil, fmt.Errorf("couldn't get filtered object")
+	}
+	if err, ok := v.(error); ok {
+		DBG("Error while filtering: %s", err)
+		return nil, err
+	}
+
+	out, marshallErr := json.Marshal(&v)
+	if marshallErr != nil {
+		return nil, fmt.Errorf("Error marshalling json: %w", marshallErr)
+	}
+	return out, nil
 }
 
 func (c *scapContentDataStream) SaveWarningsIfAny(warnings []string, outputFile string) error {

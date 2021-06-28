@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"io/ioutil"
 	"os"
 
 	"github.com/antchfx/xmlquery"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 var _ = Describe("Testing SCAP parsing and storage", func() {
@@ -32,9 +36,15 @@ var _ = Describe("Testing SCAP parsing and storage", func() {
 			Expect(err).To(BeNil())
 
 			By("parsing content for warnings")
-			expected := []string{
-				"/apis/config.openshift.io/v1/oauths/cluster",
-				"/api/v1/namespaces/openshift-kube-apiserver/configmaps/config",
+			expected := []utils.ResourcePath{
+				{
+					ObjPath:  "/apis/config.openshift.io/v1/oauths/cluster",
+					DumpPath: "/apis/config.openshift.io/v1/oauths/cluster",
+				},
+				{
+					ObjPath:  "/api/v1/namespaces/openshift-kube-apiserver/configmaps/config",
+					DumpPath: "/api/v1/namespaces/openshift-kube-apiserver/configmaps/config",
+				},
 			}
 			got := getResourcePaths(contentDS, contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate")
 			Expect(got).To(Equal(expected))
@@ -76,6 +86,36 @@ var _ = Describe("Testing SCAP parsing and storage", func() {
 			Expect(err).To(BeNil())
 			Expect(dir).To(Equal(expectedDir))
 			Expect(file).To(Equal(expectedFile))
+		})
+	})
+})
+
+var _ = Describe("Testing filtering", func() {
+	Context("Filtering namespaces", func() {
+		var rawns []byte
+		BeforeEach(func() {
+			nsFile, err := os.Open("../../tests/data/namespaces.json")
+			Expect(err).To(BeNil())
+			var readErr error
+			rawns, readErr = ioutil.ReadAll(nsFile)
+			Expect(readErr).To(BeNil())
+		})
+		It("filters namespaces appropriately", func() {
+			filteredOut, filterErr := filter(context.TODO(), rawns,
+				`[.items[] | select((.metadata.name | startswith("openshift") | not) and (.metadata.name | startswith("kube-") | not) and .metadata.name != "default")]`)
+			Expect(filterErr).To(BeNil())
+			nsArr := []interface{}{}
+			unmErr := json.Unmarshal(filteredOut, &nsArr)
+			Expect(unmErr).To(BeNil())
+			Expect(nsArr).To(HaveLen(2))
+		})
+	})
+
+	Context("Testing errors", func() {
+		It("outputs error if it can't create filter", func() {
+			_, filterErr := filter(context.TODO(), []byte{},
+				`.items[`)
+			Expect(filterErr).ToNot(BeNil())
 		})
 	})
 })
