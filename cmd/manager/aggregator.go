@@ -378,7 +378,7 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		if canCreate, why := canCreateRemediation(scan, remTargetObj); !canCreate {
 			// Only issue event once.
 			if !remediationNotPossibleEventIssued {
-				log.Info(why + " Remediation:" + crkey.Name)
+				log.Info(why, "Remediation", crkey.Name)
 				crClient.recorder.Event(scan, v1.EventTypeWarning, "CannotRemediate", why+" Remediation:"+crkey.Name)
 				remediationNotPossibleEventIssued = true
 			}
