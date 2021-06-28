@@ -5,6 +5,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.36] - 2021-06-28
+### Changes
+- Adding unit testing file for aggregator.go file, test detecting empty remediation
+- Issue warning if filter issues more than one object
+- Adding unit testing file for aggregator.go file, test detecting empty remediation
+- This checks for the empty remediation yaml file before creating a remediation
+- Enable filtering using `jq` syntax
+- Wrap warning fetching with struct
+- Persist resources as JSON and not YAML
+- Bug 1975358: Refresh pool reference before trying to unpause it
+- TP: When transitioning to Ready, remove previous error message
+- docs: Add an example of setting a variable in a tailoredProfile
+- Release v0.1.35
+- Collect all ocp-api-endpoint elements
+- RBAC: Add permissions to update oauths config
+- Release v0.1.34
+- Switch to using go 1.16
+- Remove unused const definitions
+- Update dependencies
+- RBAC: Allow api-resource-collector to list FIO objects
+
 ## [0.1.35] - 2021-06-09
 ### Changes
 - Collect all ocp-api-endpoint elements
