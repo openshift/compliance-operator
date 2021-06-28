@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.36] - 2021-06-28
+### Changes
+- Issue warning if filter issues more than one object
+- This checks for the empty remediation yaml file before creating a remediation
+- Enable filtering using `jq` syntax
+- Wrap warning fetching with struct
+- Persist resources as JSON and not YAML
+- Bug 1975358: Refresh pool reference before trying to unpause it
+- TailoredProfiles: When transitioning to Ready, remove previous error message
+- docs: Add an example of setting a variable in a tailoredProfile
+
 ## [0.1.35] - 2021-06-09
 ### Changes
 - Collect all ocp-api-endpoint elements

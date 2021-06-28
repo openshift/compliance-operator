@@ -401,6 +401,8 @@ undo-deploy-tag-image: package-version-to-tag
 .PHONY: git-release
 git-release: package-version-to-tag changelog
 	git checkout -b "release-v$(TAG)"
+	sed -i "s/\(.*Version = \"\).*/\1$(TAG)\"/" version/version.go
+	git add "version/version.go"
 	git add "deploy/olm-catalog/compliance-operator/"
 	git add "CHANGELOG.md"
 	git commit -m "Release v$(TAG)"
