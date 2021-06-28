@@ -34,6 +34,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -277,8 +278,12 @@ func createOrUpdateOneResult(crClient *complianceCrClient, owner metav1.Object, 
 	return nil
 }
 
-func canCreateRemediation(scan *compv1alpha1.ComplianceScan, obj runtime.Object) (bool, string) {
+func canCreateRemediation(scan *compv1alpha1.ComplianceScan, obj *unstructured.Unstructured) (bool, string) {
 	// FIXME(jaosorior): Figure out a more pluggable way of adding these sorts of special cases
+	if obj == nil || len(obj.Object) == 0 {
+		return false, "The remediaiton yaml file is empty"
+	}
+
 	if obj.GetObjectKind().GroupVersionKind().Kind != "MachineConfig" {
 		return true, ""
 	}
@@ -373,8 +378,8 @@ func createResults(crClient *complianceCrClient, scan *compv1alpha1.ComplianceSc
 		if canCreate, why := canCreateRemediation(scan, remTargetObj); !canCreate {
 			// Only issue event once.
 			if !remediationNotPossibleEventIssued {
-				log.Info(why)
-				crClient.recorder.Event(scan, v1.EventTypeWarning, "CannotRemediate", why)
+				log.Info(why, "Remediation", crkey.Name)
+				crClient.recorder.Event(scan, v1.EventTypeWarning, "CannotRemediate", why+" Remediation:"+crkey.Name)
 				remediationNotPossibleEventIssued = true
 			}
 			continue
