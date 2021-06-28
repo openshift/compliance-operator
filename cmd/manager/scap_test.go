@@ -117,5 +117,20 @@ var _ = Describe("Testing filtering", func() {
 				`.items[`)
 			Expect(filterErr).ToNot(BeNil())
 		})
+		Context("Filtering namespaces", func() {
+			var rawns []byte
+			BeforeEach(func() {
+				nsFile, err := os.Open("../../tests/data/namespaces.json")
+				Expect(err).To(BeNil())
+				var readErr error
+				rawns, readErr = ioutil.ReadAll(nsFile)
+				Expect(readErr).To(BeNil())
+			})
+
+			It("skips extra results", func() {
+				_, filterErr := filter(context.TODO(), rawns, `.items[]`)
+				Expect(filterErr).Should(MatchError(MoreThanOneObjErr))
+			})
+		})
 	})
 })
