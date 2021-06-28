@@ -19,6 +19,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -38,6 +39,10 @@ import (
 
 const (
 	contentFileTimeout = 3600
+)
+
+var (
+	MoreThanOneObjErr = errors.New("more than one object returned from the filter")
 )
 
 // For OpenSCAP content as an XML data stream. Implements ResourceFetcher.
@@ -307,7 +312,9 @@ func fetch(client *kubernetes.Clientset, objects []utils.ResourcePath) (map[stri
 			if rpath.Filter != "" {
 				DBG("Applying filter '%s' to path '%s'", rpath.Filter, rpath.ObjPath)
 				filteredBody, filterErr := filter(ctx, body, rpath.Filter)
-				if filterErr != nil {
+				if errors.Is(filterErr, MoreThanOneObjErr) {
+					warnings = append(warnings, filterErr.Error())
+				} else if filterErr != nil {
 					return fmt.Errorf("Couldn't filter: %w", filterErr)
 				}
 				results[rpath.DumpPath] = filteredBody
@@ -347,6 +354,11 @@ func filter(ctx context.Context, rawobj []byte, filter string) ([]byte, error) {
 	out, marshallErr := json.Marshal(&v)
 	if marshallErr != nil {
 		return nil, fmt.Errorf("Error marshalling json: %w", marshallErr)
+	}
+	_, isNotEOF := iter.Next()
+	if isNotEOF {
+		DBG("No more results should have come from the filter. This is an issue with the content.")
+		return out, fmt.Errorf("Skipping extra results from filter '%s': %w", filter, MoreThanOneObjErr)
 	}
 	return out, nil
 }
