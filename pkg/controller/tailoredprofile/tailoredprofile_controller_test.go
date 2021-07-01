@@ -159,6 +159,7 @@ var _ = Describe("TailoredprofileController", func() {
 
 			By("Reconciling a second time")
 			_, err = r.Reconcile(tpReq)
+			Expect(err).To(BeNil())
 
 			geterr = r.client.Get(ctx, tpKey, tp)
 			Expect(geterr).To(BeNil())
@@ -181,6 +182,66 @@ var _ = Describe("TailoredprofileController", func() {
 			Expect(data).To(ContainSubstring(`extends="profile_1"`))
 			Expect(data).To(ContainSubstring(`select idref="rule_3" selected="true"`))
 			Expect(data).To(ContainSubstring(`select idref="rule_2" selected="false"`))
+		})
+		It("Updates a configMap when the TP is updated", func() {
+			tpKey := types.NamespacedName{
+				Name:      tpName,
+				Namespace: namespace,
+			}
+			tpReq := reconcile.Request{}
+			tpReq.Name = tpName
+			tpReq.Namespace = namespace
+
+			By("Reconciling the first time")
+			_, err := r.Reconcile(tpReq)
+			Expect(err).To(BeNil())
+
+			By("Update the TP")
+			tpUpdate := &compv1alpha1.TailoredProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      tpName,
+					Namespace: namespace,
+				},
+				Spec: compv1alpha1.TailoredProfileSpec{
+					Extends: profileName,
+					EnableRules: []compv1alpha1.RuleReferenceSpec{
+						{
+							Name:      "rule-3",
+							Rationale: "Why not",
+						},
+					},
+				},
+			}
+
+			tp := &compv1alpha1.TailoredProfile{}
+			geterr := r.client.Get(ctx, tpKey, tp)
+			Expect(geterr).To(BeNil())
+
+			tp.Spec = *tpUpdate.Spec.DeepCopy()
+			updateErr := r.client.Update(ctx, tp)
+			Expect(updateErr).To(BeNil())
+
+			By("Reconcile the updated TP")
+			_, err = r.Reconcile(tpReq)
+			Expect(err).To(BeNil())
+
+			By("Fetch the updated TP")
+			geterr = r.client.Get(ctx, tpKey, tp)
+			Expect(geterr).To(BeNil())
+
+			By("Assert that rule-3 is still there but rule-2 not anymore")
+			cm := &corev1.ConfigMap{}
+			cmKey := types.NamespacedName{
+				Name:      tp.Status.OutputRef.Name,
+				Namespace: tp.Status.OutputRef.Namespace,
+			}
+
+			geterr = r.client.Get(ctx, cmKey, cm)
+			Expect(geterr).To(BeNil())
+			data := cm.Data["tailoring.xml"]
+			Expect(data).To(ContainSubstring(`extends="profile_1"`))
+			Expect(data).To(ContainSubstring(`select idref="rule_3" selected="true"`))
+			Expect(data).NotTo(ContainSubstring(`select idref="rule_2" selected="true"`))
 		})
 	})
 

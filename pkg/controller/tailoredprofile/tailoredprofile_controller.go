@@ -309,8 +309,16 @@ func (r *ReconcileTailoredProfile) ensureOutputObject(tp *cmpv1alpha1.TailoredPr
 		return reconcile.Result{}, err
 	}
 
-	// ConfigMap already exists - don't requeue
-	logger.Info("Skip reconcile: ConfigMap already exists", "ConfigMap.Namespace", found.Namespace, "ConfigMap.Name", found.Name)
+	// ConfigMap already exists - update
+	update := found.DeepCopy()
+	update.Data = tpcm.Data
+	err = r.client.Update(context.TODO(), update)
+	if err != nil {
+		fmt.Printf("Couldn't update TailoredProfile configMap: %v\n", err)
+		return reconcile.Result{}, err
+	}
+
+	logger.Info("Skip reconcile: ConfigMap already exists and is up-to-date", "ConfigMap.Namespace", found.Namespace, "ConfigMap.Name", found.Name)
 	return reconcile.Result{}, nil
 }
 
