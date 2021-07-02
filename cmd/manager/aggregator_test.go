@@ -45,6 +45,6 @@ var _ = Describe("Aggregator Empty Remediation Test", func() {
 			},
 		},
 	}
-	canCreate, _ := canCreateRemediation(nodeScan, emptyRem.Spec.Current.Object)
+	canCreate, _ := canCreateRemediationObject(nodeScan, emptyRem.Spec.Current.Object)
 	Expect(canCreate).To(BeFalse())
 })

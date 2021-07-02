@@ -1,10 +1,11 @@
 package utils
 
 import (
+	"math"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"math"
 )
 
 // ParseResultContextItem wraps ParseResult with some metadata that need to be added
@@ -28,13 +29,25 @@ func newParseResultWithSources(pr *ParseResult, sources ...string) *ParseResultC
 			// We explicitly DeepCopy the CheckResult and the Remediation so that we don't
 			// hold any references to the slice of the original ParseResults and the slice
 			// can be garbage-collected
-			Id:          pr.Id,
-			CheckResult: pr.CheckResult.DeepCopy(),
-			Remediation: pr.Remediation.DeepCopy(),
+			Id:           pr.Id,
+			CheckResult:  pr.CheckResult.DeepCopy(),
+			Remediations: deepCopyRemediations(pr.Remediations),
 		},
 		sources:   sources,
 		processed: false,
 	}
+}
+
+func deepCopyRemediations(inrems []*compv1alpha1.ComplianceRemediation) []*compv1alpha1.ComplianceRemediation {
+	if inrems == nil {
+		return nil
+	}
+
+	rems := make([]*compv1alpha1.ComplianceRemediation, 0, len(inrems))
+	for idx := range inrems {
+		rems = append(rems, inrems[idx].DeepCopy())
+	}
+	return rems
 }
 
 // ParseResultContext keeps track of items that are consistent across all
@@ -104,7 +117,7 @@ func (prCtx *ParseResultContext) addParsedResults(source string, newResults []*P
 		}
 		consistentPr.processed = true
 
-		ok = diffChecks(consistentPr.CheckResult, pr.CheckResult) && diffRemediations(consistentPr.Remediation, pr.Remediation)
+		ok = diffChecks(consistentPr.CheckResult, pr.CheckResult) && diffRemediations(consistentPr.Remediations, pr.Remediations)
 		if !ok {
 			// remove the check from consistent, add it to diff, but TWICE
 			// once for the sources from the consistent list and once for the new source
@@ -141,10 +154,9 @@ func (prCtx *ParseResultContext) reconcileInconsistentResults() {
 
 		reconciled := reconcileInconsistentResult(inconsistentResultList)
 		if _, ok := prCtx.consistent[id]; ok {
-			reconciled.Remediation = nil
+			reconciled.Remediations = nil
 			reconciled.CheckResult.Status = compv1alpha1.CheckResultError
 			reconciled.Annotations = annotateErrorStatus("Check found in both consistent and inconsistent lists")
-			reconciled.Remediation = nil
 		}
 		prCtx.consistent[id] = reconciled
 	}
@@ -171,9 +183,9 @@ func reconcileInconsistentResult(inconsistent []*ParseResultContextItem) *ParseR
 
 	pr := ParseResultContextItem{
 		ParseResult: ParseResult{
-			Id:          inconsistent[0].Id,
-			CheckResult: inconsistent[0].CheckResult.DeepCopy(),
-			Remediation: inconsistent[0].Remediation.DeepCopy(),
+			Id:           inconsistent[0].Id,
+			CheckResult:  inconsistent[0].CheckResult.DeepCopy(),
+			Remediations: deepCopyRemediations(inconsistent[0].Remediations),
 		},
 	}
 
@@ -181,12 +193,12 @@ func reconcileInconsistentResult(inconsistent []*ParseResultContextItem) *ParseR
 	if isDifferent {
 		pr.CheckResult.Status = compv1alpha1.CheckResultError
 		pr.Annotations = annotateErrorStatus("Check sources differ in more than status\n" + diffMsg)
-		pr.Remediation = nil
+		pr.Remediations = nil
 	} else {
 		pr.CheckResult.Status = compv1alpha1.CheckResultInconsistent
 		pr.Annotations, createRemediations = annotateInconsistentStatuses(inconsistent)
 		if !createRemediations {
-			pr.Remediation = nil
+			pr.Remediations = nil
 		}
 	}
 
@@ -297,16 +309,26 @@ func diffChecks(old, new *compv1alpha1.ComplianceCheckResult) bool {
 
 // returns true if the remediations are the same, false if they differ
 // for now (?) just diffs the MC specs and the remediation type, not sure if we'll ever want to diff more
-func diffRemediations(old, new *compv1alpha1.ComplianceRemediation) bool {
+func diffRemediations(old, new []*compv1alpha1.ComplianceRemediation) bool {
 	if old == nil {
 		return new == nil
 	}
 
-	if old.Spec.Current.Object.GetKind() != new.Spec.Current.Object.GetKind() {
+	if len(old) != len(new) {
 		return false
 	}
 
-	// should we be more picky and just compare what can be set with the remediations? e.g. OSImageURL can't
-	// be set with a remediation..
-	return cmp.Equal(old.Spec.Current.Object, new.Spec.Current.Object)
+	for idx := range old {
+		oldRem, newRem := old[idx], new[idx]
+		if oldRem.Spec.Current.Object.GetKind() != newRem.Spec.Current.Object.GetKind() {
+			return false
+		}
+
+		// should we be more picky and just compare what can be set with the remediations? e.g. OSImageURL can't
+		// be set with a remediation..
+		if !cmp.Equal(oldRem.Spec.Current.Object, newRem.Spec.Current.Object) {
+			return false
+		}
+	}
+	return true
 }

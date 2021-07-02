@@ -10,19 +10,22 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 const (
-	machineConfigFixType    = "urn:xccdf:fix:script:ignition"
-	kubernetesFixType       = "urn:xccdf:fix:script:kubernetes"
-	ocilCheckType           = "http://scap.nist.gov/schema/ocil/2"
-	rulePrefix              = "xccdf_org.ssgproject.content_rule_"
-	questionnaireSuffix     = "_ocil:questionnaire:1"
-	questionSuffix          = "_question:question:1"
-	dependencyAnnotationKey = "complianceascode.io/depends-on"
+	machineConfigFixType         = "urn:xccdf:fix:script:ignition"
+	kubernetesFixType            = "urn:xccdf:fix:script:kubernetes"
+	ocilCheckType                = "http://scap.nist.gov/schema/ocil/2"
+	rulePrefix                   = "xccdf_org.ssgproject.content_rule_"
+	questionnaireSuffix          = "_ocil:questionnaire:1"
+	questionSuffix               = "_question:question:1"
+	dependencyAnnotationKey      = "complianceascode.io/depends-on"
+	kubeDependencyAnnotationKey  = "complianceascode.io/depends-on-obj"
+	remediationTypeAnnotationKey = "complianceascode.io/remediation-type"
+	enforcementTypeAnnotationKey = "complianceascode.io/enforcement-type"
+	optionalAnnotationKey        = "complianceascode.io/optional"
 )
 
 // Constants useful for parsing warnings
@@ -34,9 +37,9 @@ const (
 )
 
 type ParseResult struct {
-	Id          string
-	CheckResult *compv1alpha1.ComplianceCheckResult
-	Remediation *compv1alpha1.ComplianceRemediation
+	Id           string
+	CheckResult  *compv1alpha1.ComplianceCheckResult
+	Remediations []*compv1alpha1.ComplianceRemediation
 }
 
 type ResourcePath struct {
@@ -211,7 +214,7 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 				CheckResult: resCheck,
 			}
 
-			pr.Remediation = newComplianceRemediation(scheme, scanName, namespace, resultRule)
+			pr.Remediations = newComplianceRemediation(scheme, scanName, namespace, resultRule)
 			parsedResults = append(parsedResults, pr)
 		}
 	}
@@ -350,7 +353,7 @@ func mapComplianceCheckResultStatus(result *xmlquery.Node) (compv1alpha1.Complia
 	return compv1alpha1.CheckResultNoResult, fmt.Errorf("couldn't match %s to a known state", resultEl.InnerText())
 }
 
-func newComplianceRemediation(scheme *runtime.Scheme, scanName, namespace string, rule *xmlquery.Node) *compv1alpha1.ComplianceRemediation {
+func newComplianceRemediation(scheme *runtime.Scheme, scanName, namespace string, rule *xmlquery.Node) []*compv1alpha1.ComplianceRemediation {
 	for _, fix := range rule.SelectElements("//xccdf-1.2:fix") {
 		if isRelevantFix(fix) {
 			return remediationFromFixElement(scheme, fix, scanName, namespace)
@@ -377,7 +380,7 @@ func nameFromId(scanName, ruleIdRef string) string {
 	return fmt.Sprintf("%s-%s", scanName, dnsFriendlyFixId)
 }
 
-func remediationFromFixElement(scheme *runtime.Scheme, fix *xmlquery.Node, scanName, namespace string) *compv1alpha1.ComplianceRemediation {
+func remediationFromFixElement(scheme *runtime.Scheme, fix *xmlquery.Node, scanName, namespace string) []*compv1alpha1.ComplianceRemediation {
 	fixId := fix.SelectAttr("id")
 	if fixId == "" {
 		return nil
@@ -386,73 +389,170 @@ func remediationFromFixElement(scheme *runtime.Scheme, fix *xmlquery.Node, scanN
 	dnsFriendlyFixId := strings.ReplaceAll(fixId, "_", "-")
 	remName := fmt.Sprintf("%s-%s", scanName, dnsFriendlyFixId)
 	// TODO(OZZ) fix text
-	return remediationFromString(scheme, remName, namespace, fix.InnerText())
+	return remediationsFromString(scheme, remName, namespace, fix.InnerText())
 }
 
-func remediationFromString(scheme *runtime.Scheme, name string, namespace string, fixContent string) *compv1alpha1.ComplianceRemediation {
-	obj, err := rawObjectToUnstructured(scheme, fixContent)
+func remediationsFromString(scheme *runtime.Scheme, name string, namespace string, fixContent string) []*compv1alpha1.ComplianceRemediation {
+	objs, err := ReadObjectsFromYAML(strings.NewReader(fixContent))
 	if err != nil {
 		return nil
 	}
 
-	annotations := make(map[string]string)
+	rems := make([]*compv1alpha1.ComplianceRemediation, 0, len(objs))
+	for idx := range objs {
+		obj := objs[idx]
+		annotations := make(map[string]string)
 
-	if hasDependencyAnnotation(obj) {
-		annotations = handleDependencyAnnotation(obj)
+		if hasDependencyAnnotation(obj) {
+			annotations = handleDependencyAnnotation(obj, annotations)
+		}
+
+		if hasOptionalAnnotation(obj) {
+			annotations = handleOptionalAnnotation(obj, annotations)
+		}
+
+		remType := compv1alpha1.ConfigurationRemediation
+		if hasTypeAnnotation(obj) {
+			remType = handleRemediationTypeAnnotation(obj)
+		}
+
+		if remType == compv1alpha1.EnforcementRemediation &&
+			hasEnforcementTypeAnnotation(obj) {
+			annotations = handleEnforcementTypeAnnotation(obj, annotations)
+		}
+
+		var remName string
+		if idx == 0 {
+			// Use result's name
+			remName = name
+		} else {
+			remName = fmt.Sprintf("%s-%d", name, idx)
+		}
+
+		rems = append(rems, &compv1alpha1.ComplianceRemediation{
+			ObjectMeta: v1.ObjectMeta{
+				Name:        remName,
+				Namespace:   namespace,
+				Annotations: annotations,
+			},
+			Spec: compv1alpha1.ComplianceRemediationSpec{
+				ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
+					Apply: false,
+					Type:  remType,
+				},
+				Current: compv1alpha1.ComplianceRemediationPayload{
+					Object: obj,
+				},
+			},
+			Status: compv1alpha1.ComplianceRemediationStatus{
+				ApplicationState: compv1alpha1.RemediationPending,
+			},
+		})
 	}
 
-	return &compv1alpha1.ComplianceRemediation{
-		ObjectMeta: v1.ObjectMeta{
-			Name:        name,
-			Namespace:   namespace,
-			Annotations: annotations,
-		},
-		Spec: compv1alpha1.ComplianceRemediationSpec{
-			ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
-				Apply: false,
-			},
-			Current: compv1alpha1.ComplianceRemediationPayload{
-				Object: obj,
-			},
-		},
-		Status: compv1alpha1.ComplianceRemediationStatus{
-			ApplicationState: compv1alpha1.RemediationPending,
-		},
-	}
+	return rems
 }
 
 func hasDependencyAnnotation(u *unstructured.Unstructured) bool {
+	return hasAnnotation(u, dependencyAnnotationKey) || hasAnnotation(u, kubeDependencyAnnotationKey)
+}
+
+func hasOptionalAnnotation(u *unstructured.Unstructured) bool {
+	return hasAnnotation(u, optionalAnnotationKey)
+}
+
+func hasTypeAnnotation(u *unstructured.Unstructured) bool {
+	return hasAnnotation(u, remediationTypeAnnotationKey)
+}
+
+func hasEnforcementTypeAnnotation(u *unstructured.Unstructured) bool {
+	return hasAnnotation(u, enforcementTypeAnnotationKey)
+}
+
+func hasAnnotation(u *unstructured.Unstructured, annotation string) bool {
 	annotations := u.GetAnnotations()
 	if annotations == nil {
 		return false
 	}
 
-	_, hasAnnotation := annotations[dependencyAnnotationKey]
-	return hasAnnotation
+	_, hasAnn := annotations[annotation]
+	return hasAnn
 }
 
-func handleDependencyAnnotation(u *unstructured.Unstructured) map[string]string {
-	outputAnnotations := make(map[string]string)
-
+func handleDependencyAnnotation(u *unstructured.Unstructured, annotations map[string]string) map[string]string {
 	// We already assume this has some annotation
 	inAnns := u.GetAnnotations()
 
 	// parse
-	dependencies := inAnns[dependencyAnnotationKey]
 
-	// set dependencies
-	outputAnnotations[compv1alpha1.RemediationDependencyAnnotation] = dependencies
+	if dependencies, hasDepKey := inAnns[dependencyAnnotationKey]; hasDepKey {
+		// set dependencies
+		annotations[compv1alpha1.RemediationDependencyAnnotation] = dependencies
 
-	// reset metadata of output object
-	delete(inAnns, dependencyAnnotationKey)
+		// reset metadata of output object
+		delete(inAnns, dependencyAnnotationKey)
+	}
+
+	if objDeps, hasKubeDepKey := inAnns[kubeDependencyAnnotationKey]; hasKubeDepKey {
+		// set dependencies
+		annotations[compv1alpha1.RemediationObjectDependencyAnnotation] = objDeps
+
+		// reset metadata of output object
+		delete(inAnns, kubeDependencyAnnotationKey)
+	}
+
 	u.SetAnnotations(inAnns)
 
-	return outputAnnotations
+	return annotations
 }
 
-func rawObjectToUnstructured(scheme *runtime.Scheme, in string) (*unstructured.Unstructured, error) {
-	obj := &unstructured.Unstructured{}
-	dec := k8syaml.NewYAMLToJSONDecoder(strings.NewReader(in))
-	err := dec.Decode(obj)
-	return obj, err
+func handleOptionalAnnotation(u *unstructured.Unstructured, annotations map[string]string) map[string]string {
+	// We already assume this has some annotation
+	inAnns := u.GetAnnotations()
+
+	// parse
+
+	if _, hasKey := inAnns[optionalAnnotationKey]; hasKey {
+		// set dependencies
+		annotations[compv1alpha1.RemediationOptionalAnnotation] = ""
+
+		// reset metadata of output object
+		delete(inAnns, optionalAnnotationKey)
+	}
+
+	u.SetAnnotations(inAnns)
+
+	return annotations
+}
+
+func handleRemediationTypeAnnotation(u *unstructured.Unstructured) compv1alpha1.RemediationType {
+	// We already assume this has some annotation
+	inAnns := u.GetAnnotations()
+
+	// parse
+	remType := inAnns[remediationTypeAnnotationKey]
+	// reset metadata of output object
+	delete(inAnns, enforcementTypeAnnotationKey)
+
+	u.SetAnnotations(inAnns)
+	return compv1alpha1.RemediationType(remType)
+}
+
+func handleEnforcementTypeAnnotation(u *unstructured.Unstructured, annotations map[string]string) map[string]string {
+	// We already assume this has some annotation
+	inAnns := u.GetAnnotations()
+
+	// parse
+	typeAnn, hasKey := inAnns[enforcementTypeAnnotationKey]
+	if hasKey {
+		// set dependencies
+		annotations[compv1alpha1.RemediationEnforcementTypeAnnotation] = typeAnn
+
+		// reset metadata of output object
+		delete(inAnns, enforcementTypeAnnotationKey)
+	}
+
+	u.SetAnnotations(inAnns)
+
+	return annotations
 }

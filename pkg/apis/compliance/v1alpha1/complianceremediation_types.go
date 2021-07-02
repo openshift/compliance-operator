@@ -1,6 +1,8 @@
 package v1alpha1
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -20,7 +22,19 @@ const (
 	RemediationMissingDependencies RemediationApplicationState = "MissingDependencies"
 )
 
+// +kubebuilder:validation:Enum=Configuration;Enforcement
 type RemediationType string
+
+const (
+	ConfigurationRemediation RemediationType = "Configuration"
+	EnforcementRemediation   RemediationType = "Enforcement"
+)
+
+const (
+	RemediationEnforcementEmpty string = ""
+	RemediationEnforcementOff   string = "off"
+	RemediationEnforcementAll   string = "all"
+)
 
 const (
 	// The key of a ComplianceCheckResult that dependency annotations point to
@@ -33,12 +47,32 @@ const (
 	RemediationHasUnmetDependenciesLabel   = "compliance.openshift.io/has-unmet-dependencies"
 	RemediationCreatedByOperatorAnnotation = "compliance.openshift.io/remediation"
 	RemediationDependencyAnnotation        = "compliance.openshift.io/depends-on"
+	RemediationObjectDependencyAnnotation  = "compliance.openshift.io/depends-on-obj"
 	RemediationDependenciesMetAnnotation   = "compliance.openshift.io/dependencies-met"
+	RemediationOptionalAnnotation          = "compliance.openshift.io/optional"
+	RemediationEnforcementTypeAnnotation   = "compliance.openshift.io/enforcement-type"
 )
+
+var (
+	KubeDepsNotFound = errors.New("kubernetes dependency annotation not found")
+)
+
+type RemediationObjectDependencyReference struct {
+	metav1.TypeMeta `json:",inline"`
+	Name            string `json:"name"`
+	Namespace       string `json:"namespace,omitempty"`
+}
 
 type ComplianceRemediationSpecMeta struct {
 	// Whether the remediation should be picked up and applied by the operator
 	Apply bool `json:"apply"`
+	// The type of remediation that this object applies. The available
+	// types are: Configuration and Enforcement. Where the Configuration
+	// type fixes a configuration to match a compliance expectation.
+	// The Enforcement type, on the other hand, ensures that the cluster
+	// stays in compliance via means of authorization.
+	// +kubebuilder:default="Configuration"
+	Type RemediationType `json:"type,omitempty"`
 }
 
 type ComplianceRemediationPayload struct {
@@ -142,12 +176,53 @@ func (r *ComplianceRemediation) IsApplied() bool {
 
 func (r *ComplianceRemediation) HasUnmetDependencies() bool {
 	a := r.GetAnnotations()
-	if a == nil {
+	if len(a) == 0 {
 		return false
 	}
 	_, hasDependencies := a[RemediationDependencyAnnotation]
+	_, hasObjDependencies := a[RemediationObjectDependencyAnnotation]
 	_, dependenciesMet := a[RemediationDependenciesMetAnnotation]
-	return hasDependencies && !dependenciesMet
+	return (hasDependencies || hasObjDependencies) && !dependenciesMet
+}
+
+func (r *ComplianceRemediation) HasUnmetKubeDependencies() bool {
+	a := r.GetAnnotations()
+	if len(a) == 0 {
+		return false
+	}
+	_, hasObjDependencies := a[RemediationObjectDependencyAnnotation]
+	_, dependenciesMet := a[RemediationDependenciesMetAnnotation]
+	return hasObjDependencies && !dependenciesMet
+}
+
+func (r *ComplianceRemediation) GetEnforcementType() string {
+	a := r.GetAnnotations()
+	if len(a) == 0 {
+		return "unknown"
+	}
+	etype, hasAnnotation := a[RemediationEnforcementTypeAnnotation]
+	if !hasAnnotation {
+		return "unknown"
+	}
+	return etype
+}
+
+func (r *ComplianceRemediation) ParseRemediationDependencyRefs() ([]RemediationObjectDependencyReference, error) {
+	annotations := r.GetAnnotations()
+	rawdeps, hasDeps := annotations[RemediationObjectDependencyAnnotation]
+	if !hasDeps {
+		return nil, KubeDepsNotFound
+	}
+
+	deps := []RemediationObjectDependencyReference{}
+
+	if rawdeps == "" {
+		return deps, nil
+	}
+	if parseErr := json.Unmarshal([]byte(rawdeps), &deps); parseErr != nil {
+		return nil, fmt.Errorf("couldn't parse kube object dependencies: %w", parseErr)
+	}
+	return deps, nil
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

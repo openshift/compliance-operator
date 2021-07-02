@@ -27,7 +27,7 @@ func countResultItems(resultList []*ParseResult) (int, int) {
 			continue
 		}
 
-		if res.Remediation != nil {
+		if res.Remediations != nil {
 			nRems++
 		}
 
@@ -137,8 +137,8 @@ var _ = Describe("XCCDF parser", func() {
 
 			BeforeEach(func() {
 				for i := range resultList {
-					if resultList[i].Remediation != nil {
-						rem = resultList[i].Remediation
+					if resultList[i].Remediations != nil {
+						rem = resultList[i].Remediations[0]
 						break
 					}
 				}
