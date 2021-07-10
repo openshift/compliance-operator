@@ -410,6 +410,7 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 					Labels: labels,
 					Annotations: map[string]string{
 						"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+						corev1.SeccompPodAnnotationKey:     corev1.SeccompProfileRuntimeDefault,
 					},
 				},
 				Spec: corev1.PodSpec{

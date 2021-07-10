@@ -119,6 +119,7 @@ func getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
 							},
 							Annotations: map[string]string{
 								"workload.openshift.io/management": `{"effect": "PreferredDuringScheduling"}`,
+								corev1.SeccompPodAnnotationKey:     corev1.SeccompProfileRuntimeDefault,
 							},
 						},
 						Spec: corev1.PodSpec{
