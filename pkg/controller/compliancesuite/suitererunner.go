@@ -149,11 +149,11 @@ func getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
 									},
 									Resources: corev1.ResourceRequirements{
 										Requests: corev1.ResourceList{
-											corev1.ResourceMemory: resource.MustParse("10Mi"),
+											corev1.ResourceMemory: resource.MustParse("20Mi"),
 											corev1.ResourceCPU:    resource.MustParse("10m"),
 										},
 										Limits: corev1.ResourceList{
-											corev1.ResourceMemory: resource.MustParse("50Mi"),
+											corev1.ResourceMemory: resource.MustParse("100Mi"),
 											corev1.ResourceCPU:    resource.MustParse("50m"),
 										},
 									},
