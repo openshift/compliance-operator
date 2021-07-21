@@ -11,7 +11,6 @@ import (
 	"k8s.io/client-go/tools/record"
 
 	"github.com/go-logr/logr"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
@@ -27,6 +26,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 )
 
 const ctrlName = "remediationctrl"
@@ -40,13 +42,16 @@ const (
 
 // Add creates a new ComplianceRemediation Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
+func Add(mgr manager.Manager, met *metrics.Metrics) error {
+	return add(mgr, newReconciler(mgr, met))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileComplianceRemediation{client: mgr.GetClient(), scheme: mgr.GetScheme(), recorder: common.NewSafeRecorder(ctrlName, mgr)}
+func newReconciler(mgr manager.Manager, met *metrics.Metrics) reconcile.Reconciler {
+	return &ReconcileComplianceRemediation{client: mgr.GetClient(), scheme: mgr.GetScheme(),
+		recorder: common.NewSafeRecorder(ctrlName, mgr),
+		metrics:  met,
+	}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -76,6 +81,7 @@ type ReconcileComplianceRemediation struct {
 	client   client.Client
 	scheme   *runtime.Scheme
 	recorder record.EventRecorder
+	metrics  *metrics.Metrics
 }
 
 // Reconcile reads that state of the cluster for a ComplianceRemediation object and makes changes based on the state read
@@ -106,6 +112,7 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 		rCopy := remediationInstance.DeepCopy()
 		rCopy.Spec.Type = compv1alpha1.ConfigurationRemediation
 		if updErr := r.client.Update(context.TODO(), rCopy); updErr != nil {
+			// metric remediation error
 			return reconcile.Result{}, fmt.Errorf("updating default remediation type: %s", updErr)
 		}
 		return reconcile.Result{}, nil
@@ -115,8 +122,10 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 		rCopy := remediationInstance.DeepCopy()
 		rCopy.Status.ApplicationState = compv1alpha1.RemediationPending
 		if updErr := r.client.Status().Update(context.TODO(), rCopy); updErr != nil {
+			// metric remediation error
 			return reconcile.Result{}, fmt.Errorf("updating default remediation application state: %s", updErr)
 		}
+		r.metrics.IncComplianceRemediationStatus(rCopy.Name, rCopy.Status)
 		return reconcile.Result{}, nil
 	}
 
@@ -420,10 +429,12 @@ func (r *ReconcileComplianceRemediation) reconcileRemediationStatus(instance *co
 	r.setRemediationStatus(instanceCopy, errorApplying, logger)
 
 	if err := r.client.Status().Update(context.TODO(), instanceCopy); err != nil {
+		// metric remediation error
 		logger.Error(err, "Failed to update the remediation status")
 		// This should be retried
 		return err
 	}
+	r.metrics.IncComplianceRemediationStatus(instanceCopy.Name, instanceCopy.Status)
 
 	return nil
 }

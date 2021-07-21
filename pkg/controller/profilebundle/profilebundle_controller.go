@@ -2,6 +2,7 @@ package profilebundle
 
 import (
 	"context"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 	"time"
 
 	// #nosec G505
@@ -40,13 +41,15 @@ var oneReplica int32 = 1
 
 // Add creates a new ProfileBundle Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
+func Add(mgr manager.Manager, met *metrics.Metrics) error {
+	return add(mgr, newReconciler(mgr, met))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileProfileBundle{client: mgr.GetClient(), scheme: mgr.GetScheme(), reader: mgr.GetAPIReader()}
+func newReconciler(mgr manager.Manager, met *metrics.Metrics) reconcile.Reconciler {
+	return &ReconcileProfileBundle{client: mgr.GetClient(), scheme: mgr.GetScheme(), reader: mgr.GetAPIReader(),
+		metrics: met,
+	}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -75,8 +78,9 @@ type ReconcileProfileBundle struct {
 	reader client.Reader
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
+	client  client.Client
+	scheme  *runtime.Scheme
+	metrics *metrics.Metrics
 }
 
 // Reconcile reads that state of the cluster for a ProfileBundle object and makes changes based on the state read

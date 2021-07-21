@@ -3,6 +3,8 @@ package compliancescan
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
@@ -76,8 +78,12 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 		scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion, compliancescaninstance)
 
 		client := fake.NewFakeClientWithScheme(scheme, objs...)
-		reconciler = ReconcileComplianceScan{client: client, scheme: scheme}
 		var err error
+		mockMetrics := metrics.NewMetrics(&metricsfakes.FakeImpl{})
+		err = mockMetrics.Register()
+		Expect(err).To(BeNil())
+
+		reconciler = ReconcileComplianceScan{client: client, scheme: scheme, metrics: mockMetrics}
 		handler, err = getScanTypeHandler(&reconciler, compliancescaninstance, logger)
 		Expect(err).To(BeNil())
 		_, err = handler.validate()

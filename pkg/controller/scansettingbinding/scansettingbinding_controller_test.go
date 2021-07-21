@@ -2,6 +2,8 @@ package scansettingbinding
 
 import (
 	"context"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
 
 	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
@@ -174,7 +176,11 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			"node-role.kubernetes.io/master": "",
 		}
 
-		reconciler = ReconcileScanSettingBinding{client: client, scheme: scheme}
+		mockMetrics := metrics.NewMetrics(&metricsfakes.FakeImpl{})
+		err = mockMetrics.Register()
+		Expect(err).To(BeNil())
+
+		reconciler = ReconcileScanSettingBinding{client: client, scheme: scheme, metrics: mockMetrics}
 	})
 
 	Context("Creates a simple suite from a Profile", func() {

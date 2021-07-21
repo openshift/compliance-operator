@@ -24,6 +24,7 @@ import (
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
@@ -36,17 +37,18 @@ const (
 
 // Add creates a new ComplianceSuite Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
+func Add(mgr manager.Manager, met *metrics.Metrics) error {
+	return add(mgr, newReconciler(mgr, met))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
+func newReconciler(mgr manager.Manager, met *metrics.Metrics) reconcile.Reconciler {
 	return &ReconcileComplianceSuite{
 		reader:   mgr.GetAPIReader(),
 		client:   mgr.GetClient(),
 		scheme:   mgr.GetScheme(),
 		recorder: mgr.GetEventRecorderFor("suitectrl"),
+		metrics:  met,
 	}
 }
 
@@ -88,6 +90,7 @@ type ReconcileComplianceSuite struct {
 	client   client.Client
 	scheme   *runtime.Scheme
 	recorder record.EventRecorder
+	metrics  *metrics.Metrics
 }
 
 // Reconcile reads that state of the cluster for a ComplianceSuite object and makes changes based on the state read

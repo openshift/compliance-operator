@@ -2,6 +2,8 @@ package compliancesuite
 
 import (
 	"context"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
@@ -89,7 +91,11 @@ var _ = Describe("ComplianceSuiteController", func() {
 		Expect(err).To(BeNil())
 
 		client := fake.NewFakeClientWithScheme(cscheme, nodeScan.DeepCopy(), suite.DeepCopy())
-		reconciler = &ReconcileComplianceSuite{reader: client, client: client, scheme: cscheme}
+		mockMetrics := metrics.NewMetrics(&metricsfakes.FakeImpl{})
+		err = mockMetrics.Register()
+		Expect(err).To(BeNil())
+
+		reconciler = &ReconcileComplianceSuite{reader: client, client: client, scheme: cscheme, metrics: mockMetrics}
 		zaplog, _ := zap.NewDevelopment()
 		logger = zapr.NewLogger(zaplog)
 	})
