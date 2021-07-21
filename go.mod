@@ -9,6 +9,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.1
 	github.com/clarketm/json v1.15.7
 	github.com/coreos/ignition/v2 v2.9.0
+	github.com/coreos/prometheus-operator v0.38.1-0.20200424145508-7e176fda06cc
 	github.com/dsnet/compress v0.0.1
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32 // indirect
 	github.com/go-logr/logr v0.4.0
@@ -22,10 +23,14 @@ require (
 	github.com/openshift/library-go v0.0.0-20200831114015-2ab0c61c15de
 	github.com/openshift/machine-config-operator v0.0.1-0.20200913004441-7eba765c69c9
 	github.com/operator-framework/operator-sdk v0.19.4
+	github.com/pkg/errors v0.9.1
+	github.com/prometheus/client_golang v1.7.1
+	github.com/prometheus/client_model v0.2.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/securego/gosec/v2 v2.8.0
 	github.com/spf13/cobra v1.1.3
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
+	github.com/stretchr/testify v1.7.0
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	go.uber.org/zap v1.17.0
 	k8s.io/api v0.19.11
