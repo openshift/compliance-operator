@@ -50,6 +50,14 @@ spec:
               value: "quay.io/compliance-operator/compliance-operator:latest"
             - name: RELATED_IMAGE_PROFILE
               value: "quay.io/complianceascode/ocp4:latest"
+          volumeMounts:
+            - name: serving-cert
+              mountPath: /var/run/secrets/serving-cert
+              readOnly: true
+      volumes:
+        - name: serving-cert
+          secret:
+            secretName: compliance-operator-serving-cert
       nodeSelector:
         node-role.kubernetes.io/master: ""
       tolerations:

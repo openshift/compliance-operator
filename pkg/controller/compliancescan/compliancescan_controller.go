@@ -24,6 +24,7 @@ import (
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
@@ -52,13 +53,16 @@ const (
 
 // Add creates a new ComplianceScan Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
+func Add(mgr manager.Manager, met *metrics.Metrics) error {
+	return add(mgr, newReconciler(mgr, met))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileComplianceScan{client: mgr.GetClient(), scheme: mgr.GetScheme(), recorder: mgr.GetEventRecorderFor("scanctrl")}
+func newReconciler(mgr manager.Manager, met *metrics.Metrics) reconcile.Reconciler {
+	return &ReconcileComplianceScan{client: mgr.GetClient(), scheme: mgr.GetScheme(),
+		recorder: mgr.GetEventRecorderFor("scanctrl"),
+		metrics:  met,
+	}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -88,6 +92,7 @@ type ReconcileComplianceScan struct {
 	client   client.Client
 	scheme   *runtime.Scheme
 	recorder record.EventRecorder
+	metrics  *metrics.Metrics
 }
 
 // Reconcile reads that state of the cluster for a ComplianceScan object and makes changes based on the state read
@@ -138,12 +143,12 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
 	}
 
-	handler, err := getScanTypeHandler(r, scanToBeUpdated, reqLogger)
+	scanTypeHandler, err := getScanTypeHandler(r, scanToBeUpdated, reqLogger)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	if cont, err := handler.validate(); !cont || err != nil {
+	if cont, err := scanTypeHandler.validate(); !cont || err != nil {
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -154,13 +159,13 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 	case compv1alpha1.PhasePending:
 		return r.phasePendingHandler(scanToBeUpdated, reqLogger)
 	case compv1alpha1.PhaseLaunching:
-		return r.phaseLaunchingHandler(handler, reqLogger)
+		return r.phaseLaunchingHandler(scanTypeHandler, reqLogger)
 	case compv1alpha1.PhaseRunning:
-		return r.phaseRunningHandler(handler, reqLogger)
+		return r.phaseRunningHandler(scanTypeHandler, reqLogger)
 	case compv1alpha1.PhaseAggregating:
-		return r.phaseAggregatingHandler(handler, reqLogger)
+		return r.phaseAggregatingHandler(scanTypeHandler, reqLogger)
 	case compv1alpha1.PhaseDone:
-		return r.phaseDoneHandler(handler, scanToBeUpdated, reqLogger, dontDelete)
+		return r.phaseDoneHandler(scanTypeHandler, scanToBeUpdated, reqLogger, dontDelete)
 	}
 
 	// the default catch-all, just remove the request from the queue
@@ -175,7 +180,11 @@ func (r *ReconcileComplianceScan) validate(instance *compv1alpha1.ComplianceScan
 		instanceCopy := instance.DeepCopy()
 		instanceCopy.Status.Phase = compv1alpha1.PhasePending
 		updateErr := r.client.Status().Update(context.TODO(), instanceCopy)
-		return false, updateErr
+		if updateErr != nil {
+			return false, updateErr
+		}
+		r.metrics.IncComplianceScanStatus(instanceCopy.Name, instanceCopy.Status)
+		return false, nil
 	}
 
 	// Set default scan type if missing
@@ -195,7 +204,11 @@ func (r *ReconcileComplianceScan) validate(instance *compv1alpha1.ComplianceScan
 		instanceCopy.Status.ErrorMessage = fmt.Sprintf("Scan type '%s' is not valid", instance.Spec.ScanType)
 		instanceCopy.Status.Phase = compv1alpha1.PhaseDone
 		updateErr := r.client.Status().Update(context.TODO(), instanceCopy)
-		return false, updateErr
+		if updateErr != nil {
+			return false, updateErr
+		}
+		r.metrics.IncComplianceScanStatus(instanceCopy.Name, instanceCopy.Status)
+		return false, nil
 	}
 
 	// Set default storage if missing
@@ -220,7 +233,11 @@ func (r *ReconcileComplianceScan) validate(instance *compv1alpha1.ComplianceScan
 		instanceCopy.Status.Result = compv1alpha1.ResultError
 		instanceCopy.Status.Phase = compv1alpha1.PhaseDone
 		err := r.client.Status().Update(context.TODO(), instanceCopy)
-		return false, err
+		if err != nil {
+			return false, err
+		}
+		r.metrics.IncComplianceScanStatus(instanceCopy.Name, instanceCopy.Status)
+		return false, nil
 	}
 
 	return true, nil
@@ -249,6 +266,7 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 	// TODO: It might be better to store the list of eligible nodes in the CR so that if someone edits the CR or
 	// adds/removes nodes while the scan is running, we just work on the same set?
 
+	r.metrics.IncComplianceScanStatus(instance.Name, instance.Status)
 	return reconcile.Result{}, nil
 }
 
@@ -303,6 +321,7 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(h scanTypeHandler, logge
 				logger.Error(updateerr, "Failed to update a scan")
 				return reconcile.Result{}, updateerr
 			}
+			r.metrics.IncComplianceScanStatus(scanCopy.Name, scanCopy.Status)
 		}
 		return common.ReturnWithRetriableError(logger, err)
 	}
@@ -311,9 +330,10 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(h scanTypeHandler, logge
 	scan.Status.Phase = compv1alpha1.PhaseRunning
 	err = r.client.Status().Update(context.TODO(), scan)
 	if err != nil {
+		// metric status update error
 		return reconcile.Result{}, err
 	}
-
+	r.metrics.IncComplianceScanStatus(scan.Name, scan.Status)
 	return reconcile.Result{}, nil
 }
 
@@ -335,9 +355,10 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(h scanTypeHandler, logger 
 	scan.Status.Phase = compv1alpha1.PhaseAggregating
 	err = r.client.Status().Update(context.TODO(), scan)
 	if err != nil {
+		// metric status update error
 		return reconcile.Result{}, err
 	}
-
+	r.metrics.IncComplianceScanStatus(scan.Name, scan.Status)
 	return reconcile.Result{}, nil
 }
 
@@ -361,7 +382,12 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(h scanTypeHandler, log
 		instance.Status.Result = compv1alpha1.ResultError
 		instance.Status.ErrorMessage = err.Error()
 		err = r.updateStatusWithEvent(instance, logger)
-		return reconcile.Result{}, err
+		if err != nil {
+			// metric status update error
+			return reconcile.Result{}, err
+		}
+		r.metrics.IncComplianceScanStatus(instance.Name, instance.Status)
+		return reconcile.Result{}, nil
 	}
 
 	logger.Info("Creating an aggregator pod for scan")
@@ -385,6 +411,11 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(h scanTypeHandler, log
 		logger.Info("Remaining in the aggregating phase")
 		instance.Status.Phase = compv1alpha1.PhaseAggregating
 		err = r.client.Status().Update(context.TODO(), instance)
+		if err != nil {
+			logger.Error(err, "Cannot update the status, requeueing")
+			return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
+		}
+		r.metrics.IncComplianceScanStatus(instance.Name, instance.Status)
 		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
 	}
 
@@ -405,7 +436,12 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(h scanTypeHandler, log
 
 	instance.Status.Phase = compv1alpha1.PhaseDone
 	err = r.updateStatusWithEvent(instance, logger)
-	return reconcile.Result{}, err
+	if err != nil {
+		// metric status update error
+		return reconcile.Result{}, err
+	}
+	r.metrics.IncComplianceScanStatus(instance.Name, instance.Status)
+	return reconcile.Result{}, nil
 }
 
 func (r *ReconcileComplianceScan) phaseDoneHandler(h scanTypeHandler, instance *compv1alpha1.ComplianceScan, logger logr.Logger, doDelete bool) (reconcile.Result, error) {
@@ -470,7 +506,12 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(h scanTypeHandler, instance *
 				instanceCopy.Status.CurrentIndex = instance.Status.CurrentIndex + 1
 			}
 			err = r.client.Status().Update(context.TODO(), instanceCopy)
-			return reconcile.Result{}, err
+			if err != nil {
+				// metric status update error
+				return reconcile.Result{}, err
+			}
+			r.metrics.IncComplianceScanStatus(instanceCopy.Name, instanceCopy.Status)
+			return reconcile.Result{}, nil
 		}
 	} else {
 		// If we're done with the scan but we're not cleaning up just yet.
@@ -490,7 +531,7 @@ func (r *ReconcileComplianceScan) scanDeleteHandler(instance *compv1alpha1.Compl
 		logger.Info("The scan is being deleted")
 		scanToBeDeleted := instance.DeepCopy()
 
-		handler, err := getScanTypeHandler(r, scanToBeDeleted, logger)
+		scanTypeHandler, err := getScanTypeHandler(r, scanToBeDeleted, logger)
 		if err != nil && !goerrors.Is(err, compv1alpha1.ErrUnkownScanType) {
 			return reconcile.Result{}, err
 		}
@@ -501,7 +542,7 @@ func (r *ReconcileComplianceScan) scanDeleteHandler(instance *compv1alpha1.Compl
 		}
 
 		// remove objects by forcing handling of phase DONE
-		if _, err := r.phaseDoneHandler(handler, scanToBeDeleted, logger, doDelete); err != nil {
+		if _, err := r.phaseDoneHandler(scanTypeHandler, scanToBeDeleted, logger, doDelete); err != nil {
 			// if fail to delete the external dependency here, return with error
 			// so that it can be retried
 			return reconcile.Result{}, err

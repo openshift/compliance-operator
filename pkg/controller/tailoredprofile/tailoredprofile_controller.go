@@ -3,6 +3,7 @@ package tailoredprofile
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 
 	"github.com/go-logr/logr"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
@@ -33,13 +34,13 @@ const (
 
 // Add creates a new TailoredProfile Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
+func Add(mgr manager.Manager, met *metrics.Metrics) error {
+	return add(mgr, newReconciler(mgr, met))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileTailoredProfile{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+func newReconciler(mgr manager.Manager, met *metrics.Metrics) reconcile.Reconciler {
+	return &ReconcileTailoredProfile{client: mgr.GetClient(), scheme: mgr.GetScheme(), metrics: met}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -74,8 +75,9 @@ var _ reconcile.Reconciler = &ReconcileTailoredProfile{}
 type ReconcileTailoredProfile struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
+	client  client.Client
+	scheme  *runtime.Scheme
+	metrics *metrics.Metrics
 }
 
 // Reconcile reads that state of the cluster for a TailoredProfile object and makes changes based on the state read

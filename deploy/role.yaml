@@ -93,6 +93,7 @@ rules:
   verbs:
   - "get"
   - "create"
+  - "update"
 - apiGroups:
   - apps
   resources:
@@ -1168,3 +1169,20 @@ rules:
   - get
   - watch
   - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus-k8s
+  namespace: openshift-compliance
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - services
+      - endpoints
+      - pods
+    verbs:
+      - get
+      - list
+      - watch

@@ -3,6 +3,8 @@ package tailoredprofile
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -103,7 +105,11 @@ var _ = Describe("TailoredprofileController", func() {
 		}
 
 		client := fake.NewFakeClientWithScheme(cscheme, objs...)
-		r = &ReconcileTailoredProfile{client: client, scheme: cscheme}
+		mockMetrics := metrics.NewMetrics(&metricsfakes.FakeImpl{})
+		err = mockMetrics.Register()
+		Expect(err).To(BeNil())
+
+		r = &ReconcileTailoredProfile{client: client, scheme: cscheme, metrics: mockMetrics}
 	})
 
 	When("extending a profile", func() {

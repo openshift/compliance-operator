@@ -3,6 +3,7 @@ package scansettingbinding
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 	"reflect"
 	"strings"
 	"time"
@@ -35,13 +36,16 @@ const (
 
 var log = logf.Log.WithName("scansettingbindingctrl")
 
-func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
+func Add(mgr manager.Manager, met *metrics.Metrics) error {
+	return add(mgr, newReconciler(mgr, met))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileScanSettingBinding{client: mgr.GetClient(), scheme: mgr.GetScheme(), recorder: common.NewSafeRecorder("scansettingbindingctrl", mgr)}
+func newReconciler(mgr manager.Manager, met *metrics.Metrics) reconcile.Reconciler {
+	return &ReconcileScanSettingBinding{client: mgr.GetClient(), scheme: mgr.GetScheme(),
+		recorder: common.NewSafeRecorder("scansettingbindingctrl", mgr),
+		metrics:  met,
+	}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -87,6 +91,7 @@ type ReconcileScanSettingBinding struct {
 	client   client.Client
 	scheme   *runtime.Scheme
 	recorder *common.SafeRecorder
+	metrics  *metrics.Metrics
 }
 
 // FIXME: generalize for other controllers?
