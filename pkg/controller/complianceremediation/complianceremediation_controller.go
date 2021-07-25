@@ -92,7 +92,6 @@ type ReconcileComplianceRemediation struct {
 func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling ComplianceRemediation")
-
 	// Fetch the ComplianceRemediation instance
 	remediationInstance := &compv1alpha1.ComplianceRemediation{}
 	getErr := r.client.Get(context.TODO(), request.NamespacedName, remediationInstance)
@@ -109,6 +108,7 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 	}
 
 	if remediationInstance.Spec.Type == "" {
+		reqLogger.Info("Updating remediation due to missing type")
 		rCopy := remediationInstance.DeepCopy()
 		rCopy.Spec.Type = compv1alpha1.ConfigurationRemediation
 		if updErr := r.client.Update(context.TODO(), rCopy); updErr != nil {
@@ -119,6 +119,7 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 	}
 
 	if remediationInstance.Status.ApplicationState == "" {
+		reqLogger.Info("Updating remediation due to missing application state")
 		rCopy := remediationInstance.DeepCopy()
 		rCopy.Status.ApplicationState = compv1alpha1.RemediationPending
 		if updErr := r.client.Status().Update(context.TODO(), rCopy); updErr != nil {
@@ -128,8 +129,8 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 		r.metrics.IncComplianceRemediationStatus(rCopy.Name, rCopy.Status)
 		return reconcile.Result{}, nil
 	}
-
 	if isNoLongerOutdated(remediationInstance) {
+		reqLogger.Info("Updating remediation cause it's no longer outdated")
 		rCopy := remediationInstance.DeepCopy()
 		delete(rCopy.Labels, compv1alpha1.OutdatedRemediationLabel)
 		updateErr := r.client.Update(context.TODO(), rCopy)
@@ -145,12 +146,27 @@ func (r *ReconcileComplianceRemediation) Reconcile(request reconcile.Request) (r
 	}
 
 	var reconcileErr error
+
 	if remediationInstance.HasUnmetDependencies() {
 		res, depErr := r.handleUnmetDependencies(remediationInstance, reqLogger)
 		if res.Requeue || depErr != nil {
 			return res, depErr
 		}
-	} else {
+	}
+	if remediationInstance.HasAnnotation(compv1alpha1.RemediationUnsetValueAnnotation) {
+		hasUpdate, valueErr := r.handleUnsetValues(remediationInstance, reqLogger)
+		if valueErr != nil || hasUpdate {
+			return reconcile.Result{}, valueErr
+		}
+	}
+	if remediationInstance.HasAnnotation(compv1alpha1.RemediationValueRequiredAnnotation) {
+		hasUpdate, valueReqErr := r.handleValueRequired(remediationInstance, reqLogger)
+		if valueReqErr != nil || hasUpdate {
+			return reconcile.Result{}, valueReqErr
+		}
+	}
+	//if no UnmetDependencies, UnsetValue, ValueRequired
+	if !(remediationInstance.HasUnmetDependencies() || remediationInstance.HasAnnotation(compv1alpha1.RemediationUnsetValueAnnotation) || remediationInstance.HasAnnotation(compv1alpha1.RemediationValueRequiredAnnotation)) {
 		reconcileErr = r.reconcileRemediation(remediationInstance, reqLogger)
 	}
 
@@ -305,6 +321,7 @@ func (r *ReconcileComplianceRemediation) handleUnmetDependencies(rem *compv1alph
 
 	if nMissingDeps > 0 {
 		if _, ok := labels[compv1alpha1.RemediationHasUnmetDependenciesLabel]; !ok {
+			logger.Info("Labeling remediation to denote it has unmet dependencies")
 			labels[compv1alpha1.RemediationHasUnmetDependenciesLabel] = ""
 			rCopy.SetLabels(labels)
 			err := r.client.Update(context.TODO(), rCopy)
@@ -315,7 +332,7 @@ func (r *ReconcileComplianceRemediation) handleUnmetDependencies(rem *compv1alph
 		}
 		return reconcile.Result{}, nil
 	}
-
+	logger.Info("Labeling remediation to denote it has all dependencies met")
 	logger.Info("Remediation has all its dependencies met", "ComplianceRemediation.Name", rem.Name)
 	rCopy.Annotations[compv1alpha1.RemediationDependenciesMetAnnotation] = ""
 	delete(rCopy.Labels, compv1alpha1.RemediationHasUnmetDependenciesLabel)
@@ -378,6 +395,134 @@ func (r *ReconcileComplianceRemediation) countKubeUnmetDependencies(rem *compv1a
 	return nMissingDeps, nil
 }
 
+func (r *ReconcileComplianceRemediation) handleValueRequired(rem *compv1alpha1.ComplianceRemediation, logger logr.Logger) (bool, error) {
+	annotations := rem.GetAnnotations()
+	labels := rem.GetLabels()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	requiredValues := annotations[compv1alpha1.RemediationValueRequiredAnnotation]
+	requiredValuesList := removeEmptyStrings(strings.Split(requiredValues, ","))
+	if len(requiredValuesList) == 0 {
+		return false, fmt.Errorf("Error has value-required annotation but empty list")
+	}
+	_, isRequiredValuesProcessed := labels[compv1alpha1.RemediationValueRequiredProcessedLabel]
+	var unsetRequireValueList []string
+	var setRequireValueList []string
+
+	//Go through values required list to find is it inside the tailored profile
+	for _, requiredValue := range requiredValuesList {
+		found, err := r.isRequiredValueSet(rem, requiredValue)
+		if err != nil {
+			return false, fmt.Errorf("Error finding if required value is set: %v", err)
+		}
+		if found {
+			setRequireValueList = append(setRequireValueList, requiredValue)
+		} else {
+			unsetRequireValueList = append(unsetRequireValueList, requiredValue)
+		}
+
+	}
+
+	currentUnsetValues := removeEmptyStrings(strings.Split(annotations[compv1alpha1.RemediationUnsetValueAnnotation], ","))
+	currentUsedValues := removeEmptyStrings(strings.Split(annotations[compv1alpha1.RemediationValueUsedAnnotation], ","))
+	if !isRequiredValuesProcessed {
+		logger.Info("Updating remediation to denote values have been processed")
+		labels[compv1alpha1.RemediationValueRequiredProcessedLabel] = ""
+		if len(unsetRequireValueList) > 0 {
+			annotations[compv1alpha1.RemediationUnsetValueAnnotation] = strings.Join(append(currentUnsetValues, unsetRequireValueList...), ",")
+		}
+		if len(setRequireValueList) > 0 {
+			annotations[compv1alpha1.RemediationValueUsedAnnotation] = strings.Join(append(currentUsedValues, setRequireValueList...), ",")
+		}
+		logger.Info("Labeling remediation to denote some values haven't been set")
+		rCopy := rem.DeepCopy()
+		rCopy.SetAnnotations(annotations)
+		rCopy.SetLabels(labels)
+		err := r.client.Update(context.TODO(), rCopy)
+		if err != nil {
+			return false, fmt.Errorf("adding xccdf required-value label/annotation: %w", err)
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+//To find if it is set in tailored profile
+func (r *ReconcileComplianceRemediation) isRequiredValueSet(rem *compv1alpha1.ComplianceRemediation, requiredValue string) (bool, error) {
+	var scan = &compv1alpha1.ComplianceScan{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{
+		Namespace: rem.GetNamespace(),
+		Name:      rem.GetScan(),
+	}, scan)
+
+	if err != nil {
+		return false, err //error getting scan
+	}
+	if scan.Spec.TailoringConfigMap != nil {
+		tp := &compv1alpha1.TailoredProfile{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: scan.Spec.TailoringConfigMap.Name, Namespace: rem.GetNamespace()}, tp)
+		if err != nil {
+			return false, err
+		}
+		for _, setValue := range tp.Spec.SetValues {
+			if setValue.Name == requiredValue {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+	//scan did not have a tailored profile
+	return false, nil
+}
+
+func (r *ReconcileComplianceRemediation) handleUnsetValues(rem *compv1alpha1.ComplianceRemediation, logger logr.Logger) (bool, error) {
+	nNotSetValues := r.countXCCDFUnsetValues(rem)
+	if nNotSetValues == 0 {
+		return false, fmt.Errorf("Error empty unset-value list")
+	}
+	labels := rem.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	//To avoide setting incorrect label for the one that has required-value annotation but does not have any un-set values
+	if nNotSetValues > 0 {
+		//Set unset lable if labes has not been set
+		if _, ok := labels[compv1alpha1.RemediationUnsetValueLabel]; !ok {
+			labels[compv1alpha1.RemediationUnsetValueLabel] = ""
+			rCopy := rem.DeepCopy()
+			rCopy.SetLabels(labels)
+			err := r.client.Update(context.TODO(), rCopy)
+			if err != nil {
+				return false, fmt.Errorf("adding un-set xccdf value label: %w", err)
+			}
+			return true, nil
+			//return true to notify caller that we updated the object
+		}
+		return false, nil
+	}
+	return false, nil
+}
+
+func (r *ReconcileComplianceRemediation) countXCCDFUnsetValues(rem *compv1alpha1.ComplianceRemediation) int {
+	notSetValues := rem.Annotations[compv1alpha1.RemediationUnsetValueAnnotation]
+	if notSetValues == "" {
+		return 0
+	}
+	return len(removeEmptyStrings(strings.Split(notSetValues, ",")))
+}
+
+func removeEmptyStrings(s []string) []string {
+	var resultString []string
+	for _, str := range s {
+		if str == "" {
+			continue
+		}
+		resultString = append(resultString, str)
+	}
+	return resultString
+}
+
 func getObjFromKubeDep(dep compv1alpha1.RemediationObjectDependencyReference) runtime.Object {
 	obj := &unstructured.Unstructured{}
 	obj.SetKind(dep.Kind)
@@ -425,7 +570,7 @@ func isRemDepHandled(r *ReconcileComplianceRemediation, rem *compv1alpha1.Compli
 func (r *ReconcileComplianceRemediation) reconcileRemediationStatus(instance *compv1alpha1.ComplianceRemediation,
 	logger logr.Logger, errorApplying error) error {
 	instanceCopy := instance.DeepCopy()
-
+	logger.Info("Updating status of remediation")
 	r.setRemediationStatus(instanceCopy, errorApplying, logger)
 
 	if err := r.client.Status().Update(context.TODO(), instanceCopy); err != nil {
@@ -445,7 +590,6 @@ func (r *ReconcileComplianceRemediation) verifyAndCompleteMC(obj *unstructured.U
 	if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
 		return fmt.Errorf("couldn't get scan for MC remediation: %w", err)
 	}
-
 	mcfgpools := &mcfgv1.MachineConfigPoolList{}
 	if err := r.client.List(context.TODO(), mcfgpools); err != nil {
 		return fmt.Errorf("couldn't list the pools for the remediation: %w", err)
@@ -456,16 +600,13 @@ func (r *ReconcileComplianceRemediation) verifyAndCompleteMC(obj *unstructured.U
 	if !utils.AnyMcfgPoolLabelMatches(scan.Spec.NodeSelector, mcfgpools) {
 		return common.NewNonRetriableCtrlError("not applying remediation that doesn't have a matching MachineconfigPool. Scan: %s", scan.Name)
 	}
-
 	obj.SetName(rem.GetMcName())
-
 	labels := obj.GetLabels()
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 	labels[mcfgv1.MachineConfigRoleLabelKey] = utils.GetFirstNodeRole(scan.Spec.NodeSelector)
 	obj.SetLabels(labels)
-
 	return nil
 }
 
@@ -525,6 +666,12 @@ func (r *ReconcileComplianceRemediation) setRemediationStatus(rem *compv1alpha1.
 	if rem.HasUnmetDependencies() {
 		logger.Info("Remediation has un-met dependencies.")
 		rem.Status.ApplicationState = compv1alpha1.RemediationMissingDependencies
+		return
+	}
+
+	if rem.HasAnnotation(compv1alpha1.RemediationUnsetValueAnnotation) {
+		logger.Info("Remediation has un-set values.")
+		rem.Status.ApplicationState = compv1alpha1.RemediationNeedsReview
 		return
 	}
 

@@ -80,7 +80,7 @@ ClientAliveCountMax VAR_SSHD_IDLE_TIMEOUT_VALUE
 ```
 Since the url encode doesn't encode ASCII alpha-numerical nor underscore characters, and
 we can later substitute the place holder after the url encoding from `VAR_SSHD_IDLE_TIMEOUT_VALUE`
-to `{{sshd_idle_timeout_value | findXCCDFValue | urlquery}}`, so that it can be post-process them with the appropriate
+to `{{.sshd_idle_timeout_value | urlquery}}`, so that it can be post-process them with the appropriate
 escaped instances in the compliance operator. The following code is the example of final result:
 ```xml
 <fix rule="sshd_set_idle_timeout" complexity="low" disruption="low" reboot="false" strategy="restrict">---
@@ -94,7 +94,7 @@ spec:
       files:
       - contents:
           source: data:, `PrintLastLog%20yes%0A%23TCPKeepAlive%20yes%0APermitUserEnvironment%20no%0ACompression
-          %20no%0AClientAliveInterval%20{{"sshd_idle_timeout_value" | findXCCDFValue | urlquery}}%0AClientAliveCountMax%200%0A%0A%23UseDNS%2
+          %20no%0AClientAliveInterval%20{{.sshd_idle_timeout_value|urlquery}}%0AClientAliveCountMax%200%0A%0A%23UseDNS%2
           0no%0A%23PidFile%20%2Fvar%2Frun%2Fsshd.pid%0A%23MaxStartups%2010%3A30%3A100%0A%23PermitTunnel%20no`
         mode: 0600
         path: /etc/ssh/sshd_config
@@ -102,9 +102,9 @@ spec:
 </fix>
 ```
 
-There will be some change in the aggregator since we brought a marker XCCDF variable into
+We make some changes into the Parsing Utility since we brought a marker XCCDF variable into
 the remediation content, we need to substitute all the placeholder with corresponding values
-before we create the `ComplianceRemediation` object. we need to fetch all the variables that 
+before we create the `ComplianceRemediation` object. We need to fetch all the variables that 
 are in the scan result `ConfigMap` for all the nodes with consistency check(Note that all the 
 tailored set values are parsed to the resulting CM), and then since we have XCCDF values marked 
 using `{{}}` in the remediation rules there is a Go Library called `Template` that we can 
@@ -212,9 +212,10 @@ settingsRef:
   ```
 
 The scan will use the values set from the `TailoredProfile`, and the aggreator
-will fetch the values from Result `ConfigMap`, to replace the `{{sshd-idle-timeout-value}}` 
-marker to the url encoded of `3600` that set in the TailoredProfile, the 
-`MachineConfig` object for the `ComplianceRemediation` will be generated as below:
+will use the parsing utility to fetch the values from Result `ConfigMap`, to 
+replace the `{{sshd-idle-timeout-value}}` marker to the url encoded of `3600` 
+that set in the TailoredProfile, the `MachineConfig` object for 
+the `ComplianceRemediation` will be generated as below:
 
 ```yaml
 apiVersion: machineconfiguration.openshift.io/v1
@@ -233,7 +234,15 @@ spec:
         path: /etc/ssh/sshd_config
         overwrite: true
 ```
+There are some some annotation and labels we used for the compliance remediation:
 
+`compliance.openshift.io/value-required`: we used this one for content creator to mark XCCDF variables that is rquired to have a tailored input from administrator who runs the scan. 
+
+`compliance.openshift.io/unset-value`: We used this annotation to mark all the XCCDF variables that are successfully parsed, but are not found in `ResultConfigMap` or there the value is in `compliance.openshift.io/value-required` annotation, but the tailored value for that value was not set by the administrator.
+
+`compliance.openshift.io/xccdf-value-used`: This one included all the values that were initially parsed as well as value set from `value-required`
+
+The remediation status will become `NeedsReview` where if there is `unset-value`
 If the the Remediation Status become `Needs-Review`, the administrator can check for the annotation `compliance.openshift.io/has-unset-xccdf-values` for that `ComplianceRemediation`,
 because some rules require to have a custom value to be set, or it didn't come with a default value. The Following is a example of missing value ComplianceRemediation object look like.
 
@@ -281,16 +290,16 @@ remediations contents. Ideally, there is some steps that a Jinja Macro script ne
 
 1. take `the_value_you_want_to_define` in remediation content and then replace the corresponding values to `VAR_THE_VALUE_WANT_TO_DEFINE`
 2. url-encode the whole thing 
-3. substitue `VAR_THE_VALUE_WANT_TO_DEFINE` to `{{"the_value_you_want_to_define" | findXCCDFValue | urlquery}}` and generate kube remediation
+3. substitue `VAR_THE_VALUE_WANT_TO_DEFINE` to `{{.the_value_you_want_to_define|urlquery}}` and generate kube remediation
 
 
 After the content build, the machine config object will have the custom XCCDF value in this formate
-`data:,...some-url-encoding{{"the_value_you_want_to_define" | findXCCDFValue | urlquery}}some-url-encoding` in kube remediation xml.
+`data:,...some-url-encoding{{.the_value_you_want_to_define|urlquery}}some-url-encoding` in kube remediation xml.
 
 The real values sustitution will happen in the compliance operator
-after the Tailor scan, go template function in the operator do the substitution from `data:,...some-url-encoding{{"the_value_you_want_to_define" | findXCCDFValue | urlquery}}some-url-encoding` 
+after the Tailor scan, go template function in the operator will do the substitution from `data:,...some-url-encoding{{.the_value_you_want_to_define|urlquery}}some-url-encoding` 
 to `data:,...some-url-encoding urlencoded(SOMESETVALUES) some-url-encoding`
-The post-processed `ComplianceRemediation` kube object will look like following, and we can also use the annotations `compliance.openshift.io/xccdf-variable-used` to see the vairable that is used:
+The post-processed `ComplianceRemediation` kube object will look like following:
 ```yaml
 apiVersion: compliance.openshift.io/v1alpha1
 kind: ComplianceRemediation
@@ -331,6 +340,8 @@ status:
   applicationState: NotApplied
 
 ```
+
+
 ## Creating content using template
 
 Currently, for certain types of rules, there are provided templates. And you only need to specify the template name and its parameters in rule.yml and the content will be generated during the build. However, we want to add values support for the Kubernetes template.

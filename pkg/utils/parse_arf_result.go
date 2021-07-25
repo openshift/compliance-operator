@@ -1,12 +1,16 @@
 package utils
 
 import (
-	"errors"
+	"bytes"
 	"fmt"
+	"html/template"
 	"io"
+	"regexp"
 	"strings"
+	"text/template/parse"
 
 	"github.com/antchfx/xmlquery"
+	"github.com/pkg/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -15,17 +19,19 @@ import (
 )
 
 const (
-	machineConfigFixType         = "urn:xccdf:fix:script:ignition"
-	kubernetesFixType            = "urn:xccdf:fix:script:kubernetes"
-	ocilCheckType                = "http://scap.nist.gov/schema/ocil/2"
-	rulePrefix                   = "xccdf_org.ssgproject.content_rule_"
-	questionnaireSuffix          = "_ocil:questionnaire:1"
-	questionSuffix               = "_question:question:1"
-	dependencyAnnotationKey      = "complianceascode.io/depends-on"
-	kubeDependencyAnnotationKey  = "complianceascode.io/depends-on-obj"
-	remediationTypeAnnotationKey = "complianceascode.io/remediation-type"
-	enforcementTypeAnnotationKey = "complianceascode.io/enforcement-type"
-	optionalAnnotationKey        = "complianceascode.io/optional"
+	machineConfigFixType            = "urn:xccdf:fix:script:ignition"
+	kubernetesFixType               = "urn:xccdf:fix:script:kubernetes"
+	ocilCheckType                   = "http://scap.nist.gov/schema/ocil/2"
+	rulePrefix                      = "xccdf_org.ssgproject.content_rule_"
+	valuePrefix                     = "xccdf_org.ssgproject.content_value_"
+	questionnaireSuffix             = "_ocil:questionnaire:1"
+	questionSuffix                  = "_question:question:1"
+	dependencyAnnotationKey         = "complianceascode.io/depends-on"
+	kubeDependencyAnnotationKey     = "complianceascode.io/depends-on-obj"
+	remediationTypeAnnotationKey    = "complianceascode.io/remediation-type"
+	enforcementTypeAnnotationKey    = "complianceascode.io/enforcement-type"
+	optionalAnnotationKey           = "complianceascode.io/optional"
+	valueInputRequiredAnnotationKey = "complianceascode.io/value-input-required"
 )
 
 // Constants useful for parsing warnings
@@ -184,12 +190,18 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 	if err != nil {
 		return nil, err
 	}
+	allValues := xmlquery.Find(resultsDom, "//set-value")
+	valuesList := make(map[string]string)
+	for _, codeNode := range allValues {
+		valuesList[strings.TrimPrefix(codeNode.SelectAttr("idref"), valuePrefix)] = codeNode.InnerText()
+	}
 
 	ruleTable := newRuleHashTable(dsDom)
 	questionsTable := newOcilQuestionTable(dsDom)
 
 	results := resultsDom.SelectElements("//rule-result")
 	parsedResults := make([]*ParseResult, 0)
+	var remErrs string
 	for i := range results {
 		result := results[i]
 		ruleIDRef := result.SelectAttr("idref")
@@ -213,13 +225,18 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 				Id:          ruleIDRef,
 				CheckResult: resCheck,
 			}
-
-			pr.Remediations = newComplianceRemediation(scheme, scanName, namespace, resultRule)
+			pr.Remediations, err = newComplianceRemediation(scheme, scanName, namespace, resultRule, valuesList)
+			if err != nil {
+				remErrs = "CheckID." + ruleIDRef + err.Error() + "\n"
+			}
 			parsedResults = append(parsedResults, pr)
 		}
 	}
-
+	if remErrs != "" {
+		return parsedResults, errors.New(remErrs)
+	}
 	return parsedResults, nil
+
 }
 
 // Returns a new complianceCheckResult if the check data is usable
@@ -353,14 +370,14 @@ func mapComplianceCheckResultStatus(result *xmlquery.Node) (compv1alpha1.Complia
 	return compv1alpha1.CheckResultNoResult, fmt.Errorf("couldn't match %s to a known state", resultEl.InnerText())
 }
 
-func newComplianceRemediation(scheme *runtime.Scheme, scanName, namespace string, rule *xmlquery.Node) []*compv1alpha1.ComplianceRemediation {
+func newComplianceRemediation(scheme *runtime.Scheme, scanName, namespace string, rule *xmlquery.Node, resultValues map[string]string) ([]*compv1alpha1.ComplianceRemediation, error) {
 	for _, fix := range rule.SelectElements("//xccdf-1.2:fix") {
 		if isRelevantFix(fix) {
-			return remediationFromFixElement(scheme, fix, scanName, namespace)
+			return remediationFromFixElement(scheme, fix, scanName, namespace, resultValues)
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
 func isRelevantFix(fix *xmlquery.Node) bool {
@@ -380,28 +397,49 @@ func nameFromId(scanName, ruleIdRef string) string {
 	return fmt.Sprintf("%s-%s", scanName, dnsFriendlyFixId)
 }
 
-func remediationFromFixElement(scheme *runtime.Scheme, fix *xmlquery.Node, scanName, namespace string) []*compv1alpha1.ComplianceRemediation {
+func remediationFromFixElement(scheme *runtime.Scheme, fix *xmlquery.Node, scanName, namespace string, resultValues map[string]string) ([]*compv1alpha1.ComplianceRemediation, error) {
 	fixId := fix.SelectAttr("id")
 	if fixId == "" {
-		return nil
+		return nil, errors.New("there is no fix-ID attribute")
 	}
 
 	dnsFriendlyFixId := strings.ReplaceAll(fixId, "_", "-")
 	remName := fmt.Sprintf("%s-%s", scanName, dnsFriendlyFixId)
 	// TODO(OZZ) fix text
-	return remediationsFromString(scheme, remName, namespace, fix.InnerText())
+	return remediationsFromString(scheme, remName, namespace, fix.InnerText(), resultValues)
 }
 
-func remediationsFromString(scheme *runtime.Scheme, name string, namespace string, fixContent string) []*compv1alpha1.ComplianceRemediation {
-	objs, err := ReadObjectsFromYAML(strings.NewReader(fixContent))
-	if err != nil {
-		return nil
+func remediationsFromString(scheme *runtime.Scheme, name string, namespace string, fixContent string, resultValues map[string]string) ([]*compv1alpha1.ComplianceRemediation, error) {
+	//ToDO find and substitute the value
+	fixWithValue, valuesUsedList, notFoundValueList, parsingError := parseValues(fixContent, resultValues)
+
+	if parsingError != nil {
+		return nil, parsingError
 	}
 
+	objs, err := ReadObjectsFromYAML(strings.NewReader(fixWithValue))
+	if err != nil {
+		return nil, err
+	}
 	rems := make([]*compv1alpha1.ComplianceRemediation, 0, len(objs))
 	for idx := range objs {
 		obj := objs[idx]
 		annotations := make(map[string]string)
+
+		if len(notFoundValueList) > 0 {
+			annotations = handleNotFoundValue(notFoundValueList, annotations)
+		}
+		if len(valuesUsedList) > 0 {
+			annotations = handleValueUsed(valuesUsedList, annotations)
+		}
+
+		if hasValueRequiredAnnotation(obj) {
+			if (len(notFoundValueList) == 0) && (len(valuesUsedList) == 0) {
+				return nil, errors.New("do not have any parsed xccdf variable, shoudn't any required values")
+			} else {
+				annotations = handleValueRequiredAnnotation(obj, annotations)
+			}
+		}
 
 		if hasDependencyAnnotation(obj) {
 			annotations = handleDependencyAnnotation(obj, annotations)
@@ -450,11 +488,78 @@ func remediationsFromString(scheme *runtime.Scheme, name string, namespace strin
 		})
 	}
 
-	return rems
+	return rems, nil
+}
+
+//This function will take orginal remediation content, and a list of all values found in the configMap
+//It will processed and substitue the value in remediation content, and return processed Remediation content
+//The return will be Processed-Remdiation Content, Value-Used List, Un-Set List, and err if possible
+func parseValues(remContent string, resultValues map[string]string) (string, []string, []string, error) {
+	t, err := template.New("").Option("missingkey=zero").Parse(remContent)
+	var valuesUsedList []string
+	var valuesMissingList []string
+	var valuesParsedList []string
+	if err != nil {
+		return remContent, valuesUsedList, valuesMissingList, errors.Wrap(err, "wrongly formatted remediation context: ") //Error creating template // Wrongly formatted remediation context
+	}
+
+	buf := &bytes.Buffer{}
+	err = t.Execute(buf, resultValues)
+	fixedText := buf.String()
+	if err != nil {
+		return fixedText, valuesUsedList, valuesMissingList, err
+	}
+	valuesParsedList = getParsedValueName(t)
+	for _, parsedVariable := range valuesParsedList {
+		_, found := resultValues[parsedVariable]
+		if found {
+			dnsFriendlyParsedVariable := strings.ReplaceAll(parsedVariable, "_", "-")
+			valuesUsedList = append(valuesUsedList, dnsFriendlyParsedVariable)
+		} else {
+			dnsFriendlyParsedVariable := strings.ReplaceAll(parsedVariable, "_", "-")
+			valuesMissingList = append(valuesMissingList, dnsFriendlyParsedVariable)
+		}
+	}
+	return fixedText, valuesUsedList, valuesMissingList, err
+}
+
+func getParsedValueName(t *template.Template) []string {
+	valueToBeTrimmed := listNodeFields(t.Tree.Root, nil)
+	return trimToValue(valueToBeTrimmed)
+}
+
+//trim {{value | urlquery}} list to value list
+func trimToValue(listToBeTrimmed []string) []string {
+	trimmedValuesList := listToBeTrimmed[:0]
+	for _, oriVal := range listToBeTrimmed {
+		re := regexp.MustCompile("([a-zA-Z]+(_[a-zA-Z]+)+)")
+		trimedValueMatch := re.FindStringSubmatch(oriVal)
+		if len(trimedValueMatch) > 1 {
+			trimmedValuesList = append(trimmedValuesList, trimedValueMatch[0])
+		}
+	}
+	return trimmedValuesList
+}
+
+func listNodeFields(node parse.Node, res []string) []string {
+	if node.Type() == parse.NodeAction {
+		res = append(res, node.String())
+	}
+
+	if ln, ok := node.(*parse.ListNode); ok {
+		for _, n := range ln.Nodes {
+			res = listNodeFields(n, res)
+		}
+	}
+	return res
 }
 
 func hasDependencyAnnotation(u *unstructured.Unstructured) bool {
 	return hasAnnotation(u, dependencyAnnotationKey) || hasAnnotation(u, kubeDependencyAnnotationKey)
+}
+
+func hasValueRequiredAnnotation(u *unstructured.Unstructured) bool {
+	return hasAnnotation(u, valueInputRequiredAnnotationKey)
 }
 
 func hasOptionalAnnotation(u *unstructured.Unstructured) bool {
@@ -499,6 +604,38 @@ func handleDependencyAnnotation(u *unstructured.Unstructured, annotations map[st
 
 		// reset metadata of output object
 		delete(inAnns, kubeDependencyAnnotationKey)
+	}
+
+	u.SetAnnotations(inAnns)
+
+	return annotations
+}
+
+func handleValueUsed(valuesList []string, annotations map[string]string) map[string]string {
+
+	annotations[compv1alpha1.RemediationValueUsedAnnotation] = strings.Join(valuesList, ",")
+
+	return annotations
+}
+
+func handleNotFoundValue(notFoundValues []string, annotations map[string]string) map[string]string {
+
+	annotations[compv1alpha1.RemediationUnsetValueAnnotation] = strings.Join(notFoundValues, ",")
+	return annotations
+}
+
+func handleValueRequiredAnnotation(u *unstructured.Unstructured, annotations map[string]string) map[string]string {
+	// We already assume this has some annotation
+	inAnns := u.GetAnnotations()
+
+	// parse
+	if valueRequired, hasValueReqKey := inAnns[valueInputRequiredAnnotationKey]; hasValueReqKey {
+		// set required custom variable names
+		dnsFriendlyRequiredVariable := strings.ReplaceAll(valueRequired, "_", "-")
+		annotations[compv1alpha1.RemediationValueRequiredAnnotation] = dnsFriendlyRequiredVariable
+
+		// reset metadata of output object
+		delete(inAnns, valueInputRequiredAnnotationKey)
 	}
 
 	u.SetAnnotations(inAnns)

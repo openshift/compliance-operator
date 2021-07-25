@@ -46,16 +46,125 @@ var _ = Describe("XCCDF parser", func() {
 	)
 
 	var (
-		xccdf           io.Reader
-		ds              io.Reader
-		schema          *runtime.Scheme
-		resultsFilename string
-		dsFilename      string
-		resultList      []*ParseResult
-		nChecks         int
-		nRems           int
-		err             error
+		xccdf                  io.Reader
+		ds                     io.Reader
+		schema                 *runtime.Scheme
+		resultsFilename        string
+		dsFilenameWrongFormate string
+		dsFilename             string
+		resultList             []*ParseResult
+		nChecks                int
+		nRems                  int
+		err                    error
 	)
+
+	Describe("Testing for wrongly formatted Remediation", func() {
+
+		mcInstance := &mcfgv1.MachineConfig{}
+		schema = scheme.Scheme
+		schema.AddKnownTypes(mcfgv1.SchemeGroupVersion, mcInstance)
+		resultsFilename = "../../tests/data/xccdf-result-remdiation-templating.xml"
+		dsFilenameWrongFormate = "../../tests/data/ds-input-for-remediation-value-wrong-formate.xml"
+		// I added {{.var_f[]ake_value|urlquery}} on line 51691 to test out the handling for wrongly template format
+		xccdf, err = os.Open(resultsFilename)
+		Expect(err).NotTo(HaveOccurred())
+		ds, err = os.Open(dsFilenameWrongFormate)
+		Expect(err).NotTo(HaveOccurred())
+		dsDom, err := ParseContent(ds)
+		Expect(err).NotTo(HaveOccurred())
+		resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+
+		Context("Make Sure it handles the Wrongly formatted Remdiation TemplateF", func() {
+			//It will parse all other checks and remediation as normal
+			//It will not create remediation for the wrong formate one
+			expRule := "rule_auditd_data_retention_max_log"
+			nChecks, nRems = countResultItems(resultList)
+			It("Should throw an Wrong Template formate error with rule name", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(expRule))
+			})
+			It("Should still have the result list", func() {
+				Expect(resultList).NotTo(BeEmpty())
+			})
+			It("Should have one less then original Remdiaiton ", func() {
+				Expect(nRems).To(Equal(totalRemediations - 1))
+			})
+		})
+
+	})
+
+	Describe("Load the XCCDF and the DS separately for Remdiation templating", func() {
+		BeforeEach(func() {
+			mcInstance := &mcfgv1.MachineConfig{}
+			schema = scheme.Scheme
+			schema.AddKnownTypes(mcfgv1.SchemeGroupVersion, mcInstance)
+			resultsFilename = "../../tests/data/xccdf-result-remdiation-templating.xml"
+			dsFilename = "../../tests/data/ds-input-for-remediation-value.xml"
+			//I edited on line 51691 source: data:,{{.var_fake_second_value|urlquery}}2...s{{.var_fake_value|urlquery}}%20...2{{.var_postfix_relayhost|urlquery}}0t...
+			//%20{{.var_auditd_max_log_file|urlquery}}%0Anum_logs%20%3D%205%0Apriority_boost%20%3D%2
+
+		})
+		JustBeforeEach(func() {
+			xccdf, err = os.Open(resultsFilename)
+			Expect(err).NotTo(HaveOccurred())
+
+			ds, err = os.Open(dsFilename)
+			Expect(err).NotTo(HaveOccurred())
+			dsDom, err := ParseContent(ds)
+			Expect(err).NotTo(HaveOccurred())
+			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resultList).NotTo(BeEmpty())
+
+		})
+
+		Context("Valid XCCDF", func() {
+			It("Should parse the XCCDF without errors", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Context("Check if parsing will generate remediation with correct template", func() {
+			var (
+				rem     *compv1alpha1.ComplianceRemediation
+				expName string
+			)
+
+			expValueUsedAnnotation := "var-postfix-relayhost,var-auditd-max-log-file" //expect found and used value
+			expUnsetValueAnnotation := "var-fake-second-value,var-fake-value"         //expect not found value
+			expRequiredValueAnnotation := "var-some-required-value"
+			BeforeEach(func() {
+				expName = "testScan-auditd-data-retention-max-log-file"
+				for i := range resultList {
+					if resultList[i].Remediations != nil {
+						if resultList[i].Remediations[0].Name == expName {
+							rem = resultList[i].Remediations[0]
+							break
+						}
+					}
+				}
+				Expect(rem).ToNot(BeNil())
+			})
+
+			It("The Remediation should be the correct testing remediation", func() {
+				Expect(rem.Name).To(Equal(expName))
+			})
+
+			It("The remdiation should have correct Value-Used annotation", func() {
+				Expect(rem.Annotations[compv1alpha1.RemediationValueUsedAnnotation]).To(Equal(expValueUsedAnnotation))
+			})
+
+			It("The remdiation should have correct Value-Not-Found/Set annotation", func() {
+				Expect(rem.Annotations[compv1alpha1.RemediationUnsetValueAnnotation]).To(Equal(expUnsetValueAnnotation))
+			})
+
+			It("The remdiation should have correct Required-Value annotation", func() {
+				Expect(rem.Annotations[compv1alpha1.RemediationValueRequiredAnnotation]).To(Equal(expRequiredValueAnnotation))
+			})
+
+		})
+
+	})
 
 	Describe("Load the XCCDF and the DS separately", func() {
 		BeforeEach(func() {
