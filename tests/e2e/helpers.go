@@ -1,13 +1,16 @@
 package e2e
 
 import (
+	"bufio"
 	"bytes"
 	goctx "context"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	v1 "k8s.io/api/rbac/v1"
 	"os"
+	"os/exec"
 	"path"
 	"regexp"
 	"strconv"
@@ -52,6 +55,10 @@ var rhcosPb *compv1alpha1.ProfileBundle
 var ocp4Pb *compv1alpha1.ProfileBundle
 
 var defaultBackoff = backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries)
+
+var (
+	curlCMD = "curl -ks -H \"Authorization: Bearer `cat /var/run/secrets/kubernetes.io/serviceaccount/token`\" "
+)
 
 type ObjectResouceVersioner interface {
 	runtime.Object
@@ -105,6 +112,11 @@ func E2EErrorf(t *testing.T, format string, args ...interface{}) {
 
 func E2EFatalf(t *testing.T, format string, args ...interface{}) {
 	t.Fatalf(fmt.Sprintf("E2E-FAILURE: %s: %s", time.Now().Format(time.RFC3339), format), args...)
+}
+
+// Returns the namespace specific metrics endpoint
+func getTestMetricsCMD(namespace string) string {
+	return curlCMD + fmt.Sprintf("https://metrics.%s.svc:8585/metrics-co", namespace)
 }
 
 func getObjNameFromTest(t *testing.T) string {
@@ -313,12 +325,73 @@ func setupComplianceOperatorCluster(t *testing.T, ctx *framework.Context, f *fra
 	if err != nil {
 		t.Fatalf("failed to initialize cluster resources: %v", err)
 	}
+
+	err = initializeMetricsTestResources(f, namespace)
+	if err != nil {
+		t.Fatalf("failed to initialize cluster resources for metrics: %v", err)
+	}
+
 	E2ELog(t, "Initialized cluster resources")
 	// wait for compliance-operator to be ready
 	err = e2eutil.WaitForOperatorDeployment(t, f.KubeClient, namespace, "compliance-operator", 1, retryInterval, timeout)
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// Initializes the permission resources needed for the in-test metrics scraping
+func initializeMetricsTestResources(f *framework.Framework, namespace string) error {
+	if _, err := f.KubeClient.RbacV1().ClusterRoles().Create(goctx.TODO(), &v1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "co-metrics-client",
+		},
+		Rules: []v1.PolicyRule{
+			{
+				NonResourceURLs: []string{
+					"/metrics-co",
+				},
+				Verbs: []string{
+					"get",
+				},
+			},
+		},
+	}, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+
+	if _, err := f.KubeClient.RbacV1().ClusterRoleBindings().Create(goctx.TODO(), &v1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "co-metrics-client",
+		},
+		Subjects: []v1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      "default",
+				Namespace: namespace,
+			},
+		},
+		RoleRef: v1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     "co-metrics-client",
+		},
+	}, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+
+	if _, err := f.KubeClient.CoreV1().Secrets(namespace).Create(goctx.TODO(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "metrics-token",
+			Namespace: namespace,
+			Annotations: map[string]string{
+				"kubernetes.io/service-account.name": "default",
+			},
+		},
+		Type: "kubernetes.io/service-account-token",
+	}, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
 }
 
 func getCleanupOpts(ctx *framework.Context) *framework.CleanupOptions {
@@ -2178,4 +2251,69 @@ func processErrorOrTimeout(err, timeoutErr error, message string) error {
 		return fmt.Errorf("Timed out when %s: %w", message, timeoutErr)
 	}
 	return nil
+}
+
+func getMetricResults(t *testing.T, namespace string) string {
+	ocPath, err := exec.LookPath("oc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// We're just under test.
+	// G204 (CWE-78): Subprocess launched with variable (Confidence: HIGH, Severity: MEDIUM)
+	// #nosec
+	cmd := exec.Command(ocPath,
+		"run", "--rm", "-i", "--restart=Never", "--image=registry.fedoraproject.org/fedora-minimal:latest",
+		"-n", namespace, "metrics-test", "--", "bash", "-c",
+		getTestMetricsCMD(namespace),
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Errorf("error getting output %s", err)
+	}
+	t.Logf("metrics output:\n%s\n", string(out))
+	return string(out)
+}
+
+func assertMetric(t *testing.T, content, metric string, expected int) error {
+	if val := parseMetric(t, content, metric); val != expected {
+		return errors.New(fmt.Sprintf("expected %v for counter %s, got %v", expected, metric, val))
+	}
+	return nil
+}
+
+func assertEachMetric(t *testing.T, namespace string, expectedMetrics map[string]int) error {
+	metricErrs := make([]error, 0)
+	metricsOutput := getMetricResults(t, namespace)
+	for metric, i := range expectedMetrics {
+		err := assertMetric(t, metricsOutput, metric, i)
+		if err != nil {
+			metricErrs = append(metricErrs, err)
+		}
+	}
+	if len(metricErrs) > 0 {
+		for err := range metricErrs {
+			t.Log(err)
+		}
+		return errors.New("unexpected metrics value")
+	}
+	return nil
+}
+
+func parseMetric(t *testing.T, content, metric string) int {
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, metric) {
+			fields := strings.Fields(line)
+			if len(fields) != 2 {
+				t.Errorf("invalid metric")
+			}
+			i, err := strconv.Atoi(fields[1])
+			if err != nil {
+				t.Errorf("invalid metric value")
+			}
+			return i
+		}
+	}
+	return 0
 }
