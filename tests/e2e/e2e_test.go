@@ -429,6 +429,16 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
+				err = assertEachMetric(t, namespace, map[string]int{
+					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"AGGREGATING\",result=\"NOT-AVAILABLE\"}", scanName): 2,
+					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"DONE\",result=\"COMPLIANT\"}", scanName):            1,
+					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"LAUNCHING\",result=\"NOT-AVAILABLE\"}", scanName):   1,
+					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"PENDING\",result=\"\"}", scanName):                  1,
+					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"RUNNING\",result=\"NOT-AVAILABLE\"}", scanName):     1,
+				})
+				if err != nil {
+					return err
+				}
 				return scanHasValidPVCReference(f, namespace, scanName)
 			},
 		},
@@ -1493,7 +1503,7 @@ func TestE2E(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      fmt.Sprintf("%s-coreos-vsyscall-kernel-argument", workerScanName),
 						Namespace: namespace,
-						Labels: 	map[string]string{
+						Labels: map[string]string{
 							compv1alpha1.ComplianceCheckResultHasRemediation: "",
 						},
 					},
