@@ -425,6 +425,12 @@ You can inspect the existing `ProfileBundle` objects by calling:
 oc get profilebundle -nopenshift-compliance
 ```
 
+Note that in case you need to roll back to a known-good content image
+from an invalid image, the `ProfileBundle` might be stuck in the `PENDING`
+state. A workaround is to move to a different image than the previous one.
+Please see [this bug report](https://bugzilla.redhat.com/show_bug.cgi?id=1914279#c2)
+for more details.
+
 ### The `Profile` object
 The `Profile` objects are never created manually, but rather based on a
 `ProfileBundle` object, typically one `ProfileBundle` would result in
