@@ -119,7 +119,7 @@ func newParserInput(name, namespace, contentImage, dsPath string, client runtime
 	pi.pcfg = &ParserConfig{
 		DataStreamPath:   dsPath,
 		ProfileBundleKey: types.NamespacedName{Name: pi.pb.Name, Namespace: pi.pb.Name},
-		Client:           client,
+		Client:           NewDefaultRetryClient(client),
 		Scheme:           scheme,
 	}
 

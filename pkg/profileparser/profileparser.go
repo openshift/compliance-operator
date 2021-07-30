@@ -3,12 +3,16 @@ package profileparser
 import (
 	"context"
 	"fmt"
+	"github.com/cenkalti/backoff/v4"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/openshift/compliance-operator/pkg/utils"
 
+	goerrors "github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -37,10 +41,145 @@ const (
 
 var log = logf.Log.WithName("profileparser")
 
+func retry(fn func() error, retryCondition func(error) bool, backoff wait.Backoff) error {
+	waitErr := wait.ExponentialBackoff(backoff, func() (bool, error) {
+		err := fn()
+		if err == nil {
+			return true, nil
+		} else if retryCondition(err) {
+			return false, nil
+		}
+
+		// propagate the error up
+		return true, goerrors.Wrap(err, "retry function")
+	})
+
+	if waitErr != nil {
+		return goerrors.Wrap(waitErr, "wait on retry")
+	}
+
+	return nil
+}
+
+type RetryCondition func(error) bool
+
+type RetryClient struct {
+	client  runtimeclient.Client
+	backoff wait.Backoff
+	// later on we can have separate conditions for separate actions maybe?
+	defaultCond RetryCondition
+}
+
+// Status implements client.StatusClient
+func (c *RetryClient) Status() runtimeclient.StatusWriter {
+	return c.client.Status()
+}
+
+func newRetryClient(client runtimeclient.Client, backoff wait.Backoff, defaultCond RetryCondition) *RetryClient {
+	return &RetryClient{
+		client:      client,
+		backoff:     backoff,
+		defaultCond: defaultCond,
+	}
+}
+
+func NewDefaultRetryClient(client runtimeclient.Client) *RetryClient {
+	return newRetryClient(
+		client,
+		wait.Backoff{
+			Duration: 500 * time.Millisecond,
+			Factor:   1.5,
+			Steps:    5,
+		},
+		func(error) bool {
+			return true
+		},
+	)
+}
+func (c *RetryClient) retry(fn func() error, retryCondition func(error) bool) error {
+	return retry(fn, retryCondition, c.backoff)
+}
+
+func (c *RetryClient) Get(ctx context.Context, key runtimeclient.ObjectKey, obj k8sruntime.Object) error {
+	return c.retry(
+		func() error {
+			return c.client.Get(ctx, key, obj)
+		},
+		func(getErr error) bool {
+			if errors.IsNotFound(getErr) {
+				return false
+			}
+			return true
+		},
+	)
+}
+
+func (c *RetryClient) List(ctx context.Context, obj k8sruntime.Object, opts ...runtimeclient.ListOption) error {
+	return c.retry(
+		func() error {
+			return c.client.List(ctx, obj, opts...)
+		},
+		c.defaultCond,
+	)
+}
+
+func (c *RetryClient) Create(ctx context.Context, obj k8sruntime.Object, opts ...runtimeclient.CreateOption) error {
+	return c.retry(
+		func() error {
+			return c.client.Create(ctx, obj, opts...)
+		},
+		c.defaultCond,
+	)
+}
+
+func (c *RetryClient) Update(ctx context.Context, obj k8sruntime.Object, opts ...runtimeclient.UpdateOption) error {
+	return c.retry(
+		func() error {
+			return c.client.Update(ctx, obj, opts...)
+		},
+		func(updateErr error) bool {
+			if errors.IsResourceExpired(updateErr) || errors.IsConflict(updateErr) {
+				return false
+			}
+			return true
+		},
+	)
+}
+
+func (c *RetryClient) Delete(ctx context.Context, obj k8sruntime.Object, opts ...runtimeclient.DeleteOption) error {
+	return c.retry(
+		func() error {
+			return c.client.Delete(ctx, obj, opts...)
+		},
+		c.defaultCond,
+	)
+}
+
+func (c *RetryClient) DeleteAllOf(ctx context.Context, obj k8sruntime.Object, opts ...runtimeclient.DeleteAllOfOption) error {
+	return c.retry(
+		func() error {
+			return c.client.DeleteAllOf(ctx, obj, opts...)
+		},
+		c.defaultCond,
+	)
+}
+
+func (c *RetryClient) Patch(ctx context.Context, obj k8sruntime.Object, patch runtimeclient.Patch, opts ...runtimeclient.PatchOption) error {
+	return c.retry(
+		func() error {
+			return c.client.Patch(ctx, obj, patch, opts...)
+		},
+		c.defaultCond,
+	)
+}
+
+// assert that we didn't forget any method
+var _ runtimeclient.Client = &RetryClient{}
+
 type ParserConfig struct {
 	DataStreamPath   string
 	ProfileBundleKey types.NamespacedName
-	Client           runtimeclient.Client
+	Client           *RetryClient
 	Scheme           *k8sruntime.Scheme
 }
 
@@ -109,7 +248,8 @@ func ParseBundle(contentDom *xmlquery.Node, pb *cmpv1alpha1.ProfileBundle, pcfg 
 
 				foundRule.Annotations = updatedRule.Annotations
 				foundRule.RulePayload = *updatedRule.RulePayload.DeepCopy()
-				return pcfg.Client.Update(context.TODO(), foundRule)
+				err := pcfg.Client.Update(context.TODO(), foundRule)
+				return err
 			})
 			return err
 		})
@@ -215,10 +355,20 @@ func createOrUpdate(cli runtimeclient.Client, kind string, key types.NamespacedN
 		return err
 	}
 
-	// Object exist, call up to update
-	if err := updateFn(found, obj); err != nil {
-		return err
-	}
+	err = backoff.Retry(func() error {
+		// Object exist, call up to update
+		updateErr := updateFn(found, obj)
+		if updateErr != nil && (errors.IsResourceExpired(updateErr) || errors.IsConflict(updateErr)) {
+			// refresh found
+			getErr := cli.Get(context.TODO(), key, found)
+			if getErr != nil {
+				return getErr
+			}
+		} else if updateErr != nil {
+			return updateErr
+		}
+		return nil
+	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 5))
 
 	return nil
 }

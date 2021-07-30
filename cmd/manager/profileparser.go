@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	"github.com/antchfx/xmlquery"
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
@@ -74,7 +73,7 @@ func newParserConfig(cmd *cobra.Command) *profileparser.ParserConfig {
 		os.Exit(1)
 	}
 	pcfg.Scheme = crclient.scheme
-	pcfg.Client = crclient.client
+	pcfg.Client = profileparser.NewDefaultRetryClient(crclient.client)
 
 	return &pcfg
 }
