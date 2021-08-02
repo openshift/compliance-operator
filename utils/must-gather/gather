@@ -1,0 +1,7 @@
+#!/bin/bash
+
+export LOGS_DIR="/must-gather"
+
+/usr/bin/gather_compliance
+
+exit 0

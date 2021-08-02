@@ -343,3 +343,13 @@ Additional documentation
 
 See the [self-paced workshop](doc/tutorials/README.md) for a hands-on tutorial,
 including advanced topics such as content building.
+
+Must-gather support
+===================
+
+An `oc adm must-gather` image for collecting operator information for debugging
+or support is available at `quay.io/compliance-operator/must-gather:latest`:
+
+```
+$ oc adm must-gather --image=quay.io/compliance-operator/must-gather:latest
+```

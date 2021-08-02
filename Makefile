@@ -109,6 +109,9 @@ OPERATOR_VERSION?=
 PREVIOUS_OPERATOR_VERSION=$(shell grep -E "\s+version: [0-9]+.[0-9]+.[0-9]+" deploy/olm-catalog/compliance-operator/manifests/compliance-operator.clusterserviceversion.yaml | sed 's/.*version: //')
 PACKAGE_CHANNEL?=alpha
 
+MUST_GATHER_IMAGE_PATH?=quay.io/compliance-operator/must-gather
+MUST_GATHER_IMAGE_TAG?=latest
+
 .PHONY: all
 all: build ## Test and Build the compliance-operator
 
@@ -143,6 +146,13 @@ index-image: opm
 .PHONY: test-broken-content-image
 test-broken-content-image:
 	$(RUNTIME) build -t $(E2E_BROKEN_CONTENT_IMAGE_PATH) -f images/testcontent/broken-content.Dockerfile .
+
+.PHONY: must-gather-image
+must-gather-image:
+	$(RUNTIME) build -t $(MUST_GATHER_IMAGE_PATH):$(MUST_GATHER_IMAGE_TAG) -f images/must-gather/Dockerfile .
+
+.PHONY: must-gather
+must-gather: must-gather-image must-gather-push
 
 .PHONY: build
 build: fmt manager ## Build the compliance-operator binary
@@ -364,6 +374,10 @@ push: image
 	$(RUNTIME) push $(RELATED_IMAGE_OPERATOR_PATH):$(TAG)
 	# bundle image
 	$(RUNTIME) push $(BUNDLE_IMAGE_PATH):$(TAG)
+
+.PHONY: must-gather-push
+must-gather-push: must-gather-image
+	$(RUNTIME) push $(MUST_GATHER_IMAGE_PATH):$(MUST_GATHER_IMAGE_TAG)
 
 .PHONY: push-index
 push-index: index-image
