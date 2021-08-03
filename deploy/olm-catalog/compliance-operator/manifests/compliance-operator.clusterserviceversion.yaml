@@ -1404,7 +1404,7 @@ spec:
   - name: Compliance Operator upstream repo
     url: https://github.com/openshift/compliance-operator
   - name: Compliance Operator documentation
-    url: https://docs.openshift.com/container-platform/4.7/security/compliance_operator/compliance-operator-understanding.html
+    url: https://docs.openshift.com/container-platform/latest/security/compliance_operator/compliance-operator-understanding.html
   maintainers:
   - email: support@redhat.com
     name: Red Hat Support
