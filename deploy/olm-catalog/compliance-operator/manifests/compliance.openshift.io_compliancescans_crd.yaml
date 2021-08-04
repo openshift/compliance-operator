@@ -57,9 +57,9 @@ spec:
                 description: Enable debug logging of workloads and OpenSCAP
                 type: boolean
               httpsProxy:
-                description: Defines a proxy for the scan to get external resources
-                  from. This is useful for disconnected installations with access
-                  to a proxy.
+                description: It is recommended to set the proxy via the config.openshift.io/Proxy
+                  object Defines a proxy for the scan to get external resources from.
+                  This is useful for disconnected installations with access to a proxy.
                 type: string
               noExternalResources:
                 description: Defines that no external resources in the Data Stream
@@ -114,6 +114,16 @@ spec:
                     nullable: true
                     type: string
                 type: object
+              remediationEnforcement:
+                description: 'Specifies what to do with remediations of Enforcement
+                  type. If left empty, this defaults to "off" which doesn''t create
+                  nor apply any enforcement remediations. If set to "all" this creates
+                  any enforcement remediations it encounters. Subsequently, this can
+                  also be set to a specific type. e.g. setting it to "gatekeeper"
+                  will apply any enforcement remediations relevant to the Gatekeeper
+                  OPA system. These objects will annotated in the content itself with:     complianceascode.io/enforcement-type:
+                  <type>'
+                type: string
               rule:
                 description: A Rule can be specified if the scan should check only
                   for a specific rule. Note that when leaving this empty, the scan

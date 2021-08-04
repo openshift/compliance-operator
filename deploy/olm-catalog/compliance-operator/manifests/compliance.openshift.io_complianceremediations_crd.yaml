@@ -72,6 +72,17 @@ spec:
                     x-kubernetes-embedded-resource: true
                     x-kubernetes-preserve-unknown-fields: true
                 type: object
+              type:
+                default: Configuration
+                description: 'The type of remediation that this object applies. The
+                  available types are: Configuration and Enforcement. Where the Configuration
+                  type fixes a configuration to match a compliance expectation. The
+                  Enforcement type, on the other hand, ensures that the cluster stays
+                  in compliance via means of authorization.'
+                enum:
+                - Configuration
+                - Enforcement
+                type: string
             required:
             - apply
             type: object
