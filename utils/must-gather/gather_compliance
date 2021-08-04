@@ -1,0 +1,70 @@
+#!/bin/bash
+set -Euox pipefail
+
+COMPONENT="compliance"
+BIN=oc
+LOGS_DIR=${LOGS_DIR:-must-gather-logs}
+
+# Get API resources
+APIRESOURCES=$(${BIN} get crds -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | grep ${COMPONENT})
+
+for APIRESOURCE in ${APIRESOURCES[@]}
+do
+  NAMESPACES=$(${BIN} get ${APIRESOURCE} --all-namespaces=true -o jsonpath='{range .items[*]}{@.metadata.namespace}{"\n"}{end}' | uniq)
+  for NAMESPACE in ${NAMESPACES[@]}
+  do
+    mkdir -p ${LOGS_DIR}/${NAMESPACE}/${APIRESOURCE}
+    ${BIN} describe ${APIRESOURCE} -n ${NAMESPACE} > ${LOGS_DIR}/${NAMESPACE}/${APIRESOURCE}/describe.log
+    ${BIN} get ${APIRESOURCE} -n ${NAMESPACE} -o=yaml > ${LOGS_DIR}/${NAMESPACE}/${APIRESOURCE}/get.yaml
+  done
+done
+
+
+# Pod logs, describes
+NAMESPACES=(openshift-compliance)
+APIRESOURCES=(configmaps pods routes roles rolebindings serviceaccounts services leases)
+
+for NAMESPACE in ${NAMESPACES[@]}
+do
+  PODS=$(${BIN} get pods -n ${NAMESPACE} -o jsonpath="{.items[*].metadata.name}")
+  mkdir -p ${LOGS_DIR}/${NAMESPACE}/pods
+  for POD in ${PODS[@]}
+  do
+    ${BIN} logs --all-containers=true -n ${NAMESPACE} ${POD} > ${LOGS_DIR}/${NAMESPACE}/pods/${POD}.log
+  done
+
+  for APIRESOURCE in ${APIRESOURCES[@]}
+  do
+    mkdir -p ${LOGS_DIR}/${NAMESPACE}/${APIRESOURCE}
+    ${BIN} describe ${APIRESOURCE} -n ${NAMESPACE} > ${LOGS_DIR}/${NAMESPACE}/${APIRESOURCE}/describe.log
+    ${BIN} get ${APIRESOURCE} -n ${NAMESPACE} -o=yaml > ${LOGS_DIR}/${NAMESPACE}/${APIRESOURCE}/get.yaml
+  done
+done
+
+
+# Clusterroles and clusterrolebindings
+KEY="compliance"
+NAMESPACE="openshift-compliance"
+APIRESOURCES=(clusterroles clusterrolebindings)
+
+for APIRESOURCE in ${APIRESOURCES[@]}
+do
+  NAMES=$(${BIN} get ${APIRESOURCE} -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | grep ${KEY})
+  for NAME in ${NAMES[@]}
+  do
+    mkdir -p ${LOGS_DIR}/${NAMESPACE}/${APIRESOURCE}
+    ${BIN} describe ${APIRESOURCE} ${NAME} > ${LOGS_DIR}/${NAMESPACE}/${APIRESOURCE}/${NAME}-describe.log
+    ${BIN} get ${APIRESOURCE} ${NAME} -o=yaml > ${LOGS_DIR}/${NAMESPACE}/${APIRESOURCE}/${NAME}.yaml
+  done
+done
+
+
+# Operator pods
+PODS=$(${BIN} get pods -n ${NAMESPACE} -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | grep ${KEY})
+mkdir -p ${LOGS_DIR}/${NAMESPACE}/pods
+for POD in ${PODS[@]}
+do
+  ${BIN} logs --all-containers=true -n ${NAMESPACE} ${POD} > ${LOGS_DIR}/${NAMESPACE}/pods/${POD}.log
+  ${BIN} describe pods ${POD} -n ${NAMESPACE} > ${LOGS_DIR}/${NAMESPACE}/pods/${POD}-describe.log
+  ${BIN} get pods ${POD} -n ${NAMESPACE} -o=yaml > ${LOGS_DIR}/${NAMESPACE}/pods/${POD}.yaml
+done
