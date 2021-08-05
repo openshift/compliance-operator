@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.37] - 2021-08-04
+### Changes
+- Bug 1946512: Use latest for CSV documentation link
+- doc: note that rolling back images in ProfileBundle is not well supported
+- Controller metrics e2e testing
+- Add initial controller metrics support
+- vendor deps
+- Bump the suitererunner resource limits
+- Fix instructions on building VMs
+- Add NERC-CIP reference support
+- The remediation templating design doc Squashed
+- Add implementation of enforcement remediations
+- tailoring: Update the tailoring CM on changes
+- Move Compliance Operator to use ubi-micro
+
 ## [0.1.36] - 2021-06-28
 ### Changes
 - Issue warning if filter issues more than one object
