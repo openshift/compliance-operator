@@ -58,6 +58,7 @@ spec:
         - name: serving-cert
           secret:
             secretName: compliance-operator-serving-cert
+            optional: true
       nodeSelector:
         node-role.kubernetes.io/master: ""
       tolerations:
