@@ -424,8 +424,13 @@ git-release: package-version-to-tag changelog
 	git push origin "v$(TAG)"
 	git push origin "release-v$(TAG)"
 
+.PHONY: fetch-git-tags
+fetch-git-tags:
+	# Make sure we are caught up with tags
+	git fetch -t
+
 .PHONY: release
-release: release-tag-image bundle push push-index undo-deploy-tag-image git-release ## Do an official release (Requires permissions)
+release: fetch-git-tags release-tag-image bundle push push-index undo-deploy-tag-image git-release ## Do an official release (Requires permissions)
 	# This will ensure that we also push to the latest tag
 	$(MAKE) push TAG=latest
 
