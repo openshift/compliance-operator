@@ -429,15 +429,23 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				err = assertEachMetric(t, namespace, map[string]int{
-					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"AGGREGATING\",result=\"NOT-AVAILABLE\"}", scanName): 2,
-					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"DONE\",result=\"COMPLIANT\"}", scanName):            1,
-					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"LAUNCHING\",result=\"NOT-AVAILABLE\"}", scanName):   1,
-					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"PENDING\",result=\"\"}", scanName):                  1,
-					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"RUNNING\",result=\"NOT-AVAILABLE\"}", scanName):     1,
-				})
+
+				aggrString := fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"AGGREGATING\",result=\"NOT-AVAILABLE\"}", scanName)
+				metricsSet := map[string]int{
+					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"DONE\",result=\"COMPLIANT\"}", scanName):          1,
+					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"LAUNCHING\",result=\"NOT-AVAILABLE\"}", scanName): 1,
+					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"PENDING\",result=\"\"}", scanName):                1,
+					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"RUNNING\",result=\"NOT-AVAILABLE\"}", scanName):   1,
+				}
+				metricsSet[aggrString] = 1
+				err = assertEachMetric(t, namespace, metricsSet)
 				if err != nil {
-					return err
+					// Aggregating may be 1 or 2... try again
+					metricsSet[aggrString] = 2
+					secondTryErr := assertEachMetric(t, namespace, metricsSet)
+					if secondTryErr != nil {
+						return secondTryErr
+					}
 				}
 				return scanHasValidPVCReference(f, namespace, scanName)
 			},
