@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.38] - 2021-08-11
+### Changes
+- e2e: aggregating/NA metric value
+- Bug 1990836: Move metrics service creation back into operator startup
+- Add fetch-git-tags make target
+- Add a must-gather plugin
+
 ## [0.1.37] - 2021-08-04
 ### Changes
 - Bug 1946512: Use latest for CSV documentation link
