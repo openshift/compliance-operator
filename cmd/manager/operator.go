@@ -5,10 +5,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"os"
 	"runtime"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	monitoring "github.com/coreos/prometheus-operator/pkg/apis/monitoring/v1"
 	monclientv1 "github.com/coreos/prometheus-operator/pkg/client/versioned/typed/monitoring/v1"
@@ -43,6 +44,7 @@ import (
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	ctrlMetrics "github.com/openshift/compliance-operator/pkg/controller/metrics"
 	"github.com/openshift/compliance-operator/pkg/utils"
+	"github.com/openshift/compliance-operator/version"
 )
 
 var operatorCmd = &cobra.Command{
@@ -82,6 +84,7 @@ func printVersion() {
 	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
 	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
 	log.Info(fmt.Sprintf("Version of operator-sdk: %v", sdkVersion.Version))
+	log.Info(fmt.Sprintf("Compliance Operator Version: %v", version.Version))
 }
 
 func RunOperator(cmd *cobra.Command, args []string) {
