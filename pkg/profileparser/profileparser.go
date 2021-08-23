@@ -720,6 +720,10 @@ func newStandardParser() *referenceParser {
 	if nciperr != nil {
 		log.Error(nciperr, "Could not register NERC-CIP reference parser") // not much we can do here..
 	}
+	pcidssperr := p.registerStandard("PCI-DSS", `^https://www.pcisecuritystandards.org/documents/PCI_DSS_v3-2-1.pdf$`)
+	if pcidssperr != nil {
+		log.Error(nciperr, "Could not register PCI-DSS reference parser") // not much we can do here..
+	}
 
 	p.registerFormatter(profileOperatorFormatter)
 	p.registerFormatter(rhacmFormatter)
