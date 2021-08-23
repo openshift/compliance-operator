@@ -95,7 +95,7 @@ spec:
                       description: Rationale of why this value is being tailored
                       type: string
                     value:
-                      description: Rationale of why this value is being tailored
+                      description: Value of the variable being set
                       type: string
                   required:
                   - name

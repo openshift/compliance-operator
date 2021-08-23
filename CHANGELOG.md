@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.39] - 2021-08-23
+### Changes
+- Allow profileparser to parse PCI-DSS references
+- Add permission for operator to remediate prometheusrule objects
+- Print Compliance Operator version on startup
+- Update wording in TailoredProfile CRD
+
 ## [0.1.38] - 2021-08-11
 ### Changes
 - e2e: aggregating/NA metric value
