@@ -26,12 +26,6 @@ const (
 	tailoringNotFoundPrefix = "Tailoring ConfigMap not found: "
 )
 
-func (r *ReconcileComplianceScan) createPlatformScanPod(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	logger.Info("Creating a Platform scan pod")
-	pod := newPlatformScanPod(instance, logger)
-	return r.launchScanPod(instance, pod, logger)
-}
-
 func (r *ReconcileComplianceScan) launchScanPod(instance *compv1alpha1.ComplianceScan, pod *corev1.Pod, logger logr.Logger) error {
 	podLogger := logger.WithValues("Pod.Name", pod.Name)
 	if instance.Spec.TailoringConfigMap != nil {
