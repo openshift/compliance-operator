@@ -2,13 +2,17 @@ package complianceremediation
 
 import (
 	"context"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
+	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/openshift/compliance-operator/pkg/apis"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"go.uber.org/zap"
@@ -21,9 +25,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	"github.com/openshift/compliance-operator/pkg/apis"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 var _ = Describe("Testing complianceremediation controller", func() {
@@ -33,6 +34,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 		scanInstance        *compv1alpha1.ComplianceScan
 		reconciler          *ReconcileComplianceRemediation
 		testRemLabels       map[string]string
+		testRemAnnotations  map[string]string
 		logger              logr.Logger
 	)
 
@@ -50,6 +52,10 @@ var _ = Describe("Testing complianceremediation controller", func() {
 		testRemLabels[compv1alpha1.SuiteLabel] = "mySuite"
 		testRemLabels[compv1alpha1.ComplianceScanLabel] = "myScan"
 
+		testRemAnnotations = make(map[string]string)
+		testRemAnnotations[compv1alpha1.RemediationValueUsedAnnotation] = "var-used-1"
+		testRemAnnotations[compv1alpha1.RemediationUnsetValueAnnotation] = "var-unset-1"
+		testRemAnnotations[compv1alpha1.RemediationValueRequiredAnnotation] = "req-value-1"
 		nodeLabels := map[string]string{
 			mcfgv1.MachineConfigRoleLabelKey: "myRole",
 		}
@@ -68,8 +74,9 @@ var _ = Describe("Testing complianceremediation controller", func() {
 		// test instance
 		remediationinstance = &compv1alpha1.ComplianceRemediation{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   "testRem",
-				Labels: testRemLabels,
+				Name:        "testRem",
+				Labels:      testRemLabels,
+				Annotations: testRemAnnotations,
 			},
 			Spec: compv1alpha1.ComplianceRemediationSpec{
 				Current: compv1alpha1.ComplianceRemediationPayload{
@@ -86,14 +93,13 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				NodeSelector: nodeLabels,
 			},
 		}
-		objs = append(objs, remediationinstance, scanInstance, mcp)
 
+		objs = append(objs, remediationinstance, scanInstance, mcp)
 		cscheme := scheme.Scheme
 		err := apis.AddToScheme(cscheme)
 		Expect(err).To(BeNil())
 		err = mcfgapi.Install(cscheme)
 		Expect(err).To(BeNil())
-
 		client := fake.NewFakeClientWithScheme(cscheme, objs...)
 		mockMetrics := metrics.NewMetrics(&metricsfakes.FakeImpl{})
 		err = mockMetrics.Register()
@@ -141,7 +147,6 @@ var _ = Describe("Testing complianceremediation controller", func() {
 
 				err := reconciler.reconcileRemediation(remediationinstance, logger)
 				Expect(err).To(BeNil())
-
 				By("the remediation should be applied")
 				foundCM := &corev1.ConfigMap{}
 				err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
@@ -234,7 +239,6 @@ var _ = Describe("Testing complianceremediation controller", func() {
 
 				err := reconciler.reconcileRemediation(remediationinstance, logger)
 				Expect(err).To(BeNil())
-
 				By("the outdated remediation should be applied")
 				foundCM := &corev1.ConfigMap{}
 				err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
@@ -292,6 +296,136 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				Expect(foundRem.Labels).NotTo(HaveKey(compv1alpha1.OutdatedRemediationLabel))
 			})
 		})
+		Context("Test handle unse value", func() {
+			BeforeEach(func() {
+				remediationinstance.Labels[compv1alpha1.OutdatedRemediationLabel] = ""
+				currentcm := &corev1.ConfigMap{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "ConfigMap",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "my-cm",
+						Namespace: "test-ns",
+					},
+					Data: map[string]string{
+						"currentkey": "currentval",
+					},
+				}
+				unstructuredCurrent, err := runtime.DefaultUnstructuredConverter.ToUnstructured(currentcm)
+				Expect(err).ToNot(HaveOccurred())
+				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
+					Object: unstructuredCurrent,
+				}
+				// NOTE that the Outdated remediation object is nil, which
+				// reflects an admin having removed it.
+				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				Expect(err).NotTo(HaveOccurred())
+				// mock that the remediation was applied
+				remediationinstance.Status.ApplicationState = compv1alpha1.RemediationApplied
+				err = reconciler.client.Status().Update(context.TODO(), remediationinstance)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("Test annotation with empty string", func() {
+				testRemAnnotations = make(map[string]string)
+				testRemAnnotations[compv1alpha1.RemediationValueUsedAnnotation] = ""
+				testRemAnnotations[compv1alpha1.RemediationUnsetValueAnnotation] = ""
+				testRemAnnotations[compv1alpha1.RemediationValueRequiredAnnotation] = ""
+				remediationinstance.Annotations = testRemAnnotations
+
+				err := reconciler.client.Update(context.TODO(), remediationinstance)
+				Expect(err).NotTo(HaveOccurred())
+
+				key := types.NamespacedName{Name: remediationinstance.GetName()}
+				hasUpdate, err := reconciler.handleUnsetValues(remediationinstance, logger)
+				Expect(err).To(HaveOccurred())
+				Expect(hasUpdate).To(Equal(false))
+
+				By("running a reconcile loop")
+				err = reconciler.client.Get(context.TODO(), key, remediationinstance)
+				Expect(err).ToNot(HaveOccurred())
+
+				hasUpdate, err = reconciler.handleValueRequired(remediationinstance, logger)
+				Expect(err).To(HaveOccurred())
+				Expect(hasUpdate).To(Equal(false))
+
+			})
+
+		})
+		Context("Handle Unset-value", func() {
+			BeforeEach(func() {
+				currentcm := &corev1.ConfigMap{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "ConfigMap",
+						APIVersion: "v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "my-cm",
+						Namespace: "test-ns",
+					},
+					Data: map[string]string{
+						"currentkey": "currentval",
+					},
+				}
+				unstructuredCurrent, err := runtime.DefaultUnstructuredConverter.ToUnstructured(currentcm)
+				Expect(err).ToNot(HaveOccurred())
+				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
+					Object: unstructuredCurrent,
+				}
+				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				Expect(err).NotTo(HaveOccurred())
+				remediationinstance.Status.ApplicationState = compv1alpha1.RemediationApplied
+				err = reconciler.client.Status().Update(context.TODO(), remediationinstance)
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("should add unset-label", func() {
+				By("running a reconcile loop")
+				key := types.NamespacedName{Name: remediationinstance.GetName()}
+				req := reconcile.Request{
+					NamespacedName: key,
+				}
+				_, err := reconciler.Reconcile(req)
+				Expect(err).To(BeNil())
+				By("The unset-label should be added")
+				foundRem := &compv1alpha1.ComplianceRemediation{}
+				err = reconciler.client.Get(context.TODO(), key, foundRem)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(foundRem.Labels).To(HaveKey(compv1alpha1.RemediationUnsetValueLabel))
+			})
+			//Because nothing will be found in TailorProfile, the variables in RemediationValueRequiredAnnotation will be added into
+			//RemediationUnsetValueAnnotation
+			It("should add value-required value to unset-annotations", func() {
+				By("running a reconcile loop first time will add label")
+				key := types.NamespacedName{Name: remediationinstance.GetName()}
+				req := reconcile.Request{
+					NamespacedName: key,
+				}
+				_, err := reconciler.Reconcile(req)
+				Expect(err).To(BeNil())
+				By("running a reconcile loop second time will handle value-required annotation")
+				_, err = reconciler.Reconcile(req)
+				Expect(err).To(BeNil())
+				By("running a reconcile loop third time should update the status to Needs-Review")
+				_, err = reconciler.Reconcile(req)
+				Expect(err).To(BeNil())
+				By("The unset-label should be added")
+				foundRem := &compv1alpha1.ComplianceRemediation{}
+				err = reconciler.client.Get(context.TODO(), key, foundRem)
+				Expect(err).ToNot(HaveOccurred())
+				unSetVals := strings.Split(foundRem.Annotations[compv1alpha1.RemediationUnsetValueAnnotation], ",")
+				Expect(unSetVals).To(ContainElement("req-value-1"))
+				By("The RequiredProcessedLabel should be added ")
+				Expect(foundRem.Labels).To(HaveKey(compv1alpha1.RemediationValueRequiredProcessedLabel))
+				By("The status should be NeedsReview")
+				Expect(foundRem.Status.ApplicationState).To(Equal(compv1alpha1.RemediationNeedsReview))
+				found, err := reconciler.isRequiredValueSet(remediationinstance, "req-value-1")
+				fmt.Println(found)
+				//fmt.Println()
+			})
+
+		})
+
 	})
 
 	Context("un-applying remediations", func() {

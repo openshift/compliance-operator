@@ -20,6 +20,7 @@ const (
 	RemediationOutdated            RemediationApplicationState = "Outdated"
 	RemediationError               RemediationApplicationState = "Error"
 	RemediationMissingDependencies RemediationApplicationState = "MissingDependencies"
+	RemediationNeedsReview         RemediationApplicationState = "NeedsReview"
 )
 
 // +kubebuilder:validation:Enum=Configuration;Enforcement
@@ -45,12 +46,17 @@ const (
 	// OutdatedRemediationLabel specifies that the remediation has been superseded by a newer version
 	OutdatedRemediationLabel               = "complianceoperator.openshift.io/outdated-remediation"
 	RemediationHasUnmetDependenciesLabel   = "compliance.openshift.io/has-unmet-dependencies"
+	RemediationUnsetValueLabel             = "compliance.openshift.io/has-unset-variable"
+	RemediationValueRequiredProcessedLabel = "compliance.openshift.io/value-required-processed"
 	RemediationCreatedByOperatorAnnotation = "compliance.openshift.io/remediation"
 	RemediationDependencyAnnotation        = "compliance.openshift.io/depends-on"
 	RemediationObjectDependencyAnnotation  = "compliance.openshift.io/depends-on-obj"
 	RemediationDependenciesMetAnnotation   = "compliance.openshift.io/dependencies-met"
 	RemediationOptionalAnnotation          = "compliance.openshift.io/optional"
 	RemediationEnforcementTypeAnnotation   = "compliance.openshift.io/enforcement-type"
+	RemediationValueRequiredAnnotation     = "compliance.openshift.io/value-required"
+	RemediationUnsetValueAnnotation        = "compliance.openshift.io/unset-value"
+	RemediationValueUsedAnnotation         = "compliance.openshift.io/xccdf-value-used"
 )
 
 var (
@@ -183,6 +189,28 @@ func (r *ComplianceRemediation) HasUnmetDependencies() bool {
 	_, hasObjDependencies := a[RemediationObjectDependencyAnnotation]
 	_, dependenciesMet := a[RemediationDependenciesMetAnnotation]
 	return (hasDependencies || hasObjDependencies) && !dependenciesMet
+}
+
+func (r *ComplianceRemediation) HasAnnotation(ann string) bool {
+
+	a := r.GetAnnotations()
+	if len(a) == 0 {
+		return false
+	}
+	_, hasAnnotation := a[ann]
+	return hasAnnotation
+
+}
+
+func (r *ComplianceRemediation) HasLabel(label string) bool {
+
+	a := r.GetLabels()
+	if len(a) == 0 {
+		return false
+	}
+	_, hasLabel := a[label]
+	return hasLabel
+
 }
 
 func (r *ComplianceRemediation) HasUnmetKubeDependencies() bool {
