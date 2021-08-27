@@ -55,7 +55,7 @@ func GetPrefixedName(pbName, objName string) string {
 
 func ParseBundle(contentDom *xmlquery.Node, pb *cmpv1alpha1.ProfileBundle, pcfg *ParserConfig) error {
 	// One go routine per type
-	errors := make(chan error)
+	errChan := make(chan error)
 	done := make(chan string)
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -81,11 +81,11 @@ func ParseBundle(contentDom *xmlquery.Node, pb *cmpv1alpha1.ProfileBundle, pcfg 
 		})
 
 		if profErr != nil {
-			errors <- profErr
+			errChan <- profErr
 		}
 
 		if err := deleteObsoleteItems(pcfg.Client, "Profile", pb.Name, pb.Namespace, nonce); err != nil {
-			errors <- err
+			errChan <- err
 		}
 		wg.Done()
 	}()
@@ -115,11 +115,11 @@ func ParseBundle(contentDom *xmlquery.Node, pb *cmpv1alpha1.ProfileBundle, pcfg 
 		})
 
 		if ruleErr != nil {
-			errors <- ruleErr
+			errChan <- ruleErr
 		}
 
 		if err := deleteObsoleteItems(pcfg.Client, "Rule", pb.Name, pb.Namespace, nonce); err != nil {
-			errors <- err
+			errChan <- err
 		}
 		wg.Done()
 	}()
@@ -144,11 +144,11 @@ func ParseBundle(contentDom *xmlquery.Node, pb *cmpv1alpha1.ProfileBundle, pcfg 
 		})
 
 		if varErr != nil {
-			errors <- varErr
+			errChan <- varErr
 		}
 
 		if err := deleteObsoleteItems(pcfg.Client, "Variable", pb.Name, pb.Namespace, nonce); err != nil {
-			errors <- err
+			errChan <- err
 		}
 		wg.Done()
 	}()
@@ -163,8 +163,8 @@ func ParseBundle(contentDom *xmlquery.Node, pb *cmpv1alpha1.ProfileBundle, pcfg 
 	case <-done:
 		// carry on
 		break
-	case err := <-errors:
-		close(errors)
+	case err := <-errChan:
+		close(errChan)
 		return err
 	}
 
