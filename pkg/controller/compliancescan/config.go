@@ -200,22 +200,6 @@ func defaultOpenScapScriptCm(name string, scan *compv1alpha1.ComplianceScan) *co
 	}
 }
 
-func platformOpenScapScriptCm(name string, scan *compv1alpha1.ComplianceScan) *corev1.ConfigMap {
-	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: common.GetComplianceOperatorNamespace(),
-			Labels: map[string]string{
-				compv1alpha1.ComplianceScanLabel: scan.Name,
-				compv1alpha1.ScriptLabel:         "",
-			},
-		},
-		Data: map[string]string{
-			OpenScapScriptConfigMapName: defaultOpenScapScriptContents,
-		},
-	}
-}
-
 func commonOpenScapEnvCm(name string, scan *compv1alpha1.ComplianceScan) *corev1.ConfigMap {
 	content := absContentPath(scan.Spec.Content)
 
