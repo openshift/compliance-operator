@@ -50,7 +50,7 @@ type VersionElement struct {
 type ProfileElement struct {
 	XMLName     xml.Name                   `xml:"xccdf-1.2:Profile"`
 	ID          string                     `xml:"id,attr"`
-	Extends     string                     `xml:"extends,attr"`
+	Extends     string                     `xml:"extends,attr,omitempty"`
 	Title       *TitleOrDescriptionElement `xml:"xccdf-1.2:title,omitempty"`
 	Description *TitleOrDescriptionElement `xml:"xccdf-1.2:description,omitempty"`
 	Selections  []SelectElement
@@ -151,10 +151,12 @@ func TailoredProfileToXML(tp *cmpv1alpha1.TailoredProfile, p *cmpv1alpha1.Profil
 		},
 		Profile: ProfileElement{
 			ID:         GetXCCDFProfileID(tp),
-			Extends:    p.ID,
 			Selections: getSelections(tp, rules),
 			Values:     getValuesFromVariables(variables),
 		},
+	}
+	if p != nil {
+		tailoring.Profile.Extends = p.ID
 	}
 	if tp.Spec.Title != "" {
 		tailoring.Profile.Title = &TitleOrDescriptionElement{

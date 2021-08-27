@@ -3,6 +3,8 @@ package tailoredprofile
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 
 	"github.com/go-logr/logr"
@@ -103,24 +105,61 @@ func (r *ReconcileTailoredProfile) Reconcile(request reconcile.Request) (reconci
 		return reconcile.Result{}, err
 	}
 
-	if canContinue, err := r.validateTailoredProfile(instance); !canContinue {
-		return reconcile.Result{}, err
-	}
+	var pb *cmpv1alpha1.ProfileBundle
+	var p *cmpv1alpha1.Profile
 
-	p, pb, pbgetErr := r.getProfileInfoFromExtends(instance)
-	if pbgetErr != nil && !common.IsRetriable(pbgetErr) {
-		// the Profile or ProfileBundle objects didn't exist. Surface the error.
-		err = r.updateTailoredProfileStatusError(instance, pbgetErr)
-		return reconcile.Result{}, err
-	} else if pbgetErr != nil {
-		return reconcile.Result{}, pbgetErr
-	}
+	if instance.Spec.Extends != "" {
+		var pbgetErr error
+		p, pb, pbgetErr = r.getProfileInfoFromExtends(instance)
+		if pbgetErr != nil && !common.IsRetriable(pbgetErr) {
+			// the Profile or ProfileBundle objects didn't exist. Surface the error.
+			err = r.updateTailoredProfileStatusError(instance, pbgetErr)
+			return reconcile.Result{}, err
+		} else if pbgetErr != nil {
+			return reconcile.Result{}, pbgetErr
+		}
 
-	// Make TailoredProfile be owned by the Profile it extends. This way
-	// we can ensure garbage collection happens.
-	// This update will trigger a requeue with the new object.
-	if needsControllerRef(instance) {
-		return r.setOwnership(instance, p)
+		// Make TailoredProfile be owned by the Profile it extends. This way
+		// we can ensure garbage collection happens.
+		// This update will trigger a requeue with the new object.
+		if needsControllerRef(instance) {
+			tpCopy := instance.DeepCopy()
+			return r.setOwnership(tpCopy, p)
+		}
+	} else {
+		var pbgetErr error
+		pb, pbgetErr = r.getProfileBundleFromRulesOrVars(instance)
+		if pbgetErr != nil && !common.IsRetriable(pbgetErr) {
+			// the Profile or ProfileBundle objects didn't exist. Surface the error.
+			err = r.updateTailoredProfileStatusError(instance, pbgetErr)
+			return reconcile.Result{}, err
+		} else if pbgetErr != nil {
+			return reconcile.Result{}, pbgetErr
+		}
+
+		// Make TailoredProfile be owned by the ProfileBundle. This way
+		// we can ensure garbage collection happens.
+		// This update will trigger a requeue with the new object.
+		if needsControllerRef(instance) {
+			tpCopy := instance.DeepCopy()
+			anns := tpCopy.GetAnnotations()
+			if anns == nil {
+				anns = make(map[string]string)
+			}
+			// If the user already provided the product type, we
+			// don't need to set it
+			_, ok := anns[cmpv1alpha1.ProductTypeAnnotation]
+			if !ok {
+				if strings.HasSuffix(tpCopy.GetName(), "-node") {
+					anns[cmpv1alpha1.ProductTypeAnnotation] = string(cmpv1alpha1.ScanTypeNode)
+				} else {
+					anns[cmpv1alpha1.ProductTypeAnnotation] = string(cmpv1alpha1.ScanTypePlatform)
+				}
+				tpCopy.SetAnnotations(anns)
+			}
+			// This will trigger an update anyway
+			return r.setOwnership(tpCopy, pb)
+		}
 	}
 
 	rules, ruleErr := r.getRulesFromSelections(instance, pb)
@@ -152,23 +191,7 @@ func (r *ReconcileTailoredProfile) Reconcile(request reconcile.Request) (reconci
 	return r.ensureOutputObject(instance, tpcm, pb, reqLogger)
 }
 
-// validates the given TailoredProfile. true means that we can continue since the
-// tailored profile is valid, false means that we can't.
-func (r *ReconcileTailoredProfile) validateTailoredProfile(tp *cmpv1alpha1.TailoredProfile) (bool, error) {
-	// Validate TailoredProfile
-	if tp.Spec.Extends == "" {
-		err := r.updateTailoredProfileStatusError(tp, fmt.Errorf(".spec.extends can't be empty"))
-		if err != nil {
-			return false, err
-		}
-		// don't return an error in the reconciler. The error will surface via the CR's status
-		return false, nil
-	}
-
-	return true, nil
-}
-
-// getProfileBundleFromExtends gets the Profile and ProfileBundleBundle where the rules come from
+// getProfileInfoFromExtends gets the Profile and ProfileBundle where the rules come from
 // out of the profile that's being extended
 func (r *ReconcileTailoredProfile) getProfileInfoFromExtends(tp *cmpv1alpha1.TailoredProfile) (*cmpv1alpha1.Profile, *cmpv1alpha1.ProfileBundle, error) {
 	p := &cmpv1alpha1.Profile{}
@@ -187,6 +210,61 @@ func (r *ReconcileTailoredProfile) getProfileInfoFromExtends(tp *cmpv1alpha1.Tai
 	}
 
 	return p, pb, nil
+}
+
+// getProfileBundleFromRulesOrVars gets the ProfileBundle where the rules come from
+func (r *ReconcileTailoredProfile) getProfileBundleFromRulesOrVars(tp *cmpv1alpha1.TailoredProfile) (*cmpv1alpha1.ProfileBundle, error) {
+	var ruleToBeChecked *cmpv1alpha1.Rule
+	for _, selection := range append(tp.Spec.EnableRules, tp.Spec.DisableRules...) {
+		rule := &cmpv1alpha1.Rule{}
+		ruleKey := types.NamespacedName{Name: selection.Name, Namespace: tp.Namespace}
+		geterr := r.client.Get(context.TODO(), ruleKey, rule)
+		if geterr != nil {
+			// We'll validate this later in the Reconcile loop
+			if kerrors.IsNotFound(geterr) {
+				continue
+			}
+			return nil, geterr
+		}
+		ruleToBeChecked = rule
+		break
+	}
+	if ruleToBeChecked != nil {
+		pb, err := r.getProfileBundleFrom("Rule", ruleToBeChecked)
+		if err != nil {
+			return nil, err
+		}
+
+		return pb, nil
+	}
+
+	var varToBeChecked *cmpv1alpha1.Variable
+	for _, setValues := range tp.Spec.SetValues {
+		variable := &cmpv1alpha1.Variable{}
+		varKey := types.NamespacedName{Name: setValues.Name, Namespace: tp.Namespace}
+		err := r.client.Get(context.TODO(), varKey, variable)
+		if err != nil {
+			// We'll verify this later in the reconcile loop
+			if kerrors.IsNotFound(err) {
+				continue
+			}
+			return nil, err
+		}
+
+		varToBeChecked = variable
+		break
+	}
+
+	if varToBeChecked != nil {
+		pb, err := r.getProfileBundleFrom("Variable", varToBeChecked)
+		if err != nil {
+			return nil, err
+		}
+
+		return pb, nil
+	}
+
+	return nil, common.NewNonRetriableCtrlError("Unable to get ProfileBundle from selected rules and variables")
 }
 
 func (r *ReconcileTailoredProfile) getRulesFromSelections(tp *cmpv1alpha1.TailoredProfile, pb *cmpv1alpha1.ProfileBundle) (map[string]*cmpv1alpha1.Rule, error) {

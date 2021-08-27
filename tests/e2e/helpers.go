@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	v1 "k8s.io/api/rbac/v1"
 	"os"
 	"os/exec"
 	"path"
@@ -17,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	v1 "k8s.io/api/rbac/v1"
 
 	backoff "github.com/cenkalti/backoff/v4"
 	ocpapi "github.com/openshift/api"
@@ -229,6 +230,19 @@ func executeTests(t *testing.T, tests ...testExecution) {
 	ocp4Pb, err = getReadyProfileBundle(t, f, "ocp4", ns)
 	if err != nil {
 		t.Error(err)
+	}
+
+	err = updateScanSettingsForDebug(t, f, ns)
+	if err != nil {
+		t.Error(err)
+	}
+
+	scansettings, sserr := ensureE2EScanSettings(t, f, ns)
+	if sserr != nil {
+		t.Error(sserr)
+	}
+	for _, ss := range scansettings {
+		defer f.Client.Delete(goctx.TODO(), ss)
 	}
 	// defer deleting the profiles or else the test namespace get stuck in Terminating
 	defer f.Client.Delete(goctx.TODO(), ocp4Pb)
@@ -2076,6 +2090,53 @@ func getReadyProfileBundle(t *testing.T, f *framework.Framework, name, namespace
 	}
 
 	return pb, nil
+}
+
+func updateScanSettingsForDebug(t *testing.T, f *framework.Framework, namespace string) error {
+	for _, ssName := range []string{"default", "default-auto-apply"} {
+		ss := &compv1alpha1.ScanSetting{}
+		sskey := types.NamespacedName{Name: ssName, Namespace: namespace}
+		if err := f.Client.Get(goctx.TODO(), sskey, ss); err != nil {
+			return err
+		}
+
+		ssCopy := ss.DeepCopy()
+		ssCopy.Debug = true
+
+		if err := f.Client.Update(goctx.TODO(), ssCopy); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func ensureE2EScanSettings(t *testing.T, f *framework.Framework, namespace string) ([]*compv1alpha1.ScanSetting, error) {
+	scansettings := []*compv1alpha1.ScanSetting{}
+	for _, ssName := range []string{"default", "default-auto-apply"} {
+		ss := &compv1alpha1.ScanSetting{}
+		sskey := types.NamespacedName{Name: ssName, Namespace: namespace}
+		if err := f.Client.Get(goctx.TODO(), sskey, ss); err != nil {
+			return scansettings, err
+		}
+
+		ssCopy := ss.DeepCopy()
+		ssCopy.ObjectMeta = metav1.ObjectMeta{
+			Name:      "e2e-" + ssName,
+			Namespace: namespace,
+		}
+		ssCopy.Roles = []string{
+			testPoolName,
+		}
+		ssCopy.Debug = true
+
+		if err := f.Client.Create(goctx.TODO(), ssCopy, nil); err != nil {
+			return scansettings, err
+		}
+		scansettings = append(scansettings, ssCopy)
+	}
+
+	return scansettings, nil
 }
 
 func writeToArtifactsDir(dir, scan, pod, container, log string) error {

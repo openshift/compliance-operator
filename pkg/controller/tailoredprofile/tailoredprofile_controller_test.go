@@ -3,6 +3,7 @@ package tailoredprofile
 import (
 	"context"
 	"fmt"
+
 	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
 
@@ -18,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
@@ -500,6 +502,288 @@ var _ = Describe("TailoredprofileController", func() {
 			Expect(tp.Status.State).To(Equal(compv1alpha1.TailoredProfileStateError))
 			Expect(tp.Status.ErrorMessage).To(MatchRegexp(
 				`not found`))
+		})
+	})
+
+	When("Creating a custom TailoredProfile from scratch", func() {
+		var tpName = "tailoring"
+		Context("with all well-formed values", func() {
+			BeforeEach(func() {
+				tp := &compv1alpha1.TailoredProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      tpName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.TailoredProfileSpec{
+						EnableRules: []compv1alpha1.RuleReferenceSpec{
+							{
+								Name:      "rule-1",
+								Rationale: "Why not",
+							},
+							{
+								Name:      "rule-2",
+								Rationale: "Why not",
+							},
+							{
+								Name:      "rule-3",
+								Rationale: "Why not",
+							},
+						},
+						SetValues: []compv1alpha1.VariableValueSpec{
+							{
+								Name:      "var-1",
+								Rationale: "Why not",
+								Value:     "1234",
+							},
+							{
+								Name:      "var-2",
+								Rationale: "Why not",
+								Value:     "1234",
+							},
+						},
+					},
+				}
+
+				createErr := r.client.Create(ctx, tp)
+				Expect(createErr).To(BeNil())
+			})
+			It("succeeds", func() {
+				tpKey := types.NamespacedName{
+					Name:      tpName,
+					Namespace: namespace,
+				}
+				tpReq := reconcile.Request{}
+				tpReq.Name = tpName
+				tpReq.Namespace = namespace
+
+				By("Reconciling the first time (setting ownership)")
+				_, err := r.Reconcile(tpReq)
+				Expect(err).To(BeNil())
+
+				tp := &compv1alpha1.TailoredProfile{}
+				geterr := r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Sets the profile bundle as the owner")
+				ownerRefs := tp.GetOwnerReferences()
+				Expect(ownerRefs).To(HaveLen(1))
+				Expect(ownerRefs[0].Kind).To(Equal("ProfileBundle"))
+				Expect(tp.GetAnnotations()).NotTo(BeNil())
+				Expect(tp.GetAnnotations()[cmpv1alpha1.ProductTypeAnnotation]).To(Equal(string(compv1alpha1.ScanTypePlatform)))
+
+				By("Reconciling a second time (setting status)")
+				_, err = r.Reconcile(tpReq)
+
+				tp = &compv1alpha1.TailoredProfile{}
+				geterr = r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Has the appropriate status")
+				Expect(tp.Status.State).To(Equal(compv1alpha1.TailoredProfileStateReady))
+				Expect(tp.Status.OutputRef.Name).To(Equal(tp.Name + "-tp"))
+				Expect(tp.Status.OutputRef.Namespace).To(Equal(tp.Namespace))
+
+				By("Generated an appropriate ConfigMap")
+				cm := &corev1.ConfigMap{}
+				cmKey := types.NamespacedName{
+					Name:      tp.Status.OutputRef.Name,
+					Namespace: tp.Status.OutputRef.Namespace,
+				}
+
+				geterr = r.client.Get(ctx, cmKey, cm)
+				Expect(geterr).To(BeNil())
+				data := cm.Data["tailoring.xml"]
+				Expect(data).To(ContainSubstring(`select idref="rule_1" selected="true"`))
+				Expect(data).To(ContainSubstring(`select idref="rule_2" selected="true"`))
+			})
+		})
+
+		Context("With rules from different profilebundles", func() {
+			BeforeEach(func() {
+				tp := &compv1alpha1.TailoredProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      tpName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.TailoredProfileSpec{
+						EnableRules: []compv1alpha1.RuleReferenceSpec{
+							{
+								Name:      "rule-1",
+								Rationale: "Why not",
+							},
+							{
+								Name:      "rule-2",
+								Rationale: "Why not",
+							},
+							{
+								// this is from another bundle
+								Name:      "rule-6",
+								Rationale: "Why not",
+							},
+						},
+						SetValues: []compv1alpha1.VariableValueSpec{
+							{
+								Name:      "var-1",
+								Rationale: "Why not",
+								Value:     "1234",
+							},
+							{
+								Name:      "var-2",
+								Rationale: "Why not",
+								Value:     "1234",
+							},
+						},
+					},
+				}
+
+				createErr := r.client.Create(ctx, tp)
+				Expect(createErr).To(BeNil())
+			})
+			It("returns an error", func() {
+				tpKey := types.NamespacedName{
+					Name:      tpName,
+					Namespace: namespace,
+				}
+				tpReq := reconcile.Request{}
+				tpReq.Name = tpName
+				tpReq.Namespace = namespace
+
+				By("Reconciling the first time (setting ownership)")
+				_, err := r.Reconcile(tpReq)
+				Expect(err).To(BeNil())
+
+				tp := &compv1alpha1.TailoredProfile{}
+				geterr := r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Sets the profile bundle as the owner")
+				ownerRefs := tp.GetOwnerReferences()
+				Expect(ownerRefs).To(HaveLen(1))
+				Expect(ownerRefs[0].Kind).To(Equal("ProfileBundle"))
+
+				By("Reconciling a second time (setting status)")
+				_, err = r.Reconcile(tpReq)
+
+				tp = &compv1alpha1.TailoredProfile{}
+				geterr = r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Has an error status")
+				Expect(tp.Status.State).To(Equal(compv1alpha1.TailoredProfileStateError))
+			})
+		})
+
+		Context("With variables from different profilebundles", func() {
+			BeforeEach(func() {
+				tp := &compv1alpha1.TailoredProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      tpName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.TailoredProfileSpec{
+						EnableRules: []compv1alpha1.RuleReferenceSpec{
+							{
+								Name:      "rule-1",
+								Rationale: "Why not",
+							},
+							{
+								Name:      "rule-2",
+								Rationale: "Why not",
+							},
+							{
+								Name:      "rule-3",
+								Rationale: "Why not",
+							},
+						},
+						SetValues: []compv1alpha1.VariableValueSpec{
+							{
+								Name:      "var-1",
+								Rationale: "Why not",
+								Value:     "1234",
+							},
+							{
+								// this is from another bundle
+								Name:      "var-6",
+								Rationale: "Why not",
+								Value:     "1234",
+							},
+						},
+					},
+				}
+
+				createErr := r.client.Create(ctx, tp)
+				Expect(createErr).To(BeNil())
+			})
+			It("returns an error", func() {
+				tpKey := types.NamespacedName{
+					Name:      tpName,
+					Namespace: namespace,
+				}
+				tpReq := reconcile.Request{}
+				tpReq.Name = tpName
+				tpReq.Namespace = namespace
+
+				By("Reconciling the first time (setting ownership)")
+				_, err := r.Reconcile(tpReq)
+				Expect(err).To(BeNil())
+
+				tp := &compv1alpha1.TailoredProfile{}
+				geterr := r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Sets the profile bundle as the owner")
+				ownerRefs := tp.GetOwnerReferences()
+				Expect(ownerRefs).To(HaveLen(1))
+				Expect(ownerRefs[0].Kind).To(Equal("ProfileBundle"))
+
+				By("Reconciling a second time (setting status)")
+				_, err = r.Reconcile(tpReq)
+
+				tp = &compv1alpha1.TailoredProfile{}
+				geterr = r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Has an error status")
+				Expect(tp.Status.State).To(Equal(compv1alpha1.TailoredProfileStateError))
+			})
+		})
+
+		Context("with no rules nor variables", func() {
+			BeforeEach(func() {
+				tp := &compv1alpha1.TailoredProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      tpName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.TailoredProfileSpec{
+						EnableRules: []compv1alpha1.RuleReferenceSpec{},
+						SetValues:   []compv1alpha1.VariableValueSpec{},
+					},
+				}
+
+				createErr := r.client.Create(ctx, tp)
+				Expect(createErr).To(BeNil())
+			})
+			It("returns an error since it can't determine the bundle", func() {
+				tpKey := types.NamespacedName{
+					Name:      tpName,
+					Namespace: namespace,
+				}
+				tpReq := reconcile.Request{}
+				tpReq.Name = tpName
+				tpReq.Namespace = namespace
+
+				By("Reconciling")
+				_, err := r.Reconcile(tpReq)
+				Expect(err).To(BeNil())
+
+				tp := &compv1alpha1.TailoredProfile{}
+				geterr := r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Has an error status")
+				Expect(tp.Status.State).To(Equal(compv1alpha1.TailoredProfileStateError))
+			})
 		})
 	})
 })

@@ -106,8 +106,6 @@ spec:
               title:
                 description: Overwrites the title of the extended profile
                 type: string
-            required:
-            - extends
             type: object
           status:
             description: TailoredProfileStatus defines the observed state of TailoredProfile
