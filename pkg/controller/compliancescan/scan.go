@@ -195,6 +195,16 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 							ReadOnly:  true,
 						},
 					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "OVERRIDE_TARGET",
+							Value: node.Labels[corev1.LabelHostname],
+						},
+						{
+							Name:  "OSCAP_EVALUATION_TARGET",
+							Value: node.Name,
+						},
+					},
 					EnvFrom: []corev1.EnvFromSource{
 						{
 							ConfigMapRef: &corev1.ConfigMapEnvSource{

@@ -77,8 +77,9 @@ if [ -z $HOSTROOT ]; then
 		oscap xccdf eval \
 	)
 else
+	export OSCAP_PROBE_ROOT="$HOSTROOT"
 	cmd=(
-		oscap-chroot $HOSTROOT xccdf eval \
+		oscap xccdf eval \
 	)
 fi
 
@@ -134,8 +135,21 @@ echo "The rds-split operation returned $split_rv"
 
 # Put both the XCCDF result and the full ARF result into the report
 # directory.
-test -f $XCCDF_PATH && mv $XCCDF_PATH $REPORT_DIR
-test -f $ARF_REPORT && mv $ARF_REPORT $REPORT_DIR
+if [ -f "$XCCDF_PATH" ]; then
+	if [ ! -z "$OVERRIDE_TARGET" ]; then
+		sed -i "s/\(<target>\)[^<>]*\(<\/target\)/\1$OVERRIDE_TARGET\2/" "$XCCDF_PATH"
+	fi
+
+	mv $XCCDF_PATH $REPORT_DIR
+fi
+
+if [ -f "$ARF_REPORT" ]; then
+	if [ ! -z "$OVERRIDE_TARGET" ]; then
+		sed -i "s/\(<target>\)[^<>]*\(<\/target\)/\1$OVERRIDE_TARGET\2/" "$ARF_REPORT"
+	fi
+
+	mv $ARF_REPORT $REPORT_DIR
+fi
 echo "$rv" > $REPORT_DIR/exit_code
 
 # Return success
