@@ -20,6 +20,11 @@ func (in *ComplianceCheckResult) DeepCopyInto(out *ComplianceCheckResult) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.ValuesUsed != nil {
+		in, out := &in.ValuesUsed, &out.ValuesUsed
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

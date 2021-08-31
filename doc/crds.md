@@ -251,6 +251,8 @@ Where:
       properly.
 	* **NOTAPPLICABLE**: Which indicates that the check didn't run because it is not
       applicable or not selected.
+ * **valuesUsed**: a list of settable variables associated with the rule scan result,
+  a user can set these variables in a tailored profile.
 
 This object is owned by the scan that created it, as seen in the
 `ownerReferences` field.
