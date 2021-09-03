@@ -1842,63 +1842,61 @@ func TestE2E(t *testing.T) {
 				return removeNodeTaint(t, f, taintedNode.Name, taintKey)
 			},
 		},
-		testExecution{
-			Name:       "TestNodeSchedulingErrorFailsTheScan",
-			IsParallel: false,
-			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
-				workerNodesLabel := map[string]string{
-					"node-role.kubernetes.io/worker": "",
-				}
-				workerNodes := getNodesWithSelectorOrFail(t, f, workerNodesLabel)
-
-				taintedNode := &workerNodes[0]
-				taintKey := "co-e2e"
-				taintVal := "val"
-				taint := corev1.Taint{
-					Key:    taintKey,
-					Value:  taintVal,
-					Effect: corev1.TaintEffectNoSchedule,
-				}
-				if err := taintNode(t, f, taintedNode, taint); err != nil {
-					E2ELog(t, "Tainting node failed")
-					return err
-				}
-				suiteName := getObjNameFromTest(t)
-				scanName := suiteName
-				suite := &compv1alpha1.ComplianceSuite{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      suiteName,
-						Namespace: namespace,
-					},
-					Spec: compv1alpha1.ComplianceSuiteSpec{
-						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
-							{
-								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: contentImagePath,
-									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
-									Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
-									Content:      rhcosContentFile,
-									NodeSelector: workerNodesLabel,
-									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
-										Debug: true,
-									},
-								},
-								Name: scanName,
-							},
-						},
-					},
-				}
-				if err := f.Client.Create(goctx.TODO(), suite, getCleanupOpts(ctx)); err != nil {
-					return err
-				}
-
-				err := waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultError)
-				if err != nil {
-					return err
-				}
-				return removeNodeTaint(t, f, taintedNode.Name, taintKey)
-			},
-		},
+		//testExecution{
+		//	Name:       "TestNodeSchedulingErrorFailsTheScan",
+		//	IsParallel: false,
+		//	TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+		//		workerNodesLabel := map[string]string{
+		//			"node-role.kubernetes.io/worker": "",
+		//		}
+		//		workerNodes := getNodesWithSelectorOrFail(t, f, workerNodesLabel)
+		//		//		taintedNode := &workerNodes[0]
+		//		taintKey := "co-e2e"
+		//		taintVal := "val"
+		//		taint := corev1.Taint{
+		//			Key:    taintKey,
+		//			Value:  taintVal,
+		//			Effect: corev1.TaintEffectNoSchedule,
+		//		}
+		//		if err := taintNode(t, f, taintedNode, taint); err != nil {
+		//			E2ELog(t, "Tainting node failed")
+		//			return err
+		//		}
+		//		suiteName := getObjNameFromTest(t)
+		//		scanName := suiteName
+		//		suite := &compv1alpha1.ComplianceSuite{
+		//			ObjectMeta: metav1.ObjectMeta{
+		//				Name:      suiteName,
+		//				Namespace: namespace,
+		//			},
+		//			Spec: compv1alpha1.ComplianceSuiteSpec{
+		//				Scans: []compv1alpha1.ComplianceScanSpecWrapper{
+		//					{
+		//						ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+		//							ContentImage: contentImagePath,
+		//							Profile:      "xccdf_org.ssgproject.content_profile_moderate",
+		//							Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
+		//							Content:      rhcosContentFile,
+		//							NodeSelector: workerNodesLabel,
+		//							ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+		//								Debug: true,
+		//							},
+		//						},
+		//						Name: scanName,
+		//					},
+		//				},
+		//			},
+		//		}
+		//		if err := f.Client.Create(goctx.TODO(), suite, getCleanupOpts(ctx)); err != nil {
+		//			return err
+		//		}
+		//		//		err := waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultError)
+		//		if err != nil {
+		//			return err
+		//		}
+		//		return removeNodeTaint(t, f, taintedNode.Name, taintKey)
+		//	},
+		//},
 		testExecution{
 			Name:       "TestScanSettingBinding",
 			IsParallel: true,
