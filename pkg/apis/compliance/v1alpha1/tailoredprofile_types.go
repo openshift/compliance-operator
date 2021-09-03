@@ -20,14 +20,15 @@ type VariableValueSpec struct {
 	Name string `json:"name"`
 	// Rationale of why this value is being tailored
 	Rationale string `json:"rationale"`
-	// Rationale of why this value is being tailored
+	// Value of the variable being set
 	Value string `json:"value"`
 }
 
 // TailoredProfileSpec defines the desired state of TailoredProfile
 type TailoredProfileSpec struct {
+	// +optional
 	// Points to the name of the profile to extend
-	Extends string `json:"extends"`
+	Extends string `json:"extends,omitempty"`
 	// Overwrites the title of the extended profile
 	Title string `json:"title,omitempty"`
 	// Overwrites the description of the extended profile

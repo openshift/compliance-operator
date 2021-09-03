@@ -600,7 +600,7 @@ spec:
 
 Notable attributes:
 
-* **spec.extends**: Name of the `Profile` object that this `TailoredProfile` builds upon
+* **spec.extends**: (Optional) Name of the `Profile` object that this `TailoredProfile` builds upon
 * **spec.title**: Human-readable title of the `TailoredProfile`
 * **spec.disableRules**: A list of `name` and `rationale` pairs. Each name refers to a name
   of a `Rule` object that is supposed to be disabled. `Rationale` is a human-readable text
@@ -615,6 +615,29 @@ Notable attributes:
   `tailoringConfigMap.name` attribute of a `ComplianceScan`.
 * **status.state**: Either of `PENDING`, `READY` or `ERROR`. If the state is `ERROR`, the
   attribute `status.errorMessage` contains the reason for the failure.
+
+While it's possible to extend a profile and build it based on another one, it's also
+possible to write a profile from scratch using the `TailoredProfile` construct.
+To do this, remember to set an appropriate title and description. It's very important
+to leave the `extends` field empty for this case. Subsequently, you'll also need
+to indicate to the Compliance Operator what type of scan will this custom profile
+generate:
+
+* Node scan: Scans the Operating System.
+* Platform scan: Scans the OpenShift configuration.
+
+To do this, set the following annotation on the TailoredProfile object:
+
+```
+  compliance.openshift.io/product-type: <Type>
+```
+
+Where the `Platform` type will build a Platform scan, and `Node` will
+build an OS scan. Note that if no `product-type` annotation is given, the
+operator will default to `Platform`. Adding the `-node` suffix to the
+name of the `TailoredProfile` object will have a similar effect as
+adding the `Node` product type annotation, and will generate an Operating
+System scan.
 
 ### The `ScanSetting` and `ScanSettingBinding` objects
 Defining the `ComplianceSuite` objects manually including all the details

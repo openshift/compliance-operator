@@ -1973,38 +1973,54 @@ func TestE2E(t *testing.T) {
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				// FIXME, maybe have a func that returns a struct with suite name and scan names?
 				suiteName := "test-remediate"
-				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
+				scanName := fmt.Sprintf("%s-e2e", suiteName)
 
-				exampleComplianceSuite := &compv1alpha1.ComplianceSuite{
+				tp := &compv1alpha1.TailoredProfile{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      suiteName,
 						Namespace: namespace,
-					},
-					Spec: compv1alpha1.ComplianceSuiteSpec{
-						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
-							AutoApplyRemediations: true,
+						Annotations: map[string]string{
+							compv1alpha1.ProductTypeAnnotation: "Node",
 						},
-						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
+					},
+					Spec: compv1alpha1.TailoredProfileSpec{
+						Title:       "Test Auto Remediate",
+						Description: "A test tailored profile to auto remediate",
+						EnableRules: []compv1alpha1.RuleReferenceSpec{
 							{
-								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: contentImagePath,
-									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
-									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
-									Content:      rhcosContentFile,
-									NodeSelector: getPoolNodeRoleSelector(),
-									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
-										Debug: true,
-									},
-								},
-								Name: workerScanName,
+								Name:      "rhcos4-no-direct-root-logins",
+								Rationale: "To be tested",
 							},
 						},
 					},
 				}
 
+				createTPErr := f.Client.Create(goctx.TODO(), tp, getCleanupOpts(ctx))
+				if createTPErr != nil {
+					return createTPErr
+				}
+
 				mcTctx.ensureE2EPool()
 
-				err := f.Client.Create(goctx.TODO(), exampleComplianceSuite, getCleanupOpts(ctx))
+				ssb := &compv1alpha1.ScanSettingBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Profiles: []compv1alpha1.NamedObjectReference{
+						{
+							APIGroup: "compliance.openshift.io/v1alpha1",
+							Kind:     "TailoredProfile",
+							Name:     suiteName,
+						},
+					},
+					SettingsRef: &compv1alpha1.NamedObjectReference{
+						APIGroup: "compliance.openshift.io/v1alpha1",
+						Kind:     "ScanSetting",
+						Name:     "e2e-default-auto-apply",
+					},
+				}
+				err := f.Client.Create(goctx.TODO(), ssb, getCleanupOpts(ctx))
 				if err != nil {
 					return err
 				}
@@ -2025,12 +2041,12 @@ func TestE2E(t *testing.T) {
 
 				// We need to check that the remediation is auto-applied and save
 				// the object so we can delete it later
-				workersNoRootLoginsRemName := fmt.Sprintf("%s-no-direct-root-logins", workerScanName)
-				waitForRemediationToBeAutoApplied(t, f, workersNoRootLoginsRemName, namespace, poolBeforeRemediation)
+				remName := fmt.Sprintf("%s-no-direct-root-logins", scanName)
+				waitForRemediationToBeAutoApplied(t, f, remName, namespace, poolBeforeRemediation)
 
 				// We can re-run the scan at this moment and check that it's now compliant
 				// and it's reflected in a CheckResult
-				err = reRunScan(t, f, workerScanName, namespace)
+				err = reRunScan(t, f, scanName, namespace)
 				if err != nil {
 					return err
 				}
@@ -2053,14 +2069,14 @@ func TestE2E(t *testing.T) {
 				// Now the check should be passing
 				checkNoDirectRootLogins := compv1alpha1.ComplianceCheckResult{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      fmt.Sprintf("%s-no-direct-root-logins", workerScanName),
+						Name:      fmt.Sprintf("%s-no-direct-root-logins", scanName),
 						Namespace: namespace,
 					},
 					ID:       "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 					Status:   compv1alpha1.CheckResultPass,
 					Severity: compv1alpha1.CheckResultSeverityMedium,
 				}
-				err = assertHasCheck(f, suiteName, workerScanName, checkNoDirectRootLogins)
+				err = assertHasCheck(f, suiteName, scanName, checkNoDirectRootLogins)
 				if err != nil {
 					return err
 				}
@@ -2070,7 +2086,7 @@ func TestE2E(t *testing.T) {
 				E2ELogf(t, "Removing applied remediation")
 				// Fetch remediation here so it can be deleted
 				rem := &compv1alpha1.ComplianceRemediation{}
-				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: workersNoRootLoginsRemName, Namespace: namespace}, rem)
+				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: remName, Namespace: namespace}, rem)
 				if err != nil {
 					return err
 				}

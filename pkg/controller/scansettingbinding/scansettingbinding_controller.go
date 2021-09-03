@@ -3,10 +3,11 @@ package scansettingbinding
 import (
 	"context"
 	"fmt"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 
 	"github.com/go-logr/logr"
 	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -148,7 +149,43 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 
 	var nodeProduct string
 	for i := range instance.Profiles {
-		scan, product, err := newCompScanFromBindingProfile(r, instance, &instance.Profiles[i], log)
+		ss := &instance.Profiles[i]
+
+		key := types.NamespacedName{Namespace: instance.Namespace, Name: ss.Name}
+		profileObj, geterr := getUnstructured(r, instance, key, ss.Kind, ss.APIGroup, reqLogger)
+		if geterr != nil {
+			return reconcile.Result{}, geterr
+		}
+
+		if profileObj.GetKind() == "TailoredProfile" {
+			val, found, nsErr := unstructured.NestedString(
+				profileObj.Object, "status", "state")
+			if nsErr != nil {
+				reqLogger.Error(nsErr, "Fetching state of tailored profile",
+					"TailoredProfile", profileObj.GetName())
+			}
+			if !found {
+				reqLogger.Info("Requeuing as TailoredProfile hasn't been processed",
+					"TailoredProfile", profileObj.GetName())
+				return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
+			}
+			if val == string(compliancev1alpha1.TailoredProfileStateError) {
+				msg := "The TailoredProfile referenced has an error and is not usable"
+				ssb := instance.DeepCopy()
+				ssb.Status.SetConditionInvalid(msg)
+				if updateErr := r.client.Status().Update(context.TODO(), ssb); updateErr != nil {
+					return reconcile.Result{}, fmt.Errorf("couldn't update ScanSettingBinding condition: %w", updateErr)
+				}
+				return reconcile.Result{}, nil
+			}
+			if val != string(compliancev1alpha1.TailoredProfileStateReady) {
+				reqLogger.Info("Requeuing as TailoredProfile isn't yet ready",
+					"TailoredProfile", profileObj.GetName())
+				return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
+			}
+		}
+
+		scan, product, err := newCompScanFromBindingProfile(r, instance, profileObj, log)
 		if err != nil {
 			return common.ReturnWithRetriableError(reqLogger, err)
 		}
@@ -320,8 +357,8 @@ func createScansWithSelector(suite *compliancev1alpha1.ComplianceSuite, v1settin
 	return scansWithSelector
 }
 
-func newCompScanFromBindingProfile(r *ReconcileScanSettingBinding, instance *compliancev1alpha1.ScanSettingBinding, ss *compliancev1alpha1.NamedObjectReference, logger logr.Logger) (*compliancev1alpha1.ComplianceScanSpecWrapper, string, error) {
-	parsedProfReference, err := resolveProfileReference(r, instance, ss, logger)
+func newCompScanFromBindingProfile(r *ReconcileScanSettingBinding, instance *compliancev1alpha1.ScanSettingBinding, profile *unstructured.Unstructured, logger logr.Logger) (*compliancev1alpha1.ComplianceScanSpecWrapper, string, error) {
+	parsedProfReference, err := resolveProfileReference(r, instance, profile, logger)
 	if err != nil {
 		return nil, "", err
 	}
@@ -373,14 +410,21 @@ func profileReferenceToScan(reference *profileReference) (*compliancev1alpha1.Co
 		return nil, "", fmt.Errorf("neither profile nor tailoredProfile are known")
 	}
 
-	err = setScanType(&scan, reference.profile.GetAnnotations())
-	if err != nil {
-		return nil, "", fmt.Errorf("cannot infer scan type from %s: %v", reference.profile.GetName(), err)
-	}
-
 	var product string
-	if scan.ScanType == compliancev1alpha1.ScanTypeNode {
-		product = reference.profile.GetAnnotations()[compliancev1alpha1.ProductAnnotation]
+	if reference.profile != nil {
+		err = setScanType(&scan, reference.profile.GetAnnotations())
+		if err != nil {
+			return nil, "", fmt.Errorf("cannot infer scan type from %s: %v", reference.profile.GetName(), err)
+		}
+
+		if scan.ScanType == compliancev1alpha1.ScanTypeNode {
+			product = reference.profile.GetAnnotations()[compliancev1alpha1.ProductAnnotation]
+		}
+	} else if reference.tailoredProfile != nil {
+		err = setScanType(&scan, reference.tailoredProfile.GetAnnotations())
+		if err != nil {
+			return nil, "", fmt.Errorf("cannot infer scan type from %s: %v", reference.tailoredProfile.GetName(), err)
+		}
 	}
 
 	return &scan, product, nil
@@ -461,42 +505,48 @@ func setScanType(scan *compliancev1alpha1.ComplianceScanSpecWrapper, annotations
 	return nil
 }
 
-func resolveProfileReference(r *ReconcileScanSettingBinding, instance *compliancev1alpha1.ScanSettingBinding, ss *compliancev1alpha1.NamedObjectReference, logger logr.Logger) (*profileReference, error) {
+func resolveProfileReference(r *ReconcileScanSettingBinding, instance *compliancev1alpha1.ScanSettingBinding, profile *unstructured.Unstructured, logger logr.Logger) (*profileReference, error) {
 	var profReference profileReference
 	var err error
 
-	profReference.name = ss.Name
+	profReference.name = profile.GetName()
 
-	// Retrieve the unstructured object, fill in the Kind and the apiVersion so that the client knows what to look for
-	key := types.NamespacedName{Namespace: instance.Namespace, Name: ss.Name}
-	o, err := getUnstructured(r, instance, key, ss.Kind, ss.APIGroup, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	if o.GetKind() == "Profile" {
-		profReference.profile = o
+	if profile.GetKind() == "Profile" {
+		profReference.profile = profile
 		profReference.tailoredProfile = nil
-	} else if o.GetKind() == "TailoredProfile" {
-		logger.Info("Retrieved a TailoredProfile, must also retrieve a Profile it points to")
-		profReference.tailoredProfile = o
 
-		profReference.profile, err = resolveProfile(r, instance, &profReference, logger)
+		profReference.profileBundle, err = resolveTypedParent(r, instance, "ProfileBundle", profReference.profile, logger)
 		if err != nil {
 			return nil, err
+		}
+	} else if profile.GetKind() == "TailoredProfile" {
+		logger.Info("Retrieved a TailoredProfile, must also retrieve a Profile it points to")
+		profReference.tailoredProfile = profile
+
+		if ownerReferenceWithKind(profile, "Profile") != nil {
+			profReference.profile, err = resolveProfile(r, instance, &profReference, logger)
+			if err != nil {
+				return nil, err
+			}
+
+			profReference.profileBundle, err = resolveTypedParent(r, instance, "ProfileBundle", profReference.profile, logger)
+			if err != nil {
+				return nil, err
+			}
+		} else if ownerReferenceWithKind(profile, "ProfileBundle") != nil {
+			profReference.profileBundle, err = resolveTypedParent(r, instance, "ProfileBundle", profReference.tailoredProfile, logger)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, common.NewNonRetriableCtrlError("TailoredProfile must be owned by a Profile or ProfileBundle")
 		}
 	} else {
 		r.recorder.Eventf(
 			instance, corev1.EventTypeWarning, "ReferenceError",
-			"unsupported Kind %s, use one of Profile, TailoredProfile", o.GetKind(),
+			"unsupported Kind %s, use one of Profile, TailoredProfile", profile.GetKind(),
 		)
-		return nil, common.NewNonRetriableCtrlError("unsupported Kind %s, use one of Profile, TailoredProfile", o.GetKind())
-	}
-
-	// finally retrieve the bundle that the profile points to
-	profReference.profileBundle, err = resolveProfileBundle(r, instance, &profReference, logger)
-	if err != nil {
-		return nil, err
+		return nil, common.NewNonRetriableCtrlError("unsupported Kind %s, use one of Profile, TailoredProfile", profile.GetKind())
 	}
 
 	return &profReference, nil
@@ -504,10 +554,6 @@ func resolveProfileReference(r *ReconcileScanSettingBinding, instance *complianc
 
 func resolveProfile(r *ReconcileScanSettingBinding, instance *compliancev1alpha1.ScanSettingBinding, profReference *profileReference, logger logr.Logger) (*unstructured.Unstructured, error) {
 	return resolveTypedParent(r, instance, "Profile", profReference.tailoredProfile, logger)
-}
-
-func resolveProfileBundle(r *ReconcileScanSettingBinding, instance *compliancev1alpha1.ScanSettingBinding, profReference *profileReference, logger logr.Logger) (*unstructured.Unstructured, error) {
-	return resolveTypedParent(r, instance, "ProfileBundle", profReference.profile, logger)
 }
 
 func resolveTypedParent(r *ReconcileScanSettingBinding, instance *compliancev1alpha1.ScanSettingBinding, expectedKind string, child *unstructured.Unstructured, logger logr.Logger) (*unstructured.Unstructured, error) {

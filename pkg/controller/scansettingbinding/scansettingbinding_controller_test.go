@@ -2,14 +2,11 @@ package scansettingbinding
 
 import (
 	"context"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
 
 	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
+	conditions "github.com/operator-framework/operator-sdk/pkg/status"
 	"go.uber.org/zap"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,6 +14,11 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
+	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
 )
 
 var _ = Describe("Testing scansettingbinding controller", func() {
@@ -27,6 +29,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 		pBundleRhcos *compv1alpha1.ProfileBundle
 		profRhcosE8  *compv1alpha1.Profile
 		tpRhcosE8    *compv1alpha1.TailoredProfile
+		scratchTP    *compv1alpha1.TailoredProfile
 
 		setting *compv1alpha1.ScanSetting
 		ssb     *compv1alpha1.ScanSettingBinding
@@ -107,6 +110,33 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			},
 		}
 
+		scratchTP = &compv1alpha1.TailoredProfile{
+			ObjectMeta: v1.ObjectMeta{
+				Name:        "scratch-tp",
+				Namespace:   common.GetComplianceOperatorNamespace(),
+				Annotations: platformProfileAnnotations,
+			},
+			Spec: compv1alpha1.TailoredProfileSpec{
+				Title:       "testing TP",
+				Description: "some desc",
+				EnableRules: []compv1alpha1.RuleReferenceSpec{
+					{
+						Name:      "rhcos4-no-empty-passwords",
+						Rationale: "I want this rule",
+					},
+				},
+			},
+			Status: compv1alpha1.TailoredProfileStatus{
+				ID: "xccdf_compliance.openshift.io_profile_scratch-tp",
+				OutputRef: compv1alpha1.OutputRef{
+					Name:      "scratch-tp-tp",
+					Namespace: common.GetComplianceOperatorNamespace(),
+				},
+				State:        compv1alpha1.TailoredProfileStateReady,
+				ErrorMessage: "",
+			},
+		}
+
 		setting = &compv1alpha1.ScanSetting{
 			ObjectMeta: v1.ObjectMeta{
 				Name:      "scan-setting",
@@ -122,7 +152,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			Roles: []string{"master", "worker"},
 		}
 
-		objs = append(objs, ssb, pBundleRhcos, profRhcosE8, tpRhcosE8, suite, setting)
+		objs = append(objs, ssb, pBundleRhcos, profRhcosE8, tpRhcosE8, scratchTP, suite, setting)
 
 		scheme := scheme.Scheme
 		scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion, objs...)
@@ -161,6 +191,20 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			Namespace: tpRhcosE8.Namespace,
 			Name:      tpRhcosE8.Name,
 		}, tpRhcosE8)
+		Expect(err).To(BeNil())
+
+		scratchTP.OwnerReferences = append(scratchTP.OwnerReferences,
+			v1.OwnerReference{
+				Name:       pBundleRhcos.Name,
+				Kind:       pBundleRhcos.Kind,
+				APIVersion: pBundleRhcos.APIVersion})
+		err = client.Create(context.TODO(), scratchTP)
+		Expect(err).To(BeNil())
+
+		err = client.Get(context.TODO(), types.NamespacedName{
+			Namespace: scratchTP.Namespace,
+			Name:      scratchTP.Name,
+		}, scratchTP)
 		Expect(err).To(BeNil())
 
 		err = client.Get(context.TODO(), types.NamespacedName{
@@ -372,6 +416,256 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 				Name: tpRhcosE8.Name + "-worker",
 			}
 			Expect(suite.Spec.Scans).To(ConsistOf(expScanMaster, expScanWorker))
+		})
+	})
+
+	Context("Creates a suite from a TailoredProfile created from scratch", func() {
+		JustBeforeEach(func() {
+			ssb = &compv1alpha1.ScanSettingBinding{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "scratch-tp",
+					Namespace: common.GetComplianceOperatorNamespace(),
+				},
+				Profiles: []compv1alpha1.NamedObjectReference{
+					{
+						Name:     scratchTP.Name,
+						Kind:     scratchTP.Kind,
+						APIGroup: scratchTP.APIVersion,
+					},
+				},
+				SettingsRef: &compv1alpha1.NamedObjectReference{
+					Name:     setting.Name,
+					Kind:     setting.Kind,
+					APIGroup: setting.APIVersion,
+				},
+			}
+			ssb.Status.SetConditionPending()
+
+			err := reconciler.client.Create(context.TODO(), ssb)
+			Expect(err).To(BeNil())
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ssb.Namespace,
+				Name:      ssb.Name,
+			}, ssb)
+			Expect(err).To(BeNil())
+		})
+
+		It("Should create a suite from the TailoredProfile", func() {
+			_, err := reconciler.Reconcile(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: ssb.Namespace,
+					Name:      ssb.Name,
+				},
+			})
+			Expect(err).To(BeNil())
+
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ssb.Namespace,
+				Name:      ssb.Name,
+			}, ssb)
+			Expect(err).To(BeNil())
+			Expect(ssb.Status.Conditions.GetCondition("Ready")).ToNot(BeNil())
+			Expect(ssb.Status.Conditions.IsTrueFor("Ready")).To(BeTrue())
+
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
+			Expect(err).To(BeNil())
+
+			Expect(suite.OwnerReferences).To(HaveLen(1))
+			Expect(suite.OwnerReferences[0].Name).To(BeEquivalentTo(ssb.Name))
+			Expect(suite.OwnerReferences[0].APIVersion).To(BeEquivalentTo(ssb.APIVersion))
+
+			Expect(suite.Spec.Schedule).To(BeEquivalentTo(setting.Schedule))
+			Expect(suite.Spec.AutoApplyRemediations).To(BeTrue())
+
+			Expect(ssb.Status.OutputRef.Name).To(Equal(suite.Name))
+			Expect(*ssb.Status.OutputRef.APIGroup).To(Equal(suite.GroupVersionKind().Group))
+
+			expScanMaster := compv1alpha1.ComplianceScanSpecWrapper{
+				ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+					ScanType:     compv1alpha1.ScanTypeNode,
+					ContentImage: pBundleRhcos.Spec.ContentImage,
+					Profile:      scratchTP.Status.ID,
+					Rule:         "",
+					Content:      pBundleRhcos.Spec.ContentFile,
+					NodeSelector: masterSelector,
+					TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
+						Name: "scratch-tp-tp",
+					},
+					ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+						Debug: true,
+					},
+				},
+				Name: scratchTP.Name + "-master",
+			}
+			expScanWorker := compv1alpha1.ComplianceScanSpecWrapper{
+				ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+					ScanType:     compv1alpha1.ScanTypeNode,
+					ContentImage: pBundleRhcos.Spec.ContentImage,
+					Profile:      scratchTP.Status.ID,
+					Rule:         "",
+					Content:      pBundleRhcos.Spec.ContentFile,
+					NodeSelector: workerSelector,
+					TailoringConfigMap: &compv1alpha1.TailoringConfigMapRef{
+						Name: "scratch-tp-tp",
+					},
+					ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+						Debug: true,
+					},
+				},
+				Name: scratchTP.Name + "-worker",
+			}
+			Expect(suite.Spec.Scans).To(ConsistOf(expScanMaster, expScanWorker))
+		})
+	})
+
+	Context("Detects error if unexistent profile", func() {
+		JustBeforeEach(func() {
+			ssb = &compv1alpha1.ScanSettingBinding{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "inconsistent-products-compliance-requirements",
+					Namespace: common.GetComplianceOperatorNamespace(),
+				},
+				Profiles: []compv1alpha1.NamedObjectReference{
+					{
+						Name:     "unexistent",
+						Kind:     profRhcosE8.Kind,
+						APIGroup: profRhcosE8.APIVersion,
+					},
+				},
+			}
+			ssb.Status.SetConditionPending()
+
+			err := reconciler.client.Create(context.TODO(), ssb)
+			Expect(err).To(BeNil())
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ssb.Namespace,
+				Name:      ssb.Name,
+			}, ssb)
+			Expect(err).To(BeNil())
+		})
+
+		It("Should not create a suite", func() {
+			_, err := reconciler.Reconcile(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: ssb.Namespace,
+					Name:      ssb.Name,
+				},
+			})
+			Expect(err).ToNot(BeNil())
+
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ssb.Namespace,
+				Name:      ssb.Name,
+			}, ssb)
+			Expect(err).To(BeNil())
+			Expect(ssb.Status.Conditions.GetCondition("Ready")).ToNot(BeNil())
+			Expect(ssb.Status.Conditions.IsTrueFor("Ready")).To(BeFalse())
+
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
+			Expect(err).ToNot(BeNil())
+		})
+	})
+
+	Context("Waits if TailoredProfile isn't ready", func() {
+		JustBeforeEach(func() {
+			By("Setting the TP to PENDING")
+			scratchTP.Status.State = compv1alpha1.TailoredProfileStatePending
+			updateErr := reconciler.client.Status().Update(context.TODO(), scratchTP)
+			Expect(updateErr).To(BeNil())
+
+			ssb = &compv1alpha1.ScanSettingBinding{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "tp-not-ready",
+					Namespace: common.GetComplianceOperatorNamespace(),
+				},
+				Profiles: []compv1alpha1.NamedObjectReference{
+					{
+						Name:     scratchTP.Name,
+						Kind:     scratchTP.Kind,
+						APIGroup: scratchTP.APIVersion,
+					},
+				},
+			}
+			ssb.Status.SetConditionPending()
+
+			err := reconciler.client.Create(context.TODO(), ssb)
+			Expect(err).To(BeNil())
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ssb.Namespace,
+				Name:      ssb.Name,
+			}, ssb)
+			Expect(err).To(BeNil())
+		})
+
+		It("Be requeued and should not create a suite", func() {
+			res, err := reconciler.Reconcile(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: ssb.Namespace,
+					Name:      ssb.Name,
+				},
+			})
+			Expect(err).To(BeNil())
+			Expect(res.Requeue).To(BeTrue())
+
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ssb.Namespace,
+				Name:      ssb.Name,
+			}, ssb)
+			Expect(err).To(BeNil())
+			Expect(ssb.Status.Conditions.GetCondition("Ready")).ToNot(BeNil())
+			Expect(ssb.Status.Conditions.IsTrueFor("Ready")).To(BeFalse())
+		})
+	})
+
+	Context("Reports error if TailoredProfile has error", func() {
+		JustBeforeEach(func() {
+			By("Setting the TP to ERROR")
+			scratchTP.Status.State = compv1alpha1.TailoredProfileStateError
+			updateErr := reconciler.client.Status().Update(context.TODO(), scratchTP)
+			Expect(updateErr).To(BeNil())
+
+			ssb = &compv1alpha1.ScanSettingBinding{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "tp-errored",
+					Namespace: common.GetComplianceOperatorNamespace(),
+				},
+				Profiles: []compv1alpha1.NamedObjectReference{
+					{
+						Name:     scratchTP.Name,
+						Kind:     scratchTP.Kind,
+						APIGroup: scratchTP.APIVersion,
+					},
+				},
+			}
+			ssb.Status.SetConditionPending()
+
+			err := reconciler.client.Create(context.TODO(), ssb)
+			Expect(err).To(BeNil())
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ssb.Namespace,
+				Name:      ssb.Name,
+			}, ssb)
+			Expect(err).To(BeNil())
+		})
+
+		It("report error and should not create a suite", func() {
+			res, err := reconciler.Reconcile(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: ssb.Namespace,
+					Name:      ssb.Name,
+				},
+			})
+			Expect(err).To(BeNil())
+			Expect(res.Requeue).To(BeFalse())
+
+			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: ssb.Namespace,
+				Name:      ssb.Name,
+			}, ssb)
+			Expect(err).To(BeNil())
+			Expect(ssb.Status.Conditions.GetCondition("Ready")).ToNot(BeNil())
+			Expect(ssb.Status.Conditions.IsTrueFor("Ready")).To(BeFalse())
+			Expect(ssb.Status.Conditions.GetCondition("Ready").Reason).To(Equal(conditions.ConditionReason("Invalid")))
 		})
 	})
 
