@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io"
 	"regexp"
+	"sort"
 	"strings"
 	"text/template/parse"
 
@@ -24,8 +25,12 @@ const (
 	ocilCheckType                   = "http://scap.nist.gov/schema/ocil/2"
 	rulePrefix                      = "xccdf_org.ssgproject.content_rule_"
 	valuePrefix                     = "xccdf_org.ssgproject.content_value_"
+	ruleValueSuffix                 = ":var:1"
 	questionnaireSuffix             = "_ocil:questionnaire:1"
 	questionSuffix                  = "_question:question:1"
+	ovalCheckPrefix                 = "oval:ssg-"
+	objValuePrefix                  = "oval:ssg-variable"
+	ovalCheckType                   = "http://oval.mitre.org/XMLSchema/oval-definitions-5"
 	dependencyAnnotationKey         = "complianceascode.io/depends-on"
 	kubeDependencyAnnotationKey     = "complianceascode.io/depends-on-obj"
 	remediationTypeAnnotationKey    = "complianceascode.io/remediation-type"
@@ -100,6 +105,7 @@ func warningHasApiObjects(in *xmlquery.Node) bool {
 }
 
 type nodeByIdHashTable map[string]*xmlquery.Node
+type nodeByIdHashVariablesTable map[string][]string
 
 func newByIdHashTable(nodes []*xmlquery.Node) nodeByIdHashTable {
 	table := make(nodeByIdHashTable)
@@ -126,7 +132,196 @@ func newRuleHashTable(dsDom *xmlquery.Node) nodeByIdHashTable {
 func newOcilQuestionTable(dsDom *xmlquery.Node) nodeByIdHashTable {
 	return newHashTableFromRootAndQuery(dsDom, "//ds:component/ocil:ocil", "//ocil:boolean_question")
 }
+func newStateHashTable(dsDom *xmlquery.Node) nodeByIdHashTable {
+	return newHashTableFromRootAndQuery(dsDom, "//ds:component/oval-def:oval_definitions/oval-def:states", "*")
+}
 
+func newObjHashTable(dsDom *xmlquery.Node) nodeByIdHashTable {
+	return newHashTableFromRootAndQuery(dsDom, "//ds:component/oval-def:oval_definitions/oval-def:objects", "*")
+}
+
+func newDefHashTable(dsDom *xmlquery.Node) nodeByIdHashTable {
+	return newHashTableFromRootAndQuery(dsDom, "//ds:component/oval-def:oval_definitions/oval-def:definitions", "*")
+}
+
+func newValueListTable(dsDom *xmlquery.Node, statesTable, objectsTable nodeByIdHashTable) nodeByIdHashVariablesTable {
+	root := "//ds:component/oval-def:oval_definitions/oval-def:tests"
+	testsDom := dsDom.SelectElement(root).SelectElements("*")
+	table := make(nodeByIdHashVariablesTable)
+
+	for i := range testsDom {
+		testDefinition := testsDom[i]
+		testId := testDefinition.SelectAttr("id")
+		var valueListState []string
+		var valueListObject []string
+		var valueList []string
+
+		states := testDefinition.SelectElements("//ind:state")
+		if len(states) > 0 {
+			for i := range states {
+				if states[i] == nil {
+					continue
+				}
+
+				state, ok := statesTable[states[i].SelectAttr("state_ref")]
+				if !ok {
+					continue
+				}
+				valueListStateTemp, hasList := findAllVariablesFromState(state)
+				if hasList {
+					valueListState = append(valueListState, valueListStateTemp...)
+				}
+
+			}
+		}
+
+		objects := testDefinition.SelectElements("//ind:object")
+
+		if len(objects) > 0 {
+			for i := range objects {
+				if objects[i] == nil {
+					continue
+				}
+
+				object, ok := objectsTable[objects[i].SelectAttr("object_ref")]
+				if !ok {
+					continue
+				}
+				valueListObjectTemp, hasList := findAllVariablesFromObject(object)
+				if hasList {
+					valueListObject = append(valueListState, valueListObjectTemp...)
+				}
+
+			}
+		}
+
+		if len(valueListState) > 0 {
+			valueList = append(valueList, valueListState...)
+
+		}
+		if len(valueListObject) > 0 {
+			valueList = append(valueList, valueListObject...)
+		}
+		if len(valueList) > 0 {
+			table[testId] = valueList
+		}
+	}
+
+	return table
+}
+
+func findAllVariablesFromState(node *xmlquery.Node) ([]string, bool) {
+	var valueList []string
+	nodes := node.SelectElements("*")
+
+	for i := range nodes {
+		if nodes[i].SelectAttr("var_ref") != "" {
+			dnsFriendlyFixId := strings.ReplaceAll(nodes[i].SelectAttr("var_ref"), "_", "-")
+			valueFormatted := strings.TrimPrefix(dnsFriendlyFixId, ovalCheckPrefix)
+			valueFormatted = strings.TrimSuffix(valueFormatted, ruleValueSuffix)
+			valueList = append(valueList, valueFormatted)
+		}
+	}
+	if len(valueList) > 0 {
+		return valueList, true
+	} else {
+		return valueList, false
+	}
+
+}
+
+func findAllVariablesFromObject(node *xmlquery.Node) ([]string, bool) {
+	var valueList []string
+	nodes := node.SelectElements("//ind:var_ref")
+	for i := range nodes {
+		if nodes[i].InnerText() != "" {
+			dnsFriendlyFixId := strings.ReplaceAll(nodes[i].InnerText(), "_", "-")
+			valueFormatted := strings.TrimPrefix(dnsFriendlyFixId, ovalCheckPrefix)
+			valueFormatted = strings.TrimSuffix(valueFormatted, ruleValueSuffix)
+			valueList = append(valueList, valueFormatted)
+		}
+	}
+	if len(valueList) > 0 {
+		return valueList, true
+	} else {
+		return valueList, false
+	}
+}
+
+func getRuleOvalTest(rule *xmlquery.Node, defTable nodeByIdHashTable) nodeByIdHashTable {
+	var ovalRefEl *xmlquery.Node
+	testList := make(map[string]*xmlquery.Node)
+	for _, check := range rule.SelectElements("//xccdf-1.2:check") {
+		if check.SelectAttr("system") == ovalCheckType {
+			ovalRefEl = check.SelectElement("xccdf-1.2:check-content-ref")
+			break
+		}
+	}
+
+	if ovalRefEl == nil {
+		return testList
+	}
+
+	ovalCheckName := strings.TrimSpace(ovalRefEl.SelectAttr("name"))
+	ovalTest, ok := defTable[ovalCheckName]
+	if !ok {
+		return testList
+	}
+
+	ovalTests := ovalTest.SelectElements("//oval-def:criterion")
+	for i := range ovalTests {
+		if ovalTests[i].SelectAttr("test_ref") == "" {
+			continue
+		}
+		testList[ovalTests[i].SelectAttr("test_ref")] = ovalTests[i]
+	}
+
+	return testList
+
+}
+
+func removeDuplicate(input []string) []string {
+	keys := make(map[string]bool)
+	trimmedList := []string{}
+
+	for _, e := range input {
+		if _, value := keys[e]; !value {
+			keys[e] = true
+			trimmedList = append(trimmedList, e)
+		}
+	}
+	return trimmedList
+}
+func getValueListUsedForRule(rule *xmlquery.Node, ovalTable nodeByIdHashVariablesTable, defTable nodeByIdHashTable, variableList map[string]string) []string {
+	var valueList []string
+	ruleTests := getRuleOvalTest(rule, defTable)
+	if len(ruleTests) == 0 {
+		return valueList
+	}
+	for test := range ruleTests {
+		valueListTemp, ok := ovalTable[test]
+		if !ok {
+			continue
+		}
+		valueList = append(valueList, valueListTemp...)
+
+	}
+	if len(valueList) == 0 {
+		return valueList
+	}
+	valueList = removeDuplicate(valueList)
+	//remove duplicate because one rule can have different tests that use same variable, so we want to remove the extra variable since we
+	//want to associate rule with value not specify check
+	valueList = sort.StringSlice(valueList)
+	var settableValueList []string
+	for i := range valueList {
+		if _, ok := variableList[strings.ReplaceAll(valueList[i], "-", "_")]; ok {
+			settableValueList = append(settableValueList, valueList[i])
+		}
+	}
+
+	return settableValueList
+}
 func getRuleOcilQuestionID(rule *xmlquery.Node) string {
 	var ocilRefEl *xmlquery.Node
 
@@ -192,13 +387,17 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 	}
 	allValues := xmlquery.Find(resultsDom, "//set-value")
 	valuesList := make(map[string]string)
+
 	for _, codeNode := range allValues {
 		valuesList[strings.TrimPrefix(codeNode.SelectAttr("idref"), valuePrefix)] = codeNode.InnerText()
 	}
 
 	ruleTable := newRuleHashTable(dsDom)
 	questionsTable := newOcilQuestionTable(dsDom)
-
+	statesTable := newStateHashTable(dsDom)
+	objsTable := newObjHashTable(dsDom)
+	defTable := newDefHashTable(dsDom)
+	ovalTestVarTable := newValueListTable(dsDom, statesTable, objsTable)
 	results := resultsDom.SelectElements("//rule-result")
 	parsedResults := make([]*ParseResult, 0)
 	var remErrs string
@@ -215,7 +414,8 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 		}
 
 		instructions := getInstructionsForRule(resultRule, questionsTable)
-		resCheck, err := newComplianceCheckResult(result, resultRule, ruleIDRef, instructions, scanName, namespace)
+		ruleValues := getValueListUsedForRule(resultRule, ovalTestVarTable, defTable, valuesList)
+		resCheck, err := newComplianceCheckResult(result, resultRule, ruleIDRef, instructions, scanName, namespace, ruleValues)
 		if err != nil {
 			continue
 		}
@@ -240,7 +440,7 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 }
 
 // Returns a new complianceCheckResult if the check data is usable
-func newComplianceCheckResult(result *xmlquery.Node, rule *xmlquery.Node, ruleIdRef, instructions, scanName, namespace string) (*compv1alpha1.ComplianceCheckResult, error) {
+func newComplianceCheckResult(result *xmlquery.Node, rule *xmlquery.Node, ruleIdRef, instructions, scanName, namespace string, ruleValues []string) (*compv1alpha1.ComplianceCheckResult, error) {
 	name := nameFromId(scanName, ruleIdRef)
 	mappedStatus, err := mapComplianceCheckResultStatus(result)
 	if err != nil {
@@ -266,6 +466,7 @@ func newComplianceCheckResult(result *xmlquery.Node, rule *xmlquery.Node, ruleId
 		Instructions: instructions,
 		Description:  complianceCheckResultDescription(rule),
 		Warnings:     getWarningsForRule(rule),
+		ValuesUsed:   ruleValues,
 	}, nil
 }
 

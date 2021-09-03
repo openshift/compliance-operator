@@ -322,6 +322,10 @@ func getCheckResultLabels(pr *utils.ParseResult, resultLabels map[string]string,
 	labels[compv1alpha1.SuiteLabel] = scan.Labels[compv1alpha1.SuiteLabel]
 	labels[compv1alpha1.ComplianceCheckResultStatusLabel] = string(pr.CheckResult.Status)
 	labels[compv1alpha1.ComplianceCheckResultSeverityLabel] = string(pr.CheckResult.Severity)
+	if len(pr.CheckResult.ValuesUsed) > 0 {
+		labels[compv1alpha1.ComplianceCheckResultValueLabel] = ""
+	}
+
 	if pr.Remediations != nil {
 		labels[compv1alpha1.ComplianceCheckResultHasRemediation] = ""
 	}
@@ -336,7 +340,6 @@ func getCheckResultLabels(pr *utils.ParseResult, resultLabels map[string]string,
 func getCheckResultAnnotations(cr *compv1alpha1.ComplianceCheckResult, resultAnnotations map[string]string) map[string]string {
 	annotations := make(map[string]string)
 	annotations[compv1alpha1.ComplianceCheckResultRuleAnnotation] = cr.IDToDNSFriendlyName()
-
 	for k, v := range resultAnnotations {
 		annotations[k] = v
 	}

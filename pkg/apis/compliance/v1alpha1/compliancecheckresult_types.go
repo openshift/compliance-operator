@@ -13,6 +13,7 @@ type ComplianceCheckStatus string
 // way.
 const ComplianceCheckResultStatusLabel = "compliance.openshift.io/check-status"
 const ComplianceCheckResultSeverityLabel = "compliance.openshift.io/check-severity"
+const ComplianceCheckResultValueLabel = "compliance.openshift.io/check-has-value"
 
 // ComplianceCheckResultLabel defines a label that will be included in the
 // ComplianceCheckResult objects. It indicates whether the result has an automated
@@ -92,6 +93,8 @@ type ComplianceCheckResult struct {
 	// Any warnings that the user should be aware about.
 	// +nullable
 	Warnings []string `json:"warnings,omitempty"`
+	// It stores a list of values used by the check
+	ValuesUsed []string `json:"valuesUsed,omitempty"`
 }
 
 // IDToDNSFriendlyName gets the ID from the scan and returns a DNS

@@ -166,6 +166,77 @@ var _ = Describe("XCCDF parser", func() {
 
 	})
 
+	Describe("Test for Check Result Variable Association ", func() {
+		BeforeEach(func() {
+			mcInstance := &mcfgv1.MachineConfig{}
+			schema = scheme.Scheme
+			schema.AddKnownTypes(mcfgv1.SchemeGroupVersion, mcInstance)
+			resultsFilename = "../../tests/data/xccdf-result-remdiation-templating.xml"
+			dsFilename = "../../tests/data/ds-input-for-remediation-value.xml"
+		})
+
+		JustBeforeEach(func() {
+			xccdf, err = os.Open(resultsFilename)
+			Expect(err).NotTo(HaveOccurred())
+
+			ds, err = os.Open(dsFilename)
+			Expect(err).NotTo(HaveOccurred())
+			dsDom, err := ParseContent(ds)
+			Expect(err).NotTo(HaveOccurred())
+			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+			Expect(resultList).NotTo(BeEmpty())
+			nChecks, nRems = countResultItems(resultList)
+		})
+
+		Context("Check if the check result has correct value used attribute with one variable", func() {
+			const (
+				expCheckResultName = "testScan-auditd-data-retention-max-log-file"
+				expValue           = "var-auditd-max-log-file"
+			)
+
+			var (
+				check *compv1alpha1.ComplianceCheckResult
+			)
+
+			BeforeEach(func() {
+				for i := range resultList {
+					if resultList[i].CheckResult != nil && resultList[i].CheckResult.Name == expCheckResultName {
+						check = resultList[i].CheckResult
+						break
+					}
+				}
+			})
+
+			It("Should have the expected value List", func() {
+				Expect(len(check.ValuesUsed)).To(Equal(1))
+				Expect(check.ValuesUsed[0]).To(Equal(expValue))
+			})
+		})
+
+		Context("Check if the check result has correct value used attribute with no variable", func() {
+			const (
+				expCheckResultName = "testScan-grub2-uefi-password"
+			)
+
+			var (
+				check *compv1alpha1.ComplianceCheckResult
+			)
+
+			BeforeEach(func() {
+				for i := range resultList {
+					if resultList[i].CheckResult != nil && resultList[i].CheckResult.Name == expCheckResultName {
+						check = resultList[i].CheckResult
+						break
+					}
+				}
+			})
+
+			It("Should have empty value List", func() {
+				Expect(len(check.ValuesUsed)).To(Equal(0))
+			})
+		})
+
+	})
 	Describe("Load the XCCDF and the DS separately", func() {
 		BeforeEach(func() {
 			mcInstance := &mcfgv1.MachineConfig{}

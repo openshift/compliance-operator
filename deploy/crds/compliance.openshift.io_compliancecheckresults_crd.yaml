@@ -57,6 +57,11 @@ spec:
           status:
             description: The result of a check
             type: string
+          valuesUsed:
+            description: It stores a list of values used by the check
+            items:
+              type: string
+            type: array
           warnings:
             description: Any warnings that the user should be aware about.
             items:
