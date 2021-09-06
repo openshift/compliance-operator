@@ -451,46 +451,62 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
-			Name: "TestScanProducesRemediations",
-			// NOTE(jaosorior): This was made a serial test because it runs the long-running, resource-taking and
-			// big AF moderate profile
-			IsParallel: false,
+			Name:       "TestScanProducesRemediations",
+			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
-				scanName := getObjNameFromTest(t)
-				selectWorkers := map[string]string{
-					"node-role.kubernetes.io/worker": "",
-				}
-				testScan := &compv1alpha1.ComplianceScan{
+				bindingName := getObjNameFromTest(t)
+				tpName := getObjNameFromTest(t)
+
+				// When using a profile directly, the profile name gets re-used
+				// in the scan. By using a tailored profile we ensure that
+				// the scan is unique and we get no clashes.
+				tp := &compv1alpha1.TailoredProfile{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      scanName,
+						Name:      tpName,
 						Namespace: namespace,
 					},
-					Spec: compv1alpha1.ComplianceScanSpec{
-						Profile: "xccdf_org.ssgproject.content_profile_moderate",
-						Content: rhcosContentFile,
-						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
-							Debug: true,
+					Spec: compv1alpha1.TailoredProfileSpec{
+						Title:       "TestScanProducesRemediations",
+						Description: "TestScanProducesRemediations",
+						Extends:     "ocp4-moderate",
+					},
+				}
+
+				createTPErr := f.Client.Create(goctx.TODO(), tp, getCleanupOpts(ctx))
+				if createTPErr != nil {
+					return createTPErr
+				}
+				scanSettingBinding := compv1alpha1.ScanSettingBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      bindingName,
+						Namespace: namespace,
+					},
+					Profiles: []compv1alpha1.NamedObjectReference{
+						{
+							Name:     tpName,
+							Kind:     "TailoredProfile",
+							APIGroup: "compliance.openshift.io/v1alpha1",
 						},
-						NodeSelector: selectWorkers,
+					},
+					SettingsRef: &compv1alpha1.NamedObjectReference{
+						Name:     "default",
+						Kind:     "ScanSetting",
+						APIGroup: "compliance.openshift.io/v1alpha1",
 					},
 				}
 				// use Context's create helper to create the object and add a cleanup function for the new object
-				err := f.Client.Create(goctx.TODO(), testScan, getCleanupOpts(ctx))
+				err := f.Client.Create(goctx.TODO(), &scanSettingBinding, getCleanupOpts(ctx))
 				if err != nil {
 					return err
 				}
-				waitForScanStatus(t, f, namespace, scanName, compv1alpha1.PhaseDone)
-
-				// We expect that a scan that is using all the rules wouldn't be compliant
-				err = scanResultIsExpected(t, f, namespace, scanName, compv1alpha1.ResultNonCompliant)
-				if err != nil {
+				if err := waitForSuiteScansStatus(t, f, namespace, bindingName, compv1alpha1.PhaseDone, compv1alpha1.ResultNonCompliant); err != nil {
 					return err
 				}
 
 				// Since the scan was not compliant, there should be some remediations and none
 				// of them should be an error
 				inNs := client.InNamespace(namespace)
-				withLabel := client.MatchingLabels{compv1alpha1.ComplianceScanLabel: testScan.Name}
+				withLabel := client.MatchingLabels{compv1alpha1.SuiteLabel: bindingName}
 				fmt.Println(inNs, withLabel)
 				remList := &compv1alpha1.ComplianceRemediationList{}
 				err = f.Client.List(goctx.TODO(), remList, inNs, withLabel)
