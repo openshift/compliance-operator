@@ -399,6 +399,100 @@ func TestE2E(t *testing.T) {
 			},
 		},
 		testExecution{
+			Name:       "TestParsingErrorRestartsParserInitContainer",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				const (
+					badImage  = "quay.io/jhrozek/ocp4-errtest-content@sha256:71ebd0af76035dce6c6c9bfe27146e91bfe6ed40d4be56894c4ee66b420d1a3a"
+					goodImage = "quay.io/jhrozek/ocp4-errtest-content@sha256:5e75d3dec71706be7ac18b5d838b9fca130983e1b8482e739ea8ea7e974ce2c1"
+				)
+
+				pbName := getObjNameFromTest(t)
+
+				pb := &compv1alpha1.ProfileBundle{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      pbName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ProfileBundleSpec{
+						ContentImage: badImage,
+						ContentFile:  ocpContentFile,
+					},
+				}
+
+				if err := f.Client.Create(goctx.TODO(), pb, getCleanupOpts(ctx)); err != nil {
+					return err
+				}
+
+				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamInvalid); err != nil {
+					return err
+				}
+
+				// list the pods with profilebundle=pbName
+				var lastErr error
+				timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+					podList := &corev1.PodList{}
+					inNs := client.InNamespace(namespace)
+					withLabel := client.MatchingLabels{"profile-bundle": pbName}
+					if lastErr := f.Client.List(goctx.TODO(), podList, inNs, withLabel); lastErr != nil {
+						return false, lastErr
+					}
+
+					if len(podList.Items) != 1 {
+						return false, fmt.Errorf("expected one parser pod, listed %d", len(podList.Items))
+					}
+					parserPod := &podList.Items[0]
+
+					// check that pod's initContainerStatuses field with name=profileparser has restartCount > 0 and that
+					// lastState.Terminated.ExitCode != 0. This way we'll know we're restarting the init container
+					// and retrying the parsing
+					for i := range parserPod.Status.InitContainerStatuses {
+						ics := parserPod.Status.InitContainerStatuses[i]
+						if ics.Name != "profileparser" {
+							continue
+						}
+						if ics.RestartCount < 1 {
+							E2ELog(t, "The profileparser did not restart (yet?)")
+							return false, nil
+						}
+
+						// wait until we get the restarted state
+						if ics.LastTerminationState.Terminated == nil {
+							E2ELog(t, "The profileparser does not have terminating state")
+							return false, nil
+						}
+						if ics.LastTerminationState.Terminated.ExitCode == 0 {
+							return true, fmt.Errorf("profileparser finished unsuccessfully")
+						}
+					}
+
+					return true, nil
+				})
+
+				if err := processErrorOrTimeout(lastErr, timeouterr, "waiting for ProfileBundle parser to restart"); err != nil {
+					return err
+				}
+
+				// Fix the image and wait for the profilebundle to be parsed OK
+				getPb := &compv1alpha1.ProfileBundle{}
+				if err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: pbName, Namespace: namespace}, getPb); err != nil {
+					return err
+				}
+
+				updatePb := getPb.DeepCopy()
+				updatePb.Spec.ContentImage = goodImage
+				if err := f.Client.Update(goctx.TODO(), updatePb); err != nil {
+					return err
+				}
+
+				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamValid); err != nil {
+					return err
+				}
+
+				return nil
+			},
+		},
+		testExecution{
 			Name:       "TestSingleScanSucceeds",
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {

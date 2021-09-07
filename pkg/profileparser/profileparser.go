@@ -480,8 +480,8 @@ func ParseVariablesAndDo(contentDom *xmlquery.Node, pb *cmpv1alpha1.ProfileBundl
 			err = action(&v)
 			if err != nil {
 				log.Error(err, "couldn't execute action for variable")
-				// We continue even if there's an error.
-				continue
+				errs <- err
+				break
 			}
 		}
 		wg.Done()
@@ -635,7 +635,8 @@ func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *
 			err = action(&p)
 			if err != nil {
 				log.Error(err, "couldn't execute action for rule")
-				// We continue even if there's an error.
+				errs <- err
+				break
 			}
 		}
 

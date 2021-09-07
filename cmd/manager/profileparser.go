@@ -151,6 +151,11 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 	// to valid
 	updateProfileBundleStatus(pcfg, pb, err)
 
+	if err != nil {
+		log.Error(err, "Parsing the bundle failed, will restart the container")
+		os.Exit(1)
+	}
+
 	if closeErr := contentFile.Close(); closeErr != nil {
 		log.Error(err, "Couldn't close the content file")
 	}
