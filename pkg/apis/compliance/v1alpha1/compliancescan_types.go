@@ -161,8 +161,8 @@ type ComplianceScanSettings struct {
 	HTTPSProxy string `json:"httpsProxy,omitempty"`
 	// Specifies tolerations needed for the scan to run on the nodes. This is useful
 	// in case the target set of nodes have custom taints that don't allow certain
-	// workloads to run. Defaults to allowing scheduling on the master nodes.
-	// +kubebuilder:default={{key: "node-role.kubernetes.io/master", operator: "Exists", effect: "NoSchedule"}}
+	// workloads to run. Defaults to allowing scheduling on all nodes.
+	// +kubebuilder:default={{operator: "Exists"}}
 	ScanTolerations []corev1.Toleration `json:"scanTolerations,omitempty"`
 
 	// Specifies what to do with remediations of Enforcement type. If left empty,
