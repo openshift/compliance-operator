@@ -29,10 +29,12 @@ type TailoredProfileSpec struct {
 	// +optional
 	// Points to the name of the profile to extend
 	Extends string `json:"extends,omitempty"`
-	// Overwrites the title of the extended profile
-	Title string `json:"title,omitempty"`
-	// Overwrites the description of the extended profile
-	Description string `json:"description,omitempty"`
+	// Title for the tailored profile. It can't be empty.
+	// +kubebuilder:validation:Pattern=^.+$
+	Title string `json:"title"`
+	// Description of tailored profile. It can't be empty.
+	// +kubebuilder:validation:Pattern=^.+$
+	Description string `json:"description"`
 	// Enables the referenced rules
 	// +optional
 	// +nullable
