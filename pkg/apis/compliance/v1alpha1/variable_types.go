@@ -2,7 +2,6 @@ package v1alpha1
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,11 +60,6 @@ func (v *Variable) SetValue(val string) error {
 	if err := v.validateType(val); err != nil {
 		return err
 	}
-
-	if err := v.validateValue(val); err != nil {
-		return err
-	}
-
 	v.Value = val
 	return nil
 }
@@ -87,20 +81,6 @@ func (v *Variable) validateType(val string) error {
 	}
 
 	return err
-}
-
-func (v *Variable) validateValue(val string) error {
-	if len(v.Selections) == 0 {
-		return nil
-	}
-
-	for _, av := range v.Selections {
-		if av.Value == val {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("value %s is not allowed, use one of %v", val, v.Selections)
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -75,10 +75,10 @@ var _ = Describe("Testing variables API", func() {
 			Expect(v.Value).To(BeEquivalentTo("ringo"))
 		})
 
-		It("denied values are not used", func() {
+		It("custom values are used", func() {
 			err := v.SetValue("ringo_deathstarr")
-			Expect(err).ToNot(BeNil())
-			Expect(v.Value).To(BeEquivalentTo("john"))
+			Expect(err).To(BeNil())
+			Expect(v.Value).To(BeEquivalentTo("ringo_deathstarr"))
 		})
 	})
 
@@ -141,10 +141,10 @@ var _ = Describe("Testing variables API", func() {
 			Expect(v.Value).To(BeEquivalentTo("84"))
 		})
 
-		It("disallowed values are not used", func() {
+		It("custom allowed values are used", func() {
 			err := v.SetValue("123")
-			Expect(err).ToNot(BeNil())
-			Expect(v.Value).To(BeEquivalentTo("42"))
+			Expect(err).To(BeNil())
+			Expect(v.Value).To(BeEquivalentTo("123"))
 		})
 	})
 })
