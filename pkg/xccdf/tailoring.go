@@ -51,8 +51,8 @@ type ProfileElement struct {
 	XMLName     xml.Name                   `xml:"xccdf-1.2:Profile"`
 	ID          string                     `xml:"id,attr"`
 	Extends     string                     `xml:"extends,attr,omitempty"`
-	Title       *TitleOrDescriptionElement `xml:"xccdf-1.2:title,omitempty"`
-	Description *TitleOrDescriptionElement `xml:"xccdf-1.2:description,omitempty"`
+	Title       *TitleOrDescriptionElement `xml:"xccdf-1.2:title"`
+	Description *TitleOrDescriptionElement `xml:"xccdf-1.2:description"`
 	Selections  []SelectElement
 	Values      []SetValueElement
 }
