@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.40] - 2021-09-09
+### Changes
+- Remove tailorprofile variable selection check
+- Disallow empty titles and descriptions for tailored profiles
+- Restart profileparser on failures
+- Skip e2e TestNodeSchedulingErrorFailsTheScan for now
+- Make default scanTolerations more tolerant
+- e2e: Migrate TestScanProducesRemediations to use ScanSettingBinding
+- Associate variable with compliance check result
+- Enable Creation of TailoredProfiles without extending existing ones
+- Don't shadow an import with a variable name
+- compliancescan: Fill the <target> element and the urn:xccdf:fact:identifier for node checks
+- Remove dead code
+- Add supoort for remediation templating for operator
+
 ## [0.1.39] - 2021-08-23
 ### Changes
 - Allow profileparser to parse PCI-DSS references

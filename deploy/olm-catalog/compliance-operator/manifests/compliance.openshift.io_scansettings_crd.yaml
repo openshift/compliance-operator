@@ -105,13 +105,11 @@ spec:
             type: array
           scanTolerations:
             default:
-            - effect: NoSchedule
-              key: node-role.kubernetes.io/master
-              operator: Exists
+            - operator: Exists
             description: Specifies tolerations needed for the scan to run on the nodes.
               This is useful in case the target set of nodes have custom taints that
               don't allow certain workloads to run. Defaults to allowing scheduling
-              on the master nodes.
+              on all nodes.
             items:
               description: The pod this Toleration is attached to tolerates any taint
                 that matches the triple <key,value,effect> using the matching operator
