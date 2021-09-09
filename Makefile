@@ -35,9 +35,13 @@ RELATED_IMAGE_OPERATOR_PATH?=$(IMAGE_REPO)/$(APP_NAME)
 RELATED_IMAGE_OPENSCAP_PATH=$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME)
 OPENSCAP_DOCKER_CONTEXT=./images/openscap
 
-BUNDLE_IMAGE_PATH=$(IMAGE_REPO)/compliance-operator-bundle
-
-INDEX_IMAGE_PATH=$(IMAGE_REPO)/compliance-operator-index
+BUNDLE_IMAGE_NAME=compliance-operator-bundle
+BUNDLE_IMAGE_PATH=$(IMAGE_REPO)/$(BUNDLE_IMAGE_NAME)
+BUNDLE_IMAGE_TAG?=latest
+TEST_BUNDLE_IMAGE_TAG?=testonly
+INDEX_IMAGE_NAME=compliance-operator-index
+INDEX_IMAGE_PATH=$(IMAGE_REPO)/$(INDEX_IMAGE_NAME)
+INDEX_IMAGE_TAG?=latest
 
 # Image tag to use. Set this if you want to use a specific tag for building
 # or your e2e tests.
@@ -137,11 +141,54 @@ openscap-image:
 
 .PHONY: bundle-image
 bundle-image:
-	$(RUNTIME) build -t $(BUNDLE_IMAGE_PATH):$(TAG) -f bundle.Dockerfile .
+	$(RUNTIME) build -t $(BUNDLE_IMAGE_PATH):$(BUNDLE_IMAGE_TAG) -f bundle.Dockerfile .
+
+.PHONY: test-bundle-image
+test-bundle-image:
+	$(RUNTIME) build -t $(BUNDLE_IMAGE_PATH):$(TEST_BUNDLE_IMAGE_TAG) -f bundle.Dockerfile .
 
 .PHONY: index-image
 index-image: opm
-	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(TAG) -f $(INDEX_IMAGE_PATH):latest -t $(INDEX_IMAGE_PATH):latest -c $(RUNTIME) --overwrite-latest
+	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(BUNDLE_IMAGE_TAG) -f $(INDEX_IMAGE_PATH):$(INDEX_IMAGE_TAG) -t $(INDEX_IMAGE_PATH):$(INDEX_IMAGE_TAG) -c $(RUNTIME) --overwrite-latest
+
+.PHONY: test-index-image
+test-index-image: opm test-bundle-image push-test-bundle
+	$(GOPATH)/bin/opm index add -b $(BUNDLE_IMAGE_PATH):$(TEST_BUNDLE_IMAGE_TAG) -t $(INDEX_IMAGE_PATH):$(INDEX_IMAGE_TAG) -c $(RUNTIME)
+
+.PHONY: index-image-to-cluster
+index-image-to-cluster: namespace openshift-user test-index-image
+	@echo "Temporarily exposing the default route to the image registry"
+	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
+	@echo "Pushing image $(INDEX_IMAGE_PATH):$(INDEX_IMAGE_TAG) to the image registry"
+	IMAGE_REGISTRY_HOST=$$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}'); \
+		$(RUNTIME) login $(LOGIN_PUSH_OPTS) -u $(OPENSHIFT_USER) -p $(shell oc whoami -t) $${IMAGE_REGISTRY_HOST}; \
+		$(RUNTIME) push $(LOGIN_PUSH_OPTS) $(INDEX_IMAGE_PATH):$(INDEX_IMAGE_TAG) $${IMAGE_REGISTRY_HOST}/openshift/$(INDEX_IMAGE_NAME):$(INDEX_IMAGE_TAG)
+	@echo "Removing the route from the image registry"
+	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
+	$(eval LOCAL_INDEX_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/openshift/$(INDEX_IMAGE_NAME):$(INDEX_IMAGE_TAG))
+
+.PHONY: bundle-image-to-cluster
+bundle-image-to-cluster: openshift-user bundle-image
+	@echo "Temporarily exposing the default route to the image registry"
+	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true}}' --type=merge
+	@echo "Pushing image $(BUNDLE_IMAGE_PATH):$(BUNDLE_IMAGE_TAG) to the image registry"
+	IMAGE_REGISTRY_HOST=$$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}'); \
+		$(RUNTIME) login $(LOGIN_PUSH_OPTS) -u $(OPENSHIFT_USER) -p $(shell oc whoami -t) $${IMAGE_REGISTRY_HOST}; \
+		$(RUNTIME) push $(LOGIN_PUSH_OPTS) $(BUNDLE_IMAGE_PATH):$(BUNDLE_IMAGE_TAG) $${IMAGE_REGISTRY_HOST}/openshift/$(BUNDLE_IMAGE_NAME):$(BUNDLE_IMAGE_TAG)
+	@echo "Removing the route from the image registry"
+	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
+	$(eval LOCAL_BUNDLE_IMAGE_PATH = image-registry.openshift-image-registry.svc:5000/openshift/$(BUNDLE_IMAGE_NAME):$(BUNDLE_IMAGE_TAG))
+
+.PHONY: test-catalog
+test-catalog: index-image-to-cluster
+	@echo "WARNING: This will temporarily modify deploy/olm-catalog/catalog-source.yaml"
+	@echo "Replacing image reference in deploy/olm-catalog/catalog-source.yaml"
+	@$(SED) 's%quay.io/compliance-operator/compliance-operator-index:latest%$(LOCAL_INDEX_IMAGE_PATH)%' deploy/olm-catalog/catalog-source.yaml
+	@oc apply -f deploy/olm-catalog/catalog-source.yaml
+	@echo "Restoring image reference in deploy/olm-catalog/catalog-source.yaml"
+	@$(SED) 's%$(LOCAL_INDEX_IMAGE_PATH)%quay.io/compliance-operator/compliance-operator-index:latest%' deploy/olm-catalog/catalog-source.yaml
+	@oc apply -f deploy/olm-catalog/operator-group.yaml
+	@oc apply -f deploy/olm-catalog/subscription.yaml
 
 .PHONY: test-broken-content-image
 test-broken-content-image:
@@ -369,15 +416,23 @@ else
 endif
 
 .PHONY: push
-push: image
+push: image push-bundle
 	# compliance-operator manager
 	$(RUNTIME) push $(RELATED_IMAGE_OPERATOR_PATH):$(TAG)
-	# bundle image
-	$(RUNTIME) push $(BUNDLE_IMAGE_PATH):$(TAG)
 
 .PHONY: must-gather-push
 must-gather-push: must-gather-image
 	$(RUNTIME) push $(MUST_GATHER_IMAGE_PATH):$(MUST_GATHER_IMAGE_TAG)
+
+.PHONY: push-bundle
+push-bundle: bundle-image
+	# bundle image
+	$(RUNTIME) push $(BUNDLE_IMAGE_PATH):$(BUNDLE_IMAGE_TAG)
+
+.PHONY: push-test-bundle
+push-test-bundle: test-bundle-image
+	# test bundle image
+	$(RUNTIME) push $(BUNDLE_IMAGE_PATH):$(TEST_BUNDLE_IMAGE_TAG)
 
 .PHONY: push-index
 push-index: index-image

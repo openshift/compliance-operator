@@ -353,3 +353,28 @@ or support is available at `quay.io/compliance-operator/must-gather:latest`:
 ```
 $ oc adm must-gather --image=quay.io/compliance-operator/must-gather:latest
 ```
+
+Metrics
+=======
+The compliance-operator exposes the following metrics to Prometheus when cluster-monitoring is available.
+
+    # HELP compliance_operator_compliance_remediation_status_total A counter for the total number of updates to the status of a ComplianceRemediation
+    # TYPE compliance_operator_compliance_remediation_status_total counter
+    compliance_operator_compliance_remediation_status_total{name="remediation-name",state="NotApplied"} 1
+
+    # HELP compliance_operator_compliance_scan_status_total A counter for the total number of updates to the status of a ComplianceScan
+    # TYPE compliance_operator_compliance_scan_status_total counter
+    compliance_operator_compliance_scan_status_total{name="scan-name",phase="AGGREGATING",result="NOT-AVAILABLE"} 1
+
+    # HELP compliance_operator_compliance_scan_error_total A counter for the total number of encounters of error
+    # TYPE compliance_operator_compliance_scan_error_total counter
+    compliance_operator_compliance_scan_error_total{name="scan-name",error="some_error"} 1
+
+After logging into the console, navigating to Monitoring -> Metrics, the compliance_operator* metrics can be queried using the metrics dashboard. The `{__name__=~"compliance.*"}` query can be used to view the full set of metrics.
+
+Testing for the metrics from the cli can also be done directly with a pod that curls the metrics service. This is useful for troubleshooting.
+
+```
+oc run --rm -i --restart=Never --image=registry.fedoraproject.org/fedora-minimal:latest -n openshift-compliance metrics-test -- bash -c 'curl -ks -H "Authorization: Bea
+rer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" https://metrics.openshift-compliance.svc:8585/metrics-co' | grep compliance
+```
