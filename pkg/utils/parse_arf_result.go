@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -613,7 +614,6 @@ func remediationFromFixElement(scheme *runtime.Scheme, fix *xmlquery.Node, scanN
 func remediationsFromString(scheme *runtime.Scheme, name string, namespace string, fixContent string, resultValues map[string]string) ([]*compv1alpha1.ComplianceRemediation, error) {
 	//ToDO find and substitute the value
 	fixWithValue, valuesUsedList, notFoundValueList, parsingError := parseValues(fixContent, resultValues)
-
 	if parsingError != nil {
 		return nil, parsingError
 	}
@@ -692,36 +692,62 @@ func remediationsFromString(scheme *runtime.Scheme, name string, namespace strin
 	return rems, nil
 }
 
+func toArrayByComma(format string) []string {
+	return strings.Split(format, ",")
+}
+
 //This function will take orginal remediation content, and a list of all values found in the configMap
 //It will processed and substitue the value in remediation content, and return processed Remediation content
 //The return will be Processed-Remdiation Content, Value-Used List, Un-Set List, and err if possible
 func parseValues(remContent string, resultValues map[string]string) (string, []string, []string, error) {
-	t, err := template.New("").Option("missingkey=zero").Parse(remContent)
 	var valuesUsedList []string
 	var valuesMissingList []string
 	var valuesParsedList []string
-	if err != nil {
-		return remContent, valuesUsedList, valuesMissingList, errors.Wrap(err, "wrongly formatted remediation context: ") //Error creating template // Wrongly formatted remediation context
+	//find everything start and end with {{}}
+	re := regexp.MustCompile(`\{\{[^}]*\}\}`)
+	contentList := re.FindAllString(remContent, -1)
+	fixedText := remContent
+	if len(contentList) == 0 {
+		return remContent, valuesUsedList, valuesMissingList, nil
+	} // no processing needed, no urlencoded data
+	//process urlencoded content file data one by one and replace them in fixedText
+	for _, content := range contentList {
+		//take out `{{ `,' }}' from content
+		trimmedContent := content[3:][:len(content)-6]
+		decodeContent, decodeErr := url.QueryUnescape(trimmedContent)
+		if decodeErr != nil {
+			return remContent, valuesUsedList, valuesMissingList, errors.Wrap(decodeErr, "error while decode remediation context: ")
+		}
+		t, err := template.New("").Option("missingkey=zero").Funcs(template.FuncMap{"toArrayByComma": toArrayByComma}).
+			Parse(decodeContent)
+		if err != nil {
+			return remContent, valuesUsedList, valuesMissingList, errors.Wrap(err, "wrongly formatted remediation context: ") //Error creating template // Wrongly formatted remediation context
+		}
+
+		buf := &bytes.Buffer{}
+		err = t.Execute(buf, resultValues)
+		if err != nil {
+			return fixedText, valuesUsedList, valuesMissingList, errors.Wrap(err, "error while parsing variables into values: ")
+		}
+		fixedContent := buf.String()
+		fixedText = strings.ReplaceAll(fixedText, content, url.PathEscape(fixedContent))
+
+		//Iterate through template tree to get all parsed variable
+		valuesParsedList = getParsedValueName(t)
+		for _, parsedVariable := range valuesParsedList {
+			_, found := resultValues[parsedVariable]
+			if found {
+				dnsFriendlyParsedVariable := strings.ReplaceAll(parsedVariable, "_", "-")
+				valuesUsedList = append(valuesUsedList, dnsFriendlyParsedVariable)
+			} else {
+				dnsFriendlyParsedVariable := strings.ReplaceAll(parsedVariable, "_", "-")
+				valuesMissingList = append(valuesMissingList, dnsFriendlyParsedVariable)
+			}
+		}
+
 	}
 
-	buf := &bytes.Buffer{}
-	err = t.Execute(buf, resultValues)
-	fixedText := buf.String()
-	if err != nil {
-		return fixedText, valuesUsedList, valuesMissingList, err
-	}
-	valuesParsedList = getParsedValueName(t)
-	for _, parsedVariable := range valuesParsedList {
-		_, found := resultValues[parsedVariable]
-		if found {
-			dnsFriendlyParsedVariable := strings.ReplaceAll(parsedVariable, "_", "-")
-			valuesUsedList = append(valuesUsedList, dnsFriendlyParsedVariable)
-		} else {
-			dnsFriendlyParsedVariable := strings.ReplaceAll(parsedVariable, "_", "-")
-			valuesMissingList = append(valuesMissingList, dnsFriendlyParsedVariable)
-		}
-	}
-	return fixedText, valuesUsedList, valuesMissingList, err
+	return fixedText, valuesUsedList, valuesMissingList, nil
 }
 
 func getParsedValueName(t *template.Template) []string {
