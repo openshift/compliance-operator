@@ -11,6 +11,12 @@ import (
 // here or in the compliance-operator?
 const RuleIDAnnotationKey = "compliance.openshift.io/rule"
 
+const (
+	CheckTypePlatform = "Platform"
+	CheckTypeNode     = "Node"
+	CheckTypeNone     = ""
+)
+
 type RulePayload struct {
 	// The XCCDF ID
 	ID string `json:"id"`
@@ -24,6 +30,11 @@ type RulePayload struct {
 	Warning string `json:"warning,omitempty"`
 	// The severity level
 	Severity string `json:"severity,omitempty"`
+	// Instructions for auditing this specific rule
+	Instructions string `json:"instructions,omitempty"`
+	// What type of check will this rule execute:
+	// Platform, Node or none (represented by an empty string)
+	CheckType string `json:"checkType,omitempty"`
 	// The Available fixes
 	// +nullable
 	// +optional

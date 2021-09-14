@@ -538,6 +538,9 @@ func parseVarValues(varNode *xmlquery.Node, v *cmpv1alpha1.Variable) error {
 
 func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *cmpv1alpha1.ProfileBundle, nonce string, action func(p *cmpv1alpha1.Rule) error) error {
 	var wg sync.WaitGroup
+	questionsTable := utils.NewOcilQuestionTable(contentDom)
+	defTable := utils.NewDefHashTable(contentDom)
+
 	processRule := func(rchan <-chan *xmlquery.Node, errs chan error) {
 		for ruleObj := range rchan {
 			id := ruleObj.SelectAttr("id")
@@ -554,7 +557,7 @@ func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *
 
 			description := ruleObj.SelectElement("xccdf-1.2:description")
 			rationale := ruleObj.SelectElement("xccdf-1.2:rationale")
-			warning := ruleObj.SelectElement("xccdf-1.2:warning")
+			warnings := utils.GetWarningsForRule(ruleObj)
 			severity := ruleObj.SelectAttr("severity")
 
 			fixes := []cmpv1alpha1.FixDefinition{}
@@ -591,6 +594,9 @@ func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *
 				foundPlatformMap[platform] = true
 			}
 
+			instructions := utils.GetInstructionsForRule(ruleObj, questionsTable)
+			defs := utils.GetRuleOvalTest(ruleObj, defTable)
+
 			// note: stdParser is a global variable initialized in init()
 			annotations, err := stdParser.parseXmlNode(ruleObj)
 			if err != nil {
@@ -620,11 +626,22 @@ func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *
 			if rationale != nil {
 				p.Rationale = utils.XmlNodeAsMarkdown(rationale)
 			}
-			if warning != nil {
-				p.Warning = utils.XmlNodeAsMarkdown(warning)
+			if warnings != nil {
+				p.Warning = strings.Join(warnings, "\n")
 			}
 			if severity != "" {
 				p.Severity = severity
+			}
+			if instructions != "" {
+				p.Instructions = instructions
+			}
+			// Parse check type
+			if len(defs) == 0 {
+				p.CheckType = cmpv1alpha1.CheckTypeNone
+			} else if utils.RuleHasApiObjectWarning(ruleObj) {
+				p.CheckType = cmpv1alpha1.CheckTypePlatform
+			} else {
+				p.CheckType = cmpv1alpha1.CheckTypeNode
 			}
 			if len(fixes) > 0 {
 				p.AvailableFixes = fixes

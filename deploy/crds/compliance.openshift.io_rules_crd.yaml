@@ -43,11 +43,18 @@ spec:
             nullable: true
             type: array
             x-kubernetes-list-type: atomic
+          checkType:
+            description: 'What type of check will this rule execute: Platform, Node
+              or none (represented by an empty string)'
+            type: string
           description:
             description: The description of the Rule
             type: string
           id:
             description: The XCCDF ID
+            type: string
+          instructions:
+            description: Instructions for auditing this specific rule
             type: string
           kind:
             description: 'Kind is a string value representing the REST resource this

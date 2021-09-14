@@ -511,39 +511,42 @@ of rules. An example `Rule` object looks like this:
 
 ```yaml
 apiVersion: compliance.openshift.io/v1alpha1
-description: '<br /><br /><pre>$ sudo nmcli radio wifi off</pre>Configure the system
-  to disable all wireless network interfaces with the&#xA;following command:'
-id: xccdf_org.ssgproject.content_rule_wireless_disable_interfaces
+checkType: Platform
+description: Use network policies to isolate traffic in your cluster network.
+id: xccdf_org.ssgproject.content_rule_configure_network_policies_namespaces
+instructions: |-
+  Verify that the every non-control plane namespace has an appropriate
+  NetworkPolicy.
+
+  To get all the non-control plane namespaces, you can do the
+  following command oc get  namespaces -o json | jq '[.items[] | select((.metadata.name | startswith("openshift") | not) and (.metadata.name | startswith("kube-") | not) and .metadata.name != "default")]'
+
+  To get all the non-control plane namespaces with a NetworkPolicy, you can do the
+  following command oc get --all-namespaces networkpolicies -o json | jq '[.items[] | select((.metadata.name | startswith("openshift") | not) and (.metadata.name | startswith("kube-") | not) and .metadata.name != "default") | .metadata.namespace] | unique'
+
+  Make sure that the namespaces displayed in the commands of the commands match.
 kind: Rule
 metadata:
   annotations:
-    compliance.openshift.io/rule: wireless-disable-interfaces
-    control.compliance.openshift.io/NIST-800-53: AC-18(a);AC-18(3);CM-7(a);CM-7(b);CM-6(a);MP-7
-    policies.open-cluster-management.io/controls: AC-18(a),AC-18(3),CM-7(a),CM-7(b),CM-6(a),MP-7
-    policies.open-cluster-management.io/standards: NIST-800-53
+    compliance.openshift.io/rule: configure-network-policies-namespaces
+    control.compliance.openshift.io/CIS-OCP: 5.3.2
+    control.compliance.openshift.io/NERC-CIP: CIP-003-3 R4;CIP-003-3 R4.2;CIP-003-3
+      R5;CIP-003-3 R6;CIP-004-3 R2.2.4;CIP-004-3 R3;CIP-007-3 R2;CIP-007-3 R2.1;CIP-007-3
+      R2.2;CIP-007-3 R2.3;CIP-007-3 R5.1;CIP-007-3 R6.1
+    control.compliance.openshift.io/NIST-800-53: AC-4;AC-4(21);CA-3(5);CM-6;CM-6(1);CM-7;CM-7(1);SC-7;SC-7(3);SC-7(5);SC-7(8);SC-7(12);SC-7(13);SC-7(18)
   labels:
-    compliance.openshift.io/profile-bundle: rhcos4
-  name: rhcos4-wireless-disable-interfaces
+    compliance.openshift.io/profile-bundle: ocp4
+  name: ocp4-configure-network-policies-namespaces
   namespace: openshift-compliance
-  ownerReferences:
-  - apiVersion: compliance.openshift.io/v1alpha1
-    blockOwnerDeletion: true
-    controller: true
-    kind: ProfileBundle
-    name: rhcos4
-    uid: 46be5b0f-e121-432e-8db2-3f417cdfdcc6
-  resourceVersion: "102322"
-  selfLink: /apis/compliance.openshift.io/v1alpha1/namespaces/openshift-compliance/rules/rhcos4-wireless-disable-interfaces
-  uid: 8debde1b-e2df-4058-a345-151905769187
-  severity: medium
-  rationale: The use of wireless networking can introduce many different attack vectors
-  into&#xA;the organization&#39;s network. Common attack vectors such as malicious
-  association&#xA;and ad hoc networks will allow an attacker to spoof a wireless access
-  point&#xA;(AP), allowing validated systems to connect to the malicious AP and enabling
-  the&#xA;attacker to monitor and record network traffic. These malicious APs can
-  also&#xA;serve to create a man-in-the-middle attack or be used to create a denial
-  of&#xA;service to valid network resources.
-title: Deactivate Wireless Network Interfaces
+rationale: Running different applications on the same Kubernetes cluster creates a
+  risk of one compromised application attacking a neighboring application. Network
+  segmentation is important to ensure that containers can communicate only with those
+  they are supposed to. When a network policy is introduced to a given namespace,
+  all traffic not allowed by the policy is denied. However, if there are no network
+  policies in a namespace all traffic will be allowed into and out of the pods in
+  that namespace.
+severity: high
+title: Ensure that application Namespaces have Network Policies defined.
 ```
 
 As you can see, the Rule object contains mostly informational data. Some
@@ -551,6 +554,26 @@ attributes that might be directly usable to admins include `id` which can
 be used as the value of the `rule` attribute of the `ComplianceScan` object
 or the annotations that contain compliance controls that are addressed by
 this rule.
+
+Notable attributes:
+
+* **id**: XCCDF identifier. Parsed directly from the datastream.
+* **instructions**: Manual instructions to audit for this specific control.
+* **spec.enableRules**: Equivalent of `disableRules`, except enables rules that might be
+  disabled by default.
+* **rationale**: A textual description of why this rule is being checked.
+* **severity**: A textual description of how severe is it to fail this rule.
+* **title**: A small summary of what this rule does
+* **checkType**: Indicates the type of check that this rule executes. `Node` is
+  done directly on the node. `Platform` is done on the Kubernetes API layer. An
+  empty value means there is no automated check and this will merely be
+  informational.
+
+Ownership:
+
+Rules will have an appropriate label to easily identify the ProfileBundle that
+created it. The profileBundle will also be specified in the OwnerReferences of
+this object.
 
 ### The `TailoredProfile` object
 While we strive to make the default profiles useful in general, each organization might
