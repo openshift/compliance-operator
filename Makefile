@@ -311,12 +311,12 @@ e2e-local: operator-sdk tear-down deploy-crds ## Run the end-to-end tests on a l
 	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 	@$(SED) 's%$(E2E_CONTENT_IMAGE_PATH)%$(DEFAULT_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 
-# If IMAGE_FORMAT is not defined, it means that we're not running on CI, so we
+# If IMAGE_FROM_CI is not defined, it means that we're not running on CI, so we
 # probably want to push the compliance-operator image to the cluster we're
 # developing on. This target exposes temporarily the image registry, pushes the
 # image, and remove the route in the end.
 #
-# The IMAGE_FORMAT variable comes from CI. It is of the format:
+# The IMAGE_FROM_CI variable comes from CI. It is of the format:
 #     <image path in CI registry>:${component}
 # Here define the `component` variable, so, when we overwrite the
 # RELATED_IMAGE_OPERATOR_PATH variable, it'll expand to the component we need.
@@ -333,14 +333,12 @@ e2e-local: operator-sdk tear-down deploy-crds ## Run the end-to-end tests on a l
 # If the E2E_SKIP_CONTAINER_BUILD environment variable is used, this will push
 # the previously built images.
 .PHONY: image-to-cluster
-ifdef IMAGE_FORMAT
+ifdef IMAGE_FROM_CI
 image-to-cluster:
-	@echo "IMAGE_FORMAT variable detected. We're in a CI enviornment."
+	@echo "IMAGE_FROM_CI variable detected. We're in a CI enviornment."
 	@echo "We're in a CI environment, skipping image-to-cluster target."
-	$(eval component = $(APP_NAME))
-	$(eval RELATED_IMAGE_OPERATOR_PATH = $(IMAGE_FORMAT))
-	$(eval component = testcontent)
-	$(eval E2E_CONTENT_IMAGE_PATH = $(IMAGE_FORMAT))
+	$(eval RELATED_IMAGE_OPERATOR_PATH = $(IMAGE_FROM_CI))
+	$(eval E2E_CONTENT_IMAGE_PATH = $(CONTENT_IMAGE_FROM_CI))
 else ifeq ($(E2E_USE_DEFAULT_IMAGES), true)
 image-to-cluster:
 	@echo "E2E_USE_DEFAULT_IMAGES variable detected. Using default images."
@@ -353,7 +351,7 @@ image-to-cluster: namespace cluster-image-push
 	@echo "E2E_SKIP_CONTAINER_BUILD variable detected. Using previously built local images."
 else
 image-to-cluster: namespace image cluster-image-push
-	@echo "IMAGE_FORMAT variable missing. We're in local enviornment."
+	@echo "IMAGE_FROM_CI variable missing. We're in local enviornment."
 endif
 
 .PHONY: cluster-image-push
