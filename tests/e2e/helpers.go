@@ -100,18 +100,22 @@ type mcTestCtx struct {
 }
 
 func E2ELogf(t *testing.T, format string, args ...interface{}) {
+	t.Helper()
 	t.Logf(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), format), args...)
 }
 
 func E2ELog(t *testing.T, args ...interface{}) {
+	t.Helper()
 	t.Log(fmt.Sprintf("%s: %s", time.Now().Format(time.RFC3339), fmt.Sprint(args...)))
 }
 
 func E2EErrorf(t *testing.T, format string, args ...interface{}) {
+	t.Helper()
 	t.Errorf(fmt.Sprintf("E2E-FAILURE: %s: %s", time.Now().Format(time.RFC3339), format), args...)
 }
 
 func E2EFatalf(t *testing.T, format string, args ...interface{}) {
+	t.Helper()
 	t.Fatalf(fmt.Sprintf("E2E-FAILURE: %s: %s", time.Now().Format(time.RFC3339), format), args...)
 }
 
