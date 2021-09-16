@@ -318,13 +318,25 @@ var _ = Describe("Testing ParseBundle", func() {
 			Expect(moderateProfilePre.Rules).To(HaveLen(len(moderateProfilePost.Rules) + 2))
 		})
 
-		It("Detects that a rule has changed severity", func() {
-			ruleChangedSeverityPost := &cmpv1alpha1.Rule{}
-			key := types.NamespacedName{Namespace: testNamespace, Name: chronydMaxpollRuleName}
-			err := client.Get(context.TODO(), key, ruleChangedSeverityPost)
-			Expect(err).To(BeNil())
+		When("Fetching the rule", func() {
+			var fetchedRule *cmpv1alpha1.Rule
+			JustBeforeEach(func() {
+				fetchedRule = &cmpv1alpha1.Rule{}
+				key := types.NamespacedName{Namespace: testNamespace, Name: chronydMaxpollRuleName}
+				err := client.Get(context.TODO(), key, fetchedRule)
+				Expect(err).To(BeNil())
+			})
+			It("Detects that a rule has changed severity", func() {
+				Expect(fetchedRule.Severity).ToNot(BeEquivalentTo(ruleChangedSeverityPre.Severity))
+			})
 
-			Expect(ruleChangedSeverityPost.Severity).ToNot(BeEquivalentTo(ruleChangedSeverityPre.Severity))
+			It("Detect that a rule is of type Node", func() {
+				Expect(fetchedRule.CheckType).To(BeEquivalentTo(cmpv1alpha1.CheckTypeNode))
+			})
+
+			It("Detect that a rule has instructions", func() {
+				Expect(fetchedRule.Instructions).ToNot(BeEmpty())
+			})
 		})
 	})
 

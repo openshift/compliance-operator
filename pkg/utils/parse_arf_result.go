@@ -93,7 +93,7 @@ func GetPathFromWarningXML(in *xmlquery.Node) []ResourcePath {
 }
 
 func warningHasApiObjects(in *xmlquery.Node) bool {
-	codeNodes := in.SelectElements("html:code")
+	codeNodes := in.SelectElements("//html:code")
 
 	for _, codeNode := range codeNodes {
 		if codeNode.SelectAttr("class") == endPointTag {
@@ -104,11 +104,11 @@ func warningHasApiObjects(in *xmlquery.Node) bool {
 	return false
 }
 
-type nodeByIdHashTable map[string]*xmlquery.Node
+type NodeByIdHashTable map[string]*xmlquery.Node
 type nodeByIdHashVariablesTable map[string][]string
 
-func newByIdHashTable(nodes []*xmlquery.Node) nodeByIdHashTable {
-	table := make(nodeByIdHashTable)
+func newByIdHashTable(nodes []*xmlquery.Node) NodeByIdHashTable {
+	table := make(NodeByIdHashTable)
 	for i := range nodes {
 		ruleDefinition := nodes[i]
 		ruleId := ruleDefinition.SelectAttr("id")
@@ -119,32 +119,32 @@ func newByIdHashTable(nodes []*xmlquery.Node) nodeByIdHashTable {
 	return table
 }
 
-func newHashTableFromRootAndQuery(dsDom *xmlquery.Node, root, query string) nodeByIdHashTable {
+func newHashTableFromRootAndQuery(dsDom *xmlquery.Node, root, query string) NodeByIdHashTable {
 	benchmarkDom := dsDom.SelectElement(root)
 	rules := benchmarkDom.SelectElements(query)
 	return newByIdHashTable(rules)
 }
 
-func newRuleHashTable(dsDom *xmlquery.Node) nodeByIdHashTable {
+func newRuleHashTable(dsDom *xmlquery.Node) NodeByIdHashTable {
 	return newHashTableFromRootAndQuery(dsDom, "//ds:component/xccdf-1.2:Benchmark", "//xccdf-1.2:Rule")
 }
 
-func newOcilQuestionTable(dsDom *xmlquery.Node) nodeByIdHashTable {
+func NewOcilQuestionTable(dsDom *xmlquery.Node) NodeByIdHashTable {
 	return newHashTableFromRootAndQuery(dsDom, "//ds:component/ocil:ocil", "//ocil:boolean_question")
 }
-func newStateHashTable(dsDom *xmlquery.Node) nodeByIdHashTable {
+func newStateHashTable(dsDom *xmlquery.Node) NodeByIdHashTable {
 	return newHashTableFromRootAndQuery(dsDom, "//ds:component/oval-def:oval_definitions/oval-def:states", "*")
 }
 
-func newObjHashTable(dsDom *xmlquery.Node) nodeByIdHashTable {
+func newObjHashTable(dsDom *xmlquery.Node) NodeByIdHashTable {
 	return newHashTableFromRootAndQuery(dsDom, "//ds:component/oval-def:oval_definitions/oval-def:objects", "*")
 }
 
-func newDefHashTable(dsDom *xmlquery.Node) nodeByIdHashTable {
+func NewDefHashTable(dsDom *xmlquery.Node) NodeByIdHashTable {
 	return newHashTableFromRootAndQuery(dsDom, "//ds:component/oval-def:oval_definitions/oval-def:definitions", "*")
 }
 
-func newValueListTable(dsDom *xmlquery.Node, statesTable, objectsTable nodeByIdHashTable) nodeByIdHashVariablesTable {
+func newValueListTable(dsDom *xmlquery.Node, statesTable, objectsTable NodeByIdHashTable) nodeByIdHashVariablesTable {
 	root := "//ds:component/oval-def:oval_definitions/oval-def:tests"
 	testsDom := dsDom.SelectElement(root).SelectElements("*")
 	table := make(nodeByIdHashVariablesTable)
@@ -248,7 +248,7 @@ func findAllVariablesFromObject(node *xmlquery.Node) ([]string, bool) {
 	}
 }
 
-func getRuleOvalTest(rule *xmlquery.Node, defTable nodeByIdHashTable) nodeByIdHashTable {
+func GetRuleOvalTest(rule *xmlquery.Node, defTable NodeByIdHashTable) NodeByIdHashTable {
 	var ovalRefEl *xmlquery.Node
 	testList := make(map[string]*xmlquery.Node)
 	for _, check := range rule.SelectElements("//xccdf-1.2:check") {
@@ -292,9 +292,9 @@ func removeDuplicate(input []string) []string {
 	}
 	return trimmedList
 }
-func getValueListUsedForRule(rule *xmlquery.Node, ovalTable nodeByIdHashVariablesTable, defTable nodeByIdHashTable, variableList map[string]string) []string {
+func getValueListUsedForRule(rule *xmlquery.Node, ovalTable nodeByIdHashVariablesTable, defTable NodeByIdHashTable, variableList map[string]string) []string {
 	var valueList []string
-	ruleTests := getRuleOvalTest(rule, defTable)
+	ruleTests := GetRuleOvalTest(rule, defTable)
 	if len(ruleTests) == 0 {
 		return valueList
 	}
@@ -344,7 +344,7 @@ func getRuleOcilQuestionID(rule *xmlquery.Node) string {
 	return strings.TrimSuffix(questionnareName, questionnaireSuffix) + questionSuffix
 }
 
-func getInstructionsForRule(rule *xmlquery.Node, ocilTable nodeByIdHashTable) string {
+func GetInstructionsForRule(rule *xmlquery.Node, ocilTable NodeByIdHashTable) string {
 	// convert rule's questionnaire ID to question ID
 	ruleQuestionId := getRuleOcilQuestionID(rule)
 
@@ -393,10 +393,10 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 	}
 
 	ruleTable := newRuleHashTable(dsDom)
-	questionsTable := newOcilQuestionTable(dsDom)
+	questionsTable := NewOcilQuestionTable(dsDom)
 	statesTable := newStateHashTable(dsDom)
 	objsTable := newObjHashTable(dsDom)
-	defTable := newDefHashTable(dsDom)
+	defTable := NewDefHashTable(dsDom)
 	ovalTestVarTable := newValueListTable(dsDom, statesTable, objsTable)
 	results := resultsDom.SelectElements("//rule-result")
 	parsedResults := make([]*ParseResult, 0)
@@ -413,7 +413,7 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 			continue
 		}
 
-		instructions := getInstructionsForRule(resultRule, questionsTable)
+		instructions := GetInstructionsForRule(resultRule, questionsTable)
 		ruleValues := getValueListUsedForRule(resultRule, ovalTestVarTable, defTable, valuesList)
 		resCheck, err := newComplianceCheckResult(result, resultRule, ruleIDRef, instructions, scanName, namespace, ruleValues)
 		if err != nil {
@@ -465,7 +465,7 @@ func newComplianceCheckResult(result *xmlquery.Node, rule *xmlquery.Node, ruleId
 		Severity:     mappedSeverity,
 		Instructions: instructions,
 		Description:  complianceCheckResultDescription(rule),
-		Warnings:     getWarningsForRule(rule),
+		Warnings:     GetWarningsForRule(rule),
 		ValuesUsed:   ruleValues,
 	}, nil
 }
@@ -487,7 +487,7 @@ func complianceCheckResultDescription(rule *xmlquery.Node) string {
 	return title + getSafeText(rule, "xccdf-1.2:rationale")
 }
 
-func getWarningsForRule(rule *xmlquery.Node) []string {
+func GetWarningsForRule(rule *xmlquery.Node) []string {
 	warningObjs := rule.SelectElements("//xccdf-1.2:warning")
 
 	warnings := []string{}
@@ -508,6 +508,21 @@ func getWarningsForRule(rule *xmlquery.Node) []string {
 		return nil
 	}
 	return warnings
+}
+
+func RuleHasApiObjectWarning(rule *xmlquery.Node) bool {
+	warningObjs := rule.SelectElements("//xccdf-1.2:warning")
+
+	for _, warn := range warningObjs {
+		if warn == nil {
+			continue
+		}
+		if warningHasApiObjects(warn) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func mapComplianceCheckResultSeverity(result *xmlquery.Node) (compv1alpha1.ComplianceCheckResultSeverity, error) {
