@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"strings"
 
 	igntypes "github.com/coreos/ignition/v2/config/v3_1/types"
 	. "github.com/onsi/ginkgo"
@@ -100,8 +103,8 @@ var _ = Describe("XCCDF parser", func() {
 			schema.AddKnownTypes(mcfgv1.SchemeGroupVersion, mcInstance)
 			resultsFilename = "../../tests/data/xccdf-result-remdiation-templating.xml"
 			dsFilename = "../../tests/data/ds-input-for-remediation-value.xml"
-			//I edited on line 51691 source: data:,{{.var_fake_second_value|urlquery}}2...s{{.var_fake_value|urlquery}}%20...2{{.var_postfix_relayhost|urlquery}}0t...
-			//%20{{.var_auditd_max_log_file|urlquery}}%0Anum_logs%20%3D%205%0Apriority_boost%20%3D%2
+			//the ds-input-for-remediation-value is generated from newly modified content build
+			//it has data:,{{ ..23%0A%23%20This%20file%20controls%20the%20configuratio... }} formate
 
 		})
 		JustBeforeEach(func() {
@@ -160,6 +163,52 @@ var _ = Describe("XCCDF parser", func() {
 
 			It("The remdiation should have correct Required-Value annotation", func() {
 				Expect(rem.Annotations[compv1alpha1.RemediationValueRequiredAnnotation]).To(Equal(expRequiredValueAnnotation))
+			})
+
+		})
+
+		Context("Check if parsing will generate remediation with correct template mutiply lines", func() {
+			var (
+				rem     *compv1alpha1.ComplianceRemediation
+				expName string
+			)
+
+			expValueUsedAnnotation := "var-multiple-time-servers" //expect found and used value
+			expRequiredValueAnnotation := "var-multiple-time-servers"
+			expNTPServersSetting := `Server 0.fedora.pool.ntp.org
+Server 1.fedora.pool.ntp.org
+Server 2.fedora.pool.ntp.org
+Server 3.fedora.pool.ntp.org`
+			expNTPServersSettingUrl := url.PathEscape(expNTPServersSetting)
+			BeforeEach(func() {
+				expName = "testScan-chronyd-or-ntpd-specify-multiple-servers"
+				for i := range resultList {
+					if resultList[i].Remediations != nil {
+						if resultList[i].Remediations[0].Name == expName {
+							rem = resultList[i].Remediations[0]
+							break
+						}
+					}
+				}
+				Expect(rem).ToNot(BeNil())
+			})
+
+			It("The Remediation should be the correct testing remediation", func() {
+				Expect(rem.Name).To(Equal(expName))
+			})
+
+			It("The remdiation should have correct Value-Used annotation", func() {
+				Expect(rem.Annotations[compv1alpha1.RemediationValueUsedAnnotation]).To(Equal(expValueUsedAnnotation))
+			})
+
+			It("The remdiation should have correct Required-Value annotation", func() {
+				Expect(rem.Annotations[compv1alpha1.RemediationValueRequiredAnnotation]).To(Equal(expRequiredValueAnnotation))
+			})
+
+			It("The remediation should have correct ntp servers", func() {
+				//print remediation machine config into variable
+				MCContent := fmt.Sprintf("%s", rem.Spec.Current.Object.Object)
+				Expect(strings.Contains(MCContent, expNTPServersSettingUrl)).To(Equal(true))
 			})
 
 		})

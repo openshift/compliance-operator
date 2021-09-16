@@ -459,16 +459,19 @@ func (r *ReconcileComplianceRemediation) isRequiredValueSet(rem *compv1alpha1.Co
 	if err != nil {
 		return false, err //error getting scan
 	}
+
 	if scan.Spec.TailoringConfigMap != nil {
-		tp := &compv1alpha1.TailoredProfile{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: scan.Spec.TailoringConfigMap.Name, Namespace: rem.GetNamespace()}, tp)
+		tpcm := &corev1.ConfigMap{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: scan.Spec.TailoringConfigMap.Name, Namespace: rem.GetNamespace()}, tpcm)
 		if err != nil {
 			return false, err
 		}
-		for _, setValue := range tp.Spec.SetValues {
-			if setValue.Name == requiredValue {
-				return true, nil
-			}
+		tpContent, ok := tpcm.Data["tailoring.xml"]
+		if !ok {
+			return false, fmt.Errorf("Error retriving Tailor Profile CM")
+		}
+		if strings.Contains(tpContent, strings.ReplaceAll(requiredValue, "-", "_")) {
+			return true, nil
 		}
 		return false, nil
 	}
