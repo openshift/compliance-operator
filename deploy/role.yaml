@@ -137,6 +137,7 @@ rules:
   - ""
   resources:
   - nodes  # We need to list the nodes to be able to selectively scan
+  - namespaces # We need this to get the range
   verbs:
   - list
   - watch

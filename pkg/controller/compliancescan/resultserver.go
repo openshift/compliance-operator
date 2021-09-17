@@ -3,8 +3,11 @@ package compliancescan
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/go-logr/logr"
+	ocpapisecv1 "github.com/openshift/api/security/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -18,15 +21,29 @@ import (
 
 const resultserverSA = "resultserver"
 
+const (
+	defaultPodFSGroup int64 = 2000
+	defaultPodUid     int64 = 1000
+)
+
 // The result-server is a pod that listens for results from other pods and
 // stores them in a PVC.
 // It's comprised of the PVC for the scan, the pod and a service that fronts it
 func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
+	ctx := context.Background()
 	resultServerLabels := getResultServerLabels(instance)
 
 	logger.Info("Creating scan result server pod")
-	deployment := resultServer(instance, resultServerLabels, logger)
-	err := r.client.Create(context.TODO(), deployment)
+	podFSGroup, podFSGroupErr := r.getPodFSGroup(ctx)
+	if podFSGroupErr != nil {
+		return podFSGroupErr
+	}
+	podUid, podUidErr := r.getPodUid(ctx)
+	if podUidErr != nil {
+		return podUidErr
+	}
+	deployment := resultServer(instance, resultServerLabels, podFSGroup, podUid, logger)
+	err := r.client.Create(ctx, deployment)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logger.Error(err, "Cannot create deployment", "deployment", deployment)
 		return err
@@ -34,7 +51,7 @@ func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.Comp
 	logger.Info("ResultServer Deployment launched", "Deployment.Name", deployment.Name)
 
 	service := resultServerService(instance, resultServerLabels)
-	err = r.client.Create(context.TODO(), service)
+	err = r.client.Create(ctx, service)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logger.Error(err, "Cannot create service", "service", service)
 		return err
@@ -81,7 +98,7 @@ func (r *ReconcileComplianceScan) deleteResultServer(instance *compv1alpha1.Comp
 
 	logger.Info("Deleting scan result server pod")
 
-	deployment := resultServer(instance, resultServerLabels, logger)
+	deployment := resultServer(instance, resultServerLabels, 0, 0, logger)
 
 	err := r.client.Delete(context.TODO(), deployment)
 	if err != nil && !errors.IsNotFound(err) {
@@ -108,10 +125,44 @@ func getResultServerLabels(instance *compv1alpha1.ComplianceScan) map[string]str
 	}
 }
 
+func (r *ReconcileComplianceScan) getPodFSGroup(ctx context.Context) (int64, error) {
+	return r.getRangeFromNSorDefault(ctx, ocpapisecv1.SupplementalGroupsAnnotation, defaultPodFSGroup)
+}
+
+func (r *ReconcileComplianceScan) getPodUid(ctx context.Context) (int64, error) {
+	return r.getRangeFromNSorDefault(ctx, ocpapisecv1.UIDRangeAnnotation, defaultPodUid)
+}
+
+func (r *ReconcileComplianceScan) getRangeFromNSorDefault(
+	ctx context.Context,
+	rangeTypeAnnotation string,
+	defaultValue int64,
+) (int64, error) {
+	key := types.NamespacedName{
+		Name: common.GetComplianceOperatorNamespace(),
+	}
+	ns := corev1.Namespace{}
+	if geterr := r.client.Get(ctx, key, &ns); geterr != nil {
+		return 0, geterr
+	}
+	anns := ns.GetAnnotations()
+	targetrange, found := anns[rangeTypeAnnotation]
+	if !found {
+		return defaultValue, nil
+	}
+	rangeInfo := strings.Split(targetrange, "/")[0]
+	rangeinit, err := strconv.Atoi(rangeInfo)
+	if err != nil {
+		return 0, err
+	}
+	return int64(rangeinit), nil
+}
+
 // Serve up arf reports for a compliance scan with a web service protected by openshift auth (oauth-proxy sidecar).
 // Needs corresponding Service (with service-serving cert).
 // Need to aggregate reports into one service ? on subdirs?
-func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]string, logger logr.Logger) *appsv1.Deployment {
+func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]string,
+	podFSGroup, podUid int64, logger logr.Logger) *appsv1.Deployment {
 	falseP := false
 	trueP := true
 	return &appsv1.Deployment{
@@ -143,6 +194,11 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 						},
 					},
 					ServiceAccountName: resultserverSA,
+					SecurityContext: &corev1.PodSecurityContext{
+						FSGroup:      &podFSGroup,
+						RunAsNonRoot: &trueP,
+						RunAsUser:    &podUid,
+					},
 					Containers: []corev1.Container{
 						{
 							Name:            "result-server",
