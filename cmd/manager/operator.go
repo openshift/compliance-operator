@@ -56,6 +56,22 @@ var operatorCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(operatorCmd)
+	defineOperatorFlags(operatorCmd)
+}
+
+func defineOperatorFlags(cmd *cobra.Command) {
+	cmd.Flags().Bool("skip-metrics", false,
+		"Skips adding metrics.")
+
+	// Add the zap logger flag set to the CLI. The flag set must
+	// be added before calling pflag.Parse().
+	flags := cmd.Flags()
+	flags.AddFlagSet(zap.FlagSet())
+
+	// Add flags registered by imported packages (e.g. glog and
+	// controller-runtime)
+	flags.AddGoFlagSet(flag.CommandLine)
+
 }
 
 // Change below variables to serve metrics on different host or port.
@@ -88,15 +104,7 @@ func printVersion() {
 }
 
 func RunOperator(cmd *cobra.Command, args []string) {
-	// Add the zap logger flag set to the CLI. The flag set must
-	// be added before calling pflag.Parse().
 	flags := cmd.Flags()
-	flags.AddFlagSet(zap.FlagSet())
-
-	// Add flags registered by imported packages (e.g. glog and
-	// controller-runtime)
-	flags.AddGoFlagSet(flag.CommandLine)
-
 	if err := flags.Parse(zap.FlagSet().Args()); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to parse zap flagset: %v", zap.FlagSet().Args())
 		os.Exit(1)
@@ -205,8 +213,11 @@ func RunOperator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// Add the Metrics Service
-	addMetrics(ctx, cfg, kubeClient, monitoringClient)
+	skipMetrics, _ := flags.GetBool("skip-metrics")
+	if !skipMetrics {
+		// Add the Metrics Service
+		addMetrics(ctx, cfg, kubeClient, monitoringClient)
+	}
 
 	if err := ensureDefaultProfileBundles(ctx, mgr.GetClient(), namespaceList); err != nil {
 		log.Error(err, "Error creating default ProfileBundles.")
