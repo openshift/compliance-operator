@@ -3,6 +3,7 @@ package compliancescan
 import (
 	"context"
 	"fmt"
+
 	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
 
@@ -73,7 +74,13 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 		serverSecret, _ := serverCertSecret(compliancescaninstance, caSecret.Data[corev1.TLSCertKey], caSecret.Data[corev1.TLSPrivateKeyKey], common.GetComplianceOperatorNamespace())
 		clientSecret, _ := clientCertSecret(compliancescaninstance, caSecret.Data[corev1.TLSCertKey], caSecret.Data[corev1.TLSPrivateKeyKey], common.GetComplianceOperatorNamespace())
 
-		objs = append(objs, nodeinstance1, nodeinstance2, caSecret, serverSecret, clientSecret)
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: common.GetComplianceOperatorNamespace(),
+			},
+		}
+
+		objs = append(objs, nodeinstance1, nodeinstance2, caSecret, serverSecret, clientSecret, ns)
 		scheme := scheme.Scheme
 		scheme.AddKnownTypes(compv1alpha1.SchemeGroupVersion, compliancescaninstance)
 
