@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.41] - 2021-09-20
+### Changes
+- Specify fsgroup, user and non-root user usage in resultserver
+- Gather /version when doing Platform scans
+- Add flag to skip the metrics deployment
+- fetch openscap version during build time
+- Add instructions and check type to Rule object
+- e2e: Mark logging functions as helper functions
+- Makefile: Rename IMAGE_FORMAT var
+- add support for multi line remediation
+- Fix value-required handling.
+- Use ClusterRole/ClusterRoleBinding for monitoring permissions
+
 ## [0.1.40] - 2021-09-09
 ### Changes
 - Remove tailorprofile variable selection check
