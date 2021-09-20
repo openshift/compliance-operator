@@ -28,6 +28,7 @@ metadata:
   name: rhcos4-no-kptr-restrict
   namespace: openshift-compliance
 spec:
+  description: test tailored profile
   extends: rhcos4-e8
   title: RHCOS4 E8 profile disables the kptr-restrict rule
   disableRules:
