@@ -139,6 +139,10 @@ func (c *scapContentDataStream) FigureResources(profile string) error {
 	// Always stage the clusteroperators/openshift-apiserver object for version detection.
 	found := []utils.ResourcePath{
 		{
+			ObjPath:  "/version",
+			DumpPath: "/version",
+		},
+		{
 			ObjPath:  "/apis/config.openshift.io/v1/clusteroperators/openshift-apiserver",
 			DumpPath: "/apis/config.openshift.io/v1/clusteroperators/openshift-apiserver",
 		},
