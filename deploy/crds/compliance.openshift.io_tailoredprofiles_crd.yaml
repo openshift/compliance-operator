@@ -115,7 +115,7 @@ spec:
           status:
             description: TailoredProfileStatus defines the observed state of TailoredProfile
             properties:
-              errorMessagae:
+              errorMessage:
                 type: string
               id:
                 description: The XCCDF ID of the tailored profile

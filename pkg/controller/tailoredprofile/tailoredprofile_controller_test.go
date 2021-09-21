@@ -71,7 +71,7 @@ var _ = Describe("TailoredprofileController", func() {
 
 		objs := []runtime.Object{pb1.DeepCopy(), pb2.DeepCopy(), p.DeepCopy()}
 
-		for i := 1; i < 7; i++ {
+		for i := 1; i < 10; i++ {
 			r := &compv1alpha1.Rule{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      fmt.Sprintf("rule-%d", i),
@@ -102,6 +102,13 @@ var _ = Describe("TailoredprofileController", func() {
 				Expect(crefErr).To(BeNil())
 				crefErr = controllerutil.SetControllerReference(pb2, v, cscheme)
 				Expect(crefErr).To(BeNil())
+				if i < 7 {
+					r.CheckType = compv1alpha1.CheckTypePlatform
+				} else if i == 7 {
+					r.CheckType = compv1alpha1.CheckTypeNone
+				} else {
+					r.CheckType = compv1alpha1.CheckTypeNode
+				}
 			}
 			objs = append(objs, r.DeepCopy(), v.DeepCopy())
 		}
@@ -783,6 +790,381 @@ var _ = Describe("TailoredprofileController", func() {
 
 				By("Has an error status")
 				Expect(tp.Status.State).To(Equal(compv1alpha1.TailoredProfileStateError))
+			})
+		})
+
+		Context("with platform rules", func() {
+			BeforeEach(func() {
+				tp := &compv1alpha1.TailoredProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      tpName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.TailoredProfileSpec{
+						EnableRules: []compv1alpha1.RuleReferenceSpec{
+							{
+								Name:      "rule-5",
+								Rationale: "platform",
+							},
+							{
+								Name:      "rule-6",
+								Rationale: "platform",
+							},
+						},
+					},
+				}
+
+				createErr := r.client.Create(ctx, tp)
+				Expect(createErr).To(BeNil())
+			})
+			It("succeeds", func() {
+				tpKey := types.NamespacedName{
+					Name:      tpName,
+					Namespace: namespace,
+				}
+				tpReq := reconcile.Request{}
+				tpReq.Name = tpName
+				tpReq.Namespace = namespace
+
+				By("Reconciling the first time (setting ownership)")
+				_, err := r.Reconcile(tpReq)
+				Expect(err).To(BeNil())
+
+				tp := &compv1alpha1.TailoredProfile{}
+				geterr := r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Sets the profile bundle as the owner")
+				ownerRefs := tp.GetOwnerReferences()
+				Expect(ownerRefs).To(HaveLen(1))
+				Expect(ownerRefs[0].Kind).To(Equal("ProfileBundle"))
+				Expect(tp.GetAnnotations()).NotTo(BeNil())
+				Expect(tp.GetAnnotations()[cmpv1alpha1.ProductTypeAnnotation]).To(Equal(string(compv1alpha1.ScanTypePlatform)))
+
+				By("Reconciling a second time (setting status)")
+				_, err = r.Reconcile(tpReq)
+
+				tp = &compv1alpha1.TailoredProfile{}
+				geterr = r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Has the appropriate status")
+				Expect(tp.Status.State).To(Equal(compv1alpha1.TailoredProfileStateReady))
+				Expect(tp.Status.OutputRef.Name).To(Equal(tp.Name + "-tp"))
+				Expect(tp.Status.OutputRef.Namespace).To(Equal(tp.Namespace))
+
+				By("Generated an appropriate ConfigMap")
+				cm := &corev1.ConfigMap{}
+				cmKey := types.NamespacedName{
+					Name:      tp.Status.OutputRef.Name,
+					Namespace: tp.Status.OutputRef.Namespace,
+				}
+
+				geterr = r.client.Get(ctx, cmKey, cm)
+				Expect(geterr).To(BeNil())
+				data := cm.Data["tailoring.xml"]
+				Expect(data).To(ContainSubstring(`select idref="rule_5" selected="true"`))
+				Expect(data).To(ContainSubstring(`select idref="rule_6" selected="true"`))
+			})
+		})
+
+		Context("with platform rules and none type", func() {
+			BeforeEach(func() {
+				tp := &compv1alpha1.TailoredProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      tpName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.TailoredProfileSpec{
+						EnableRules: []compv1alpha1.RuleReferenceSpec{
+							{
+								Name:      "rule-5",
+								Rationale: "platform",
+							},
+							{
+								Name:      "rule-6",
+								Rationale: "platform",
+							},
+							{
+								Name:      "rule-7",
+								Rationale: "none",
+							},
+						},
+					},
+				}
+
+				createErr := r.client.Create(ctx, tp)
+				Expect(createErr).To(BeNil())
+			})
+			It("succeeds", func() {
+				tpKey := types.NamespacedName{
+					Name:      tpName,
+					Namespace: namespace,
+				}
+				tpReq := reconcile.Request{}
+				tpReq.Name = tpName
+				tpReq.Namespace = namespace
+
+				By("Reconciling the first time (setting ownership)")
+				_, err := r.Reconcile(tpReq)
+				Expect(err).To(BeNil())
+
+				tp := &compv1alpha1.TailoredProfile{}
+				geterr := r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Sets the profile bundle as the owner")
+				ownerRefs := tp.GetOwnerReferences()
+				Expect(ownerRefs).To(HaveLen(1))
+				Expect(ownerRefs[0].Kind).To(Equal("ProfileBundle"))
+				Expect(tp.GetAnnotations()).NotTo(BeNil())
+				Expect(tp.GetAnnotations()[cmpv1alpha1.ProductTypeAnnotation]).To(Equal(string(compv1alpha1.ScanTypePlatform)))
+
+				By("Reconciling a second time (setting status)")
+				_, err = r.Reconcile(tpReq)
+
+				tp = &compv1alpha1.TailoredProfile{}
+				geterr = r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Has the appropriate status")
+				Expect(tp.Status.State).To(Equal(compv1alpha1.TailoredProfileStateReady))
+				Expect(tp.Status.OutputRef.Name).To(Equal(tp.Name + "-tp"))
+				Expect(tp.Status.OutputRef.Namespace).To(Equal(tp.Namespace))
+
+				By("Generated an appropriate ConfigMap")
+				cm := &corev1.ConfigMap{}
+				cmKey := types.NamespacedName{
+					Name:      tp.Status.OutputRef.Name,
+					Namespace: tp.Status.OutputRef.Namespace,
+				}
+
+				geterr = r.client.Get(ctx, cmKey, cm)
+				Expect(geterr).To(BeNil())
+				data := cm.Data["tailoring.xml"]
+				Expect(data).To(ContainSubstring(`select idref="rule_5" selected="true"`))
+				Expect(data).To(ContainSubstring(`select idref="rule_6" selected="true"`))
+				Expect(data).To(ContainSubstring(`select idref="rule_7" selected="true"`))
+			})
+		})
+
+		Context("with node rules", func() {
+			BeforeEach(func() {
+				tp := &compv1alpha1.TailoredProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      tpName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.TailoredProfileSpec{
+						EnableRules: []compv1alpha1.RuleReferenceSpec{
+							{
+								Name:      "rule-8",
+								Rationale: "node",
+							},
+							{
+								Name:      "rule-9",
+								Rationale: "node",
+							},
+						},
+					},
+				}
+
+				createErr := r.client.Create(ctx, tp)
+				Expect(createErr).To(BeNil())
+			})
+			It("succeeds", func() {
+				tpKey := types.NamespacedName{
+					Name:      tpName,
+					Namespace: namespace,
+				}
+				tpReq := reconcile.Request{}
+				tpReq.Name = tpName
+				tpReq.Namespace = namespace
+
+				By("Reconciling the first time (setting ownership)")
+				_, err := r.Reconcile(tpReq)
+				Expect(err).To(BeNil())
+
+				tp := &compv1alpha1.TailoredProfile{}
+				geterr := r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Sets the profile bundle as the owner")
+				ownerRefs := tp.GetOwnerReferences()
+				Expect(ownerRefs).To(HaveLen(1))
+				Expect(ownerRefs[0].Kind).To(Equal("ProfileBundle"))
+				Expect(tp.GetAnnotations()).NotTo(BeNil())
+				Expect(tp.GetAnnotations()[cmpv1alpha1.ProductTypeAnnotation]).To(Equal(string(compv1alpha1.ScanTypePlatform)))
+
+				By("Reconciling a second time (setting status)")
+				_, err = r.Reconcile(tpReq)
+
+				tp = &compv1alpha1.TailoredProfile{}
+				geterr = r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Has the appropriate status")
+				Expect(tp.Status.State).To(Equal(compv1alpha1.TailoredProfileStateReady))
+				Expect(tp.Status.OutputRef.Name).To(Equal(tp.Name + "-tp"))
+				Expect(tp.Status.OutputRef.Namespace).To(Equal(tp.Namespace))
+
+				By("Generated an appropriate ConfigMap")
+				cm := &corev1.ConfigMap{}
+				cmKey := types.NamespacedName{
+					Name:      tp.Status.OutputRef.Name,
+					Namespace: tp.Status.OutputRef.Namespace,
+				}
+
+				geterr = r.client.Get(ctx, cmKey, cm)
+				Expect(geterr).To(BeNil())
+				data := cm.Data["tailoring.xml"]
+				Expect(data).To(ContainSubstring(`select idref="rule_8" selected="true"`))
+				Expect(data).To(ContainSubstring(`select idref="rule_9" selected="true"`))
+			})
+		})
+
+		Context("with node rules and none type", func() {
+			BeforeEach(func() {
+				tp := &compv1alpha1.TailoredProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      tpName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.TailoredProfileSpec{
+						EnableRules: []compv1alpha1.RuleReferenceSpec{
+							{
+								Name:      "rule-8",
+								Rationale: "node",
+							},
+							{
+								Name:      "rule-9",
+								Rationale: "node",
+							},
+							{
+								Name:      "rule-7",
+								Rationale: "none",
+							},
+						},
+					},
+				}
+
+				createErr := r.client.Create(ctx, tp)
+				Expect(createErr).To(BeNil())
+			})
+			It("succeeds", func() {
+				tpKey := types.NamespacedName{
+					Name:      tpName,
+					Namespace: namespace,
+				}
+				tpReq := reconcile.Request{}
+				tpReq.Name = tpName
+				tpReq.Namespace = namespace
+
+				By("Reconciling the first time (setting ownership)")
+				_, err := r.Reconcile(tpReq)
+				Expect(err).To(BeNil())
+
+				tp := &compv1alpha1.TailoredProfile{}
+				geterr := r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Sets the profile bundle as the owner")
+				ownerRefs := tp.GetOwnerReferences()
+				Expect(ownerRefs).To(HaveLen(1))
+				Expect(ownerRefs[0].Kind).To(Equal("ProfileBundle"))
+				Expect(tp.GetAnnotations()).NotTo(BeNil())
+				Expect(tp.GetAnnotations()[cmpv1alpha1.ProductTypeAnnotation]).To(Equal(string(compv1alpha1.ScanTypePlatform)))
+
+				By("Reconciling a second time (setting status)")
+				_, err = r.Reconcile(tpReq)
+
+				tp = &compv1alpha1.TailoredProfile{}
+				geterr = r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Has the appropriate status")
+				Expect(tp.Status.State).To(Equal(compv1alpha1.TailoredProfileStateReady))
+				Expect(tp.Status.OutputRef.Name).To(Equal(tp.Name + "-tp"))
+				Expect(tp.Status.OutputRef.Namespace).To(Equal(tp.Namespace))
+
+				By("Generated an appropriate ConfigMap")
+				cm := &corev1.ConfigMap{}
+				cmKey := types.NamespacedName{
+					Name:      tp.Status.OutputRef.Name,
+					Namespace: tp.Status.OutputRef.Namespace,
+				}
+
+				geterr = r.client.Get(ctx, cmKey, cm)
+				Expect(geterr).To(BeNil())
+				data := cm.Data["tailoring.xml"]
+				Expect(data).To(ContainSubstring(`select idref="rule_8" selected="true"`))
+				Expect(data).To(ContainSubstring(`select idref="rule_9" selected="true"`))
+				Expect(data).To(ContainSubstring(`select idref="rule_7" selected="true"`))
+			})
+		})
+
+		Context("with node rules and platform rules", func() {
+			BeforeEach(func() {
+				tp := &compv1alpha1.TailoredProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      tpName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.TailoredProfileSpec{
+						EnableRules: []compv1alpha1.RuleReferenceSpec{
+							{
+								Name:      "rule-6",
+								Rationale: "platform",
+							},
+							{
+								Name:      "rule-9",
+								Rationale: "node",
+							},
+							{
+								Name:      "rule-7",
+								Rationale: "none",
+							},
+						},
+					},
+				}
+
+				createErr := r.client.Create(ctx, tp)
+				Expect(createErr).To(BeNil())
+			})
+			It("it fails because of a validation error", func() {
+				tpKey := types.NamespacedName{
+					Name:      tpName,
+					Namespace: namespace,
+				}
+				tpReq := reconcile.Request{}
+				tpReq.Name = tpName
+				tpReq.Namespace = namespace
+
+				By("Reconciling the first time (setting ownership)")
+				_, err := r.Reconcile(tpReq)
+				Expect(err).To(BeNil())
+
+				tp := &compv1alpha1.TailoredProfile{}
+				geterr := r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Sets the profile bundle as the owner")
+				ownerRefs := tp.GetOwnerReferences()
+				Expect(ownerRefs).To(HaveLen(1))
+				Expect(ownerRefs[0].Kind).To(Equal("ProfileBundle"))
+				Expect(tp.GetAnnotations()).NotTo(BeNil())
+				Expect(tp.GetAnnotations()[cmpv1alpha1.ProductTypeAnnotation]).To(Equal(string(compv1alpha1.ScanTypePlatform)))
+
+				By("Reconciling a second time (setting status)")
+				_, err = r.Reconcile(tpReq)
+
+				tp = &compv1alpha1.TailoredProfile{}
+				geterr = r.client.Get(ctx, tpKey, tp)
+				Expect(geterr).To(BeNil())
+
+				By("Has the appropriate error status")
+				Expect(tp.Status.State).To(Equal(compv1alpha1.TailoredProfileStateError))
+				Expect(tp.Status.ErrorMessage).NotTo(BeEmpty())
 			})
 		})
 	})

@@ -69,7 +69,7 @@ type TailoredProfileStatus struct {
 	OutputRef OutputRef `json:"outputRef,omitempty"`
 	// The current state of the tailored profile
 	State        TailoredProfileState `json:"state,omitempty"`
-	ErrorMessage string               `json:"errorMessagae,omitempty"`
+	ErrorMessage string               `json:"errorMessage,omitempty"`
 }
 
 // OutputRef is a reference to the object created from the tailored profile
