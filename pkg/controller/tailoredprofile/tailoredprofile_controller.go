@@ -171,6 +171,12 @@ func (r *ReconcileTailoredProfile) Reconcile(request reconcile.Request) (reconci
 		return reconcile.Result{}, ruleErr
 	}
 
+	if ruleValidErr := assertValidRuleTypes(rules); ruleValidErr != nil {
+		// Surface the error.
+		suerr := r.updateTailoredProfileStatusError(instance, ruleValidErr)
+		return reconcile.Result{}, suerr
+	}
+
 	variables, varErr := r.getVariablesFromSelections(instance, pb)
 	if varErr != nil && !common.IsRetriable(varErr) {
 		// Surface the error.
@@ -460,4 +466,29 @@ func isOwnedBy(obj, owner metav1.Object) bool {
 		}
 	}
 	return false
+}
+
+func assertValidRuleTypes(rules map[string]*cmpv1alpha1.Rule) error {
+	// Figure out
+	var expectedCheckType string
+	for _, rule := range rules {
+		// cmpv1alpha1.CheckTypeNone fits every type since it's
+		// merely informational
+		if rule.CheckType == cmpv1alpha1.CheckTypeNone {
+			continue
+		}
+		// Initialize expected check type
+		if expectedCheckType == "" {
+			expectedCheckType = rule.CheckType
+			// No need to compare if we're just initializing the
+			// expectation
+			continue
+		}
+
+		if expectedCheckType != rule.CheckType {
+			return common.NewNonRetriableCtrlError("Rule '%s' with type '%s' didn't match expected type: %s",
+				rule.GetName(), rule.CheckType, expectedCheckType)
+		}
+	}
+	return nil
 }
