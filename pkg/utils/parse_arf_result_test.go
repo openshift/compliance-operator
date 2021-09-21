@@ -403,38 +403,4 @@ Server 3.fedora.pool.ntp.org`
 			})
 		})
 	})
-
-	Describe("Benchmark loading the XCCFD and the DS", func() {
-		BeforeEach(func() {
-			mcInstance := &mcfgv1.MachineConfig{}
-			schema = scheme.Scheme
-			schema.AddKnownTypes(mcfgv1.SchemeGroupVersion, mcInstance)
-			resultsFilename = "../../tests/data/xccdf-result.xml"
-			dsFilename = "../../tests/data/ds-input.xml"
-		})
-
-		JustBeforeEach(func() {
-			xccdf, err = os.Open(resultsFilename)
-			Expect(err).NotTo(HaveOccurred())
-
-			ds, err = os.Open(dsFilename)
-			Expect(err).NotTo(HaveOccurred())
-
-		})
-
-		Context("Valid XCCDF and DS with remediations", func() {
-			Measure("Should parse the XCCDF and DS without errors", func(b Benchmarker) {
-				runtime := b.Time("runtime", func() {
-					dsDom, err := ParseContent(ds)
-					Expect(err).NotTo(HaveOccurred())
-					resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(nRems).To(Equal(totalRemediations))
-					Expect(nChecks).To(Equal(totalChecks))
-				})
-
-				Ω(runtime.Seconds()).Should(BeNumerically("<", 3.0), "ParseRemediationsFromArf() shouldn't take too long.")
-			}, 100)
-		})
-	})
 })
