@@ -268,7 +268,7 @@ func (r *ReconcileTailoredProfile) getProfileBundleFromRulesOrVars(tp *cmpv1alph
 }
 
 func (r *ReconcileTailoredProfile) getRulesFromSelections(tp *cmpv1alpha1.TailoredProfile, pb *cmpv1alpha1.ProfileBundle) (map[string]*cmpv1alpha1.Rule, error) {
-	rules := make(map[string]*cmpv1alpha1.Rule)
+	rules := make(map[string]*cmpv1alpha1.Rule, len(tp.Spec.EnableRules)+len(tp.Spec.DisableRules))
 	for _, selection := range append(tp.Spec.EnableRules, tp.Spec.DisableRules...) {
 		_, ok := rules[selection.Name]
 		if ok {
