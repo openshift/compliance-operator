@@ -16,7 +16,7 @@ General tips
   the API object having issues, e.g. if a `ComplianceRemediation` can't be applied,
   the first place to look might be the messages from the `remediationctrl` controller.
   You can filter the messages from a single controller e.g. using `jq`:
-  `oc logs -l name=compliance-operator | jq -c 'select(.logger == "profilebundlectrl")' `
+  `oc logs -l name=compliance-operator | jq -c 'select(.logger == "remediationctrl")' `
 
 * The timestamps are logged as seconds since UNIX epoch in UTC. To convert
   them to a human-readable date, use
