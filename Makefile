@@ -25,8 +25,7 @@ else ifeq ($(RUNTIME), docker)
 endif
 
 # Temporary
-OPENSCAP_DEFAULT_IMAGE_TAG=1.3.4
-RELATED_IMAGE_OPENSCAP_TAG?=$(OPENSCAP_DEFAULT_IMAGE_TAG)
+RELATED_IMAGE_OPENSCAP_TAG?=latest
 
 # Image path to use. Set this if you want to use a specific path for building
 # or your e2e tests. This is overwritten if we bulid the image and push it to
@@ -137,7 +136,7 @@ operator-image:
 
 .PHONY: openscap-image
 openscap-image:
-	$(RUNTIME) build --no-cache -t $(RELATED_IMAGE_OPENSCAP_PATH):$(TAG) $(OPENSCAP_DOCKER_CONTEXT)
+	$(RUNTIME) build --no-cache -t $(RELATED_IMAGE_OPENSCAP_PATH):$(RELATED_IMAGE_OPENSCAP_TAG) $(OPENSCAP_DOCKER_CONTEXT)
 
 .PHONY: bundle-image
 bundle-image:
@@ -291,13 +290,13 @@ test-benchmark: ## Run the benchmark tests -- Note that this can only be ran for
 e2e: namespace tear-down operator-sdk image-to-cluster openshift-user deploy-crds ## Run the end-to-end tests
 	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
 	@echo "Replacing workload references in deploy/operator.yaml"
-	@$(SED) 's%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%$(RELATED_IMAGE_OPENSCAP_PATH):$(RELATED_IMAGE_OPENSCAP_TAG)%' deploy/operator.yaml
+	@$(SED) 's%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%$(RELATED_IMAGE_OPENSCAP_PATH)%' deploy/operator.yaml
 	@$(SED) 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	@$(SED) 's%$(DEFAULT_CONTENT_IMAGE_PATH)%$(E2E_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 	@echo "Running e2e tests"
 	unset GOFLAGS && BROKEN_CONTENT_IMAGE=$(E2E_BROKEN_CONTENT_IMAGE_PATH) CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --skip-cleanup-error --image "$(RELATED_IMAGE_OPERATOR_PATH)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 	@echo "Restoring image references in deploy/operator.yaml"
-	@$(SED) 's%$(RELATED_IMAGE_OPENSCAP_PATH):$(RELATED_IMAGE_OPENSCAP_TAG)%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(OPENSCAP_DEFAULT_IMAGE_TAG)%' deploy/operator.yaml
+	@$(SED) 's%$(RELATED_IMAGE_OPENSCAP_PATH)%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%' deploy/operator.yaml
 	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 	@$(SED) 's%$(E2E_CONTENT_IMAGE_PATH)%$(DEFAULT_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 
@@ -339,6 +338,7 @@ image-to-cluster:
 	@echo "We're in a CI environment, skipping image-to-cluster target."
 	$(eval RELATED_IMAGE_OPERATOR_PATH = $(IMAGE_FROM_CI))
 	$(eval E2E_CONTENT_IMAGE_PATH = $(CONTENT_IMAGE_FROM_CI))
+	$(eval RELATED_IMAGE_OPENSCAP_PATH = $(OPENSCAP_IMAGE_FROM_CI))
 else ifeq ($(E2E_USE_DEFAULT_IMAGES), true)
 image-to-cluster:
 	@echo "E2E_USE_DEFAULT_IMAGES variable detected. Using default images."
@@ -350,7 +350,7 @@ else ifeq ($(E2E_SKIP_CONTAINER_BUILD), true)
 image-to-cluster: namespace cluster-image-push
 	@echo "E2E_SKIP_CONTAINER_BUILD variable detected. Using previously built local images."
 else
-image-to-cluster: namespace image cluster-image-push
+image-to-cluster: namespace image openscap-image cluster-image-push
 	@echo "IMAGE_FROM_CI variable missing. We're in local enviornment."
 endif
 
@@ -361,10 +361,12 @@ cluster-image-push: namespace openshift-user
 	@echo "Pushing image $(RELATED_IMAGE_OPERATOR_PATH):$(TAG) to the image registry"
 	IMAGE_REGISTRY_HOST=$$(oc get route default-route -n openshift-image-registry --template='{{ .spec.host }}'); \
 		$(RUNTIME) login $(LOGIN_PUSH_OPTS) -u $(OPENSHIFT_USER) -p $(shell oc whoami -t) $${IMAGE_REGISTRY_HOST}; \
-		$(RUNTIME) push $(LOGIN_PUSH_OPTS) $(RELATED_IMAGE_OPERATOR_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/openshift/$(APP_NAME):$(TAG)
+		$(RUNTIME) push $(LOGIN_PUSH_OPTS) $(RELATED_IMAGE_OPERATOR_PATH):$(TAG) $${IMAGE_REGISTRY_HOST}/openshift/$(APP_NAME):$(TAG); \
+		$(RUNTIME) push $(LOGIN_PUSH_OPTS) $(RELATED_IMAGE_OPENSCAP_PATH):$(RELATED_IMAGE_OPENSCAP_TAG) $${IMAGE_REGISTRY_HOST}/openshift/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)
 	@echo "Removing the route from the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
 	$(eval RELATED_IMAGE_OPERATOR_PATH = image-registry.openshift-image-registry.svc:5000/openshift/$(APP_NAME):$(TAG))
+	$(eval RELATED_IMAGE_OPENSCAP_PATH = image-registry.openshift-image-registry.svc:5000/openshift/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG))
 
 .PHONY: namespace
 namespace:
@@ -378,8 +380,10 @@ deploy: namespace deploy-crds ## Deploy the operator from the manifests in the d
 .PHONY: deploy-local
 deploy-local: namespace image-to-cluster deploy-crds ## Deploy the operator from the manifests in the deploy/ directory and the images from a local build
 	$(SED) 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
+	$(SED) 's%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%$(RELATED_IMAGE_OPENSCAP_PATH)%' deploy/operator.yaml
 	@oc apply -n $(NAMESPACE) -f deploy/
 	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
+	@$(SED) 's%$(RELATED_IMAGE_OPENSCAP_PATH)%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%' deploy/operator.yaml
 	@oc set triggers -n $(NAMESPACE) deployment/compliance-operator --from-image openshift/compliance-operator:latest -c compliance-operator
 
 .PHONY: deploy-crds
