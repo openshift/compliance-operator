@@ -297,14 +297,6 @@ func canCreateRemediationObject(scan *compv1alpha1.ComplianceScan, obj *unstruct
 		return false, "The remediaiton yaml file is empty"
 	}
 
-	if obj.GetObjectKind().GroupVersionKind().Kind != "MachineConfig" {
-		return true, ""
-	}
-
-	role := utils.GetFirstNodeRole(scan.Spec.NodeSelector)
-	if role == "" {
-		return false, "ComplianceScan's nodeSelector doesn't have any role. Ideally this needs to match a MachineConfigPool"
-	}
 	return true, ""
 }
 
