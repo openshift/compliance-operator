@@ -495,6 +495,10 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 	// Check that all remediations have been applied yet. If not, requeue.
 	for _, rem := range postProcessRemList.Items {
 		if !rem.IsApplied() {
+			if rem.Status.ApplicationState == compv1alpha1.RemediationNeedsReview {
+				r.recorder.Event(suite, corev1.EventTypeWarning, "CannotRemediate", "Remediation needs-review. Values not set"+" Remediation:"+rem.Name)
+				continue
+			}
 			logger.Info("Remediation not applied yet. Skipping post-processing", "ComplianceRemediation.Name", rem.Name)
 			return reconcile.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 		}
