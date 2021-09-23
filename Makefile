@@ -441,6 +441,11 @@ push-index: index-image
 	# index image
 	$(RUNTIME) push $(INDEX_IMAGE_PATH):latest
 
+.PHONY: push-openscap-image
+push-openscap-image: openscap-image
+	# openscap image
+	$(RUNTIME) push $(RELATED_IMAGE_OPENSCAP_PATH):$(RELATED_IMAGE_OPENSCAP_TAG)
+
 .PHONY: check-operator-version
 check-operator-version:
 ifndef OPERATOR_VERSION
