@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"os"
 
@@ -10,6 +11,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/openshift/compliance-operator/pkg/utils"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 var _ = Describe("Testing SCAP parsing and storage", func() {
@@ -131,6 +134,24 @@ var _ = Describe("Testing filtering", func() {
 				_, filterErr := filter(context.TODO(), rawns, `.items[]`)
 				Expect(filterErr).Should(MatchError(MoreThanOneObjErr))
 			})
+		})
+	})
+})
+
+var _ = Describe("Testing fetching", func() {
+	Context("fetches", func() {
+		It("fetches and stores 404s", func() {
+			files, warnings, err := fetch(func(_ string) (io.ReadCloser, error) {
+				return nil, errors.NewNotFound(schema.GroupResource{
+					Group:    "some group",
+					Resource: "some resource",
+				}, "some name")
+			}, []utils.ResourcePath{{DumpPath: "key"}})
+
+			Expect(err).To(BeNil())
+			Expect(files).To(HaveLen(1))
+			Expect(string(files["key"])).To(Equal("# kube-api-error=NotFound"))
+			Expect(warnings).To(HaveLen(1))
 		})
 	})
 })

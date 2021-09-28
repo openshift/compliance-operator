@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -30,11 +31,10 @@ import (
 
 	"github.com/antchfx/xmlquery"
 	"github.com/itchyny/gojq"
+	"github.com/openshift/compliance-operator/pkg/utils"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/kubernetes"
-
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 const (
@@ -278,7 +278,9 @@ func (c *scapContentDataStream) getExtendedProfileFromTailoring(ds *xmlquery.Nod
 }
 
 func (c *scapContentDataStream) FetchResources() ([]string, error) {
-	found, warnings, err := fetch(c.client, c.resources)
+	found, warnings, err := fetch(func(uri string) (io.ReadCloser, error) {
+		return c.client.RESTClient().Get().RequestURI(uri).Stream(context.Background())
+	}, c.resources)
 	if err != nil {
 		return warnings, err
 	}
@@ -286,16 +288,15 @@ func (c *scapContentDataStream) FetchResources() ([]string, error) {
 	return warnings, nil
 }
 
-func fetch(client *kubernetes.Clientset, objects []utils.ResourcePath) (map[string][]byte, []string, error) {
-	warnings := []string{}
+func fetch(streamFunc func(string) (io.ReadCloser, error), objects []utils.ResourcePath) (map[string][]byte, []string, error) {
+	var warnings []string
 	results := map[string][]byte{}
 	ctx := context.Background()
 	for _, rpath := range objects {
 		err := func() error {
 			uri := rpath.ObjPath
 			LOG("Fetching URI: '%s'", uri)
-			req := client.RESTClient().Get().RequestURI(uri)
-			stream, err := req.Stream(ctx)
+			stream, err := streamFunc(uri)
 			if meta.IsNoMatchError(err) || kerrors.IsForbidden(err) || kerrors.IsNotFound(err) {
 				DBG("Encountered non-fatal error to be persisted in the scan: %s", err)
 				objerr := fmt.Errorf("could not fetch %s: %w", uri, err)
