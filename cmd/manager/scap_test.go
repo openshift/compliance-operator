@@ -152,6 +152,7 @@ var _ = Describe("Testing fetching", func() {
 			Expect(files).To(HaveLen(1))
 			Expect(string(files["key"])).To(Equal("# kube-api-error=NotFound"))
 			Expect(warnings).To(HaveLen(1))
+			Expect(warnings[0]).To(Equal("could not fetch : some resource.some group \"some name\" not found"))
 		})
 	})
 })
