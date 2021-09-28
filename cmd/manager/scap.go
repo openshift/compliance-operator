@@ -300,6 +300,8 @@ func fetch(client *kubernetes.Clientset, objects []utils.ResourcePath) (map[stri
 				DBG("Encountered non-fatal error to be persisted in the scan: %s", err)
 				objerr := fmt.Errorf("could not fetch %s: %w", uri, err)
 				warnings = append(warnings, objerr.Error())
+				// additionally, we'll add a warning comment in the object so openSCAP can read and process it
+				results[rpath.DumpPath] = []byte("# Error=" + kerrors.ReasonForError(err))
 				return nil
 			} else if err != nil {
 				return err
