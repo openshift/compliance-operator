@@ -301,7 +301,9 @@ func fetch(client *kubernetes.Clientset, objects []utils.ResourcePath) (map[stri
 				objerr := fmt.Errorf("could not fetch %s: %w", uri, err)
 				warnings = append(warnings, objerr.Error())
 				// additionally, we'll add a warning comment in the object so openSCAP can read and process it
-				results[rpath.DumpPath] = []byte("# Error=" + kerrors.ReasonForError(err))
+				if kerrors.IsForbidden(err) || kerrors.IsNotFound(err) {
+					results[rpath.DumpPath] = []byte("# kube-api-error=" + kerrors.ReasonForError(err))
+				}
 				return nil
 			} else if err != nil {
 				return err
