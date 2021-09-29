@@ -751,6 +751,13 @@ The following attributes can be set in the `ScanSetting:
   should be scheduled on. Internally, each `Profile` or `TailoredProfile` in a
    `ScanSettingBinding` creates a `ComplianceScan` for each role specified in this attribute.
 
+The Compliance Operator creates two `ScanSetting` objects on startup:
+ * **default**: a ScanSetting that would run a scan every day at 1AM on both masters and workers,
+   using a 1GBi PV and keeping the last three results. Remediations are neither applied nor updated
+   automatically.
+ * **default-auto-apply**: As above, except both autoApplyRemediations and autoUpdateRemediations
+   are set to true.
+
  When the above objects are created, the result are a suite and three scans:
 ```
 $ oc get compliancesuites
