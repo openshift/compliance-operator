@@ -97,6 +97,10 @@ settingsRef:
   kind: ScanSetting
   apiGroup: compliance.openshift.io/v1alpha1
 ```
+
+Note that the operator creates two `ScanSetting` objects by default for
+convenience.
+
 Both `ScanSetting` and `ScanSettingBinding` objects are handled by the
 same controller tagged with `logger=scansettingbindingctrl`.  These objects
 have no status, any issues are communicated in form of events. On success,

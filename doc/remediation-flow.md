@@ -133,7 +133,8 @@ Coming from the administrator side, the admin would define the
 that itself unrolls into one or more `ComplianceScan` objects.
 After the scans finish, `ComplianceCheckResult` objects are generated for
 each test in the scan and a `ComplianceRemediation` object for every gap
-that can be remediated automatically.
+that can be remediated automatically. Note that two `ScanSettings` objects are
+provided by default by the operator.
 
 The `ComplianceRemediation` objects would link back to the `suite` with
 labels that identify the suite and the scan respectively. This way, the
@@ -268,7 +269,9 @@ It's possible to tell the Compliance Operator that, if a remediation is created 
 it should attempt to apply it. This is done through the `autoApplyRemediations` flag which is
 available in both the `ScanSettings` and the `ComplianceSuite` itself. If this is enabled,
 the operator will apply the remediations belonging to a scan once the ComplianceSuite reaches
-the `Done` phase. To avoid multiple reboots, the Compliance Operator would pause the 
+the `Done` phase. To avoid multiple reboots, the Compliance Operator would pause the
+MachineConfigPools until the remediations are applied. There also exists a `ScanSettingBinding`
+named "default-auto-apply" that can be used to generate scans that auto-apply remediations.
 
 #### Remediations with dependencies
 
