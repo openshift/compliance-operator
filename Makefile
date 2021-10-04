@@ -34,17 +34,18 @@ RELATED_IMAGE_OPERATOR_PATH?=$(IMAGE_REPO)/$(APP_NAME)
 RELATED_IMAGE_OPENSCAP_PATH=$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME)
 OPENSCAP_DOCKER_CONTEXT=./images/openscap
 
+# Image tag to use. Set this if you want to use a specific tag for building
+# or your e2e tests.
+TAG?=latest
+
 BUNDLE_IMAGE_NAME=compliance-operator-bundle
 BUNDLE_IMAGE_PATH=$(IMAGE_REPO)/$(BUNDLE_IMAGE_NAME)
-BUNDLE_IMAGE_TAG?=latest
+BUNDLE_IMAGE_TAG?=$(TAG)
 TEST_BUNDLE_IMAGE_TAG?=testonly
 INDEX_IMAGE_NAME=compliance-operator-index
 INDEX_IMAGE_PATH=$(IMAGE_REPO)/$(INDEX_IMAGE_NAME)
 INDEX_IMAGE_TAG?=latest
 
-# Image tag to use. Set this if you want to use a specific tag for building
-# or your e2e tests.
-TAG?=latest
 
 # Build variables
 # ===============
