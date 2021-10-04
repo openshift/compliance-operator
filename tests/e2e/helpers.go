@@ -1288,6 +1288,25 @@ func unApplyRemediationAndCheck(t *testing.T, f *framework.Framework, namespace,
 	return nil
 }
 
+func waitForGenericRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, remName, remNamespace string) {
+	rem := &compv1alpha1.ComplianceRemediation{}
+	var lastErr error
+	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		lastErr = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: remName, Namespace: remNamespace}, rem)
+		if apierrors.IsNotFound(lastErr) {
+			E2ELogf(t, "Waiting for availability of %s remediation\n", remName)
+			return false, nil
+		}
+		if lastErr != nil {
+			E2ELogf(t, "Retrying. Got error: %v\n", lastErr)
+			return false, nil
+		}
+		E2ELogf(t, "Found remediation: %s\n", remName)
+		return true, nil
+	})
+	assertNoErrorNorTimeout(t, lastErr, timeouterr, "getting remediation before auto-applying it")
+}
+
 func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, remName, remNamespace string, pool *mcfgv1.MachineConfigPool) {
 	rem := &compv1alpha1.ComplianceRemediation{}
 	var lastErr error

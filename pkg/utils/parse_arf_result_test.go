@@ -132,9 +132,25 @@ var _ = Describe("XCCDF parser", func() {
 				rem     *compv1alpha1.ComplianceRemediation
 				expName string
 			)
-
-			expValueUsedAnnotation := "var-postfix-relayhost,var-auditd-max-log-file" //expect found and used value
-			expUnsetValueAnnotation := "var-fake-second-value,var-fake-value"         //expect not found value
+			/*
+				kind: MachineConfig
+				metadata:
+				annotations:
+					complianceascode.io/value-input-required: var_some_required_value
+				spec:
+					config:
+						ignition:
+							version: 3.1.0
+					storage:
+						files:
+						- contents:
+				  			source: data:,{{ %7B%7B.var_fake_second_value%7D%7D%0A%7B%7B.var_fake_value%7D%7D%0A%7B%7B.var_postfix_relayhost%7D%7D%0A%0Alocal_events%20%3D%20yes%0Awrite_logs%20%3D%20yes%0Alog_file%20%3D%20%2Fvar%2Flog%2Faudit%2Faudit.log%0Alog_group%20%3D%20root%0Alog_format%20%3D%20ENRICHED%0Aflush%20%3D%20incremental_async%0Afreq%20%3D%2050%0Amax_log_file%20%3D%20%7B%7B.var_auditd_max_log_file%7D%7D%0Anum_logs%20%3D%205%0Apriority_boost%20%3D%204%0Aname_format%20%3D%20hostname%0A%23%23name%20%3D%20mydomain%0Amax_log_file_action%20%3D%20rotate%0Aspace_left%20%3D%20100%0Aspace_left_action%20%3D%20syslog%0Averify_email%20%3D%20yes%0Aaction_mail_acct%20%3D%20root%0Aadmin_space_left%20%3D%2050%0Aadmin_space_left_action%20%3D%20syslog%0Adisk_full_action%20%3D%20syslog%0Adisk_error_action%20%3D%20syslog%0Ause_libwrap%20%3D%20yes%0A%23%23tcp_listen_port%20%3D%2060%0Atcp_listen_queue%20%3D%205%0Atcp_max_per_addr%20%3D%201%0A%23%23tcp_client_ports%20%3D%201024-65535%0Atcp_client_max_idle%20%3D%200%0Atransport%20%3D%20TCP%0Akrb5_principal%20%3D%20auditd%0A%23%23krb5_key_file%20%3D%20%2Fetc%2Faudit%2Faudit.key%0Adistribute_network%20%3D%20no%0Aq_depth%20%3D%20400%0Aoverflow_action%20%3D%20syslog%0Amax_restarts%20%3D%2010%0Aplugin_dir%20%3D%20%2Fetc%2Faudit%2Fplugins.d }}
+						mode: {{.var_file_mode}}
+						path: /etc/audit/auditd.conf
+						overwrite: true
+			*/
+			expValueUsedAnnotation := "var-postfix-relayhost,var-auditd-max-log-file"       //expect found and used value
+			expUnsetValueAnnotation := "var-fake-second-value,var-fake-value,var-file-mode" //expect not found value
 			expRequiredValueAnnotation := "var-some-required-value"
 			BeforeEach(func() {
 				expName = "testScan-auditd-data-retention-max-log-file"
@@ -402,5 +418,296 @@ Server 3.fedora.pool.ntp.org`
 				})
 			})
 		})
+	})
+
+	Describe("Testing for parseValues", func() {
+		var value_dic = map[string]string{
+			"the_value_1": "3600,1200,3122",
+			"the_value_2": "1111",
+			"the_value_3": "2222",
+			"the_value_4": "3333",
+			"var_kubelet_evictionhard_imagefs_available": "10%",
+			"var_version": "3.1.0",
+			"var_servers": "server1,server2,server3",
+		}
+
+		var usedVals []string
+		var missingVals []string
+		var processedContent string
+		var MachineConfig string
+		Context("Contents with only url-encoded template content", func() {
+
+			expUsedVals := []string{"the-value-1", "the-value-2"}
+			expMissingVals := []string{"the-value-not-defined"}
+
+			BeforeEach(func() {
+				/*
+					The content of following url-encoded data:
+					test1 := {{.the_value_1}}
+					test2 := {{.the_value_2}}
+					test_not_defined := {{.the_value_not_defined}}
+				*/
+				MachineConfig = `apiVersion: machineconfiguration.openshift.io/v1
+			kind: MachineConfig
+			spec:
+			  config:
+				ignition:
+				  version: 3.1.0
+				storage:
+				  files:
+				  - contents:
+					  source: data:,{{ test1%20%3A%3D%20%7B%7B.the_value_1%7D%7D%0Atest2%20%3A%3D%20%7B%7B.the_value_2%7D%7D%0Atest_not_defined%20%3A%3D%20%7B%7B.the_value_not_defined%7D%7D }}
+					mode: 420
+					overwrite: true
+					path: /etc/chrony.conf`
+
+				_, usedVals, missingVals, err = parseValues(MachineConfig, value_dic)
+			})
+			It("Should parse without error", func() {
+				Expect(err).To(BeNil())
+			})
+
+			It("Should have correct missing values list", func() {
+				Expect(missingVals).To(Equal(expMissingVals))
+			})
+
+			It("Should have correct used values list", func() {
+				Expect(usedVals).To(Equal(expUsedVals))
+			})
+		})
+
+		Context("Contents with only url-encoded template content extra space at beginning", func() {
+
+			expUsedVals := []string{"the-value-1", "the-value-2"}
+			expMissingVals := []string{"the-value-not-defined"}
+
+			BeforeEach(func() {
+				/*
+					The content of following url-encoded data:
+					test1 := {{.the_value_1}}
+					test2 := {{.the_value_2}}
+					test_not_defined := {{.the_value_not_defined}}
+				*/
+				MachineConfig = `apiVersion: machineconfiguration.openshift.io/v1
+			kind: MachineConfig
+			spec:
+			  config:
+				ignition:
+				  version: 3.1.0
+				storage:
+				  files:
+				  - contents:
+					  source: data:,{{   test1%20%3A%3D%20%7B%7B.the_value_1%7D%7D%0Atest2%20%3A%3D%20%7B%7B.the_value_2%7D%7D%0Atest_not_defined%20%3A%3D%20%7B%7B.the_value_not_defined%7D%7D }}
+					mode: 420
+					overwrite: true
+					path: /etc/chrony.conf`
+
+				_, usedVals, missingVals, err = parseValues(MachineConfig, value_dic)
+			})
+			It("Should parse without error", func() {
+				Expect(err).To(BeNil())
+			})
+
+			It("Should have correct missing values list", func() {
+				Expect(missingVals).To(Equal(expMissingVals))
+			})
+
+			It("Should have correct used values list", func() {
+				Expect(usedVals).To(Equal(expUsedVals))
+			})
+		})
+
+		Context("Contents with wrong formatted url-encoded template content", func() {
+
+			BeforeEach(func() {
+				// an extra space is added in url-encoded data
+				MachineConfig = `apiVersion: machineconfiguration.openshift.io/v1
+			kind: MachineConfig
+			spec:
+			  config:
+				ignition:
+				  version: 3.1.0
+				storage:
+				  files:
+				  - contents:
+					  source: data:,{{ test1%20%3A%3D%20%7B%7B.t he_value_1%7D%7D%0Atest2%20%3A%3D%20%7B%7B.the_value_2%7D%7D%0Atest_not_defined%20%3A%3D%20%7B%7B.the_value_not_defined%7D%7D }}
+					mode: 420
+					overwrite: true
+					path: /etc/chrony.conf`
+
+				_, usedVals, missingVals, err = parseValues(MachineConfig, value_dic)
+			})
+			It("Should parse with error", func() {
+				Expect(err).NotTo(BeNil())
+			})
+
+			It("Should have correct missing values list", func() {
+				Expect(missingVals).To(BeEmpty())
+			})
+
+			It("Should have correct used values list", func() {
+				Expect(usedVals).To(BeEmpty())
+			})
+		})
+
+		Context("Contents with non-url-encoded template content", func() {
+
+			expUsedVals := []string{"var-kubelet-evictionhard-imagefs-available"}
+
+			BeforeEach(func() {
+
+				MachineConfig = `apiVersion: machineconfiguration.openshift.io/v1
+			kind: KubeletConfig
+			spec:
+			  kubeletConfig:
+			  	evictionHard:
+				  imagefs.available: {{.var_kubelet_evictionhard_imagefs_available}}`
+
+				_, usedVals, missingVals, err = parseValues(MachineConfig, value_dic)
+			})
+
+			It("Should parse without error", func() {
+				Expect(err).To(BeNil())
+			})
+
+			It("Should have correct missing values list", func() {
+				Expect(missingVals).To(BeEmpty())
+			})
+
+			It("Should have correct used values list", func() {
+				Expect(usedVals).To(Equal(expUsedVals))
+			})
+		})
+
+		Context("Contents with non-url-encoded template content loop array variable", func() {
+
+			expUsedVals := []string{"var-servers", "the-value-2"}
+			BeforeEach(func() {
+
+				MachineConfig = `apiVersion: machineconfiguration.openshift.io/v1
+			kind: KubeletConfig
+			spec:
+				  {{$var_servers:=.var_servers}}
+				  {{$the_value_2:=.the_value_2}}
+				  {{range $element:=$var_servers|toArrayByComma}}server {{$element}} minpoll 4 maxpoll {{$the_value_2}}
+				  {{end}}`
+
+				_, usedVals, missingVals, err = parseValues(MachineConfig, value_dic)
+
+			})
+
+			It("Should parse without error", func() {
+				Expect(err).To(BeNil())
+			})
+
+			It("Should have correct missing values list", func() {
+				Expect(missingVals).To(BeEmpty())
+			})
+
+			It("Should have correct used values list", func() {
+				Expect(usedVals).To(Equal(expUsedVals))
+			})
+		})
+
+		Context("Contents with wrong non-url-encoded template content", func() {
+
+			BeforeEach(func() {
+
+				MachineConfig = `apiVersion: machineconfiguration.openshift.io/v1
+			kind: KubeletConfig
+			spec:
+			  kubeletConfig:
+			  	evictionHard:
+				  imagefs.available: {{.var_kubelet_evi ctionhard_imagefs_available}}`
+
+				_, usedVals, missingVals, err = parseValues(MachineConfig, value_dic)
+			})
+
+			It("Should parse with error", func() {
+				Expect(err).NotTo(BeNil())
+			})
+
+			It("Should have correct missing values list", func() {
+				Expect(missingVals).To(BeEmpty())
+			})
+
+			It("Should have correct used values list", func() {
+				Expect(usedVals).To(BeEmpty())
+			})
+		})
+
+		Context("Contents with url-encoded template content and non-urlencoded template content", func() {
+
+			expUsedVals := []string{"the-value-1", "the-value-2", "var-version"}
+			expMissingVals := []string{"the-value-not-defined", "var-file"}
+
+			BeforeEach(func() {
+
+				MachineConfig = `apiVersion: machineconfiguration.openshift.io/v1
+			kind: MachineConfig
+			spec:
+			  config:
+				ignition:
+				  version: {{.var_version}}
+				storage:
+				  files: {{.var_file}}
+				  - contents:
+					  source: data:,{{ test1%20%3A%3D%20%7B%7B.the_value_1%7D%7D%0Atest2%20%3A%3D%20%7B%7B.the_value_2%7D%7D%0Atest_not_defined%20%3A%3D%20%7B%7B.the_value_not_defined%7D%7D }}
+					mode: 420
+					overwrite: true
+					path: /etc/chrony.conf`
+
+				_, usedVals, missingVals, err = parseValues(MachineConfig, value_dic)
+			})
+			It("Should parse without error", func() {
+				Expect(err).To(BeNil())
+			})
+
+			It("Should have correct missing values list", func() {
+				Expect(missingVals).To(Equal(expMissingVals))
+			})
+
+			It("Should have correct used values list", func() {
+				Expect(usedVals).To(Equal(expUsedVals))
+			})
+		})
+
+		Context("Contents without template", func() {
+
+			BeforeEach(func() {
+
+				MachineConfig = `apiVersion: machineconfiguration.openshift.io/v1
+			kind: MachineConfig
+			spec:
+			  config:
+				ignition:
+				  version: 3.1.0
+				storage:
+				  files: 
+				  - contents:
+					  source: data:,test1%20%3A%3D%20%7B%7B.the_value_1%7D%7D%0Atest2%20%3A%3D%20%7B%7B.the_value_2%7D%7D%0Atest_not_defined%20%3A%3D%20%7B%7B.the_value_not_defined%7D%7D
+					mode: 420
+					overwrite: true
+					path: /etc/chrony.conf`
+
+				processedContent, usedVals, missingVals, err = parseValues(MachineConfig, value_dic)
+			})
+			It("Should parse without error", func() {
+				Expect(err).To(BeNil())
+			})
+
+			It("Should have correct missing values list", func() {
+				Expect(missingVals).To(BeEmpty())
+			})
+
+			It("Should have correct used values list", func() {
+				Expect(usedVals).To(BeEmpty())
+			})
+
+			It("Should have orignial content", func() {
+				Expect(processedContent).To(Equal(MachineConfig))
+			})
+		})
+
 	})
 })
