@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.42] - 2021-10-04
+### Changes
+- add error to the result object as comment (#721)
+- docs: Document the default-auto-apply ScanSetting
+- Makefile: Add push-openscap-image target
+- Proposal for Kubelet Config Remediation
+- fix needs-review unpause pool
+- add openscap image build
+- Update 06-troubleshooting.md
+- Remove Benchmark unit tests
+- Validate that rules in tailored profile are of appropriate type
+- TailoredProfiles: Allocate rules map with expected number of items
+- Fix error message json representation in CRD
+- aggregator: Remove MachineConfig validation
+- Add description to TailoredProfile yaml
+
 ## [0.1.41] - 2021-09-20
 ### Changes
 - Specify fsgroup, user and non-root user usage in resultserver
