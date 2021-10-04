@@ -1,17 +1,451 @@
-## The Custom Resource Definitions
+# The Custom Resource Definitions
 
-The compliance operator uses several objects as CRDs in order to operate and output
-results. We'll go through these in this document.
+The Compliance Operator introduces several CRDs to aid users in their
+compliance scanning.
+
+![CRDs](images/co-crds.png?raw=true "CRDs")
+
+The main workflow is:
+
+* Define what you need to comply with.
+* Define how you want your scans to be configured.
+* Link the what with the how.
+* Track your compliance scans
+* View the results
+
+We'll go through the elements.
+
+## What do you need to comply with?
+
+In order to effectuate compliance scans, the Compliance Operator uses pre-built
+security content which comes from the [ComplianceAsCode](complianceascode.readthedocs.io/)
+community. This is exposed by the Compliance Operator as custom resources
+which allow us to define the profiles we need to comply with and set
+relevant parameters.
+
+### The `ProfileBundle` object
+OpenSCAP content for consumption by the Compliance Operator is distributed
+as container images. In order to make it easier for users to discover what
+profiles a container image ships, a `ProfileBundle` object can be created,
+which the Compliance Operator then parses and creates a `Profile` object
+for each profile in the bundle. The Compliance Operator will also parse
+`Rule` and `Variable` objects which are used by the `Profiles` in order
+for system administrators to have the full view of what's contained
+in the profile. The `Profile` can be then either used directly or
+further customized using a `TailoredProfile` object.
+
+An example `ProfileBundle` object looks like this:
+```yaml
+- apiVersion: compliance.openshift.io/v1alpha1
+  kind: ProfileBundle
+    name: ocp4
+    namespace: openshift-compliance
+  spec:
+    contentFile: ssg-ocp4-ds.xml
+    contentImage: quay.io/complianceascode/ocp4:latest
+  status:
+    dataStreamStatus: VALID
+```
+
+Where:
+
+* **spec.contentFile**: Contains a path from the root directory (`/`) where
+  the profile file is located
+* **spec.contentImage**: A container image that encapsulates the profile files
+* **status.dataStreamStatus**: Whether the Compliance Operator was able to parse
+  the content files
+* **status.errorMessage**: In case parsing of the content files fails, this
+  attribute will contain a human-readable explanation.
+
+The ComplianceAsCode upstream image is located at `quay.io/complianceascode/ocp4:latest`.
+For OCP4, the two most used `contentFile` values would be `ssg-ocp4-ds.xml` which contain
+the platform (Kubernetes) checks and `ssg-rhcos4-ds.xml` file which contains the node
+(OS level) checks. For these two files, the corresponding `ProfileBundle` objects are created
+automatically when the ComplianceOperator starts in order to provide useful defaults.
+You can inspect the existing `ProfileBundle` objects by calling:
+
+```
+oc get profilebundle -nopenshift-compliance
+```
+
+Note that in case you need to roll back to a known-good content image
+from an invalid image, the `ProfileBundle` might be stuck in the `PENDING`
+state. A workaround is to move to a different image than the previous one.
+Please see [this bug report](https://bugzilla.redhat.com/show_bug.cgi?id=1914279#c2)
+for more details. Alternatively, you can delete and re-create the
+`ProfileBundle` object to get it to a good state again.
+
+The Compliance Operator usually ships with some valid `ProfileBundles`
+so they're usable and parsed as soon as the operator is installed.
+
+### The `Profile` object
+The `Profile` objects are never created nor modified manually, but rather based on a
+`ProfileBundle` object, typically one `ProfileBundle` would result in
+several `Profiles`. The `Profile` object contains parsed out details about
+an OpenSCAP profile such as its XCCDF identifier, what kind of checks the
+profile contains (node vs platform) and for what system or platform.
+
+For example:
+```yaml
+apiVersion: compliance.openshift.io/v1alpha1
+description: |-
+  This compliance profile reflects the core set of Moderate-Impact Baseline
+  configuration settings for deployment of Red Hat Enterprise
+  Linux CoreOS into U.S. Defense, Intelligence, and Civilian agencies.
+...
+id: xccdf_org.ssgproject.content_profile_moderate
+kind: Profile
+metadata:
+  annotations:
+    compliance.openshift.io/product: redhat_enterprise_linux_coreos_4
+    compliance.openshift.io/product-type: Node
+  creationTimestamp: "2020-07-14T16:18:47Z"
+  generation: 1
+  labels:
+    compliance.openshift.io/profile-bundle: rhcos4
+  name: rhcos4-moderate
+  namespace: openshift-compliance
+  ownerReferences:
+  - apiVersion: compliance.openshift.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: ProfileBundle
+    name: rhcos4
+    uid: 46be5b0f-e121-432e-8db2-3f417cdfdcc6
+  resourceVersion: "101939"
+  selfLink: /apis/compliance.openshift.io/v1alpha1/namespaces/openshift-compliance/profiles/rhcos4-moderate
+  uid: ab64865d-811e-411f-9acf-7b09d45c1746
+rules:
+- rhcos4-account-disable-post-pw-expiration
+- rhcos4-accounts-no-uid-except-zero
+- rhcos4-audit-rules-dac-modification-chmod
+- rhcos4-audit-rules-dac-modification-chown
+- rhcos4-audit-rules-dac-modification-fchmod
+- rhcos4-audit-rules-dac-modification-fchmodat
+- rhcos4-audit-rules-dac-modification-fchown
+- rhcos4-audit-rules-dac-modification-fchownat
+- rhcos4-audit-rules-dac-modification-fremovexattr
+...
+title: NIST 800-53 Moderate-Impact Baseline for Red Hat Enterprise Linux CoreOS
+```
+Note that this example has been abbreviated, the full list of rules and the full description
+are too long to display.
+
+Notable attributes:
+
+* **id**: The XCCDF name of the profile. Use this identifier when defining a `ComplianceScan`
+  object as the value of the `profile` attribute of the scan.
+* **rules**: A list of rules this profile contains. Each rule corresponds to a single check.
+* **metadata.annotations.compliance.openshift.io/product-type**: Either `Node` or `Platform`.
+  `Node`-type profiles scan the cluster nodes, `Platform`-type profiles scan the Kubernetes
+  platform. Match this value with the `scanType` attribute of a `ComplianceScan` object.
+* **metadata.annotations.compliance.openshift.io/product**: The name of the product this profile
+  is targeting. Mostly for informational purposes.
+
+Example usage:
+```
+# List all available profiles
+oc get profile.complliance -nopenshift-compliance
+# List all profiles generated from the rhcos4 profile bundle
+oc get profile.compliance -nopenshift-compliance -lcompliance.openshift.io/profile-bundle=rhcos4
+```
+
+### The `Rule` object
+As seen in the `Profile` object description, each profile contains a rather large number
+of rules. An example `Rule` object looks like this:
+
+```yaml
+apiVersion: compliance.openshift.io/v1alpha1
+checkType: Platform
+description: Use network policies to isolate traffic in your cluster network.
+id: xccdf_org.ssgproject.content_rule_configure_network_policies_namespaces
+instructions: |-
+  Verify that the every non-control plane namespace has an appropriate
+  NetworkPolicy.
+
+  To get all the non-control plane namespaces, you can do the
+  following command oc get  namespaces -o json | jq '[.items[] | select((.metadata.name | startswith("openshift") | not) and (.metadata.name | startswith("kube-") | not) and .metadata.name != "default")]'
+
+  To get all the non-control plane namespaces with a NetworkPolicy, you can do the
+  following command oc get --all-namespaces networkpolicies -o json | jq '[.items[] | select((.metadata.name | startswith("openshift") | not) and (.metadata.name | startswith("kube-") | not) and .metadata.name != "default") | .metadata.namespace] | unique'
+
+  Make sure that the namespaces displayed in the commands of the commands match.
+kind: Rule
+metadata:
+  annotations:
+    compliance.openshift.io/rule: configure-network-policies-namespaces
+    control.compliance.openshift.io/CIS-OCP: 5.3.2
+    control.compliance.openshift.io/NERC-CIP: CIP-003-3 R4;CIP-003-3 R4.2;CIP-003-3
+      R5;CIP-003-3 R6;CIP-004-3 R2.2.4;CIP-004-3 R3;CIP-007-3 R2;CIP-007-3 R2.1;CIP-007-3
+      R2.2;CIP-007-3 R2.3;CIP-007-3 R5.1;CIP-007-3 R6.1
+    control.compliance.openshift.io/NIST-800-53: AC-4;AC-4(21);CA-3(5);CM-6;CM-6(1);CM-7;CM-7(1);SC-7;SC-7(3);SC-7(5);SC-7(8);SC-7(12);SC-7(13);SC-7(18)
+  labels:
+    compliance.openshift.io/profile-bundle: ocp4
+  name: ocp4-configure-network-policies-namespaces
+  namespace: openshift-compliance
+rationale: Running different applications on the same Kubernetes cluster creates a
+  risk of one compromised application attacking a neighboring application. Network
+  segmentation is important to ensure that containers can communicate only with those
+  they are supposed to. When a network policy is introduced to a given namespace,
+  all traffic not allowed by the policy is denied. However, if there are no network
+  policies in a namespace all traffic will be allowed into and out of the pods in
+  that namespace.
+severity: high
+title: Ensure that application Namespaces have Network Policies defined.
+```
+
+As you can see, the Rule object contains mostly informational data. Some
+attributes that might be directly usable to admins include `id` which can
+be used as the value of the `rule` attribute of the `ComplianceScan` object
+or the annotations that contain compliance controls that are addressed by
+this rule.
+
+Notable attributes:
+
+* **id**: XCCDF identifier. Parsed directly from the datastream.
+* **instructions**: Manual instructions to audit for this specific control.
+* **rationale**: A textual description of why this rule is being checked.
+* **severity**: A textual description of how severe is it to fail this rule.
+* **title**: A small summary of what this rule does
+* **checkType**: Indicates the type of check that this rule executes. `Node` is
+  done directly on the node. `Platform` is done on the Kubernetes API layer. An
+  empty value means there is no automated check and this will merely be
+  informational.
+
+Ownership:
+
+Rules will have an appropriate label to easily identify the ProfileBundle that
+created it. The profileBundle will also be specified in the OwnerReferences of
+this object.
+
+### The `TailoredProfile` object
+While we strive to make the default profiles useful in general, each organization might
+have different requirements and thus might need to customize the profiles. This is where
+the `TailoredProfile` is useful. It allows you to enable or disable rules, set variable
+values and provide justification for these customizations. The `TailoredProfile`, upon
+validating, creates a `ConfigMap` that can be referenced by a `ComplianceScan`. A more
+user-friendly way of consuming the `TailoredProfile` way is to reference it directly
+in a `ScanSettingBinding` object which is described later.
+
+An example `TailoredProfile` that extends an RHCOS4 profile and disables a single rule
+is displayed below:
+```yaml
+apiVersion: compliance.openshift.io/v1alpha1
+kind: TailoredProfile
+metadata:
+  name: rhcos4-with-usb
+spec:
+  extends: rhcos4-moderate
+  title: RHCOS4 moderate profile that allows USB support
+  disableRules:
+    - name: rhcos4-grub2-nousb-argument
+      rationale: We use USB peripherals in our environment
+status:
+  id: xccdf_compliance.openshift.io_profile_rhcos4-with-usb
+  outputRef:
+    name: rhcos4-with-usb-tp
+    namespace: openshift-compliance
+  state: READY
+```
+
+Another example that changes the value of a variable the content uses to check
+for a kubelet eviction limit is below:
+```yaml
+apiVersion: compliance.openshift.io/v1alpha1
+kind: TailoredProfile
+metadata:
+  name: cis-node-kubelet-memory
+spec:
+  extends: ocp4-moderate-node
+  title: CIS node with different kubelet memory limit
+  setValues:
+    - name: upstream-ocp4-var-kubelet-evictionhard-memory-available
+      rationale: Bump the kubelet hard eviction limit to 500MB
+      value: 500Mi
+```
+
+Notable attributes:
+
+* **spec.extends**: (Optional) Name of the `Profile` object that this `TailoredProfile` builds upon
+* **spec.title**: Human-readable title of the `TailoredProfile`
+* **spec.disableRules**: A list of `name` and `rationale` pairs. Each name refers to a name
+  of a `Rule` object that is supposed to be disabled. `Rationale` is a human-readable text
+  describing why the rule is disabled.
+* **spec.enableRules**: Equivalent of `disableRules`, except enables rules that might be
+  disabled by default.
+* **spec.setValues**: Allows for setting specific values to something other
+  than their current default.
+* **status.id**: The XCCDF ID of the resulting profile. Use variable when
+  defining a `ComplianceScan` using this `TailoredProfile` as the value of the `profile`
+  attribute of the scan.
+* **status.outputRef.name**: The result of creating a `TailoredProfile` is typically a
+  `ConfigMap`. This is the name of the `ConfigMap` which can be used as the value of the
+  `tailoringConfigMap.name` attribute of a `ComplianceScan`.
+* **status.state**: Either of `PENDING`, `READY` or `ERROR`. If the state is `ERROR`, the
+  attribute `status.errorMessage` contains the reason for the failure.
+
+While it's possible to extend a profile and build it based on another one, it's also
+possible to write a profile from scratch using the `TailoredProfile` construct.
+To do this, remember to set an appropriate title and description. It's very important
+to leave the `extends` field empty for this case. Subsequently, you'll also need
+to indicate to the Compliance Operator what type of scan will this custom profile
+generate:
+
+* Node scan: Scans the Operating System.
+* Platform scan: Scans the OpenShift configuration.
+
+To do this, set the following annotation on the TailoredProfile object:
+
+```
+  compliance.openshift.io/product-type: <Type>
+```
+
+Where the `Platform` type will build a Platform scan, and `Node` will
+build an OS scan. Note that if no `product-type` annotation is given, the
+operator will default to `Platform`. Adding the `-node` suffix to the
+name of the `TailoredProfile` object will have a similar effect as
+adding the `Node` product type annotation, and will generate an Operating
+System scan.
+
+## How you want your scans to be configured?
+
+The specifics of how a scan should happen, where should it happen, and how
+often, are also something that's configurable for the Compliance Operator
+using a custom resource
+
+### The `ScanSetting` object
+
+To easily allow administrators to define and re-use settings of how
+they'd like the compliance scans to happen, the `ScanSetting` object
+provides the necessary tunables.
+
+A sample looks as follows:
+
+```yaml
+apiVersion: compliance.openshift.io/v1alpha1
+kind: ScanSetting
+metadata:
+  name: my-companys-constraints
+autoApplyRemediations: false
+autoUpdateRemediations: false
+schedule: "0 1 * * *"
+rawResultStorage:
+  size: "2Gi"
+  rotation: 10
+# For each role, a separate scan will be created pointing
+# to a node-role specified in roles
+roles:
+  - worker
+  - master
+```
+
+The following attributes can be set in the `ScanSetting:
+
+* **autoApplyRemediations**: Specifies if any remediations found from the
+  scan(s) should be applied automatically.
+* **autoUpdateRemediations**: Defines whether or not the remediations
+  should be updated automatically in case the content updates.
+* **schedule**: Defines how often should the scan(s) be run in cron format.
+* **rawResultStorage.size**: Specifies the size of storage that should be asked
+  for in order for the scan to store the raw results. (Defaults to 1Gi)
+* **rawResultStorage.rotation**: Specifies the amount of scans for which the raw
+  results will be stored. Older results will get rotated, and it's the
+  responsibility of administrators to store these results elsewhere before
+  rotation happens. Note that a rotation policy of '0' disables rotation
+  entirely. Defaults to 3.
+* **scanTolerations**: Specifies tolerations that will be set in the scan Pods
+  for scheduling. Defaults to allowing the scan to ignore taints. For
+  details on tolerations, see the
+  [Kubernetes documentation on this](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/).
+ * **roles**: Specifies the `node-role.kubernetes.io` label value that any scan of type `Node`
+  should be scheduled on.
+
+A single `ScanSetting` object can also be reused for multiple scans,
+as it merely defines the settings.
+
+The Compliance Operator creates two `ScanSetting` objects on startup:
+ * **default**: a ScanSetting that would run a scan every day at 1AM on both masters and workers,
+   using a 1GBi PV and keeping the last three results. Remediations are neither applied nor updated
+   automatically.
+ * **default-auto-apply**: As above, except both autoApplyRemediations and autoUpdateRemediations
+   are set to true.
+
+## Linking the "what" with the "how"
+
+When an organization has defined the standard they need to comply with,
+and thus selected a profile (or tailored one), and has also
+defined the settings to run the scans, we can now link them together.
+
+The Compliance Operator will do the right thing and make sure it happens.
+
+### `ScanSettingBinding` objects
+This object allows to specify the compliance requirements by
+referencing the `Profile` or `TailoredProfile` objects. It is then
+linked to a `ScanSetting` object which supplies operational
+constraints such as schedule or which node roles must be
+scanned. The Compliance Operator then generates the `ComplianceSuite`
+objects based on the `ScanSetting` and `ScanSettingBinding` including all
+the low-level details read directly from the profiles.
+
+Let's inspect an example, first a `ScanSettingBinding` object:
+```yaml
+apiVersion: compliance.openshift.io/v1alpha1
+kind: ScanSettingBinding
+metadata:
+  name: my-companys-compliance-requirements
+profiles:
+  # Node checks
+  - name: rhcos4-with-usb
+    kind: TailoredProfile
+    apiGroup: compliance.openshift.io/v1alpha1
+  # Cluster checks
+  - name: ocp4-moderate
+    kind: Profile
+    apiGroup: compliance.openshift.io/v1alpha1
+settingsRef:
+  name: my-companys-constraints
+  kind: ScanSetting
+  apiGroup: compliance.openshift.io/v1alpha1
+```
+
+There are two important pieces of a `ScanSettingBinding` object:
+
+* **profiles**: Contains a list of (`name,kind,apiGroup`) triples that make up
+  a selection of `Profile` of `TailoredProfile` to scan your environment with.
+* **settingsRef**: A reference to a `ScanSetting` object also using the
+  (`name,kind,apiGroup`) triple that prescribes the operational constraints
+  like schedule or the storage size.
+
+The `ScanSetting` complements the `ScanSettingBinding` in the sense that the binding object
+provides a list of suites, the setting object provides settings for the suites and scans
+and places the node-level scans onto node roles.
+
+When the above objects are created, the result will be a compliance suite:
+```
+$ oc get compliancesuites
+NAME                                  PHASE     RESULT
+my-companys-compliance-requirements   RUNNING   NOT-AVAILABLE
+```
+
+If you examine the suite, you'll see that it automatically picks up the
+correct XCCDF scan ID as well as the tailoring configMap without having to
+specify these low-level details manually. The suite is also owned by the
+ `ScanSettingBinding`, meaning that if you delete the binding, the suite also
+ gets deleted.
+
+## Tracking your compliance scans
+
+The next thing we'll want to do is see how our scans are doing.
 
 ### The `ComplianceSuite` object
 
-The API resource that you'll be interacting with is called `ComplianceSuite`.
-It is a collection of `ComplianceScan` objects, each of which describes
-a scan. In addition, the `ComplianceSuite` also contains an overview of the
-remediations found and the statuses of the scans. For node scans, you'll typically want
-to map a scan to a `MachinePool`, mostly because the remediations for any
+The `ComplianceSuite` contains the raw settings to create scans and the
+overall result. For scans of type `Node`, you'll typically want
+to map a scan to a `MachineConfigPool`, mostly because the remediations for any
 issues that would be found contain `MachineConfig` objects that must be
-applied to a pool.
+applied to a pool. So, if you're specifying the label yourself,
+make sure that it directly applies to a pool. When the `ComplianceSuite` is
+created by a `ScanSettingBinding`, this will be done by the Compliance Operator.
 
 A `ComplianceSuite` will look similar to this:
 
@@ -69,7 +503,11 @@ LAST SEEN   TYPE     REASON            OBJECT                                   
 
 This will also show up in the output of the `oc describe` command.
 
-### The `ComplianceScan` object
+**NOTE**: Defining the `ComplianceSuite` objects manually including all the details
+such as XCCDF includes declaring a fair amount of attributes and therefore
+creating the objects might be error-prone. 
+
+### (Advanced) The `ComplianceScan` object
 
 Similarly to `Pods` in Kubernetes, a `ComplianceScan` is the base object that
 the compliance-operator introduces. Also similarly to `Pods`, you normally
@@ -181,6 +619,11 @@ LAST SEEN   TYPE     REASON            OBJECT                        MESSAGE
 ```
 
 This will also show up in the output of the `oc describe` command.
+
+## Viewing the results
+
+When a compliance suite gets to the `DONE` phase, we'll have results
+and possible fixes (remediations) available.
 
 ### The `ComplianceCheckResult` object
 
@@ -385,393 +828,3 @@ oc get compliancecheckresults -l 'compliance.openshift.io/check-status in (FAIL)
 The manual remediation steps are typically stored in the `ComplianceCheckResult`'s
 `description` attribute.
 
-### The `ProfileBundle` object
-OpenSCAP content for consumption by the Compliance Operator is distributed
-as container images. In order to make it easier for users to discover what
-profiles a container image ships, a `ProfileBundle` object can be created,
-which the Compliance Operator then parses and creates a `Profile` object
-for each profile in the bundle. The `Profile` can be then either used
-directly or further customized using a `TailoredProfile` object.
-
-An example `ProfileBundle` object looks like this:
-```yaml
-- apiVersion: compliance.openshift.io/v1alpha1
-  kind: ProfileBundle
-    name: ocp4
-    namespace: openshift-compliance
-  spec:
-    contentFile: ssg-ocp4-ds.xml
-    contentImage: quay.io/complianceascode/ocp4:latest
-  status:
-    dataStreamStatus: VALID
-```
-
-Where:
-
-* **spec.contentFile**: Contains a path from the root directory (`/`) where
-  the profile file is located
-* **spec.contentImage**: A container image that encapsulates the profile files
-* **status.dataStreamStatus**: Whether the Compliance Operator was able to parse
-  the content files
-* **status.errorMessage**: In case parsing of the content files fails, this
-  attribute will contain a human-readable explanation.
-
-The ComplianceAsCode upstream image is located at `quay.io/complianceascode/ocp4:latest`.
-For OCP4, the two most used `contentFile` values would be `ssg-ocp4-ds.xml` which contain
-the platform (Kubernetes) checks and `ssg-rhcos4-ds.xml` file which contains the node
-(OS level) checks. For these two files, the corresponding `ProfileBundle` objects are created
-automatically when the ComplianceOperator starts in order to provide useful defaults.
-You can inspect the existing `ProfileBundle` objects by calling:
-
-```
-oc get profilebundle -nopenshift-compliance
-```
-
-Note that in case you need to roll back to a known-good content image
-from an invalid image, the `ProfileBundle` might be stuck in the `PENDING`
-state. A workaround is to move to a different image than the previous one.
-Please see [this bug report](https://bugzilla.redhat.com/show_bug.cgi?id=1914279#c2)
-for more details.
-
-### The `Profile` object
-The `Profile` objects are never created manually, but rather based on a
-`ProfileBundle` object, typically one `ProfileBundle` would result in
-several `Profiles`. The `Profile` object contains parsed out details about
-an OpenSCAP profile such as its XCCDF identifier, what kind of checks the
-profile contains (node vs platform) and for what system or platform.
-
-For example:
-```yaml
-apiVersion: compliance.openshift.io/v1alpha1
-description: |-
-  This compliance profile reflects the core set of Moderate-Impact Baseline
-  configuration settings for deployment of Red Hat Enterprise
-  Linux CoreOS into U.S. Defense, Intelligence, and Civilian agencies.
-...
-id: xccdf_org.ssgproject.content_profile_moderate
-kind: Profile
-metadata:
-  annotations:
-    compliance.openshift.io/product: redhat_enterprise_linux_coreos_4
-    compliance.openshift.io/product-type: Node
-  creationTimestamp: "2020-07-14T16:18:47Z"
-  generation: 1
-  labels:
-    compliance.openshift.io/profile-bundle: rhcos4
-  name: rhcos4-moderate
-  namespace: openshift-compliance
-  ownerReferences:
-  - apiVersion: compliance.openshift.io/v1alpha1
-    blockOwnerDeletion: true
-    controller: true
-    kind: ProfileBundle
-    name: rhcos4
-    uid: 46be5b0f-e121-432e-8db2-3f417cdfdcc6
-  resourceVersion: "101939"
-  selfLink: /apis/compliance.openshift.io/v1alpha1/namespaces/openshift-compliance/profiles/rhcos4-moderate
-  uid: ab64865d-811e-411f-9acf-7b09d45c1746
-rules:
-- rhcos4-account-disable-post-pw-expiration
-- rhcos4-accounts-no-uid-except-zero
-- rhcos4-audit-rules-dac-modification-chmod
-- rhcos4-audit-rules-dac-modification-chown
-- rhcos4-audit-rules-dac-modification-fchmod
-- rhcos4-audit-rules-dac-modification-fchmodat
-- rhcos4-audit-rules-dac-modification-fchown
-- rhcos4-audit-rules-dac-modification-fchownat
-- rhcos4-audit-rules-dac-modification-fremovexattr
-...
-title: NIST 800-53 Moderate-Impact Baseline for Red Hat Enterprise Linux CoreOS
-```
-Note that this example has been abbreviated, the full list of rules and the full description
-are too long to display.
-
-Notable attributes:
-
-* **id**: The XCCDF name of the profile. Use this identifier when defining a `ComplianceScan`
-  object as the value of the `profile` attribute of the scan.
-* **rules**: A list of rules this profile contains. Each rule corresponds to a single check.
-* **metadata.annotations.compliance.openshift.io/product-type**: Either `Node` or `Platform`.
-  `Node`-type profiles scan the cluster nodes, `Platform`-type profiles scan the Kubernetes
-  platform. Match this value with the `scanType` attribute of a `ComplianceScan` object.
-* **metadata.annotations.compliance.openshift.io/product**: The name of the product this profile
-  is targeting. Mostly for informational purposes.
-
-Example usage:
-```
-# List all available profiles
-oc get profile.complliance -nopenshift-compliance
-# List all profiles generated from the rhcos4 profile bundle
-oc get profile.compliance -nopenshift-compliance -lcompliance.openshift.io/profile-bundle=rhcos4
-```
-
-### The `Rule` object
-As seen in the `Profile` object description, each profile contains a rather large number
-of rules. An example `Rule` object looks like this:
-
-```yaml
-apiVersion: compliance.openshift.io/v1alpha1
-checkType: Platform
-description: Use network policies to isolate traffic in your cluster network.
-id: xccdf_org.ssgproject.content_rule_configure_network_policies_namespaces
-instructions: |-
-  Verify that the every non-control plane namespace has an appropriate
-  NetworkPolicy.
-
-  To get all the non-control plane namespaces, you can do the
-  following command oc get  namespaces -o json | jq '[.items[] | select((.metadata.name | startswith("openshift") | not) and (.metadata.name | startswith("kube-") | not) and .metadata.name != "default")]'
-
-  To get all the non-control plane namespaces with a NetworkPolicy, you can do the
-  following command oc get --all-namespaces networkpolicies -o json | jq '[.items[] | select((.metadata.name | startswith("openshift") | not) and (.metadata.name | startswith("kube-") | not) and .metadata.name != "default") | .metadata.namespace] | unique'
-
-  Make sure that the namespaces displayed in the commands of the commands match.
-kind: Rule
-metadata:
-  annotations:
-    compliance.openshift.io/rule: configure-network-policies-namespaces
-    control.compliance.openshift.io/CIS-OCP: 5.3.2
-    control.compliance.openshift.io/NERC-CIP: CIP-003-3 R4;CIP-003-3 R4.2;CIP-003-3
-      R5;CIP-003-3 R6;CIP-004-3 R2.2.4;CIP-004-3 R3;CIP-007-3 R2;CIP-007-3 R2.1;CIP-007-3
-      R2.2;CIP-007-3 R2.3;CIP-007-3 R5.1;CIP-007-3 R6.1
-    control.compliance.openshift.io/NIST-800-53: AC-4;AC-4(21);CA-3(5);CM-6;CM-6(1);CM-7;CM-7(1);SC-7;SC-7(3);SC-7(5);SC-7(8);SC-7(12);SC-7(13);SC-7(18)
-  labels:
-    compliance.openshift.io/profile-bundle: ocp4
-  name: ocp4-configure-network-policies-namespaces
-  namespace: openshift-compliance
-rationale: Running different applications on the same Kubernetes cluster creates a
-  risk of one compromised application attacking a neighboring application. Network
-  segmentation is important to ensure that containers can communicate only with those
-  they are supposed to. When a network policy is introduced to a given namespace,
-  all traffic not allowed by the policy is denied. However, if there are no network
-  policies in a namespace all traffic will be allowed into and out of the pods in
-  that namespace.
-severity: high
-title: Ensure that application Namespaces have Network Policies defined.
-```
-
-As you can see, the Rule object contains mostly informational data. Some
-attributes that might be directly usable to admins include `id` which can
-be used as the value of the `rule` attribute of the `ComplianceScan` object
-or the annotations that contain compliance controls that are addressed by
-this rule.
-
-Notable attributes:
-
-* **id**: XCCDF identifier. Parsed directly from the datastream.
-* **instructions**: Manual instructions to audit for this specific control.
-* **spec.enableRules**: Equivalent of `disableRules`, except enables rules that might be
-  disabled by default.
-* **rationale**: A textual description of why this rule is being checked.
-* **severity**: A textual description of how severe is it to fail this rule.
-* **title**: A small summary of what this rule does
-* **checkType**: Indicates the type of check that this rule executes. `Node` is
-  done directly on the node. `Platform` is done on the Kubernetes API layer. An
-  empty value means there is no automated check and this will merely be
-  informational.
-
-Ownership:
-
-Rules will have an appropriate label to easily identify the ProfileBundle that
-created it. The profileBundle will also be specified in the OwnerReferences of
-this object.
-
-### The `TailoredProfile` object
-While we strive to make the default profiles useful in general, each organization might
-have different requirements and thus might need to customize the profiles. This is where
-the `TailoredProfile` is useful. It allows you to enable or disable rules, set variable
-values and provide justification for these customizations. The `TailoredProfile`, upon
-validating, creates a `ConfigMap` that can be referenced by a `ComplianceScan`. A more
-user-friendly way of consuming the `TailoredProfile` way is to reference it directly
-in a `ScanSettingBinding` object which is described later.
-
-An example `TailoredProfile` that extends an RHCOS4 profile and disables a single rule
-is displayed below:
-```yaml
-apiVersion: compliance.openshift.io/v1alpha1
-kind: TailoredProfile
-metadata:
-  name: rhcos4-with-usb
-spec:
-  extends: rhcos4-moderate
-  title: RHCOS4 moderate profile that allows USB support
-  disableRules:
-    - name: rhcos4-grub2-nousb-argument
-      rationale: We use USB peripherals in our environment
-status:
-  id: xccdf_compliance.openshift.io_profile_rhcos4-with-usb
-  outputRef:
-    name: rhcos4-with-usb-tp
-    namespace: openshift-compliance
-  state: READY
-```
-
-Another example that changes the value of a variable the content uses to check
-for a kubelet eviction limit is below:
-```yaml
-apiVersion: compliance.openshift.io/v1alpha1
-kind: TailoredProfile
-metadata:
-  name: cis-node-kubelet-memory
-spec:
-  extends: ocp4-moderate-node
-  title: CIS node with different kubelet memory limit
-  setValues:
-    - name: upstream-ocp4-var-kubelet-evictionhard-memory-available
-      rationale: Bump the kubelet hard eviction limit to 500MB
-      value: 500Mi
-```
-
-Notable attributes:
-
-* **spec.extends**: (Optional) Name of the `Profile` object that this `TailoredProfile` builds upon
-* **spec.title**: Human-readable title of the `TailoredProfile`
-* **spec.disableRules**: A list of `name` and `rationale` pairs. Each name refers to a name
-  of a `Rule` object that is supposed to be disabled. `Rationale` is a human-readable text
-  describing why the rule is disabled.
-* **spec.enableRules**: Equivalent of `disableRules`, except enables rules that might be
-  disabled by default.
-* **status.id**: The XCCDF ID of the resulting profile. Use variable when
-  defining a `ComplianceScan` using this `TailoredProfile` as the value of the `profile`
-  attribute of the scan.
-* **status.outputRef.name**: The result of creating a `TailoredProfile` is typically a
-  `ConfigMap`. This is the name of the `ConfigMap` which can be used as the value of the
-  `tailoringConfigMap.name` attribute of a `ComplianceScan`.
-* **status.state**: Either of `PENDING`, `READY` or `ERROR`. If the state is `ERROR`, the
-  attribute `status.errorMessage` contains the reason for the failure.
-
-While it's possible to extend a profile and build it based on another one, it's also
-possible to write a profile from scratch using the `TailoredProfile` construct.
-To do this, remember to set an appropriate title and description. It's very important
-to leave the `extends` field empty for this case. Subsequently, you'll also need
-to indicate to the Compliance Operator what type of scan will this custom profile
-generate:
-
-* Node scan: Scans the Operating System.
-* Platform scan: Scans the OpenShift configuration.
-
-To do this, set the following annotation on the TailoredProfile object:
-
-```
-  compliance.openshift.io/product-type: <Type>
-```
-
-Where the `Platform` type will build a Platform scan, and `Node` will
-build an OS scan. Note that if no `product-type` annotation is given, the
-operator will default to `Platform`. Adding the `-node` suffix to the
-name of the `TailoredProfile` object will have a similar effect as
-adding the `Node` product type annotation, and will generate an Operating
-System scan.
-
-### The `ScanSetting` and `ScanSettingBinding` objects
-Defining the `ComplianceSuite` objects manually including all the details
-such as XCCDF includes declaring a fair amount of attributes and therefore
-creating the objects might be error-prone. In order to address the usual
-cases in a more user-friendly manner, the Compliance Operator includes two
-more objects that allow the user to define the compliance requirements on
-a more high level.  In particular, the `ScanSettingBinding` object allows
-to specify the compliance requirements by referencing the `Profile`
-or `TailoredProfile` objects and the `ScanSetting` objects supplies
-operational constraints such as schedule or which node roles must be
-scanned. The Compliance Operator then generates the `ComplianceSuite`
-objects based on the `ScanSetting` and `ScanSettingBinding` including all
-the low-level details read directly from the profiles.
-
-Let's inspect an example, first a `ScanSettingBinding` object:
-```yaml
-apiVersion: compliance.openshift.io/v1alpha1
-kind: ScanSettingBinding
-metadata:
-  name: my-companys-compliance-requirements
-profiles:
-  # Node checks
-  - name: rhcos4-with-usb
-    kind: TailoredProfile
-    apiGroup: compliance.openshift.io/v1alpha1
-  # Cluster checks
-  - name: ocp4-moderate
-    kind: Profile
-    apiGroup: compliance.openshift.io/v1alpha1
-settingsRef:
-  name: my-companys-constraints
-  kind: ScanSetting
-  apiGroup: compliance.openshift.io/v1alpha1
-```
-
-There are two important pieces of a `ScanSettingBinding` object:
-
-* **profiles**: Contains a list of (`name,kind,apiGroup`) triples that make up
-  a selection of `Profile` of `TailoredProfile` to scan your environment with.
-* **settingsRef**: A reference to a `ScanSetting` object also using the
-  (`name,kind,apiGroup`) triple that prescribes the operational constraints
-  like schedule or the storage size.
-
-Next, let's look at an example of a `ScanSetting` object:
-```yaml
-apiVersion: compliance.openshift.io/v1alpha1
-kind: ScanSetting
-metadata:
-  name: my-companys-constraints
-# Suite-specific settings
-autoApplyRemediations: false
-schedule: "0 1 * * *"
-# Scan-specific settings
-rawResultStorage:
-  size: "2Gi"
-  rotation: 10
-# For each role, a separate scan will be created pointing
-# to a node-role specified in roles
-roles:
-  - worker
-  - master
-```
-
-The `ScanSetting` complements the `ScanSettingBinding` in the sense that the binding object
-provides a list of suites, the setting object provides settings for the suites and scans
-and places the node-level scans onto node roles. A single `ScanSetting` object can also
-be reused for multiple `ScanSettingBinding` objects.
-
-The following attributes can be set in the `ScanSetting:
-* **autoApplyRemediations**: Specifies if any remediations found from the
-  scan(s) should be applied automatically.
-* **autoUpdateRemediations**: Defines whether or not the remediations
-  should be updated automatically in case the content updates.
-* **schedule**: Defines how often should the scan(s) be run in cron format.
-* **rawResultStorage.size**: Specifies the size of storage that should be asked
-  for in order for the scan to store the raw results. (Defaults to 1Gi)
-* **rawResultStorage.rotation**: Specifies the amount of scans for which the raw
-  results will be stored. Older results will get rotated, and it's the
-  responsibility of administrators to store these results elsewhere before
-  rotation happens. Note that a rotation policy of '0' disables rotation
-  entirely. Defaults to 3.
-* **scanTolerations**: Specifies tolerations that will be set in the scan Pods
-  for scheduling. Defaults to allowing the scan to run on master nodes. For
-  details on tolerations, see the
-  [Kubernetes documentation on this](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/).
- * **roles**: Specifies the `node-role.kubernetes.io` label value that any Node Suite
-  should be scheduled on. Internally, each `Profile` or `TailoredProfile` in a
-   `ScanSettingBinding` creates a `ComplianceScan` for each role specified in this attribute.
-
-The Compliance Operator creates two `ScanSetting` objects on startup:
- * **default**: a ScanSetting that would run a scan every day at 1AM on both masters and workers,
-   using a 1GBi PV and keeping the last three results. Remediations are neither applied nor updated
-   automatically.
- * **default-auto-apply**: As above, except both autoApplyRemediations and autoUpdateRemediations
-   are set to true.
-
- When the above objects are created, the result are a suite and three scans:
-```
-$ oc get compliancesuites
-NAME                                  PHASE     RESULT
-my-companys-compliance-requirements   RUNNING   NOT-AVAILABLE
-$ oc get compliancescans
-NAME                     PHASE     RESULT
-ocp4-moderate            DONE      NON-COMPLIANT
-rhcos4-with-usb-master   RUNNING   NOT-AVAILABLE
-rhcos4-with-usb-worker   RUNNING   NOT-AVAILABLE
-```
-
-If you examine the scans, you'll see that they automatically pick up the
-correct XCCDF scan ID as well as the tailoring configMap without having to
-specify these low-level details manually. The suite is also owned by the
- `ScanSettingBinding`, meaning that if you delete the binding, the suite also
- gets deleted.
