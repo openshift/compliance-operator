@@ -38,6 +38,9 @@ const (
 	enforcementTypeAnnotationKey    = "complianceascode.io/enforcement-type"
 	optionalAnnotationKey           = "complianceascode.io/optional"
 	valueInputRequiredAnnotationKey = "complianceascode.io/value-input-required"
+	//index to trim `{{`and`}}`
+	trimStartIndex = 2
+	trimEndIndex   = 2
 )
 
 // Constants useful for parsing warnings
@@ -717,52 +720,93 @@ func toArrayByComma(format string) []string {
 func parseValues(remContent string, resultValues map[string]string) (string, []string, []string, error) {
 	var valuesUsedList []string
 	var valuesMissingList []string
-	var valuesParsedList []string
 	//find everything start and end with {{}}
 	re := regexp.MustCompile(`\{\{[^}]*\}\}`)
 	contentList := re.FindAllString(remContent, -1)
 	fixedText := remContent
 	if len(contentList) == 0 {
 		return remContent, valuesUsedList, valuesMissingList, nil
-	} // no processing needed, no urlencoded data
-	//process urlencoded content file data one by one and replace them in fixedText
+	}
+	// there are two types of content we need to process, one is url-encoded machine config source ex. {{ -a%20always0-F%20di }},
+	// the other one is not url_encoded ex. {{.var_some_value}}, we are going to take care of url-encoded content first, and then
+	// feed the processed content to template again
+
 	for _, content := range contentList {
-		//take out `{{ `,' }}' from content
-		trimmedContent := content[3:][:len(content)-6]
-		decodeContent, decodeErr := url.QueryUnescape(trimmedContent)
+
+		// take out `{{ `,' }}' out from content
+		trimmedContent := content[trimStartIndex:][:len(content)-trimStartIndex-trimEndIndex]
+		// take out leading and tailling spaces
+		trimmedContent = strings.TrimSpace(trimmedContent)
+
+		// trimmedContent here should only contain url-encoded content, check if it contains illegall character space
+		isIllegalURL := regexp.MustCompile(".*[\\ \"\\<\\>\\{\\}|\\\\^~\\[\\]].*")
+		if isIllegalURL.MatchString(trimmedContent) {
+			continue
+		}
+
+		var decodeErr error
+		preProcessedContent, decodeErr := url.QueryUnescape(trimmedContent)
 		if decodeErr != nil {
 			return remContent, valuesUsedList, valuesMissingList, errors.Wrap(decodeErr, "error while decode remediation context: ")
 		}
-		t, err := template.New("").Option("missingkey=zero").Funcs(template.FuncMap{"toArrayByComma": toArrayByComma}).
-			Parse(decodeContent)
-		if err != nil {
-			return remContent, valuesUsedList, valuesMissingList, errors.Wrap(err, "wrongly formatted remediation context: ") //Error creating template // Wrongly formatted remediation context
+
+		// we don't need special processing if preProcessedContent is same as orginal content
+		if preProcessedContent == trimmedContent {
+			continue
 		}
 
-		buf := &bytes.Buffer{}
-		err = t.Execute(buf, resultValues)
+		fixedContent, usedVals, missingVals, err := processContent(preProcessedContent, resultValues)
 		if err != nil {
-			return fixedText, valuesUsedList, valuesMissingList, errors.Wrap(err, "error while parsing variables into values: ")
+			return remContent, valuesUsedList, valuesMissingList, errors.Wrap(err, "error while processing remediation context: ")
 		}
-		fixedContent := buf.String()
+		valuesUsedList = append(valuesUsedList, usedVals...)
+		valuesMissingList = append(valuesMissingList, missingVals...)
 		fixedText = strings.ReplaceAll(fixedText, content, url.PathEscape(fixedContent))
-
-		//Iterate through template tree to get all parsed variable
-		valuesParsedList = getParsedValueName(t)
-		for _, parsedVariable := range valuesParsedList {
-			_, found := resultValues[parsedVariable]
-			if found {
-				dnsFriendlyParsedVariable := strings.ReplaceAll(parsedVariable, "_", "-")
-				valuesUsedList = append(valuesUsedList, dnsFriendlyParsedVariable)
-			} else {
-				dnsFriendlyParsedVariable := strings.ReplaceAll(parsedVariable, "_", "-")
-				valuesMissingList = append(valuesMissingList, dnsFriendlyParsedVariable)
-			}
-		}
 
 	}
 
+	// now the content is free of url-encoded string, we can feed the fixedContent to template to process the general case content.
+	// ex. {{.<variable name>}}
+	fixedText, usedVals, missingVals, err := processContent(fixedText, resultValues)
+	if err != nil {
+		return remContent, valuesUsedList, valuesMissingList, errors.Wrap(err, "error while processing remediation context: ")
+	}
+	valuesUsedList = append(valuesUsedList, usedVals...)
+	valuesMissingList = append(valuesMissingList, missingVals...)
+
 	return fixedText, valuesUsedList, valuesMissingList, nil
+}
+
+func processContent(preProcessedContent string, resultValues map[string]string) (string, []string, []string, error) {
+	var valuesUsedList []string
+	var valuesMissingList []string
+	var valuesParsedList []string
+	t, err := template.New("").Option("missingkey=zero").Funcs(template.FuncMap{"toArrayByComma": toArrayByComma}).
+		Parse(preProcessedContent)
+	if err != nil {
+		return preProcessedContent, valuesUsedList, valuesMissingList, errors.Wrap(err, "wrongly formatted remediation context: ") //Error creating template // Wrongly formatted remediation context
+	}
+
+	buf := &bytes.Buffer{}
+	err = t.Execute(buf, resultValues)
+	if err != nil {
+		return preProcessedContent, valuesUsedList, valuesMissingList, errors.Wrap(err, "error while parsing variables into values: ")
+	}
+	fixedContent := buf.String()
+
+	//Iterate through template tree to get all parsed variable
+	valuesParsedList = getParsedValueName(t)
+	for _, parsedVariable := range valuesParsedList {
+		_, found := resultValues[parsedVariable]
+		if found {
+			dnsFriendlyParsedVariable := strings.ReplaceAll(parsedVariable, "_", "-")
+			valuesUsedList = append(valuesUsedList, dnsFriendlyParsedVariable)
+		} else {
+			dnsFriendlyParsedVariable := strings.ReplaceAll(parsedVariable, "_", "-")
+			valuesMissingList = append(valuesMissingList, dnsFriendlyParsedVariable)
+		}
+	}
+	return fixedContent, valuesUsedList, valuesMissingList, nil
 }
 
 func getParsedValueName(t *template.Template) []string {
@@ -774,7 +818,7 @@ func getParsedValueName(t *template.Template) []string {
 func trimToValue(listToBeTrimmed []string) []string {
 	trimmedValuesList := listToBeTrimmed[:0]
 	for _, oriVal := range listToBeTrimmed {
-		re := regexp.MustCompile("([a-zA-Z]+(_[a-zA-Z]+)+)")
+		re := regexp.MustCompile("([a-zA-Z-0-9]+(_[a-zA-Z-0-9]+)+)")
 		trimedValueMatch := re.FindStringSubmatch(oriVal)
 		if len(trimedValueMatch) > 1 {
 			trimmedValuesList = append(trimmedValuesList, trimedValueMatch[0])

@@ -2885,5 +2885,154 @@ func TestE2E(t *testing.T) {
 				return nil
 			},
 		},
+		testExecution{
+			Name:       "TestVariableTemplate",
+			IsParallel: false,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+
+				const baselineImage = "quay.io/wenshen/co_content@sha256:a299bd8c5e348fdc72208c0781509ccb94d4d326001156d03191b793be9bc2dc"
+				const requiredRule = "audit-profile-set"
+				const pbName = "upstream-ocp4"
+				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
+
+				ocpPb := &compv1alpha1.ProfileBundle{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      pbName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ProfileBundleSpec{
+						ContentImage: baselineImage,
+						ContentFile:  ocpContentFile,
+					},
+				}
+				if err := f.Client.Create(goctx.TODO(), ocpPb, getCleanupOpts(ctx)); err != nil {
+					return err
+				}
+				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamValid); err != nil {
+					return err
+				}
+
+				// Check that if the rule we are going to test is there
+				err, found := doesRuleExist(f, ocpPb.Namespace, prefixName(pbName, requiredRule))
+				if err != nil {
+					return err
+				} else if found != true {
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, requiredRule))
+					return err
+				}
+
+				suiteName := "audit-profile-set-test"
+				scanName := "audit-profile-set-test"
+
+				tp := &compv1alpha1.TailoredProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.TailoredProfileSpec{
+						Title:       "Audit-Profile-Set-Test",
+						Description: "A test tailored profile to auto remediate audit profile set",
+						EnableRules: []compv1alpha1.RuleReferenceSpec{
+							{
+								Name:      "upstream-ocp4-audit-profile-set",
+								Rationale: "To be tested",
+							},
+						},
+						SetValues: []compv1alpha1.VariableValueSpec{
+							{
+								Name:      "upstream-ocp4-var-openshift-audit-profile",
+								Rationale: "Value to be set",
+								Value:     "WriteRequestBodies",
+							},
+						},
+					},
+				}
+
+				createTPErr := f.Client.Create(goctx.TODO(), tp, getCleanupOpts(ctx))
+				if createTPErr != nil {
+					return createTPErr
+				}
+
+				ssb := &compv1alpha1.ScanSettingBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Profiles: []compv1alpha1.NamedObjectReference{
+						{
+							APIGroup: "compliance.openshift.io/v1alpha1",
+							Kind:     "TailoredProfile",
+							Name:     suiteName,
+						},
+					},
+					SettingsRef: &compv1alpha1.NamedObjectReference{
+						APIGroup: "compliance.openshift.io/v1alpha1",
+						Kind:     "ScanSetting",
+						Name:     "default-auto-apply",
+					},
+				}
+				err = f.Client.Create(goctx.TODO(), ssb, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+
+				apiServerBeforeRemediation := &configv1.APIServer{}
+				err = f.Client.Get(goctx.TODO(), types.NamespacedName{Name: "cluster"}, apiServerBeforeRemediation)
+				if err != nil {
+					return err
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultNonCompliant)
+				if err != nil {
+					return err
+				}
+
+				// We need to check that the remediation is auto-applied
+				remName := "audit-profile-set-test-audit-profile-set"
+				waitForGenericRemediationToBeAutoApplied(t, f, remName, namespace)
+
+				// We can re-run the scan at this moment and check that it's now compliant
+				// and it's reflected in a CheckResult
+				err = reRunScan(t, f, scanName, namespace)
+				if err != nil {
+					return err
+				}
+
+				// Scan has been re-started
+				E2ELogf(t, "Scan phase should be reset")
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseRunning, compv1alpha1.ResultNotAvailable)
+				if err != nil {
+					return err
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				E2ELogf(t, "Let's wait for it to be done now")
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
+				if err != nil {
+					return err
+				}
+				E2ELogf(t, "scan re-run has finished")
+
+				// Now the check should be passing
+				auditProfileSet := compv1alpha1.ComplianceCheckResult{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf("%s-audit-profile-set", scanName),
+						Namespace: namespace,
+					},
+					ID:       "xccdf_org.ssgproject.content_rule_audit_profile_set",
+					Status:   compv1alpha1.CheckResultPass,
+					Severity: compv1alpha1.CheckResultSeverityMedium,
+				}
+				err = assertHasCheck(f, suiteName, scanName, auditProfileSet)
+				if err != nil {
+					return err
+				}
+
+				E2ELogf(t, "The test succeeded!")
+				return nil
+
+			},
+		},
 	)
 }
