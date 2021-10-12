@@ -2892,7 +2892,7 @@ func TestE2E(t *testing.T) {
 
 				const baselineImage = "quay.io/wenshen/co_content@sha256:a299bd8c5e348fdc72208c0781509ccb94d4d326001156d03191b793be9bc2dc"
 				const requiredRule = "audit-profile-set"
-				const pbName = "upstream-ocp4"
+				pbName := getObjNameFromTest(t)
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
 
 				ocpPb := &compv1alpha1.ProfileBundle{
@@ -2934,13 +2934,13 @@ func TestE2E(t *testing.T) {
 						Description: "A test tailored profile to auto remediate audit profile set",
 						EnableRules: []compv1alpha1.RuleReferenceSpec{
 							{
-								Name:      "upstream-ocp4-audit-profile-set",
+								Name:      prefixName(pbName, requiredRule),
 								Rationale: "To be tested",
 							},
 						},
 						SetValues: []compv1alpha1.VariableValueSpec{
 							{
-								Name:      "upstream-ocp4-var-openshift-audit-profile",
+								Name:      prefixName(pbName, "var-openshift-audit-profile"),
 								Rationale: "Value to be set",
 								Value:     "WriteRequestBodies",
 							},
@@ -3025,6 +3025,150 @@ func TestE2E(t *testing.T) {
 					Severity: compv1alpha1.CheckResultSeverityMedium,
 				}
 				err = assertHasCheck(f, suiteName, scanName, auditProfileSet)
+				if err != nil {
+					return err
+				}
+
+				E2ELogf(t, "The test succeeded!")
+				return nil
+
+			},
+		},
+
+		testExecution{
+			Name:       "TestKubeletConfigRemediation",
+			IsParallel: false,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+
+				const baselineImage = "quay.io/wenshen/co_content@sha256:2c16e3d4732bdb2e87ef2833d2f1368295d96f134df805b34710cfeb62d1d028"
+				const requiredRule = "kubelet-eviction-thresholds-set-hard-imagefs-available"
+				pbName := getObjNameFromTest(t)
+				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
+
+				ocpPb := &compv1alpha1.ProfileBundle{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      pbName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ProfileBundleSpec{
+						ContentImage: baselineImage,
+						ContentFile:  ocpContentFile,
+					},
+				}
+				if err := f.Client.Create(goctx.TODO(), ocpPb, getCleanupOpts(ctx)); err != nil {
+					return err
+				}
+				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamValid); err != nil {
+					return err
+				}
+
+				// Check that if the rule we are going to test is there
+				err, found := doesRuleExist(f, ocpPb.Namespace, prefixName(pbName, requiredRule))
+				if err != nil {
+					return err
+				} else if found != true {
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, requiredRule))
+					return err
+				}
+
+				suiteName := "kubeletconfig-test-node"
+				scanName := "kubeletconfig-test-node-e2e"
+
+				tp := &compv1alpha1.TailoredProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.TailoredProfileSpec{
+						Title:       "kubeletconfig-Test",
+						Description: "A test tailored profile to kubeletconfig remediation",
+						EnableRules: []compv1alpha1.RuleReferenceSpec{
+							{
+								Name:      prefixName(pbName, requiredRule),
+								Rationale: "To be tested",
+							},
+						},
+						SetValues: []compv1alpha1.VariableValueSpec{
+							{
+								Name:      prefixName(pbName, "var-kubelet-evictionhard-imagefs-available"),
+								Rationale: "Value to be set",
+								Value:     "20%",
+							},
+						},
+					},
+				}
+				mcTctx.ensureE2EPool()
+				createTPErr := f.Client.Create(goctx.TODO(), tp, getCleanupOpts(ctx))
+				if createTPErr != nil {
+					return createTPErr
+				}
+
+				ssb := &compv1alpha1.ScanSettingBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Profiles: []compv1alpha1.NamedObjectReference{
+						{
+							APIGroup: "compliance.openshift.io/v1alpha1",
+							Kind:     "TailoredProfile",
+							Name:     suiteName,
+						},
+					},
+					SettingsRef: &compv1alpha1.NamedObjectReference{
+						APIGroup: "compliance.openshift.io/v1alpha1",
+						Kind:     "ScanSetting",
+						Name:     "e2e-default-auto-apply",
+					},
+				}
+
+				err = f.Client.Create(goctx.TODO(), ssb, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultNonCompliant)
+				if err != nil {
+					return err
+				}
+
+				// We need to check that the remediation is auto-applied and save
+				// the object so we can delete it later
+				remName := prefixName(scanName, requiredRule)
+				waitForGenericRemediationToBeAutoApplied(t, f, remName, namespace)
+
+				err = reRunScan(t, f, scanName, namespace)
+				if err != nil {
+					return err
+				}
+
+				// Scan has been re-started
+				E2ELogf(t, "Scan phase should be reset")
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseRunning, compv1alpha1.ResultNotAvailable)
+				if err != nil {
+					return err
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				E2ELogf(t, "Let's wait for it to be done now")
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
+				if err != nil {
+					return err
+				}
+				E2ELogf(t, "scan re-run has finished")
+
+				// Now the check should be passing
+				checkResult := compv1alpha1.ComplianceCheckResult{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf("%s-kubelet-eviction-thresholds-set-hard-imagefs-available", scanName),
+						Namespace: namespace,
+					},
+					ID:       "xccdf_org.ssgproject.content_rule_kubelet_eviction_thresholds_set_hard_imagefs_available",
+					Status:   compv1alpha1.CheckResultPass,
+					Severity: compv1alpha1.CheckResultSeverityMedium,
+				}
+				err = assertHasCheck(f, suiteName, scanName, checkResult)
 				if err != nil {
 					return err
 				}

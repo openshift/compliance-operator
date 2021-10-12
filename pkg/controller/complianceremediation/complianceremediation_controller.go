@@ -16,7 +16,7 @@ import (
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -202,6 +202,12 @@ func (r *ReconcileComplianceRemediation) reconcileRemediation(instance *compv1al
 	}
 	if utils.IsMachineConfig(obj) {
 		if err := r.verifyAndCompleteMC(obj, instance); err != nil {
+			return err
+		}
+	}
+	//verify if the remediation is kubeletconfig, and process it
+	if utils.IsKubeletConfig(obj) {
+		if err := r.verifyAndCompleteKC(obj, instance); err != nil {
 			return err
 		}
 	}
@@ -600,7 +606,7 @@ func (r *ReconcileComplianceRemediation) verifyAndCompleteMC(obj *unstructured.U
 	// The scans contain a nodeSelector that ultimately must match a machineConfigPool. The only way we can
 	// ensure it does is by checking if it matches any MachineConfigPool's labels.
 	// See also: https://github.com/openshift/machine-config-operator/blob/master/docs/custom-pools.md
-	if !utils.AnyMcfgPoolLabelMatches(scan.Spec.NodeSelector, mcfgpools) {
+	if ok, _ := utils.AnyMcfgPoolLabelMatches(scan.Spec.NodeSelector, mcfgpools); !ok {
 		return common.NewNonRetriableCtrlError("not applying remediation that doesn't have a matching MachineconfigPool. Scan: %s", scan.Name)
 	}
 	obj.SetName(rem.GetMcName())
@@ -610,6 +616,74 @@ func (r *ReconcileComplianceRemediation) verifyAndCompleteMC(obj *unstructured.U
 	}
 	labels[mcfgv1.MachineConfigRoleLabelKey] = utils.GetFirstNodeRole(scan.Spec.NodeSelector)
 	obj.SetLabels(labels)
+	return nil
+}
+
+// Process kubeletconfig remediation
+func (r *ReconcileComplianceRemediation) verifyAndCompleteKC(obj *unstructured.Unstructured, rem *compv1alpha1.ComplianceRemediation) error {
+	scan := &compv1alpha1.ComplianceScan{}
+	scanKey := types.NamespacedName{Name: rem.Labels[compv1alpha1.ComplianceScanLabel], Namespace: rem.Namespace}
+	if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
+		return fmt.Errorf("couldn't get scan for KC remediation: %w", err)
+	}
+	mcfgpools := &mcfgv1.MachineConfigPoolList{}
+	if err := r.client.List(context.TODO(), mcfgpools); err != nil {
+		return fmt.Errorf("couldn't list the pools for the remediation: %w", err)
+	}
+	// The scans contain a nodeSelector that ultimately must match a machineConfigPool. The only way we can
+	// ensure it does is by checking if it matches any MachineConfigPool's labels.
+	// See also: https://github.com/openshift/machine-config-operator/blob/master/docs/custom-pools.md
+	ok, pool := utils.AnyMcfgPoolLabelMatches(scan.Spec.NodeSelector, mcfgpools)
+	if !ok {
+		return common.NewNonRetriableCtrlError("not applying remediation that doesn't have a matching MachineconfigPool. Scan: %s", scan.Name)
+	}
+
+	// We need to check if there is exsisting kubeletConfigMC present for selected MCP
+	hasCustomKC, kubeletMCName, err := utils.IsMcfgPoolUsingKC(pool)
+
+	if err != nil {
+		return err
+	}
+	// we need to patch the remediation if there is already a CustomKC present
+	if hasCustomKC {
+
+		kubletMC := &mcfgv1.MachineConfig{}
+		kMCKey := types.NamespacedName{Name: kubeletMCName}
+
+		if err := r.client.Get(context.TODO(), kMCKey, kubletMC); err != nil {
+			return fmt.Errorf("couldn't get current generated KubeletConfig MC: %w", err)
+		}
+		// WE need to get name of original kubelet config that used to generate this kubeletconfig machine config
+		if len(kubletMC.GetOwnerReferences()) == 0 {
+			return fmt.Errorf("the generated kubelet machine config does not have a owner")
+		}
+		kubletName := kubletMC.GetOwnerReferences()[0].Name
+
+		kubeletConfig := &mcfgv1.KubeletConfig{}
+		kcKey := types.NamespacedName{Name: kubletName}
+		if err := r.client.Get(context.TODO(), kcKey, kubeletConfig); err != nil {
+			return fmt.Errorf("couldn't get current KubeletConfig: %w", err)
+		}
+		// Set kublet config name
+		obj.SetName(kubeletConfig.GetName())
+		obj.SetLabels(kubeletConfig.GetLabels())
+		return nil
+	}
+
+	// We will need to create a kubelet config if there is no custom KC
+	kubletName := "compliance-operator-kubelet"
+
+	// Set kublet config name
+	obj.SetName(kubletName)
+
+	// Set MachineConfigSelector
+	NodeSelector := []string{"spec", "machineConfigPoolSelector", "matchLabels"}
+
+	machineConfigPoolSelector := map[string]string{"pools.operator.machineconfiguration.openshift.io/" + pool.GetName(): ""}
+	err = unstructured.SetNestedStringMap(obj.Object, machineConfigPoolSelector, NodeSelector...)
+	if err != nil {
+		return fmt.Errorf("couldn't set machineConfigPoolSelector for kubeletconfig: %w", err)
+	}
 	return nil
 }
 

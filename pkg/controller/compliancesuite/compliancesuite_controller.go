@@ -544,8 +544,7 @@ func (r *ReconcileComplianceSuite) applyRemediation(rem compv1alpha1.ComplianceR
 	mcfgpools *mcfgv1.MachineConfigPoolList,
 	affectedMcfgPools map[string]*mcfgv1.MachineConfigPool,
 	logger logr.Logger) error {
-
-	if utils.IsMachineConfig(rem.Spec.Current.Object) {
+	if utils.IsMachineConfig(rem.Spec.Current.Object) || utils.IsKubeletConfig(rem.Spec.Current.Object) {
 		// get affected pool
 		pool := r.getAffectedMcfgPool(scan, mcfgpools)
 		// we only need to operate on pools that are affected
@@ -555,6 +554,7 @@ func (r *ReconcileComplianceSuite) applyRemediation(rem compv1alpha1.ComplianceR
 				foundPool = pool.DeepCopy()
 				affectedMcfgPools[pool.Name] = foundPool
 			}
+			// we will use the same logic here for Kubelet Config remediation
 			if err := r.applyMcfgRemediationAndPausePool(rem, suite, foundPool, logger); err != nil {
 				return err
 			}
