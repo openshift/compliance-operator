@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.43] - 2021-10-14
+### Changes
+- Update api-resource-collector comment
+- Add permission for checking the kubeadmin user
+- Add KubeletConfig Remediaiton Support
+- Add variable support for non-urlencoded content
+- Revamp CRD docs
+- Makefile: Make container image bundle depend on $TAG
+
 ## [0.1.42] - 2021-10-04
 ### Changes
 - add error to the result object as comment (#721)
