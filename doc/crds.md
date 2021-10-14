@@ -346,6 +346,12 @@ The following attributes can be set in the `ScanSetting:
 * **autoUpdateRemediations**: Defines whether or not the remediations
   should be updated automatically in case the content updates.
 * **schedule**: Defines how often should the scan(s) be run in cron format.
+* **scanTolerations**: Specifies tolerations that will be set in the scan Pods
+  for scheduling. Defaults to allowing the scan to ignore taints. For
+  details on tolerations, see the
+  [Kubernetes documentation on this](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/).
+ * **roles**: Specifies the `node-role.kubernetes.io` label value that any scan of type `Node`
+  should be scheduled on.
 * **rawResultStorage.size**: Specifies the size of storage that should be asked
   for in order for the scan to store the raw results. (Defaults to 1Gi)
 * **rawResultStorage.rotation**: Specifies the amount of scans for which the raw
@@ -353,12 +359,14 @@ The following attributes can be set in the `ScanSetting:
   responsibility of administrators to store these results elsewhere before
   rotation happens. Note that a rotation policy of '0' disables rotation
   entirely. Defaults to 3.
-* **scanTolerations**: Specifies tolerations that will be set in the scan Pods
-  for scheduling. Defaults to allowing the scan to ignore taints. For
-  details on tolerations, see the
-  [Kubernetes documentation on this](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/).
- * **roles**: Specifies the `node-role.kubernetes.io` label value that any scan of type `Node`
-  should be scheduled on.
+* **rawResultStorage.nodeSelector**: By setting this, it's possible to
+  configure where the result server instances are run. These instances
+  will mount a Persistent Volume to store the raw results, so special
+  care should be taken to schedule these in trusted nodes.
+* **rawResultStorage.tolerations**:  Specifies tolerations needed
+  for the result server to run on the nodes. This is useful in
+  case the target set of nodes have custom taints that don't allow certain
+	workloads to run. Defaults to allowing scheduling on master nodes.
 
 A single `ScanSetting` object can also be reused for multiple scans,
 as it merely defines the settings.
