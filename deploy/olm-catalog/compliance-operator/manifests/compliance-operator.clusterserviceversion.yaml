@@ -159,13 +159,13 @@ metadata:
       ]
     capabilities: Seamless Upgrades
     categories: Monitoring,Security
-    olm.skipRange: '>=0.1.17 <0.1.42'
+    olm.skipRange: '>=0.1.17 <0.1.43'
     operatorframework.io/cluster-monitoring: "true"
     operatorframework.io/suggested-namespace: openshift-compliance
     operators.openshift.io/infrastructure-features: '["disconnected", "fips", "proxy-aware"]'
     repository: https://github.com/openshift/compliance-operator
     support: Red Hat Inc.
-  name: compliance-operator.v0.1.42
+  name: compliance-operator.v0.1.43
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -266,6 +266,7 @@ spec:
           resources:
           - machineconfigs
           - machineconfigpools
+          - kubeletconfigs
           verbs:
           - list
           - get
@@ -1111,6 +1112,7 @@ spec:
           - machineconfiguration.openshift.io
           resources:
           - machineconfigs
+          - kubeletconfigs
           verbs:
           - get
           - list
@@ -1131,6 +1133,14 @@ spec:
           - get
           - watch
           - list
+        - apiGroups:
+          - ""
+          resourceNames:
+          - kubeadmin
+          resources:
+          - secrets
+          verbs:
+          - get
         serviceAccountName: api-resource-collector
       deployments:
       - name: compliance-operator
@@ -1165,10 +1175,10 @@ spec:
                 - name: RELATED_IMAGE_OPENSCAP
                   value: quay.io/compliance-operator/openscap-ocp:latest
                 - name: RELATED_IMAGE_OPERATOR
-                  value: quay.io/compliance-operator/compliance-operator:0.1.42
+                  value: quay.io/compliance-operator/compliance-operator:0.1.43
                 - name: RELATED_IMAGE_PROFILE
                   value: quay.io/complianceascode/ocp4:latest
-                image: quay.io/compliance-operator/compliance-operator:0.1.42
+                image: quay.io/compliance-operator/compliance-operator:0.1.43
                 imagePullPolicy: Always
                 name: compliance-operator
                 resources:
@@ -1493,4 +1503,4 @@ spec:
   provider:
     name: Red Hat Inc.
     url: www.redhat.com
-  version: 0.1.42
+  version: 0.1.43
