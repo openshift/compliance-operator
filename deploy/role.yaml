@@ -387,6 +387,8 @@ rules:
 # because the OLM doesn't support adding labels to roles nor specifying
 # roleRefs
 # See: https://github.com/operator-framework/operator-lifecycle-manager/issues/732
+# As an addition, this role is also able to read the kubeadmin secret
+# with the main intent to check that it's been removed.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -1183,3 +1185,12 @@ rules:
   - get
   - watch
   - list
+# Necessary for checking that the kubeadmin secret has been removed
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  resourceNames:
+  - kubeadmin
+  verbs:
+  - get
