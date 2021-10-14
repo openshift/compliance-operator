@@ -146,6 +146,7 @@ rules:
   resources:
   - machineconfigs  # The compliance remediation controller operates on MachineConfigs
   - machineconfigpools
+  - kubeletconfigs
   verbs:
   - list
   - get
@@ -1161,6 +1162,7 @@ rules:
   - machineconfiguration.openshift.io
   resources:
   - machineconfigs
+  - kubeletconfigs
   verbs:
   - get
   - list

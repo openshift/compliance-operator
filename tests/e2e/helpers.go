@@ -838,7 +838,7 @@ func assertHasCheck(f *framework.Framework, suiteName, scanName string, check co
 	}
 
 	if getCheck.Labels[compv1alpha1.ComplianceScanLabel] != scanName {
-		return fmt.Errorf("Did not find expected suite name label %s, found %s", suiteName, getCheck.Labels[compv1alpha1.SuiteLabel])
+		return fmt.Errorf("Did not find expected scan name label %s, found %s", scanName, getCheck.Labels[compv1alpha1.ComplianceScanLabel])
 	}
 
 	if getCheck.Labels[compv1alpha1.ComplianceCheckResultSeverityLabel] != string(getCheck.Severity) {
@@ -1056,10 +1056,15 @@ func waitForNodesToHaveARenderedPool(t *testing.T, f *framework.Framework, nodes
 	}
 
 	E2ELogf(t, "We'll wait for the nodes to reach %s\n", pool.Spec.Configuration.Name)
-	return wait.PollImmediate(machineOperationRetryInterval, machineOperationTimeout, func() (bool, error) {
+	return wait.PollImmediateInfinite(machineOperationRetryInterval, func() (bool, error) {
 		for _, loopNode := range nodes {
+
 			node := &corev1.Node{}
-			err := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: loopNode.Name}, node)
+
+			err := backoff.Retry(func() error {
+				return f.Client.Get(goctx.TODO(), types.NamespacedName{Name: loopNode.Name}, node)
+			}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
+
 			if err != nil {
 				return false, err
 			}
@@ -1305,6 +1310,8 @@ func waitForGenericRemediationToBeAutoApplied(t *testing.T, f *framework.Framewo
 		return true, nil
 	})
 	assertNoErrorNorTimeout(t, lastErr, timeouterr, "getting remediation before auto-applying it")
+	E2ELogf(t, "Machines updated with remediation")
+	waitForNodesToBeReady(t, f, "Failed to wait for nodes to come back up after auto-applying remediation")
 }
 
 func waitForRemediationToBeAutoApplied(t *testing.T, f *framework.Framework, remName, remNamespace string, pool *mcfgv1.MachineConfigPool) {
@@ -1532,9 +1539,10 @@ func unLabelNodes(t *testing.T, f *framework.Framework, rmPoolNodeLabel string, 
 func createMCPObject(t *testing.T, f *framework.Framework, newPoolNodeLabel, oldPoolName, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
 	nodeSelectorMatchLabel := make(map[string]string)
 	nodeSelectorMatchLabel[newPoolNodeLabel] = ""
-
+	poolLabels := make(map[string]string)
+	poolLabels["pools.operator.machineconfiguration.openshift.io/e2e"] = ""
 	newPool := &mcfgv1.MachineConfigPool{
-		ObjectMeta: metav1.ObjectMeta{Name: newPoolName},
+		ObjectMeta: metav1.ObjectMeta{Name: newPoolName, Labels: poolLabels},
 		Spec: mcfgv1.MachineConfigPoolSpec{
 			NodeSelector: &metav1.LabelSelector{
 				MatchLabels: nodeSelectorMatchLabel,

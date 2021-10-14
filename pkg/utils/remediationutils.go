@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -9,15 +10,23 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// IsMachineConfig checks if the specified object is a MachineConfig object
-func IsMachineConfig(obj *unstructured.Unstructured) bool {
+func IsKind(obj *unstructured.Unstructured, kind string) bool {
 	if obj == nil {
 		return false
 	}
 	// FIXME(jaosorior): Find a more dynamic way to get
 	// the MachineConfig's GVK
 	objgvk := obj.GroupVersionKind()
-	return "MachineConfig" == objgvk.Kind && mcfgapi.GroupName == objgvk.Group
+	return kind == objgvk.Kind && mcfgapi.GroupName == objgvk.Group
+}
+
+// IsMachineConfig checks if the specified object is a MachineConfig object
+func IsMachineConfig(obj *unstructured.Unstructured) bool {
+	return IsKind(obj, "MachineConfig")
+}
+
+func IsKubeletConfig(obj *unstructured.Unstructured) bool {
+	return IsKind(obj, "KubeletConfig")
 }
 
 func HaveOutdatedRemediations(client runtimeclient.Client) (error, bool) {

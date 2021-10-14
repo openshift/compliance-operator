@@ -2,9 +2,9 @@ package complianceremediation
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
+	"github.com/clarketm/json"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
@@ -31,6 +31,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 
 	var (
 		remediationinstance *compv1alpha1.ComplianceRemediation
+		mcp                 *mcfgv1.MachineConfigPool
 		scanInstance        *compv1alpha1.ComplianceScan
 		reconciler          *ReconcileComplianceRemediation
 		testRemLabels       map[string]string
@@ -60,13 +61,27 @@ var _ = Describe("Testing complianceremediation controller", func() {
 			mcfgv1.MachineConfigRoleLabelKey: "myRole",
 		}
 
-		mcp := &mcfgv1.MachineConfigPool{
+		mcp = &mcfgv1.MachineConfigPool{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "my-pool",
 			},
 			Spec: mcfgv1.MachineConfigPoolSpec{
 				NodeSelector: &metav1.LabelSelector{
 					MatchLabels: nodeLabels,
+				},
+				Configuration: mcfgv1.MachineConfigPoolStatusConfiguration{
+					Source: []corev1.ObjectReference{
+						{
+							APIVersion: "machineconfiguration.openshift.io/v1",
+							Kind:       "MachineConfig",
+							Name:       "01-worker-kubelet",
+						},
+						{
+							APIVersion: "machineconfiguration.openshift.io/v1",
+							Kind:       "MachineConfig",
+							Name:       "something-else",
+						},
+					},
 				},
 			},
 		}
@@ -188,6 +203,162 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				foundMC := &mcfgv1.MachineConfig{}
 				mcKey := types.NamespacedName{Name: remediationinstance.GetMcName()}
 				err = reconciler.client.Get(context.TODO(), mcKey, foundMC)
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		Context("with current KubeletConfig remediation object and default no custom kubelet config", func() {
+			BeforeEach(func() {
+
+				rawConfig, _ := json.Marshal(map[string]int{"maxPods": 1123})
+				kc := &mcfgv1.KubeletConfig{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "KubeletConfig",
+						APIVersion: mcfgapi.GroupName + "/v1",
+					},
+					// We specifically add no ObjectMeta since this will be
+					// added by the operator
+					Spec: mcfgv1.KubeletConfigSpec{
+						KubeletConfig: &runtime.RawExtension{
+							Raw: rawConfig,
+						},
+					},
+				}
+				unstructuredKC, err := runtime.DefaultUnstructuredConverter.ToUnstructured(kc)
+				Expect(err).ToNot(HaveOccurred())
+				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
+					Object: unstructuredKC,
+				}
+				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should reconcile the current remediation", func() {
+				By("running a reconcile loop")
+
+				err := reconciler.reconcileRemediation(remediationinstance, logger)
+				Expect(err).To(BeNil())
+
+				By("the remediation should be applied")
+				foundKC := &mcfgv1.KubeletConfig{}
+				mcKey := types.NamespacedName{Name: "compliance-operator-kubelet"}
+				err = reconciler.client.Get(context.TODO(), mcKey, foundKC)
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		Context("with current KubeletConfig remediation object and many custom kubelet configs", func() {
+			BeforeEach(func() {
+				//Setting environment with mutiple custom kubelet config
+				mcConfig := mcfgv1.MachineConfigPoolStatusConfiguration{
+					Source: []corev1.ObjectReference{
+						{
+							APIVersion: "machineconfiguration.openshift.io/v1",
+							Kind:       "MachineConfig",
+							Name:       "01-worker-kubelet",
+						},
+						{
+							APIVersion: "machineconfiguration.openshift.io/v1",
+							Kind:       "MachineConfig",
+							Name:       "99-worker-generated-kubelet",
+						},
+						{
+							APIVersion: "machineconfiguration.openshift.io/v1",
+							Kind:       "MachineConfig",
+							Name:       "99-worker-generated-kubelet-1",
+						},
+						{
+							APIVersion: "machineconfiguration.openshift.io/v1",
+							Kind:       "MachineConfig",
+							Name:       "99-worker-generated-kubelet-2",
+						},
+						{
+							APIVersion: "machineconfiguration.openshift.io/v1",
+							Kind:       "MachineConfig",
+							Name:       "99-worker-generated-kubelet-3",
+						},
+					},
+				}
+				mcp.Spec.Configuration = mcConfig
+				err := reconciler.client.Update(context.TODO(), mcp)
+				Expect(err).NotTo(HaveOccurred())
+
+				//We need to simulate for a exsisting generated kubelet Machine Config
+				kMCGenerated := &mcfgv1.MachineConfig{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "MachineConfig",
+						APIVersion: mcfgapi.GroupName + "/v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "99-worker-generated-kubelet-3",
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion: "machineconfiguration.openshift.io/v1",
+								Kind:       "KubeletConfig",
+								Name:       "custom-kubelet",
+								UID:        "b144e060-d19f-443c-81e1-813422aa78be",
+							},
+						},
+					},
+				}
+
+				err = reconciler.client.Create(context.TODO(), kMCGenerated)
+				Expect(err).NotTo(HaveOccurred())
+
+				//create the exsisting kublet config, owner of 99-worker-generated-kubelet-3
+				oriRawConfig, _ := json.Marshal(map[string]int{"maxPods": 1100})
+
+				ekc := &mcfgv1.KubeletConfig{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "KubeletConfig",
+						APIVersion: mcfgapi.GroupName + "/v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "custom-kubelet",
+					},
+					Spec: mcfgv1.KubeletConfigSpec{
+						KubeletConfig: &runtime.RawExtension{
+							Raw: oriRawConfig,
+						},
+					},
+				}
+
+				err = reconciler.client.Create(context.TODO(), ekc)
+				Expect(err).NotTo(HaveOccurred())
+
+				newRawConfig, _ := json.Marshal(map[string]int{"test-value-2": 1125})
+				kc := &mcfgv1.KubeletConfig{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "KubeletConfig",
+						APIVersion: mcfgapi.GroupName + "/v1",
+					},
+					// We specifically add no ObjectMeta since this will be
+					// added by the operator
+					Spec: mcfgv1.KubeletConfigSpec{
+						KubeletConfig: &runtime.RawExtension{
+							Raw: newRawConfig,
+						},
+					},
+				}
+				unstructuredKC, err := runtime.DefaultUnstructuredConverter.ToUnstructured(kc)
+				Expect(err).ToNot(HaveOccurred())
+				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
+					Object: unstructuredKC,
+				}
+				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should reconcile the current remediation", func() {
+				By("running a reconcile loop")
+
+				err := reconciler.reconcileRemediation(remediationinstance, logger)
+				Expect(err).To(BeNil())
+
+				By("the remediation should be applied")
+				foundKC := &mcfgv1.KubeletConfig{}
+				mcKey := types.NamespacedName{Name: "custom-kubelet"}
+				err = reconciler.client.Get(context.TODO(), mcKey, foundKC)
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -419,9 +590,6 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				Expect(foundRem.Labels).To(HaveKey(compv1alpha1.RemediationValueRequiredProcessedLabel))
 				By("The status should be NeedsReview")
 				Expect(foundRem.Status.ApplicationState).To(Equal(compv1alpha1.RemediationNeedsReview))
-				found, err := reconciler.isRequiredValueSet(remediationinstance, "req-value-1")
-				fmt.Println(found)
-				//fmt.Println()
 			})
 
 		})
