@@ -671,7 +671,7 @@ func (r *ReconcileComplianceRemediation) verifyAndCompleteKC(obj *unstructured.U
 	}
 
 	// We will need to create a kubelet config if there is no custom KC
-	kubletName := "compliance-operator-kubelet"
+	kubletName := "compliance-operator-kubelet-" + pool.GetName()
 
 	// Set kublet config name
 	obj.SetName(kubletName)
