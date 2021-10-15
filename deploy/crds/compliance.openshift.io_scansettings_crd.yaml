@@ -152,6 +152,13 @@ spec:
               format. Note the scan will still be triggered immediately, and the scheduled
               scans will start running only after the initial results are ready.
             type: string
+          strictNodeScan:
+            default: true
+            description: Defines whether the scan should proceed if we're not able
+              to scan all the nodes or not. `true` means that the operator should
+              be strict and error out. `false` means that we don't need to be strict
+              and we can proceed.
+            type: boolean
         type: object
     served: true
     storage: true

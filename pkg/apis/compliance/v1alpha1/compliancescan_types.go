@@ -165,6 +165,13 @@ type ComplianceScanSettings struct {
 	// +kubebuilder:default={{operator: "Exists"}}
 	ScanTolerations []corev1.Toleration `json:"scanTolerations,omitempty"`
 
+	// Defines whether the scan should proceed if we're not able to
+	// scan all the nodes or not. `true` means that the operator
+	// should be strict and error out. `false` means that we don't
+	// need to be strict and we can proceed.
+	// +kubebuilder:default=true
+	StrictNodeScan *bool `json:"strictNodeScan,omitempty"`
+
 	// Specifies what to do with remediations of Enforcement type. If left empty,
 	// this defaults to "off" which doesn't create nor apply any enforcement remediations.
 	// If set to "all" this creates any enforcement remediations it encounters.
@@ -318,6 +325,15 @@ func (cs *ComplianceScan) RemediationEnforcementIsOff() bool {
 func (cs *ComplianceScan) RemediationEnforcementTypeMatches(etype string) bool {
 	return (strings.EqualFold(cs.Spec.RemediationEnforcement, RemediationEnforcementAll) ||
 		strings.EqualFold(cs.Spec.RemediationEnforcement, etype))
+}
+
+// GetScanType get's the scan type for a scan
+func (cs *ComplianceScan) IsStrictNodeScan() bool {
+	// strictNodeScan should be true by default
+	if cs.Spec.StrictNodeScan == nil {
+		return true
+	}
+	return *cs.Spec.StrictNodeScan
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
