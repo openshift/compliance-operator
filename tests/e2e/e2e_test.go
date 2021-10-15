@@ -509,7 +509,7 @@ func TestE2E(t *testing.T) {
 						compv1alpha1.CheckTypeNode,
 					},
 					{
-						"ocp4-kubeadmin-removed",
+						"ocp4-general-apply-scc",
 						compv1alpha1.CheckTypeNone,
 					},
 				} {
