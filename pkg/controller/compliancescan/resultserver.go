@@ -183,16 +183,8 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 					},
 				},
 				Spec: corev1.PodSpec{
-					NodeSelector: map[string]string{
-						"node-role.kubernetes.io/master": "",
-					},
-					Tolerations: []corev1.Toleration{
-						{
-							Key:      "node-role.kubernetes.io/master",
-							Operator: corev1.TolerationOpExists,
-							Effect:   corev1.TaintEffectNoSchedule,
-						},
-					},
+					NodeSelector:       scanInstance.Spec.RawResultStorage.NodeSelector,
+					Tolerations:        scanInstance.Spec.RawResultStorage.Tolerations,
 					ServiceAccountName: resultserverSA,
 					SecurityContext: &corev1.PodSecurityContext{
 						FSGroup:      &podFSGroup,
