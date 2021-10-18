@@ -241,7 +241,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 
 				By("the remediation should be applied")
 				foundKC := &mcfgv1.KubeletConfig{}
-				mcKey := types.NamespacedName{Name: "compliance-operator-kubelet"}
+				mcKey := types.NamespacedName{Name: "compliance-operator-kubelet-" + mcp.GetName()}
 				err = reconciler.client.Get(context.TODO(), mcKey, foundKC)
 				Expect(err).ToNot(HaveOccurred())
 			})
