@@ -111,7 +111,8 @@ func (nh *nodeScanTypeHandler) validate() (bool, error) {
 	nodeWarning := "Not continuing scan: Node is unschedulable"
 	for idx := range nh.nodes {
 		node := &nh.nodes[idx]
-		if node.Spec.Unschedulable {
+		// Surface error if we're being strict with our node scans
+		if nh.getScan().IsStrictNodeScan() && node.Spec.Unschedulable {
 			nh.l.Info(nodeWarning, "Node.Name", node.GetName())
 			eventFmt := fmt.Sprintf("%s: %s", nodeWarning, node.GetName())
 			nh.r.recorder.Event(nh.scan, corev1.EventTypeWarning, "UnschedulableNode", eventFmt)
@@ -239,6 +240,18 @@ func (nh *nodeScanTypeHandler) gatherResults() (compv1alpha1.ComplianceScanStatu
 
 		// we output the last result if it was an error
 		if result == compv1alpha1.ResultError {
+			if !nh.getScan().IsStrictNodeScan() {
+				errCode := foundCM.Data["exit-code"]
+				// If the pod was unschedulable and the scan is not
+				// strict, we can skip the error
+				if errCode == common.PodUnschedulableExitCode {
+					skipWarn := "Skipping result for scan: Node is unschedulable"
+					nh.l.Info(skipWarn, "Node.Name", node.GetName())
+					eventFmt := fmt.Sprintf("%s: %s", skipWarn, node.GetName())
+					nh.r.recorder.Event(nh.scan, corev1.EventTypeWarning, "UnschedulableNode", eventFmt)
+					continue
+				}
+			}
 			nh.l.Info("Node scan error", "node.Name", node.Name, "errMsg", err)
 			return result, true, err
 		}

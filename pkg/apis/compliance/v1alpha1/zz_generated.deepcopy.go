@@ -283,6 +283,11 @@ func (in *ComplianceScanSettings) DeepCopyInto(out *ComplianceScanSettings) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.StrictNodeScan != nil {
+		in, out := &in.StrictNodeScan, &out.StrictNodeScan
+		*out = new(bool)
+		**out = **in
+	}
 	return
 }
 
