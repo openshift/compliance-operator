@@ -26,9 +26,9 @@ import (
 )
 
 const (
-	machineConfigFixType = "urn:xccdf:fix:script:ignition"
-	kubernetesFixType    = "urn:xccdf:fix:script:kubernetes"
-
+	machineConfigFixType  = "urn:xccdf:fix:script:ignition"
+	kubernetesFixType     = "urn:xccdf:fix:script:kubernetes"
+	valuePrefix           = "xccdf_org.ssgproject.content_value_"
 	controlAnnotationBase = "control.compliance.openshift.io/"
 
 	rhacmStdsAnnotationKey   = "policies.open-cluster-management.io/standards"
@@ -541,6 +541,24 @@ func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *
 	questionsTable := utils.NewOcilQuestionTable(contentDom)
 	defTable := utils.NewDefHashTable(contentDom)
 
+	allValues := xmlquery.Find(contentDom, "//xccdf-1.2:Value")
+	valuesList := make(map[string]string)
+	for _, variable := range allValues {
+		for _, val := range variable.SelectElements("//xccdf-1.2:value") {
+			if val.SelectAttr("hidden") == "true" {
+				// this is typically used for functions
+				continue
+			}
+			if val.SelectAttr("selector") == "" {
+				// It is not an enum choice, but a default value instead
+				if strings.HasPrefix(variable.SelectAttr("id"), valuePrefix) {
+					valuesList[strings.TrimPrefix(variable.SelectAttr("id"), valuePrefix)] = val.OutputXML(false)
+				}
+
+			}
+		}
+	}
+
 	processRule := func(rchan <-chan *xmlquery.Node, errs chan error) {
 		for ruleObj := range rchan {
 			id := ruleObj.SelectAttr("id")
@@ -620,11 +638,24 @@ func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *
 					AvailableFixes: nil,
 				},
 			}
+			var valueRendered []string
 			if description != nil {
-				p.Description = utils.XmlNodeAsMarkdown(description)
+				p.Description, valueRendered, err = utils.RenderValues(utils.XmlNodeAsMarkdownPreRender(description), valuesList)
+
+				if err != nil {
+					log.Error(err, "couldn't render variable in rules")
+				} else if len(valueRendered) > 0 {
+					p.Annotations[cmpv1alpha1.RuleVariableAnnotationKey] = strings.ReplaceAll(strings.Join(valueRendered, ","), "_", "-")
+				}
 			}
+
 			if rationale != nil {
-				p.Rationale = utils.XmlNodeAsMarkdown(rationale)
+				p.Rationale, valueRendered, err = utils.RenderValues(utils.XmlNodeAsMarkdownPreRender(rationale), valuesList)
+				if err != nil {
+					log.Error(err, "couldn't render variable in rules")
+				} else if len(valueRendered) > 0 {
+					p.Annotations[cmpv1alpha1.RuleVariableAnnotationKey] = strings.ReplaceAll(strings.Join(valueRendered, ","), "_", "-")
+				}
 			}
 			if warnings != nil {
 				p.Warning = strings.Join(warnings, "\n")
