@@ -1194,3 +1194,12 @@ rules:
   - kubeadmin
   verbs:
   - get
+# Necessary to check EBS encryption for PCIDSS requirements
+- apiGroups:
+  - machine.openshift.io
+  resources:
+  - machinesets
+  verbs:
+  - get
+  - list
+
