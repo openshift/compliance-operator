@@ -21,26 +21,40 @@ import (
 )
 
 const (
-	machineConfigFixType            = "urn:xccdf:fix:script:ignition"
-	kubernetesFixType               = "urn:xccdf:fix:script:kubernetes"
-	ocilCheckType                   = "http://scap.nist.gov/schema/ocil/2"
-	rulePrefix                      = "xccdf_org.ssgproject.content_rule_"
-	valuePrefix                     = "xccdf_org.ssgproject.content_value_"
-	ruleValueSuffix                 = ":var:1"
-	questionnaireSuffix             = "_ocil:questionnaire:1"
-	questionSuffix                  = "_question:question:1"
-	ovalCheckPrefix                 = "oval:ssg-"
-	objValuePrefix                  = "oval:ssg-variable"
-	ovalCheckType                   = "http://oval.mitre.org/XMLSchema/oval-definitions-5"
-	dependencyAnnotationKey         = "complianceascode.io/depends-on"
-	kubeDependencyAnnotationKey     = "complianceascode.io/depends-on-obj"
-	remediationTypeAnnotationKey    = "complianceascode.io/remediation-type"
-	enforcementTypeAnnotationKey    = "complianceascode.io/enforcement-type"
-	optionalAnnotationKey           = "complianceascode.io/optional"
-	valueInputRequiredAnnotationKey = "complianceascode.io/value-input-required"
+	machineConfigFixType = "urn:xccdf:fix:script:ignition"
+	kubernetesFixType    = "urn:xccdf:fix:script:kubernetes"
+	ocilCheckType        = "http://scap.nist.gov/schema/ocil/2"
+	rulePrefix           = "xccdf_org.ssgproject.content_rule_"
+	valuePrefix          = "xccdf_org.ssgproject.content_value_"
+	ruleValueSuffix      = ":var:1"
+	questionnaireSuffix  = "_ocil:questionnaire:1"
+	questionSuffix       = "_question:question:1"
+	ovalCheckPrefix      = "oval:ssg-"
+	objValuePrefix       = "oval:ssg-variable"
+	ovalCheckType        = "http://oval.mitre.org/XMLSchema/oval-definitions-5"
 	//index to trim `{{`and`}}`
 	trimStartIndex = 2
 	trimEndIndex   = 2
+)
+
+// ComplianceAsCode annotations
+const (
+	// Establishes that a remediation depends on an XCCDF check
+	dependencyAnnotationKey = "complianceascode.io/depends-on"
+	// Establishes that is meant for policy enforcement of a certain type
+	enforcementTypeAnnotationKey = "complianceascode.io/enforcement-type"
+	// Establishes that a remediation is applicable to a certain range of Kubernetes version
+	k8sVersionAnnotationKey = "complianceascode.io/k8s-version"
+	// Establishes that a remediation depends on another Kubernetes object
+	kubeDependencyAnnotationKey = "complianceascode.io/depends-on-obj"
+	// Establishes that a remediation is applicable to a certain range of OpenShift version
+	ocpVersionAnnotationKey = "complianceascode.io/ocp-version"
+	// Establishes that a remediation is optional; thus errors applying won't be reflected
+	optionalAnnotationKey = "complianceascode.io/optional"
+	// Establishes the type of remediation; could be enforcement or configuration
+	remediationTypeAnnotationKey = "complianceascode.io/remediation-type"
+	// Establishes that a remediation needs a value to be defined
+	valueInputRequiredAnnotationKey = "complianceascode.io/value-input-required"
 )
 
 // Constants useful for parsing warnings
@@ -668,6 +682,10 @@ func remediationsFromString(scheme *runtime.Scheme, name string, namespace strin
 			annotations = handleOptionalAnnotation(obj, annotations)
 		}
 
+		if hasVersionDependencyAnnotation(obj) {
+			annotations = handleVersionDependencyAnnotation(obj, annotations)
+		}
+
 		remType := compv1alpha1.ConfigurationRemediation
 		if hasTypeAnnotation(obj) {
 			remType = handleRemediationTypeAnnotation(obj)
@@ -860,6 +878,10 @@ func hasEnforcementTypeAnnotation(u *unstructured.Unstructured) bool {
 	return hasAnnotation(u, enforcementTypeAnnotationKey)
 }
 
+func hasVersionDependencyAnnotation(u *unstructured.Unstructured) bool {
+	return hasAnnotation(u, ocpVersionAnnotationKey) || hasAnnotation(u, k8sVersionAnnotationKey)
+}
+
 func hasAnnotation(u *unstructured.Unstructured, annotation string) bool {
 	annotations := u.GetAnnotations()
 	if annotations == nil {
@@ -887,6 +909,33 @@ func handleDependencyAnnotation(u *unstructured.Unstructured, annotations map[st
 	if objDeps, hasKubeDepKey := inAnns[kubeDependencyAnnotationKey]; hasKubeDepKey {
 		// set dependencies
 		annotations[compv1alpha1.RemediationObjectDependencyAnnotation] = objDeps
+
+		// reset metadata of output object
+		delete(inAnns, kubeDependencyAnnotationKey)
+	}
+
+	u.SetAnnotations(inAnns)
+
+	return annotations
+}
+
+func handleVersionDependencyAnnotation(u *unstructured.Unstructured, annotations map[string]string) map[string]string {
+	// We already assume this has some annotation
+	inAnns := u.GetAnnotations()
+
+	// parse
+
+	if ocpvrange, hasDepKey := inAnns[ocpVersionAnnotationKey]; hasDepKey {
+		// set dependencies
+		annotations[compv1alpha1.OCPVersionDependencyAnnotation] = ocpvrange
+
+		// reset metadata of output object
+		delete(inAnns, ocpVersionAnnotationKey)
+	}
+
+	if k8svrange, hasKubeDepKey := inAnns[kubeDependencyAnnotationKey]; hasKubeDepKey {
+		// set dependencies
+		annotations[compv1alpha1.K8SVersionDependencyAnnotation] = k8svrange
 
 		// reset metadata of output object
 		delete(inAnns, kubeDependencyAnnotationKey)
