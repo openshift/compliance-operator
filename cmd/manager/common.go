@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	ocpcfgv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
@@ -27,9 +28,10 @@ const (
 var log = logf.Log.WithName("cmd")
 
 type complianceCrClient struct {
-	client   runtimeclient.Client
-	scheme   *runtime.Scheme
-	recorder record.EventRecorder
+	client    runtimeclient.Client
+	scheme    *runtime.Scheme
+	recorder  record.EventRecorder
+	clientset *kubernetes.Clientset
 }
 
 func (crclient *complianceCrClient) useEventRecorder(source string, config *rest.Config) error {
@@ -47,12 +49,35 @@ func (crclient *complianceCrClient) useEventRecorder(source string, config *rest
 	return nil
 }
 
-func createCrClient(config *rest.Config) (*complianceCrClient, error) {
+func (crclient *complianceCrClient) getClient() runtimeclient.Client {
+	return crclient.client
+}
+
+func (crclient *complianceCrClient) getRecorder() record.EventRecorder {
+	return crclient.recorder
+}
+
+func (crclient *complianceCrClient) getScheme() *runtime.Scheme {
+	return crclient.scheme
+}
+
+func (crclient *complianceCrClient) getClientset() *kubernetes.Clientset {
+	return crclient.clientset
+}
+
+func getScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 
 	corev1.AddToScheme(scheme)
 	mcfgv1.AddToScheme(scheme)
 	compapis.AddToScheme(scheme)
+	ocpcfgv1.AddToScheme(scheme)
+
+	return scheme
+}
+
+func createCrClient(config *rest.Config) (*complianceCrClient, error) {
+	scheme := getScheme()
 
 	client, err := runtimeclient.New(config, runtimeclient.Options{
 		Scheme: scheme,
@@ -61,9 +86,15 @@ func createCrClient(config *rest.Config) (*complianceCrClient, error) {
 		return nil, err
 	}
 
+	clientSet, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
 	return &complianceCrClient{
-		client: client,
-		scheme: scheme,
+		client:    client,
+		scheme:    scheme,
+		clientset: clientSet,
 	}, nil
 }
 

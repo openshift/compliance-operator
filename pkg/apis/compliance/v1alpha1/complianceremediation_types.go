@@ -43,20 +43,51 @@ const (
 )
 
 const (
-	// OutdatedRemediationLabel specifies that the remediation has been superseded by a newer version
-	OutdatedRemediationLabel               = "complianceoperator.openshift.io/outdated-remediation"
-	RemediationHasUnmetDependenciesLabel   = "compliance.openshift.io/has-unmet-dependencies"
-	RemediationUnsetValueLabel             = "compliance.openshift.io/has-unset-variable"
+	// OutdatedRemediationLabel specifies that the remediation has been superseded by a newer version.
+	OutdatedRemediationLabel = "complianceoperator.openshift.io/outdated-remediation"
+	// RemediationHasUnmetDependenciesLabel specifies that a remediation has unmet dependencies
+	// and thus cannot be applied.
+	RemediationHasUnmetDependenciesLabel = "compliance.openshift.io/has-unmet-dependencies"
+	// RemediationUnsetValueLabel specifies that a remediation requires a value
+	// to be set.
+	RemediationUnsetValueLabel = "compliance.openshift.io/has-unset-variable"
+	// RemediationValueRequiredProcessedLabel specifies that a remediation's needed value
+	// has been processed.
 	RemediationValueRequiredProcessedLabel = "compliance.openshift.io/value-required-processed"
+	// RemediationCreatedByOperatorAnnotation specifies that a remediation was
+	// created by the Compliance Operator; this is used for the Compliance Operator to
+	// know whether it can delete the object or not when un-applying a remediation.
 	RemediationCreatedByOperatorAnnotation = "compliance.openshift.io/remediation"
-	RemediationDependencyAnnotation        = "compliance.openshift.io/depends-on"
-	RemediationObjectDependencyAnnotation  = "compliance.openshift.io/depends-on-obj"
-	RemediationDependenciesMetAnnotation   = "compliance.openshift.io/dependencies-met"
-	RemediationOptionalAnnotation          = "compliance.openshift.io/optional"
-	RemediationEnforcementTypeAnnotation   = "compliance.openshift.io/enforcement-type"
-	RemediationValueRequiredAnnotation     = "compliance.openshift.io/value-required"
-	RemediationUnsetValueAnnotation        = "compliance.openshift.io/unset-value"
-	RemediationValueUsedAnnotation         = "compliance.openshift.io/xccdf-value-used"
+	// RemediationDependencyAnnotation specifies that a remediation depends on
+	// an XCCDF rule passing in order to be applied.
+	RemediationDependencyAnnotation = "compliance.openshift.io/depends-on"
+	// RemediationObjectDependencyAnnotation specifies that a remediation depends on
+	// another Kubernetes object existing in order to be applied.
+	RemediationObjectDependencyAnnotation = "compliance.openshift.io/depends-on-obj"
+	// RemediationDependenciesMetAnnotation specifies that a remediation's dependencies
+	// have been met.
+	RemediationDependenciesMetAnnotation = "compliance.openshift.io/dependencies-met"
+	// RemediationOptionalAnnotation specifies that a remediation is optional,
+	// and thus failures applying it are to be ignored.
+	RemediationOptionalAnnotation = "compliance.openshift.io/optional"
+	// RemediationEnforcementTypeAnnotation specifies that a remediation is
+	// of a certain policy enforcement type. This generally marks the engine
+	// that the policy will be evaluated with. e.g. gatekeeper
+	RemediationEnforcementTypeAnnotation = "compliance.openshift.io/enforcement-type"
+	// RemediationValueRequiredAnnotation specifies that a remediation requires
+	// a value to be set before being applied.
+	RemediationValueRequiredAnnotation = "compliance.openshift.io/value-required"
+	// RemediationUnsetValueAnnotation specifies the unset value that's missing
+	// for the remediation
+	RemediationUnsetValueAnnotation = "compliance.openshift.io/unset-value"
+	// RemediationValueUsedAnnotation specifies the values used for a remediation
+	RemediationValueUsedAnnotation = "compliance.openshift.io/xccdf-value-used"
+	// OCPVersionDependencyAnnotation specifies that the OCP cluster needs to fall
+	// into a range in order to be applied
+	OCPVersionDependencyAnnotation = "compliance.openshift.io/ocp-version"
+	// K8SVersionDependencyAnnotation specifies that the k8s cluster needs to fall
+	// into a range in order to be applied
+	K8SVersionDependencyAnnotation = "compliance.openshift.io/k8s-version"
 )
 
 var (
