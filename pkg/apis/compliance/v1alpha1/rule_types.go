@@ -11,6 +11,9 @@ import (
 // here or in the compliance-operator?
 const RuleIDAnnotationKey = "compliance.openshift.io/rule"
 
+// RuleVariableAnnotationKey store list of xccdf variables used to render the rule
+const RuleVariableAnnotationKey = "compliance.openshift.io/rule-variable"
+
 const (
 	CheckTypePlatform = "Platform"
 	CheckTypeNode     = "Node"
