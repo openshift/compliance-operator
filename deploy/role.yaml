@@ -345,14 +345,6 @@ metadata:
   name: remediation-aggregator
 rules:
 - apiGroups:
-  - ""
-  resources:
-  - nodes  # Needed for version filtering
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
   - config.openshift.io
   resources:
   - clusteroperators  # Needed for version filtering
