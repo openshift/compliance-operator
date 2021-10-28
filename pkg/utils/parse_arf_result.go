@@ -933,12 +933,12 @@ func handleVersionDependencyAnnotation(u *unstructured.Unstructured, annotations
 		delete(inAnns, ocpVersionAnnotationKey)
 	}
 
-	if k8svrange, hasKubeDepKey := inAnns[kubeDependencyAnnotationKey]; hasKubeDepKey {
+	if k8svrange, hasKubeDepKey := inAnns[k8sVersionAnnotationKey]; hasKubeDepKey {
 		// set dependencies
 		annotations[compv1alpha1.K8SVersionDependencyAnnotation] = k8svrange
 
 		// reset metadata of output object
-		delete(inAnns, kubeDependencyAnnotationKey)
+		delete(inAnns, k8sVersionAnnotationKey)
 	}
 
 	u.SetAnnotations(inAnns)
