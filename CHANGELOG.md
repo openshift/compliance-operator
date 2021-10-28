@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.45] - 2021-10-28
+### Changes
+- Add a more verbose Changelog for the recent versions
+- Add "infrastructure" to resources we always fetch
+- Remove permissions for aggregator to list nodes
+- Fix Kubernetes version dependency parsing bug
+- Implement version applicability for remediations
+- Add permissions to get and list machineset in preparation for implementation of req 3.4.1 pcidss
+- Add support for rendering variable in rule objects
+
 ## [0.1.44] - 2021-10-20
 ### Changes
  - enhancements
