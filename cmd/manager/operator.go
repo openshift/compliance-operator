@@ -346,6 +346,9 @@ func ensureDefaultProfileBundles(ctx context.Context, crclient client.Client, na
 					ContentFile:  fmt.Sprintf("ssg-%s-ds.xml", prod),
 				},
 			}
+			log.Info("Ensuring ProfileBundle is available",
+				"ProfileBundle.Name", pb.GetName(),
+				"ProfileBundle.Namespace", pb.GetNamespace())
 			if err := ensureSupportedProfileBundle(ctx, crclient, pb); err != nil {
 				lastErr = err
 			}
@@ -380,6 +383,9 @@ func ensureDefaultScanSettings(ctx context.Context, crclient client.Client, name
 				"master",
 			},
 		}
+		log.Info("Ensuring ScanSetting is available",
+			"ScanSetting.Name", d.GetName(),
+			"ScanSetting.Namespace", d.GetNamespace())
 		derr := crclient.Create(ctx, d)
 		if !k8serrors.IsAlreadyExists(derr) {
 			lastErr = derr
@@ -400,6 +406,9 @@ func ensureDefaultScanSettings(ctx context.Context, crclient client.Client, name
 				"master",
 			},
 		}
+		log.Info("Ensuring ScanSetting is available",
+			"ScanSetting.Name", d.GetName(),
+			"ScanSetting.Namespace", d.GetNamespace())
 		aerr := crclient.Create(ctx, a)
 		if !k8serrors.IsAlreadyExists(aerr) {
 			lastErr = aerr
