@@ -127,23 +127,34 @@ func RunOperator(cmd *cobra.Command, args []string) {
 		log.Error(err, "Failed to get watch namespace")
 		os.Exit(1)
 	}
-	log.Info("Watching", "namespace", namespace)
-	// Force watch of compliance-operator-namespace so it gets added to the cache
-	if !strings.Contains(namespace, common.GetComplianceOperatorNamespace()) {
-		namespace = namespace + "," + common.GetComplianceOperatorNamespace()
+	if namespace != "" {
+		log.Info("Watching", "namespace", namespace)
+		// Force watch of compliance-operator-namespace so it gets added to the cache
+		if !strings.Contains(namespace, common.GetComplianceOperatorNamespace()) {
+			namespace = namespace + "," + common.GetComplianceOperatorNamespace()
+		}
+	} else {
+		log.Info("Watching all namespaces")
 	}
 	options := manager.Options{
 		Namespace:          namespace,
 		MetricsBindAddress: fmt.Sprintf("%s:%d", metricsHost, metricsPort),
 	}
-	namespaceList := strings.Split(namespace, ",")
-	// Add support for MultiNamespace set in WATCH_NAMESPACE (e.g ns1,ns2)
-	// Note that this is not intended to be used for excluding namespaces, this is better done via a Predicate
-	// Also note that you may face performance issues when using this with a high number of namespaces.
-	// More Info: https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/cache#MultiNamespacedCacheBuilder
-	if strings.Contains(namespace, ",") {
-		options.Namespace = ""
-		options.NewCache = cache.MultiNamespacedCacheBuilder(namespaceList)
+	var namespaceList []string
+
+	if namespace != "" {
+		namespaceList = strings.Split(namespace, ",")
+		// Add support for MultiNamespace set in WATCH_NAMESPACE (e.g ns1,ns2)
+		// Note that this is not intended to be used for excluding namespaces, this is better done via a Predicate
+		// Also note that you may face performance issues when using this with a high number of namespaces.
+		// More Info: https://godoc.org/github.com/kubernetes-sigs/controller-runtime/pkg/cache#MultiNamespacedCacheBuilder
+		if strings.Contains(namespace, ",") {
+			options.Namespace = ""
+			options.NewCache = cache.MultiNamespacedCacheBuilder(namespaceList)
+		}
+	} else {
+		// NOTE(jaosorior): This will be used to set up the needed defaults
+		namespaceList = []string{common.GetComplianceOperatorNamespace()}
 	}
 
 	// Get a config to talk to the apiserver
