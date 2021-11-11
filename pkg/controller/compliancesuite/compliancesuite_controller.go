@@ -356,7 +356,10 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 	}
 
 	logger.Info("Updating scan status", "ComplianceScan.Name", modScanStatus.Name, "ComplianceScan.Phase", modScanStatus.Phase)
-	return r.client.Status().Update(context.TODO(), suite)
+	if err := r.client.Status().Update(context.TODO(), suite); err != nil {
+		return err
+	}
+	return r.setSuiteMetric(suite)
 }
 
 func (r *ReconcileComplianceSuite) generateEventsForSuite(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) {
@@ -396,7 +399,10 @@ func (r *ReconcileComplianceSuite) addScanStatus(suite *compv1alpha1.ComplianceS
 	logger.Info("Adding scan status", "ComplianceScan.Name", newScanStatus.Name, "ComplianceScan.Phase", newScanStatus.Phase)
 	suite.Status.Phase = suite.LowestCommonState()
 	suite.Status.Result = suite.LowestCommonResult()
-	return r.client.Status().Update(context.TODO(), suite)
+	if err := r.client.Status().Update(context.TODO(), suite); err != nil {
+		return err
+	}
+	return r.setSuiteMetric(suite)
 }
 
 func launchScanForSuite(r *ReconcileComplianceSuite, suite *compv1alpha1.ComplianceSuite, scanWrap *compv1alpha1.ComplianceScanSpecWrapper, logger logr.Logger) error {
@@ -625,4 +631,17 @@ func (r *ReconcileComplianceSuite) getAffectedMcfgPool(scan *compv1alpha1.Compli
 
 func remediationNeedsOutdatedRemoval(rem *compv1alpha1.ComplianceRemediation, suite *compv1alpha1.ComplianceSuite) bool {
 	return suite.ShouldRemoveOutdated() && rem.Status.ApplicationState == compv1alpha1.RemediationOutdated
+}
+
+func (r *ReconcileComplianceSuite) setSuiteMetric(suite *compv1alpha1.ComplianceSuite) error {
+	if suite.Status.Result == compv1alpha1.ResultCompliant {
+		r.metrics.SetComplianceStateInCompliance(suite.Name)
+	} else if suite.Status.Result == compv1alpha1.ResultNonCompliant {
+		r.metrics.SetComplianceStateOutOfCompliance(suite.Name)
+	} else if suite.Status.Result == compv1alpha1.ResultInconsistent {
+		r.metrics.SetComplianceStateInconsistent(suite.Name)
+	} else if suite.Status.Result == compv1alpha1.ResultError {
+		r.metrics.SetComplianceStateError(suite.Name)
+	}
+	return nil
 }

@@ -370,6 +370,10 @@ The compliance-operator exposes the following metrics to Prometheus when cluster
     # TYPE compliance_operator_compliance_scan_error_total counter
     compliance_operator_compliance_scan_error_total{name="scan-name",error="some_error"} 1
 
+    # HELP compliance_operator_compliance_state A gauge for the compliance state of a ComplianceSuite. Set to 0 when COMPLIANT, 1 when NON-COMPLIANT, 2 when INCONSISTENT, and 3 when ERROR
+    # TYPE compliance_operator_compliance_state gauge
+    compliance_operator_compliance_state{name="some-compliance-suite"} 1
+
 After logging into the console, navigating to Monitoring -> Metrics, the compliance_operator* metrics can be queried using the metrics dashboard. The `{__name__=~"compliance.*"}` query can be used to view the full set of metrics.
 
 Testing for the metrics from the cli can also be done directly with a pod that curls the metrics service. This is useful for troubleshooting.
