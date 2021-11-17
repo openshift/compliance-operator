@@ -1021,7 +1021,8 @@ func TestE2E(t *testing.T) {
 						Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
 						NodeSelector: selectNone,
 						ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
-							Debug: true,
+							Debug:             true,
+							ShowNotApplicable: true,
 						},
 					},
 				}
@@ -1886,7 +1887,8 @@ func TestE2E(t *testing.T) {
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      "ssg-rhcos4-ds.xml",
 									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
-										Debug: true,
+										Debug:             true,
+										ShowNotApplicable: true,
 									},
 									NodeSelector: map[string]string{
 										"node-role.kubernetes.io/worker": "",

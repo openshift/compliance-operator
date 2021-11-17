@@ -541,6 +541,11 @@ func createResults(crClient aggregatorCrClient, scan *compv1alpha1.ComplianceSca
 		if checkResultExists {
 			// Copy resource version and other metadata needed for update
 			foundCheckResult.ObjectMeta.DeepCopyInto(&pr.CheckResult.ObjectMeta)
+		} else if !scan.Spec.ShowNotApplicable && pr.CheckResult.Status == compv1alpha1.CheckResultNotApplicable {
+			// If the result is not applicable we skip creation
+			// Note that updating a not-applicable result should still
+			// work in order to get older deployments to keep working.
+			continue
 		}
 		// check is owned by the scan
 		if err := createOrUpdateOneResult(crClient, scan, checkResultLabels, checkResultAnnotations, checkResultExists, pr.CheckResult); err != nil {
