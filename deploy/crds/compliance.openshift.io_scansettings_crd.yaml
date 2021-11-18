@@ -209,6 +209,10 @@ spec:
               format. Note the scan will still be triggered immediately, and the scheduled
               scans will start running only after the initial results are ready.
             type: string
+          showNotApplicable:
+            default: false
+            description: Determines whether to hide or show results that are not applicable.
+            type: boolean
           strictNodeScan:
             default: true
             description: Defines whether the scan should proceed if we're not able

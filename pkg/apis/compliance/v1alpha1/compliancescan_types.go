@@ -191,6 +191,10 @@ type ComplianceScanSettings struct {
 	// These objects will annotated in the content itself with:
 	//     complianceascode.io/enforcement-type: <type>
 	RemediationEnforcement string `json:"remediationEnforcement,omitempty"`
+
+	// Determines whether to hide or show results that are not applicable.
+	// +kubebuilder:default=false
+	ShowNotApplicable bool `json:"showNotApplicable,omitempty"`
 }
 
 // ComplianceScanSpec defines the desired state of ComplianceScan
