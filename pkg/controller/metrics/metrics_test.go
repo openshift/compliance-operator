@@ -71,6 +71,9 @@ func TestFileIntegrityMetrics(t *testing.T) {
 		m := dto.Metric{}
 		err := (<-c).Write(&m)
 		require.Nil(t, err)
+		if m.Counter == nil {
+			return int(*m.Gauge.Value)
+		}
 		return int(*m.Counter.Value)
 	}
 
@@ -90,6 +93,26 @@ func TestFileIntegrityMetrics(t *testing.T) {
 					metricLabelScanResult: "bar",
 					metricLabelScanPhase:  "baz",
 				})
+				require.Nil(t, err)
+				require.Equal(t, 1, getMetricValue(ctr))
+			},
+		},
+		{ // gauge compliant
+			when: func(m *Metrics) {
+				m.SetComplianceStateInCompliance("cstate")
+			},
+			then: func(m *Metrics) {
+				ctr, err := m.metrics.metricComplianceStateGauge.GetMetricWith(prometheus.Labels{metricLabelSuiteName: "cstate"})
+				require.Nil(t, err)
+				require.Equal(t, 0, getMetricValue(ctr))
+			},
+		},
+		{ // gauge non-compliant
+			when: func(m *Metrics) {
+				m.SetComplianceStateOutOfCompliance("cstate")
+			},
+			then: func(m *Metrics) {
+				ctr, err := m.metrics.metricComplianceStateGauge.GetMetricWith(prometheus.Labels{metricLabelSuiteName: "cstate"})
 				require.Nil(t, err)
 				require.Equal(t, 1, getMetricValue(ctr))
 			},

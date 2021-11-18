@@ -87,6 +87,7 @@ var (
 	serviceMonitorBearerTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	serviceMonitorTLSCAFile       = "/etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt"
 	serviceMonitorTLSServerName   = "metrics.openshift-compliance.svc"
+	alertName                     = "compliance"
 )
 
 const (
@@ -264,6 +265,11 @@ func addMetrics(ctx context.Context, cfg *rest.Config, kClient *kubernetes.Clien
 
 	if err := createServiceMonitor(ctx, cfg, mClient, operatorNs, metricsService); err != nil {
 		log.Error(err, "Error creating ServiceMonitor")
+		os.Exit(1)
+	}
+
+	if err := createNonComplianceAlert(ctx, mClient, operatorNs); err != nil {
+		log.Error(err, "Error creating PrometheusRule")
 		os.Exit(1)
 	}
 }
@@ -486,6 +492,42 @@ func serveCRMetrics(cfg *rest.Config, operatorNs string) error {
 	err = kubemetrics.GenerateAndServeCRMetrics(cfg, ns, filteredGVK, metricsHost, operatorMetricsPort)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+// createNonComplianceAlert tries to create the default PrometheusRule. Returns nil.
+func createNonComplianceAlert(ctx context.Context, client *monclientv1.MonitoringV1Client, namespace string) error {
+	rule := monitoring.Rule{
+		Alert: "NonCompliant",
+		Expr:  intstr.FromString(`compliance_operator_compliance_state{name=~".+"} > 0`),
+		For:   "1s",
+		Labels: map[string]string{
+			"severity": "warning",
+		},
+		Annotations: map[string]string{
+			"summary":     "The cluster is out-of-compliance",
+			"description": "The compliance suite {{ $labels.name }} returned as NON-COMPLIANT, ERROR, or INCONSISTENT",
+		},
+	}
+	_, createErr := client.PrometheusRules(namespace).Create(ctx, &monitoring.PrometheusRule{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      alertName,
+		},
+		Spec: monitoring.PrometheusRuleSpec{
+			Groups: []monitoring.RuleGroup{
+				{
+					Name: "compliance",
+					Rules: []monitoring.Rule{
+						rule,
+					},
+				},
+			},
+		},
+	}, metav1.CreateOptions{})
+	if createErr != nil && !kerr.IsAlreadyExists(createErr) {
+		log.Info("could not create prometheus rule for alert", createErr)
 	}
 	return nil
 }

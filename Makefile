@@ -383,6 +383,8 @@ deploy-local: namespace image-to-cluster deploy-crds ## Deploy the operator from
 	$(SED) 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	$(SED) 's%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%$(RELATED_IMAGE_OPENSCAP_PATH)%' deploy/operator.yaml
 	@oc apply -n $(NAMESPACE) -f deploy/
+	@oc apply -f deploy/olm-catalog/compliance-operator/manifests/monitoring_clusterrolebinding.yaml
+	@oc apply -f deploy/olm-catalog/compliance-operator/manifests/monitoring_clusterrole.yaml
 	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
 	@$(SED) 's%$(RELATED_IMAGE_OPENSCAP_PATH)%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%' deploy/operator.yaml
 	@oc set triggers -n $(NAMESPACE) deployment/compliance-operator --from-image openshift/compliance-operator:latest -c compliance-operator

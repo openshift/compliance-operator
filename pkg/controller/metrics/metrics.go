@@ -21,9 +21,11 @@ const (
 	metricNameComplianceScanStatus        = "compliance_scan_status_total"
 	metricNameComplianceScanError         = "compliance_scan_error_total"
 	metricNameComplianceRemediationStatus = "compliance_remediation_status_total"
+	metricNameComplianceStateGauge        = "compliance_state"
 
 	metricLabelScanResult       = "result"
 	metricLabelScanName         = "name"
+	metricLabelSuiteName        = "name"
 	metricLabelScanPhase        = "phase"
 	metricLabelScanError        = "error"
 	metricLabelRemediationName  = "name"
@@ -32,6 +34,13 @@ const (
 	HandlerPath                  = "/metrics-co"
 	ControllerMetricsServiceName = "metrics-co"
 	MetricsAddrListen            = ":8585"
+)
+
+const (
+	METRIC_STATE_COMPLIANT = iota
+	METRIC_STATE_NON_COMPLIANT
+	METRIC_STATE_INCONSISTENT
+	METRIC_STATE_ERROR
 )
 
 // Metrics is the main structure of this package.
@@ -45,6 +54,7 @@ type ControllerMetrics struct {
 	metricComplianceScanError         *prometheus.CounterVec
 	metricComplianceScanStatus        *prometheus.CounterVec
 	metricComplianceRemediationStatus *prometheus.CounterVec
+	metricComplianceStateGauge        *prometheus.GaugeVec
 }
 
 func DefaultControllerMetrics() *ControllerMetrics {
@@ -80,6 +90,16 @@ func DefaultControllerMetrics() *ControllerMetrics {
 				metricLabelRemediationState,
 			},
 		),
+		metricComplianceStateGauge: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name:      metricNameComplianceStateGauge,
+				Namespace: metricNamespace,
+				Help:      "A gauge for the compliance state of a ComplianceSuite. Set to 0 when COMPLIANT, 1 when NON-COMPLIANT, 2 when INCONSISTENT, and 3 when ERROR",
+			},
+			[]string{
+				metricLabelSuiteName,
+			},
+		),
 	}
 }
 
@@ -102,6 +122,7 @@ func (m *Metrics) Register() error {
 		metricNameComplianceScanError:         m.metrics.metricComplianceScanError,
 		metricNameComplianceScanStatus:        m.metrics.metricComplianceScanStatus,
 		metricNameComplianceRemediationStatus: m.metrics.metricComplianceRemediationStatus,
+		metricNameComplianceStateGauge:        m.metrics.metricComplianceStateGauge,
 	} {
 		m.log.Info(fmt.Sprintf("Registering metric: %s", name))
 		if err := m.impl.Register(collector); err != nil {
@@ -154,4 +175,24 @@ func (m *Metrics) IncComplianceRemediationStatus(name string, status v1alpha1.Co
 		metricLabelRemediationName:  name,
 		metricLabelRemediationState: string(status.ApplicationState),
 	}).Inc()
+}
+
+// SetComplianceStateError sets the compliance_state gauge to 3.
+func (m *Metrics) SetComplianceStateError(name string) {
+	m.metrics.metricComplianceStateGauge.WithLabelValues(name).Set(METRIC_STATE_ERROR)
+}
+
+// SetComplianceStateInconsistent sets the compliance_state gauge to 2.
+func (m *Metrics) SetComplianceStateInconsistent(name string) {
+	m.metrics.metricComplianceStateGauge.WithLabelValues(name).Set(METRIC_STATE_INCONSISTENT)
+}
+
+// SetComplianceStateOutOfCompliance sets the compliance_state gauge to 1.
+func (m *Metrics) SetComplianceStateOutOfCompliance(name string) {
+	m.metrics.metricComplianceStateGauge.WithLabelValues(name).Set(METRIC_STATE_NON_COMPLIANT)
+}
+
+// SetComplianceStateInCompliance sets the compliance_state gauge to 0.
+func (m *Metrics) SetComplianceStateInCompliance(name string) {
+	m.metrics.metricComplianceStateGauge.WithLabelValues(name).Set(METRIC_STATE_COMPLIANT)
 }
