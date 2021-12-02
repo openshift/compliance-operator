@@ -236,6 +236,11 @@ spec:
                 default: Node
                 description: The type of Compliance scan.
                 type: string
+              showNotApplicable:
+                default: false
+                description: Determines whether to hide or show results that are not
+                  applicable.
+                type: boolean
               strictNodeScan:
                 default: true
                 description: Defines whether the scan should proceed if we're not
