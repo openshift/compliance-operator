@@ -12,24 +12,24 @@ import (
 	"github.com/pkg/errors"
 )
 
-func XmlNodeAsMarkdownPreRender(node *xmlquery.Node) string {
-	return xmlToMarkdown(node.OutputXML(false), true)
+func XmlNodeAsMarkdownPreRender(node *xmlquery.Node, needsSpace bool) string {
+	return xmlToMarkdown(node.OutputXML(false), true, needsSpace)
 }
 
 func XmlNodeAsMarkdown(node *xmlquery.Node) string {
-	return xmlToMarkdown(node.OutputXML(false), false)
+	return xmlToMarkdown(node.OutputXML(false), false, false)
 }
 
-func xmlToMarkdown(in string, preRender bool) string {
+func xmlToMarkdown(in string, preRender bool, needsSpace bool) string {
 
-	text, err := html2text.FromString(xmlToHtml(in, preRender), html2text.Options{PrettyTables: true, OmitLinks: false})
+	text, err := html2text.FromString(xmlToHtml(in, preRender, needsSpace), html2text.Options{PrettyTables: true, OmitLinks: false})
 	if err != nil {
 		return in
 	}
 	return text
 }
 
-func xmlToHtml(in string, preRender bool) string {
+func xmlToHtml(in string, preRender bool, needsSpace bool) string {
 	builder := strings.Builder{}
 	decoder := xml.NewDecoder(strings.NewReader(in))
 	for {
@@ -47,7 +47,7 @@ func xmlToHtml(in string, preRender bool) string {
 			if preRender && tok.Name.Local == "sub" && len(tok.Attr) > 1 {
 				if strings.HasPrefix(tok.Attr[0].Value, valuePrefix) {
 					// Have the check in nested if statment to avoid array out of bond
-					builder.WriteString(formateXccdfVar(tok.Attr[0].Value))
+					builder.WriteString(formateXccdfVar(tok.Attr[0].Value, needsSpace))
 				} else {
 					builder.WriteString(formatElement(tok.Name, "<"))
 				}
@@ -64,8 +64,11 @@ func xmlToHtml(in string, preRender bool) string {
 	return builder.String()
 }
 
-func formateXccdfVar(in string) string {
-	return " {{." + strings.TrimPrefix(in, valuePrefix) + "}} "
+func formateXccdfVar(in string, needsSpace bool) string {
+	if needsSpace {
+		return " {{." + strings.TrimPrefix(in, valuePrefix) + "}} "
+	}
+	return "{{." + strings.TrimPrefix(in, valuePrefix) + "}}"
 }
 
 func formatElement(elName xml.Name, tag string) string {
