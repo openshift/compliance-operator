@@ -2,9 +2,12 @@ package scansettingbinding
 
 import (
 	"context"
+	"regexp"
+	"strings"
 
 	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	conditions "github.com/operator-framework/operator-sdk/pkg/status"
 	"go.uber.org/zap"
@@ -225,9 +228,11 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 		Expect(err).To(BeNil())
 
 		reconciler = ReconcileScanSettingBinding{
-			client:  client,
-			scheme:  scheme,
-			metrics: mockMetrics,
+			client:      client,
+			scheme:      scheme,
+			metrics:     mockMetrics,
+			roleVal:     regexp.MustCompile(roleValRegexp),
+			invalidRole: regexp.MustCompile(invalidRoleRegexp),
 		}
 	})
 
@@ -737,6 +742,47 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
 			Expect(err).ToNot(BeNil())
 		})
+	})
+
+	When("Validating roles", func() {
+		DescribeTable("Should pass the validation",
+			func(roles []string) {
+				ss := &compv1alpha1.ScanSetting{
+					Roles: roles,
+				}
+				err := reconciler.validateRoles(ss)
+				Expect(err).To(BeNil())
+			},
+			Entry("master & worker", []string{"master", "worker"}),
+			Entry("@all", []string{"@all"}),
+			Entry("other samples", []string{"control-plane", "role-1", "role-2", "role-3"}),
+		)
+
+		When("Passing empty roles", func() {
+			It("is valid but issues warning event", func() {
+				ss := &compv1alpha1.ScanSetting{
+					Roles: []string{},
+				}
+				err := reconciler.validateRoles(ss)
+				Expect(err).To(BeNil())
+				// TODO(jaosorior): Validate that a warning was issued
+			})
+		})
+
+		DescribeTable("Should fail the validation if it includes ",
+			func(roles []string) {
+				ss := &compv1alpha1.ScanSetting{
+					Roles: roles,
+				}
+				err := reconciler.validateRoles(ss)
+				Expect(err).ToNot(BeNil(), "validation should have returned an error")
+			},
+			Entry("spaces", []string{"master "}),
+			Entry("@all mixed with others", []string{"@all", "worker"}),
+			Entry("too long", []string{strings.Repeat("foo", 100)}),
+			Entry("empty string", []string{""}),
+			Entry("invalid character", []string{"l33t$"}),
+		)
 	})
 
 })

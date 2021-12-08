@@ -4,6 +4,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	AllRoles = "@all"
+)
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ScanSetting is the Schema for the scansettings API
@@ -15,7 +19,19 @@ type ScanSetting struct {
 
 	ComplianceSuiteSettings `json:",inline"`
 	ComplianceScanSettings  `json:",inline"`
-	// The list of roles to apply node-specific checks to
+	// The list of roles to apply node-specific checks to.
+	//
+	// This will be translated to the standard Kubernetes
+	// role label `node-role.kubernetes.io/<role name>`.
+	//
+	// It's also possible to specify `@all` as a role, which
+	// will run a scan on all nodes by not specifying a node
+	// selector as we normally do. The usage of `@all` in
+	// OpenShift is discouraged as the operator won't
+	// be able to apply remediations unless roles are specified.
+	//
+	// Note that tolerations must still be configured for
+	// the opeartor to appropriately schedule scans.
 	Roles []string `json:"roles,omitempty"`
 }
 

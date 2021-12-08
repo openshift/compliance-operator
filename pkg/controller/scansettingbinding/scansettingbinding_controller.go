@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 
 	"github.com/go-logr/logr"
-	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -28,11 +28,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 const (
 	// The default time we should wait before requeuing
 	requeueAfterDefault = 10 * time.Second
+	// roleValRegexp evaluates role values. The limit comes
+	// from the label limit (63) minus the length of
+	// "node-role.kubernetes.io/".
+	roleValRegexp     = `^([a-zA-Z0-9-]){1,39}$`
+	invalidRoleRegexp = `[^a-zA-Z0-9-]+`
 )
 
 var log = logf.Log.WithName("scansettingbindingctrl")
@@ -44,8 +51,10 @@ func Add(mgr manager.Manager, met *metrics.Metrics, _ utils.CtlplaneSchedulingIn
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager, met *metrics.Metrics) reconcile.Reconciler {
 	return &ReconcileScanSettingBinding{client: mgr.GetClient(), scheme: mgr.GetScheme(),
-		recorder: common.NewSafeRecorder("scansettingbindingctrl", mgr),
-		metrics:  met,
+		recorder:    common.NewSafeRecorder("scansettingbindingctrl", mgr),
+		metrics:     met,
+		roleVal:     regexp.MustCompile(roleValRegexp),
+		invalidRole: regexp.MustCompile(invalidRoleRegexp),
 	}
 }
 
@@ -89,10 +98,12 @@ var _ reconcile.Reconciler = &ReconcileScanSettingBinding{}
 
 // ReconcileScanSettingBinding reconciles a ScanSettingBinding object
 type ReconcileScanSettingBinding struct {
-	client   client.Client
-	scheme   *runtime.Scheme
-	recorder *common.SafeRecorder
-	metrics  *metrics.Metrics
+	client      client.Client
+	scheme      *runtime.Scheme
+	recorder    *common.SafeRecorder
+	metrics     *metrics.Metrics
+	roleVal     *regexp.Regexp
+	invalidRole *regexp.Regexp
 }
 
 // FIXME: generalize for other controllers?
@@ -209,7 +220,7 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 	}
 
 	if instance.SettingsRef != nil {
-		err := applyConstraint(r, instance, &suite, instance.SettingsRef, log)
+		err := r.applyConstraint(instance, &suite, instance.SettingsRef, log)
 		if err != nil {
 			return common.ReturnWithRetriableError(reqLogger, err)
 		}
@@ -305,7 +316,12 @@ func isDifferentProduct(nodeProduct, incomingProduct string) bool {
 	return incomingProduct != "" && incomingProduct != nodeProduct
 }
 
-func applyConstraint(r *ReconcileScanSettingBinding, instance *compliancev1alpha1.ScanSettingBinding, suite *compliancev1alpha1.ComplianceSuite, constraintRef *compliancev1alpha1.NamedObjectReference, logger logr.Logger) error {
+func (r *ReconcileScanSettingBinding) applyConstraint(
+	instance *compliancev1alpha1.ScanSettingBinding,
+	suite *compliancev1alpha1.ComplianceSuite,
+	constraintRef *compliancev1alpha1.NamedObjectReference,
+	logger logr.Logger,
+) error {
 	key := types.NamespacedName{Namespace: instance.Namespace, Name: constraintRef.Name}
 	constraint, err := getUnstructured(r, instance, key, constraintRef.Kind, constraintRef.APIGroup, logger)
 	if err != nil {
@@ -321,8 +337,15 @@ func applyConstraint(r *ReconcileScanSettingBinding, instance *compliancev1alpha
 		return common.WrapNonRetriableCtrlError(err)
 	}
 
+	if valErr := r.validateRoles(&v1setting); valErr != nil {
+		return common.NewRetriableCtrlErrorWithCustomHandler(
+			func() (reconcile.Result, error) {
+				return reconcile.Result{}, nil
+			}, "error validating ScanSetting '%s' roles: %w", v1setting.GetName(), valErr)
+	}
+
 	// create per-role scans
-	suite.Spec.Scans = createScansWithSelector(suite, &v1setting, logger)
+	suite.Spec.Scans = r.createScansWithSelector(suite, &v1setting, logger)
 	// apply settings for suite - deep copy to future proof in case there are any slices or so later
 	suite.Spec.ComplianceSuiteSettings = *v1setting.ComplianceSuiteSettings.DeepCopy()
 	// apply settings for scans, need to DeepCopy as ScanSetting contains a slice
@@ -334,14 +357,39 @@ func applyConstraint(r *ReconcileScanSettingBinding, instance *compliancev1alpha
 	return nil
 }
 
-func createScansWithSelector(suite *compliancev1alpha1.ComplianceSuite, v1setting *compliancev1alpha1.ScanSetting, logger logr.Logger) []compliancev1alpha1.ComplianceScanSpecWrapper {
+func (r *ReconcileScanSettingBinding) validateRoles(setting *compliancev1alpha1.ScanSetting) error {
+	if len(setting.Roles) == 0 {
+		r.Eventf(setting, corev1.EventTypeWarning, "EmptyRoles",
+			"The ScanSetting's roles are empty. Node scans won't be scheduled.")
+		return nil
+	}
+	// This is fine and expected
+	if len(setting.Roles) == 1 && setting.Roles[0] == compliancev1alpha1.AllRoles {
+		return nil
+	}
+	for _, role := range setting.Roles {
+		if role == compliancev1alpha1.AllRoles {
+			return fmt.Errorf("role %s cannot be used alongside other roles", compliancev1alpha1.AllRoles)
+		}
+		if !r.roleVal.MatchString(role) {
+			return fmt.Errorf("role %s is invalid", role)
+		}
+	}
+	return nil
+}
+
+func (r *ReconcileScanSettingBinding) createScansWithSelector(
+	suite *compliancev1alpha1.ComplianceSuite,
+	v1setting *compliancev1alpha1.ScanSetting,
+	logger logr.Logger,
+) []compliancev1alpha1.ComplianceScanSpecWrapper {
 	scansWithSelector := make([]compliancev1alpha1.ComplianceScanSpecWrapper, 0)
 	for _, scan := range suite.Spec.Scans {
 		logger.Info("Processing original scan", "scan.Name", scan.Name)
 		if strings.ToLower(string(scan.ScanType)) == "node" {
 			for _, role := range v1setting.Roles {
 				scanCopy := scan.DeepCopy()
-				scanCopy.Name = scan.Name + "-" + role
+				scanCopy.Name = scan.Name + "-" + r.sanitizeRoleForName(role)
 				scanCopy.NodeSelector = utils.GetNodeRoleSelector(role)
 				logger.Info("Adding per-role scan", "scanCopy.Name", scanCopy.Name)
 				scansWithSelector = append(scansWithSelector, *scanCopy)
@@ -355,6 +403,20 @@ func createScansWithSelector(suite *compliancev1alpha1.ComplianceSuite, v1settin
 	}
 
 	return scansWithSelector
+}
+
+// returns a sanitized role name that can be used
+// for a name. Note that it is also assumed that validation
+// has already taken place.
+func (r *ReconcileScanSettingBinding) sanitizeRoleForName(roleName string) string {
+	if roleName == compliancev1alpha1.AllRoles {
+		return "a-all"
+	}
+	// Remove all invalid characters if anything slips through
+	// here. This should be a no-op since validation
+	// has already happened.
+	return r.invalidRole.ReplaceAllString(roleName, "")
+
 }
 
 func newCompScanFromBindingProfile(r *ReconcileScanSettingBinding, instance *compliancev1alpha1.ScanSettingBinding, profile *unstructured.Unstructured, logger logr.Logger) (*compliancev1alpha1.ComplianceScanSpecWrapper, string, error) {
