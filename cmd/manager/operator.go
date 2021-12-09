@@ -9,8 +9,6 @@ import (
 	"runtime"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/util/intstr"
-
 	monitoring "github.com/coreos/prometheus-operator/pkg/apis/monitoring/v1"
 	monclientv1 "github.com/coreos/prometheus-operator/pkg/client/versioned/typed/monitoring/v1"
 	ocpapi "github.com/openshift/api"
@@ -22,11 +20,14 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/metrics"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	kerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -219,8 +220,14 @@ func RunOperator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	getSIErr, si := getSchedulingInfo(ctx, mgr.GetAPIReader())
+	if getSIErr != nil {
+		log.Error(getSIErr, "Getting control plane schedling info")
+		os.Exit(1)
+	}
+
 	// Setup all Controllers
-	if err := controller.AddToManager(mgr, met); err != nil {
+	if err := controller.AddToManager(mgr, met, si); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
@@ -346,6 +353,21 @@ func ensureMetricsServiceAndSecret(ctx context.Context, kClient *kubernetes.Clie
 	}
 
 	return mService, nil
+}
+
+func getSchedulingInfo(ctx context.Context, cli client.Reader) (error, utils.CtlplaneSchedulingInfo) {
+	key := types.NamespacedName{
+		Name:      common.GetComplianceOperatorName(),
+		Namespace: common.GetComplianceOperatorNamespace(),
+	}
+	pod := corev1.Pod{}
+	if err := cli.Get(ctx, key, &pod); err != nil {
+		return err, utils.CtlplaneSchedulingInfo{}
+	}
+	return nil, utils.CtlplaneSchedulingInfo{
+		Selector:    pod.Spec.NodeSelector,
+		Tolerations: pod.Spec.Tolerations,
+	}
 }
 
 func ensureDefaultProfileBundles(ctx context.Context, crclient client.Client, namespaceList []string) error {

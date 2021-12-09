@@ -42,7 +42,9 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
-              value: "compliance-operator"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: RELATED_IMAGE_OPENSCAP
               # Hardcoding this temporarily until its propagated to CI
               value: "quay.io/compliance-operator/openscap-ocp:1.3.5"
@@ -65,11 +67,3 @@ spec:
         - key: "node-role.kubernetes.io/master"
           operator: "Exists"
           effect: "NoSchedule"
-        - key: "node.kubernetes.io/unreachable"
-          operator: "Exists"
-          effect: "NoExecute"
-          tolerationSeconds: 120
-        - key: "node.kubernetes.io/not-ready"
-          operator: "Exists"
-          effect: "NoExecute"
-          tolerationSeconds: 120

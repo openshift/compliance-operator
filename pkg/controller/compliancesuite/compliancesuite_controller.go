@@ -37,18 +37,19 @@ const (
 
 // Add creates a new ComplianceSuite Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, met *metrics.Metrics) error {
-	return add(mgr, newReconciler(mgr, met))
+func Add(mgr manager.Manager, met *metrics.Metrics, si utils.CtlplaneSchedulingInfo) error {
+	return add(mgr, newReconciler(mgr, met, si))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager, met *metrics.Metrics) reconcile.Reconciler {
+func newReconciler(mgr manager.Manager, met *metrics.Metrics, si utils.CtlplaneSchedulingInfo) reconcile.Reconciler {
 	return &ReconcileComplianceSuite{
-		reader:   mgr.GetAPIReader(),
-		client:   mgr.GetClient(),
-		scheme:   mgr.GetScheme(),
-		recorder: mgr.GetEventRecorderFor("suitectrl"),
-		metrics:  met,
+		reader:         mgr.GetAPIReader(),
+		client:         mgr.GetClient(),
+		scheme:         mgr.GetScheme(),
+		recorder:       mgr.GetEventRecorderFor("suitectrl"),
+		metrics:        met,
+		schedulingInfo: si,
 	}
 }
 
@@ -91,6 +92,9 @@ type ReconcileComplianceSuite struct {
 	scheme   *runtime.Scheme
 	recorder record.EventRecorder
 	metrics  *metrics.Metrics
+	// helps us schedule platform scans on the nodes labeled for the
+	// compliance operator's control plane
+	schedulingInfo utils.CtlplaneSchedulingInfo
 }
 
 // Reconcile reads that state of the cluster for a ComplianceSuite object and makes changes based on the state read
@@ -191,7 +195,7 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 }
 
 func (r *ReconcileComplianceSuite) suiteDeleteHandler(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) error {
-	rerunner := getRerunner(suite)
+	rerunner := r.getRerunner(suite)
 	if err := r.handleRerunnerDelete(rerunner, suite.Name, logger); err != nil {
 		return err
 	}

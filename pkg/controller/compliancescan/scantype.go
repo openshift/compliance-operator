@@ -305,7 +305,7 @@ func (ph *platformScanTypeHandler) validate() (bool, error) {
 
 func (ph *platformScanTypeHandler) createScanWorkload() error {
 	ph.l.Info("Creating a Platform scan pod")
-	pod := newPlatformScanPod(ph.scan, ph.l)
+	pod := ph.r.newPlatformScanPod(ph.scan, ph.l)
 	return ph.r.launchScanPod(ph.scan, pod, ph.l)
 }
 

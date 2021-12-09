@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/openshift/compliance-operator/pkg/controller/metrics"
+	"github.com/openshift/compliance-operator/pkg/utils"
 
 	"github.com/go-logr/logr"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
@@ -36,7 +37,7 @@ const (
 
 // Add creates a new TailoredProfile Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, met *metrics.Metrics) error {
+func Add(mgr manager.Manager, met *metrics.Metrics, _ utils.CtlplaneSchedulingInfo) error {
 	return add(mgr, newReconciler(mgr, met))
 }
 
