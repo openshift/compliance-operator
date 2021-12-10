@@ -273,7 +273,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 	}
 }
 
-func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Logger) *corev1.Pod {
+func (r *ReconcileComplianceScan) newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Logger) *corev1.Pod {
 	mode := int32(0744)
 	podName := getPodForNodeName(scanInstance.Name, PlatformScanName)
 	cmName := getConfigMapForNodeName(scanInstance.Name, PlatformScanName)
@@ -480,16 +480,8 @@ func newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.L
 					},
 				},
 			},
-			NodeSelector: map[string]string{
-				"node-role.kubernetes.io/master": "",
-			},
-			Tolerations: []corev1.Toleration{
-				{
-					Key:      "node-role.kubernetes.io/master",
-					Operator: corev1.TolerationOpExists,
-					Effect:   corev1.TaintEffectNoSchedule,
-				},
-			},
+			NodeSelector:  r.schedulingInfo.Selector,
+			Tolerations:   r.schedulingInfo.Tolerations,
 			RestartPolicy: corev1.RestartPolicyOnFailure,
 			Volumes: []corev1.Volume{
 				{
@@ -624,7 +616,7 @@ func (r *ReconcileComplianceScan) addTailoringVolume(name string, pod *corev1.Po
 
 func (r *ReconcileComplianceScan) deletePlatformScanPod(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	logger.Info("Deleting the platform scan pod for instance", "instance", instance.Name)
-	pod := newPlatformScanPod(instance, logger)
+	pod := r.newPlatformScanPod(instance, logger)
 
 	err := r.client.Delete(context.TODO(), pod)
 	if errors.IsNotFound(err) {

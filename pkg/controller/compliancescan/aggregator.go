@@ -21,7 +21,7 @@ func getAggregatorPodName(scanName string) string {
 	return utils.DNSLengthName("aggregator-pod-", "aggregator-pod-%s", scanName)
 }
 
-func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Logger) *corev1.Pod {
+func (r *ReconcileComplianceScan) newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Logger) *corev1.Pod {
 	podName := getAggregatorPodName(scanInstance.Name)
 
 	podLabels := map[string]string{
@@ -42,16 +42,8 @@ func newAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Log
 			},
 		},
 		Spec: corev1.PodSpec{
-			NodeSelector: map[string]string{
-				"node-role.kubernetes.io/master": "",
-			},
-			Tolerations: []corev1.Toleration{
-				{
-					Key:      "node-role.kubernetes.io/master",
-					Operator: corev1.TolerationOpExists,
-					Effect:   corev1.TaintEffectNoSchedule,
-				},
-			},
+			NodeSelector:       r.schedulingInfo.Selector,
+			Tolerations:        r.schedulingInfo.Tolerations,
 			ServiceAccountName: aggregatorSA,
 			InitContainers: []corev1.Container{
 				{
@@ -124,7 +116,7 @@ func (r *ReconcileComplianceScan) launchAggregatorPod(scanInstance *compv1alpha1
 }
 
 func (r *ReconcileComplianceScan) deleteAggregator(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	aggregator := newAggregatorPod(instance, logger)
+	aggregator := r.newAggregatorPod(instance, logger)
 	err := r.client.Delete(context.TODO(), aggregator)
 	if err != nil && !errors.IsNotFound(err) {
 		logger.Error(err, "Cannot delete aggregator pod", "pod", aggregator)

@@ -37,7 +37,7 @@ const (
 
 var log = logf.Log.WithName("scansettingbindingctrl")
 
-func Add(mgr manager.Manager, met *metrics.Metrics) error {
+func Add(mgr manager.Manager, met *metrics.Metrics, _ utils.CtlplaneSchedulingInfo) error {
 	return add(mgr, newReconciler(mgr, met))
 }
 

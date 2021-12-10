@@ -2,8 +2,9 @@ package profilebundle
 
 import (
 	"context"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 	"time"
+
+	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 
 	// #nosec G505
 
@@ -41,14 +42,18 @@ var oneReplica int32 = 1
 
 // Add creates a new ProfileBundle Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, met *metrics.Metrics) error {
-	return add(mgr, newReconciler(mgr, met))
+func Add(mgr manager.Manager, met *metrics.Metrics, si utils.CtlplaneSchedulingInfo) error {
+	return add(mgr, newReconciler(mgr, met, si))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager, met *metrics.Metrics) reconcile.Reconciler {
-	return &ReconcileProfileBundle{client: mgr.GetClient(), scheme: mgr.GetScheme(), reader: mgr.GetAPIReader(),
-		metrics: met,
+func newReconciler(mgr manager.Manager, met *metrics.Metrics, si utils.CtlplaneSchedulingInfo) reconcile.Reconciler {
+	return &ReconcileProfileBundle{
+		client:         mgr.GetClient(),
+		scheme:         mgr.GetScheme(),
+		reader:         mgr.GetAPIReader(),
+		metrics:        met,
+		schedulingInfo: si,
 	}
 }
 
@@ -81,6 +86,9 @@ type ReconcileProfileBundle struct {
 	client  client.Client
 	scheme  *runtime.Scheme
 	metrics *metrics.Metrics
+	// helps us schedule platform scans on the nodes labeled for the
+	// compliance operator's control plane
+	schedulingInfo utils.CtlplaneSchedulingInfo
 }
 
 // Reconcile reads that state of the cluster for a ProfileBundle object and makes changes based on the state read
@@ -171,7 +179,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 	}
 
 	// Define a new Pod object
-	depl := newWorkloadForBundle(instance, effectiveImage)
+	depl := r.newWorkloadForBundle(instance, effectiveImage)
 
 	found := &appsv1.Deployment{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: depl.Name, Namespace: depl.Namespace}, found)
@@ -265,7 +273,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 
 func (r *ReconcileProfileBundle) profileBundleDeleteHandler(pb *compliancev1alpha1.ProfileBundle, logger logr.Logger) error {
 	logger.Info("The ProfileBundle is being deleted")
-	pod := newWorkloadForBundle(pb, "")
+	pod := r.newWorkloadForBundle(pb, "")
 	logger.Info("Deleting profileparser workload", "Pod.Name", pod.Name)
 	err := r.client.Delete(context.TODO(), pod)
 	if err != nil && !errors.IsNotFound(err) {
@@ -394,7 +402,7 @@ func getISTagAnnotation(isTagName, isTagNamespace string) map[string]string {
 	}
 }
 
-func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *appsv1.Deployment {
+func (r *ReconcileProfileBundle) newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *appsv1.Deployment {
 	falseP := false
 	trueP := true
 	labels := getWorkloadLabels(pb)
@@ -417,16 +425,8 @@ func newWorkloadForBundle(pb *compliancev1alpha1.ProfileBundle, image string) *a
 					},
 				},
 				Spec: corev1.PodSpec{
-					NodeSelector: map[string]string{
-						"node-role.kubernetes.io/master": "",
-					},
-					Tolerations: []corev1.Toleration{
-						{
-							Key:      "node-role.kubernetes.io/master",
-							Operator: corev1.TolerationOpExists,
-							Effect:   corev1.TaintEffectNoSchedule,
-						},
-					},
+					NodeSelector: r.schedulingInfo.Selector,
+					Tolerations:  r.schedulingInfo.Tolerations,
 					InitContainers: []corev1.Container{
 						{
 							Name:  "content-container",

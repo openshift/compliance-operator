@@ -53,15 +53,18 @@ const (
 
 // Add creates a new ComplianceScan Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, met *metrics.Metrics) error {
-	return add(mgr, newReconciler(mgr, met))
+func Add(mgr manager.Manager, met *metrics.Metrics, si utils.CtlplaneSchedulingInfo) error {
+	return add(mgr, newReconciler(mgr, met, si))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager, met *metrics.Metrics) reconcile.Reconciler {
-	return &ReconcileComplianceScan{client: mgr.GetClient(), scheme: mgr.GetScheme(),
-		recorder: mgr.GetEventRecorderFor("scanctrl"),
-		metrics:  met,
+func newReconciler(mgr manager.Manager, met *metrics.Metrics, si utils.CtlplaneSchedulingInfo) reconcile.Reconciler {
+	return &ReconcileComplianceScan{
+		client:         mgr.GetClient(),
+		scheme:         mgr.GetScheme(),
+		recorder:       mgr.GetEventRecorderFor("scanctrl"),
+		metrics:        met,
+		schedulingInfo: si,
 	}
 }
 
@@ -93,6 +96,9 @@ type ReconcileComplianceScan struct {
 	scheme   *runtime.Scheme
 	recorder record.EventRecorder
 	metrics  *metrics.Metrics
+	// helps us schedule platform scans on the nodes labeled for the
+	// compliance operator's control plane
+	schedulingInfo utils.CtlplaneSchedulingInfo
 }
 
 // Reconcile reads that state of the cluster for a ComplianceScan object and makes changes based on the state read
@@ -391,7 +397,7 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(h scanTypeHandler, log
 	}
 
 	logger.Info("Creating an aggregator pod for scan")
-	aggregator := newAggregatorPod(instance, logger)
+	aggregator := r.newAggregatorPod(instance, logger)
 	err = r.launchAggregatorPod(instance, aggregator, logger)
 	if err != nil {
 		logger.Error(err, "Failed to launch aggregator pod", "aggregator", aggregator)

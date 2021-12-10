@@ -22,7 +22,7 @@ import (
 const rerunnerServiceAccount = "rerunner"
 
 func (r *ReconcileComplianceSuite) reconcileScanRerunnerCronJob(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) error {
-	rerunner := getRerunner(suite)
+	rerunner := r.getRerunner(suite)
 	if suite.Spec.Schedule == "" {
 		return r.handleRerunnerDelete(rerunner, suite.Name, logger)
 	}
@@ -98,7 +98,7 @@ func GetRerunnerName(suiteName string) string {
 	return suiteName + "-rerunner"
 }
 
-func getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
+func (r *ReconcileComplianceSuite) getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
 	falseP := false
 	trueP := true
 	return &batchv1beta1.CronJob{
@@ -122,16 +122,8 @@ func getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
 							},
 						},
 						Spec: corev1.PodSpec{
-							NodeSelector: map[string]string{
-								"node-role.kubernetes.io/master": "",
-							},
-							Tolerations: []corev1.Toleration{
-								{
-									Key:      "node-role.kubernetes.io/master",
-									Operator: corev1.TolerationOpExists,
-									Effect:   corev1.TaintEffectNoSchedule,
-								},
-							},
+							NodeSelector:       r.schedulingInfo.Selector,
+							Tolerations:        r.schedulingInfo.Tolerations,
 							ServiceAccountName: rerunnerServiceAccount,
 							RestartPolicy:      corev1.RestartPolicyOnFailure,
 							Containers: []corev1.Container{

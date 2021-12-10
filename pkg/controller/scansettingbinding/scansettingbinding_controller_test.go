@@ -224,7 +224,11 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 		err = mockMetrics.Register()
 		Expect(err).To(BeNil())
 
-		reconciler = ReconcileScanSettingBinding{client: client, scheme: scheme, metrics: mockMetrics}
+		reconciler = ReconcileScanSettingBinding{
+			client:  client,
+			scheme:  scheme,
+			metrics: mockMetrics,
+		}
 	})
 
 	Context("Creates a simple suite from a Profile", func() {
