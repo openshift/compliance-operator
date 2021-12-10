@@ -194,6 +194,7 @@ func (c *mcTestCtx) trackPool(pool *mcfgv1.MachineConfigPool) {
 	E2ELogf(c.t, "Tracking pool %s\n", pool.Name)
 }
 
+// This will creat a new machine config sub pool with one random node from worker pool to speed up the test.
 func (c *mcTestCtx) ensureE2EPool() {
 	pool, err := createReadyMachineConfigPoolSubset(c.t, c.f, workerPoolName, testPoolName)
 	if err != nil {
