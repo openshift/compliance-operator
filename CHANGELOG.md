@@ -7,21 +7,69 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.1.46] - 2021-12-01
 ### Changes
-- metrics: Add ComplianceSuite status gauge and alert
-- Make shoting `NotApplicable` results optional
-- Support deployments on all namespaces
-- Log creation of default objects
-- Fix documentation for remediation templating
+ - enhancements
+     - Make showing `NotApplicable` results optional - the `ComplianceScan` and
+       the `ScanSetting` CR were extended (through extending of a shared structure)
+       with a new field `showNotApplicable` which defaults to `false`. When set
+       to `false`, the Compliance Operator will not render
+       `ComplianceCheckResult` objects that do not apply to the system being
+       scanned, but are part of the benchmark, e.g.  rules that check for etcd
+       properties on worker nodes.  When set to `true`, all checks results,
+       including those not applicable would be created.
+     - metrics: Add `ComplianceSuite` status gauge and alert - enables monitoring
+       of Compliance Suite status through metrics.
+       - Add the `compliance_operator_compliance_state` gauge metric that
+         switches to 1 for a ComplianceSuite with a NON-COMPLIANT result,
+         0 when COMPLIANT, 2 when INCONSISTENT, and 3 when ERROR.
+       - Create a `PrometheusRule` warning alert for the gauge.
+     - Support deployments on all namespaces - adds support for watching all
+       namespaces by passing an empty value to the `WATCH_NAMESPACE`
+       environment variable. Please note that the default objects 
+       (`ProfileBundles`, `ScanSettings`) are always only created in the operator's
+       namespace.
+ - bug fixes
+     - Fix documentation for remediation templating - the `doc/remediation-templating.md`
+       document was improved to reflect the current state of the remediation
+       templating.
+ - internal changes
+     - Log creation of default objects - There were cases where we need
+       to debug if our default objects have been created. It was non-trivial
+       to figure this out from the current logs, so the logging was extended
+       to include the creation of the default `ProfileBundle` and `ScanSetting`
+       objects.
+
 
 ## [0.1.45] - 2021-10-28
 ### Changes
-- Add a more verbose Changelog for the recent versions
-- Add "infrastructure" to resources we always fetch
-- Remove permissions for aggregator to list nodes
-- Fix Kubernetes version dependency parsing bug
-- Implement version applicability for remediations
-- Add permissions to get and list machineset in preparation for implementation of req 3.4.1 pcidss
-- Add support for rendering variable in rule objects
+ - enhancements
+     - Implement version applicability for remediations - remediations coming
+       from the ComplianceAsCode project can now express their minimal requires
+       Kubernetes or OpenShift versions. If the remediation is applied on a
+       cluster that does not match the version requirement, such remediation
+       would not be created. This functionality is used e.g. by the 
+       `rhcos4-configure-usbguard-auditbackend` rule, as seen from the
+       `complianceascode.io/ocp-version: '>=4.7.0'` annotation on its fix.
+     - Add "infrastructure" to resources we always fetch - this is an
+       enhancement for content writers. The 'infrastructure/cluster' object
+       is now always fetched, making it possible to determine the platform
+       that CO is running at. This allows to support checks that are only
+       valid for a certain cloud platform (e.g. only for AWS)
+ - bug fixes
+     - Add support for rendering variable in rule objects - if a
+       ComplianceAsCode check uses a variable in a rule's description or
+       rationale, the variable's value is now correctly rendered
+     - Remove permissions for aggregator to list nodes - a previous version
+       of the Compliance Operator assigned the permissions to list and get
+       nodes to the aggregator pod. Those permissions were not needed and
+       were removed.
+     - Fix Kubernetes version dependency parsing bug - a bug in the version
+       applicability for remediations. This is a bug introduced and fixed
+       in this release.
+ - internal changes
+     - Add permissions to get and list machineset in preparation for
+       implementation of req 3.4.1 pcidss - the RBAC rules were extended
+       to support the PCI-DSS standard.
+     - Add a more verbose Changelog for the recent versions
 
 ## [0.1.44] - 2021-10-20
 ### Changes
