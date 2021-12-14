@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+
+	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 const (
@@ -122,6 +124,9 @@ func McfgPoolLabelMatches(nodeSelector map[string]string, pool *mcfgv1.MachineCo
 }
 
 func GetNodeRoleSelector(role string) map[string]string {
+	if role == cmpv1alpha1.AllRoles {
+		return map[string]string{}
+	}
 	return map[string]string{
 		nodeRolePrefix + role: "",
 	}

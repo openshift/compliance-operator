@@ -155,7 +155,14 @@ spec:
               <type>'
             type: string
           roles:
-            description: The list of roles to apply node-specific checks to
+            description: "The list of roles to apply node-specific checks to. \n This
+              will be translated to the standard Kubernetes role label `node-role.kubernetes.io/<role
+              name>`. \n It's also possible to specify `@all` as a role, which will
+              run a scan on all nodes by not specifying a node selector as we normally
+              do. The usage of `@all` in OpenShift is discouraged as the operator
+              won't be able to apply remediations unless roles are specified. \n Note
+              that tolerations must still be configured for the opeartor to appropriately
+              schedule scans."
             items:
               type: string
             type: array
