@@ -279,6 +279,12 @@ func (r *ReconcileComplianceRemediation) patchRemediation(remObj *unstructured.U
 }
 
 func (r *ReconcileComplianceRemediation) deleteRemediation(remObj *unstructured.Unstructured, foundObj *unstructured.Unstructured, logger logr.Logger) error {
+
+	if utils.IsKubeletConfig(remObj) {
+		logger.Info("Can't unapply since it is KubeletConfig Remediation")
+		return nil
+	}
+
 	logger.Info("Remediation will be deleted")
 
 	if !compv1alpha1.RemediationWasCreatedByOperator(foundObj) {

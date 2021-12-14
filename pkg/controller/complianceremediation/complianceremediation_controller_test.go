@@ -315,6 +315,9 @@ var _ = Describe("Testing complianceremediation controller", func() {
 					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "custom-kubelet",
+						Annotations: map[string]string{
+							"compliance.openshift.io/remediation": "",
+						},
 					},
 					Spec: mcfgv1.KubeletConfigSpec{
 						KubeletConfig: &runtime.RawExtension{
@@ -360,7 +363,23 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				mcKey := types.NamespacedName{Name: "custom-kubelet"}
 				err = reconciler.client.Get(context.TODO(), mcKey, foundKC)
 				Expect(err).ToNot(HaveOccurred())
+
+				By("Unapply remediation")
+				remediationinstance.Spec.Apply = false
+				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = reconciler.reconcileRemediation(remediationinstance, logger)
+				Expect(err).To(BeNil())
+
+				By("should not return a NotFound error")
+				// we don't allow kubeletconfig remediation to be unapplied
+				foundKC = &mcfgv1.KubeletConfig{}
+				mcKey = types.NamespacedName{Name: "custom-kubelet"}
+				err = reconciler.client.Get(context.TODO(), mcKey, foundKC)
+				Expect(kerrors.IsNotFound(err)).NotTo(BeTrue())
 			})
+
 		})
 
 		Context("with an outdated remediation object", func() {
