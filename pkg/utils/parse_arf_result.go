@@ -756,16 +756,11 @@ func parseValues(remContent string, resultValues map[string]string) (string, []s
 		// take out leading and tailling spaces
 		trimmedContent = strings.TrimSpace(trimmedContent)
 
-		// trimmedContent here should only contain url-encoded content, check if it contains illegall character space
-		isIllegalURL := regexp.MustCompile(".*[\\ \"\\<\\>\\{\\}|\\\\^~\\[\\]].*")
-		if isIllegalURL.MatchString(trimmedContent) {
-			continue
-		}
-
 		var decodeErr error
 		preProcessedContent, decodeErr := url.QueryUnescape(trimmedContent)
 		if decodeErr != nil {
-			return remContent, valuesUsedList, valuesMissingList, errors.Wrap(decodeErr, "error while decode remediation context: ")
+			// skip contents like {{ .<some-var> }}
+			continue
 		}
 
 		// we don't need special processing if preProcessedContent is same as orginal content
