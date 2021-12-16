@@ -60,30 +60,38 @@ func init() {
 	defineOperatorFlags(operatorCmd)
 }
 
-func defineOperatorFlags(cmd *cobra.Command) {
-	cmd.Flags().Bool("skip-metrics", false,
-		"Skips adding metrics.")
+type PlatformType string
 
-	// Add the zap logger flag set to the CLI. The flag set must
-	// be added before calling pflag.Parse().
-	flags := cmd.Flags()
-	flags.AddFlagSet(zap.FlagSet())
-
-	// Add flags registered by imported packages (e.g. glog and
-	// controller-runtime)
-	flags.AddGoFlagSet(flag.CommandLine)
-
-}
+const (
+	PlatformOpenShift PlatformType = "OpenShift"
+	PlatformEKS       PlatformType = "EKS"
+	PlatformGeneric   PlatformType = "Generic"
+	PlatformUnknown   PlatformType = "Unknown"
+)
 
 // Change below variables to serve metrics on different host or port.
 var (
-	metricsHost               = "0.0.0.0"
-	metricsServiceName        = "metrics"
-	metricsPort         int32 = 8383
-	operatorMetricsPort int32 = 8686
-	defaultProducts           = []string{
-		"rhcos4",
-		"ocp4",
+	metricsHost                      = "0.0.0.0"
+	metricsServiceName               = "metrics"
+	metricsPort                int32 = 8383
+	operatorMetricsPort        int32 = 8686
+	defaultProductsPerPlatform       = map[PlatformType][]string{
+		PlatformOpenShift: {
+			"rhcos4",
+			"ocp4",
+		},
+		PlatformEKS: {
+			"eks",
+		},
+	}
+	defaultRolesPerPlatform = map[PlatformType][]string{
+		PlatformOpenShift: {
+			"master",
+			"worker",
+		},
+		PlatformGeneric: {
+			compv1alpha1.AllRoles,
+		},
 	}
 	serviceMonitorBearerTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	serviceMonitorTLSCAFile       = "/etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt"
@@ -97,6 +105,24 @@ const (
 	// Run scan every day at 1am
 	defaultScanSettingsSchedule = "0 1 * * *"
 )
+
+func defineOperatorFlags(cmd *cobra.Command) {
+	cmd.Flags().Bool("skip-metrics", false,
+		"Skips adding metrics.")
+	cmd.Flags().String("platform", "OpenShift",
+		"Specifies the Platform the Compliance Operator is running on. "+
+			"This will affect the defaults created.")
+
+	// Add the zap logger flag set to the CLI. The flag set must
+	// be added before calling pflag.Parse().
+	flags := cmd.Flags()
+	flags.AddFlagSet(zap.FlagSet())
+
+	// Add flags registered by imported packages (e.g. glog and
+	// controller-runtime)
+	flags.AddGoFlagSet(flag.CommandLine)
+
+}
 
 func printVersion() {
 	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
@@ -220,9 +246,9 @@ func RunOperator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	getSIErr, si := getSchedulingInfo(ctx, mgr.GetAPIReader())
+	si, getSIErr := getSchedulingInfo(ctx, mgr.GetAPIReader())
 	if getSIErr != nil {
-		log.Error(getSIErr, "Getting control plane schedling info")
+		log.Error(getSIErr, "Getting control plane scheduling info")
 		os.Exit(1)
 	}
 
@@ -231,19 +257,22 @@ func RunOperator(cmd *cobra.Command, args []string) {
 		log.Error(err, "")
 		os.Exit(1)
 	}
+	pflag, _ := flags.GetString("platform")
+	platform := getValidPlatform(pflag)
 
 	skipMetrics, _ := flags.GetBool("skip-metrics")
-	if !skipMetrics {
+	// We only support these metrics in OpenShift (at the moment)
+	if platform == PlatformOpenShift && !skipMetrics {
 		// Add the Metrics Service
 		addMetrics(ctx, cfg, kubeClient, monitoringClient)
 	}
 
-	if err := ensureDefaultProfileBundles(ctx, mgr.GetClient(), namespaceList); err != nil {
+	if err := ensureDefaultProfileBundles(ctx, mgr.GetClient(), namespaceList, platform); err != nil {
 		log.Error(err, "Error creating default ProfileBundles.")
 		os.Exit(1)
 	}
 
-	if err := ensureDefaultScanSettings(ctx, mgr.GetClient(), namespaceList); err != nil {
+	if err := ensureDefaultScanSettings(ctx, mgr.GetClient(), namespaceList, platform, si); err != nil {
 		log.Error(err, "Error creating default ScanSettings.")
 		os.Exit(1)
 	}
@@ -254,6 +283,17 @@ func RunOperator(cmd *cobra.Command, args []string) {
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
 		log.Error(err, "Manager exited non-zero")
 		os.Exit(1)
+	}
+}
+
+func getValidPlatform(p string) PlatformType {
+	switch {
+	case strings.EqualFold(p, string(PlatformOpenShift)):
+		return PlatformOpenShift
+	case strings.EqualFold(p, string(PlatformEKS)):
+		return PlatformEKS
+	default:
+		return PlatformUnknown
 	}
 }
 
@@ -355,24 +395,37 @@ func ensureMetricsServiceAndSecret(ctx context.Context, kClient *kubernetes.Clie
 	return mService, nil
 }
 
-func getSchedulingInfo(ctx context.Context, cli client.Reader) (error, utils.CtlplaneSchedulingInfo) {
+func getSchedulingInfo(ctx context.Context, cli client.Reader) (utils.CtlplaneSchedulingInfo, error) {
 	key := types.NamespacedName{
 		Name:      common.GetComplianceOperatorName(),
 		Namespace: common.GetComplianceOperatorNamespace(),
 	}
 	pod := corev1.Pod{}
+	log.Info("Deriving scheduling info from pod",
+		"Pod.Name", key.Name, "Pod.Namespace", key.Namespace)
 	if err := cli.Get(ctx, key, &pod); err != nil {
-		return err, utils.CtlplaneSchedulingInfo{}
+		return utils.CtlplaneSchedulingInfo{}, err
 	}
-	return nil, utils.CtlplaneSchedulingInfo{
+	return utils.CtlplaneSchedulingInfo{
 		Selector:    pod.Spec.NodeSelector,
 		Tolerations: pod.Spec.Tolerations,
-	}
+	}, nil
 }
 
-func ensureDefaultProfileBundles(ctx context.Context, crclient client.Client, namespaceList []string) error {
+func ensureDefaultProfileBundles(
+	ctx context.Context,
+	crclient client.Client,
+	namespaceList []string,
+	platform PlatformType,
+) error {
 	pbimg := utils.GetComponentImage(utils.CONTENT)
 	var lastErr error
+	defaultProducts, isSupported := defaultProductsPerPlatform[platform]
+	if !isSupported {
+		log.Info("No ProfileBundle defaults for unknown product." +
+			" Skipping defaults creation.")
+		return nil
+	}
 	for _, prod := range defaultProducts {
 		for _, ns := range namespaceList {
 			pb := &compv1alpha1.ProfileBundle{
@@ -406,21 +459,31 @@ func ensureSupportedProfileBundle(ctx context.Context, crclient client.Client, p
 	return nil
 }
 
-func ensureDefaultScanSettings(ctx context.Context, crclient client.Client, namespaceList []string) error {
+func ensureDefaultScanSettings(
+	ctx context.Context,
+	crclient client.Client,
+	namespaceList []string,
+	platform PlatformType,
+	si utils.CtlplaneSchedulingInfo,
+) error {
 	var lastErr error
 	for _, ns := range namespaceList {
+		roles := getDefaultRoles(platform)
 		d := &compv1alpha1.ScanSetting{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      defaultScanSettingsName,
 				Namespace: ns,
 			},
+			ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+				RawResultStorage: compv1alpha1.RawResultStorageSettings{
+					NodeSelector: si.Selector,
+					Tolerations:  si.Tolerations,
+				},
+			},
 			ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
 				Schedule: defaultScanSettingsSchedule,
 			},
-			Roles: []string{
-				"worker",
-				"master",
-			},
+			Roles: roles,
 		}
 		log.Info("Ensuring ScanSetting is available",
 			"ScanSetting.Name", d.GetName(),
@@ -435,15 +498,18 @@ func ensureDefaultScanSettings(ctx context.Context, crclient client.Client, name
 				Name:      defaultAutoApplyScanSettingsName,
 				Namespace: ns,
 			},
+			ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+				RawResultStorage: compv1alpha1.RawResultStorageSettings{
+					NodeSelector: si.Selector,
+					Tolerations:  si.Tolerations,
+				},
+			},
 			ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
 				AutoApplyRemediations:  true,
 				AutoUpdateRemediations: true,
 				Schedule:               defaultScanSettingsSchedule,
 			},
-			Roles: []string{
-				"worker",
-				"master",
-			},
+			Roles: roles,
 		}
 		log.Info("Ensuring ScanSetting is available",
 			"ScanSetting.Name", d.GetName(),
@@ -454,6 +520,14 @@ func ensureDefaultScanSettings(ctx context.Context, crclient client.Client, name
 		}
 	}
 	return lastErr
+}
+
+func getDefaultRoles(platform PlatformType) []string {
+	roles, hasSpecific := defaultRolesPerPlatform[platform]
+	if hasSpecific {
+		return roles
+	}
+	return defaultRolesPerPlatform[PlatformGeneric]
 }
 
 // createServiceMonitor attempts to create a ServiceMonitor out of service, and updates it to include the controller
