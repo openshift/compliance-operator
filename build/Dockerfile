@@ -1,5 +1,5 @@
 # Step one: build compliance-operator
-FROM golang:1.16 AS builder
+FROM golang:1.17 AS builder
 
 WORKDIR /go/src/github.com/openshift/compliance-operator
 
