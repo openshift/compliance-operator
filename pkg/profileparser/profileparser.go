@@ -640,7 +640,7 @@ func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *
 			}
 			var valueRendered []string
 			if description != nil {
-				p.Description, valueRendered, err = utils.RenderValues(utils.XmlNodeAsMarkdownPreRender(description), valuesList)
+				p.Description, valueRendered, err = utils.RenderValues(utils.XmlNodeAsMarkdownPreRender(description, true), valuesList)
 
 				if err != nil {
 					log.Error(err, "couldn't render variable in rules")
@@ -650,7 +650,7 @@ func ParseRulesAndDo(contentDom *xmlquery.Node, stdParser *referenceParser, pb *
 			}
 
 			if rationale != nil {
-				p.Rationale, valueRendered, err = utils.RenderValues(utils.XmlNodeAsMarkdownPreRender(rationale), valuesList)
+				p.Rationale, valueRendered, err = utils.RenderValues(utils.XmlNodeAsMarkdownPreRender(rationale, true), valuesList)
 				if err != nil {
 					log.Error(err, "couldn't render variable in rules")
 				} else if len(valueRendered) > 0 {
