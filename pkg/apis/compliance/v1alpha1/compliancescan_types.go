@@ -145,12 +145,10 @@ type RawResultStorageSettings struct {
 	// By setting this, it's possible to configure where the result server instances
 	// are run. These instances will mount a Persistent Volume to store the raw
 	// results, so special care should be taken to schedule these in trusted nodes.
-	// +kubebuilder:default={"node-role.kubernetes.io/master": ""}
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 	// Specifies tolerations needed for the result server to run on the nodes. This is useful
 	// in case the target set of nodes have custom taints that don't allow certain
 	// workloads to run. Defaults to allowing scheduling on master nodes.
-	// +kubebuilder:default={{key: "node-role.kubernetes.io/master", operator: "Exists", effect: "NoSchedule"}}
 	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
 }
 
