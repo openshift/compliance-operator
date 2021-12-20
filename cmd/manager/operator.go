@@ -406,9 +406,19 @@ func getSchedulingInfo(ctx context.Context, cli client.Reader) (utils.CtlplaneSc
 	if err := cli.Get(ctx, key, &pod); err != nil {
 		return utils.CtlplaneSchedulingInfo{}, err
 	}
+
+	sel := pod.Spec.NodeSelector
+	if sel == nil {
+		sel = map[string]string{}
+	}
+	tol := pod.Spec.Tolerations
+	if tol == nil {
+		tol = []corev1.Toleration{}
+	}
+
 	return utils.CtlplaneSchedulingInfo{
-		Selector:    pod.Spec.NodeSelector,
-		Tolerations: pod.Spec.Tolerations,
+		Selector:    sel,
+		Tolerations: tol,
 	}, nil
 }
 
