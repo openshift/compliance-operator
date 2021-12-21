@@ -8,10 +8,10 @@ We want to accomplish:
    * The remediation content can have `KubeletConfig` as payload
    * The remediation controller will be able to merge KubeletConfig remediation into the correct KubeletConfig that is currently being used by the cluster
 
-## Add CaC `KubletConfig` remediation content 
-In CaC content, we are going to add `KubletConfig` remediation besides `MachineConfig` that we currently have.
+## Add CaC `KubeletConfig` remediation content 
+In CaC content, we are going to add `KubeletConfig` remediation besides `MachineConfig` that we currently have.
 
-We will have remdiation that has object payload to be `KubletConfig`. As a exmaple below:
+We will have remediation that has object payload to be `KubeletConfig`. As an example below:
 ```yaml
 apiVersion: machineconfiguration.openshift.io/v1
 kind: KubeletConfig
@@ -19,33 +19,37 @@ spec:
   kubeletConfig:
     maxPods: 1100
 ```
+## Applying/Unapplying `KubeletConfig` remediation
 
-## Remediation controller handles `KubletConfig` remediation
+Applying `KubeletConfig` remediation is just like any other remediation; there
+isn't any extra step for it. 
 
-When we are going to apply one of `KubletConfig` remediation the following will happen:
+However, things are different when un-applying a `KubeletConfig` remediation.
+Our compliance operator does not support un-applying a `KubeletConfig` remediation.
+Therefore, if you need to un-apply certain `KubeletConfig` remediation, you will need to 
+remove remediation configurations from the corresponding `KubeletConfig` object manually.
 
-First, we need to get MachineConfigPool list.
-```go
-mcfgpools := &mcfgv1.MachineConfigPoolList{}
-  if err := r.client.List(context.TODO(), mcfgpools); err != nil {
-    return fmt.Errorf("couldn't list the pools for the remediation: %w", err)
-  }
-```
+## Remediation controller handles `KubeletConfig` remediation
 
-We then find the poola that meets the remedition nodes' label. ex. worker/master 
-nodes `machineconfiguration.openshift.io/role:`
+When we are going to apply one of `KubeletConfig` the remediation, the following will happen:
 
-We will use the nodeselector: `machineconfiguration.openshift.io/role:`  to match 
-machineConfigPoolSelector: `pools.operator.machineconfiguration.openshift.io/:`
+We will apply the `KubeletConfig` remediation to a pool with a matching node selector from the scan.
+Since there can only be one `KubeletConfig` per pool, we need to check if the pool
+has an existing `KubeletConfig`.
 
-### Remediation when no `KubeletConfigs` present
+### Remediation when no `KubeletConfig` present for the selected pool
 
-Once we have the machine config pool, we need to find out if an Admin has created 
-any `KubeletConfigs`, to do that we can check `pool.spec.configuration.source`, if 
-there is only one `name: 01-master-kubelet` machine config in the list.
+Once we have the selected machine config pool, we need to find out if an Admin has created 
+any `KubeletConfig` or our compliance has created any `KubeletConfig` for the pool,
+to do that we can check `pool.spec.configuration.source`, if there is only one machine
+config for `KubeletConfig` called `name: 01-master-kubelet` in the Machine Config list.
 
-If there is no `KubeletConfigs` for that pool, we will need to create one, and also 
-add a label to the pool depends on the nodeselctor `pools.operator.machineconfiguration.openshift.io/master: ""`/ `pools.operator.machineconfiguration.openshift.io/worker: ""`.: The name of KubeletConfig will be the scan name.
+Or we can use a command `oc get KubeletConfig` to see if there is a `KubeletConfig` object that
+is in used by any pool.
+
+If there is no `KubeletConfig` for that pool, Compliance Operator create one when
+a `KubeletConfig` remediation gets applied. The name of KubeletConfig created by 
+the Compliance Operator will be `KubeletConfig compliance-operator-kubelet-<pool-name>`
 
 ```yaml
 apiVersion: machineconfiguration.openshift.io/v1
@@ -60,15 +64,15 @@ spec:
     maxPods: 1100
 ```
 
-### Remediation when there are custom `KubeletConfigs` present
-If there are more than one `KubeletConfigs`, for example `99-master-generated-kubelet`, 
+### Remediation when there are existing `KubeletConfig` present for the selected pool
+If there are more than one `KubeletConfig`, for example `99-master-generated-kubelet`, 
 `99-master-generated-kubelet-1`, `99-master-generated-kubelet-2` ..,we need to find the 
 last one that was used to render the `MachineConfigPool`'s `MachineConfig`. Only the 
-last `KubeletConfigs` will be taken into render the final `MachineConfig`
+last `KubeletConfig` will be taken into render the final `MachineConfig`
 
 
-Therefore, we need first to find `99-master-generated-kubelet` with largest number, in 
-this case  it is `99-master-generated-kubelet-4` and then we can find which `KubletConfig` 
+Therefore, we need first to find `99-master-generated-kubelet` with the largest number, in 
+this case, it is `99-master-generated-kubelet-4` and then we can find which `KubeletConfig` 
 was used to render this MC, in this example:
 
 ```yaml
@@ -95,9 +99,9 @@ metadata:
 ```
 
 From here, we know `KubeletConfig` named `set-max-pods-3` is the one used to 
-generate the final pool MC. Next, we need to patch merge the compliance remediation 
-kubelet config remediation to this file. We will pause the MC pool and start 
-the patch one by one untill all the remediations have been applied.
+generate the final pool MC. Next, we need to patch merge the `KubeletConfig`
+remediation to this file. We will pause the MC pool and patch all the remediations
+one by one, and then unpause the pool once all the remediations have been applied.
 
 ```yaml
 apiVersion: machineconfiguration.openshift.io/v1
