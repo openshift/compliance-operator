@@ -7,13 +7,48 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.1.47] - 2021-12-15
 ### Changes
-- Add human-readable changelog for 0.1.45 and 0.1.46
-- Fix bugs where kubeletconfig gets deletes when unapplying
-- Remove regex checks for url-encoded content
-- ScanSetting: Introduce special `@all` role to match all nodes
-- Add documentation for E2E test
-- Inherit scheduling for workloads from Compliance Operator manager
-- Add status descriptor for CRDs
+
+ - enhancements
+      - Add status descriptor for CRDs - the CRDs' status attributes were annotated
+        with [status descriptors](https://github.com/openshift/console/blob/master/frontend/packages/operator-lifecycle-manager/src/components/descriptors/reference/reference.md)
+        that would provide a nicer UI for the status subresources of Compliance Operator's
+        CRs in the OpenShift web UI console.
+      - ScanSetting: Introduce special `@all` role to match all nodes - Introduces
+        the ability to detect `@all` in the ScanSettings roles. When used, the
+        scansettingbinding controller will set an empty `nodeSelector` which
+        will then match all nodes available. This is mostly intended for
+        non-OpenShift deployments.
+      - Inherit scheduling for workloads from Compliance Operator manager - This
+        enhancement removed hardcoded assumptions that all nodes are labeled
+        with 'node-role.kubernetes.io/'. The Compliance Operator was using these
+        labels for scheduling workloads, which works fine in OpenShift, but not
+        on other distributions. Instead, all controllers inherit the placement
+        information (nodeSelector and tolerations) from the controller manager.
+        This enhancement is mostly aimed at non-OpenShift distributions.
+      - Enable defaults per platform - This enables the Compliance Operator
+        to specify defaults per specific platform. At the moment, OpenShift and
+        EKS are supported. For OpenShift, the ScanSettings created by defaults
+        target master and worker nodes and allow the resultserver to be created
+        on master nodes. For EKS, ScanSettings schedule on all available nodes
+        and inherit the nodeSelector and tolerations from the operator.
+ - bug fixes
+      - Remove regex checks for url-encoded content - When parsing remediations,
+        the Compliance Operator used to verify the remediation content using a
+        too strict regular expression and would error out processing
+        valid remediations. The bug was affecting sshd related remediations from
+        the ComplianceAsCode project in particular. The check was not
+        necessary and was removed. ([RHBZ #2033009](https://bugzilla.redhat.com/show_bug.cgi?id=2033009))
+      - Fix bugs where kubeletconfig gets deleted when unapplying - a
+        KubeletConfig remediation was supposed to be re-applied on a subsequent
+        scan run (typically with `auto_apply_remediations=true`), the remediation
+        might not be applied correctly, leading to some of the remediations
+        not being applied at all. Because the root cause of the issue
+        was in code that was handling unapplying KubeletConfig remediations, the
+        unapplying of KubeletConfig remediations was disabled until a better fix
+        is developed. ([RHBZ #2032420](https://bugzilla.redhat.com/show_bug.cgi?id=2032420))
+ - internal changes
+      - Add human-readable changelog for 0.1.45 and 0.1.46
+      - Add documentation for E2E test
 
 ## [0.1.46] - 2021-12-01
 ### Changes
