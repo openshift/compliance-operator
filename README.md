@@ -321,31 +321,26 @@ $ oc extract cm/masters-scan-ip-10-0-174-253.ec2.internal-pod
 Note that if the results are too big for the ConfigMap, they'll be bzipped and
 base64 encoded.
 
-OS support
-==========
+## OS support
 
-Node scans
-----------
+### Node scans
 
 Note that the current testing has been done in RHCOS. In the absence of
 RHEL/CentOS support, one can simply run OpenSCAP directly on the nodes.
 
-Platform scans
---------------
+### Platform scans
 
 Current testing has been done on OpenShift (OCP). The project is open to
 getting other platforms tested, so volunteers are needed for this.
 
 The current supported versions of OpenShift are 4.6 and up.
 
-Additional documentation
-========================
+## Additional documentation
 
 See the [self-paced workshop](doc/tutorials/README.md) for a hands-on tutorial,
 including advanced topics such as content building.
 
-Must-gather support
-===================
+## Must-gather support
 
 An `oc adm must-gather` image for collecting operator information for debugging
 or support is available at `quay.io/compliance-operator/must-gather:latest`:
@@ -354,8 +349,7 @@ or support is available at `quay.io/compliance-operator/must-gather:latest`:
 $ oc adm must-gather --image=quay.io/compliance-operator/must-gather:latest
 ```
 
-Metrics
-=======
+## Metrics
 The compliance-operator exposes the following metrics to Prometheus when cluster-monitoring is available.
 
     # HELP compliance_operator_compliance_remediation_status_total A counter for the total number of updates to the status of a ComplianceRemediation
