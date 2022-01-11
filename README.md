@@ -376,3 +376,17 @@ Testing for the metrics from the cli can also be done directly with a pod that c
 oc run --rm -i --restart=Never --image=registry.fedoraproject.org/fedora-minimal:latest -n openshift-compliance metrics-test -- bash -c 'curl -ks -H "Authorization: Bea
 rer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" https://metrics.openshift-compliance.svc:8585/metrics-co' | grep compliance
 ```
+
+## Contributor Guide
+
+### Writing Release Notes
+
+Release notes are maintained in the [change log](CHANGELOG.md) and follow guidelines
+based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). We include additional
+guidelines for increased readability and consistency:
+
+* Changes should be grouped by section, either as an enhancement, bug fix, or
+  internal change
+* References to code or configuration should render as literals
+* Bug fixes should link to bug reports (GitHub Issues or Jira items)
+* Features or enhancements should link to formal RFEs (GitHub Issues or Jira items)
