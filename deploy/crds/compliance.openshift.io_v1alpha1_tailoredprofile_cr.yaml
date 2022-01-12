@@ -5,6 +5,7 @@ metadata:
 spec:
   extends: ocp4-moderate
   title: My little profile
+  description: 'Example of a tailoredProfile that extends OCP4 FedRAMP Moderate'
   disableRules:
     - name: ocp4-file-permissions-node-config
       rationale: This breaks X application.
