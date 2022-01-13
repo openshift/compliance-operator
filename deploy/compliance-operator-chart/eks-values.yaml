@@ -1,0 +1,17 @@
+# Values defined in this file are specific to running the compliance-operator
+# on EKS. All other values use the defaults defined in values.yaml.
+platform: eks
+nodeSelector: null
+tolerations: null
+
+scanSettingBindings:
+  # These bindings are provided as examples. You can have Helm create these
+  # bindings for you and initiate a scan by setting
+  # `scanSettingBindings.create: true`.
+  Bindings:
+    - bindingName: cis-platform
+      profileName: eks-cis
+      scanSettingName: default
+    - bindingName: cis-node
+      profileName: eks-cis-node
+      scanSettingName: default

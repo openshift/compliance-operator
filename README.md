@@ -56,6 +56,43 @@ $ oc get deploy -nopenshift-compliance
 $ oc get pods -nopenshift-compliance
 ```
 
+### Deploying with Helm
+
+The repository contains a [Helm](https://helm.sh/) chart that deploys the
+compliance-operator. This chart is currently not published to any official
+registries and requires that you [install](https://helm.sh/docs/intro/install/)
+Helm version v3.0.0 or greater. You're required to run the chart from this
+repository.
+
+Make sure you create the namespace prior to running `helm install`:
+
+```
+$ kubectl create -f deploy/ns.yaml
+```
+
+Next, deploy a release of the compliance-operator using `helm install` from
+`deploy/compliance-operator-chart/`:
+
+```
+$ cd deploy/compliance-operator-chart
+$ helm install --namespace openshift-compliance --generate-name .
+```
+
+The chart defines defaults values in `values.yaml`. You can override these
+values in a specific file or supply them to helm using `--set`. For example,
+you can run the compliance-operator on EKS using the EKS-specific overrides in
+`eks-values.yaml`:
+
+```
+$ helm install . --namespace openshift-compliance --generate-name -f eks-values.yaml
+```
+
+You can use Helm to uninstall, or delete a release, but Helm does not cleanup
+[custom resource
+definitions](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/#helm).
+You must do this manually if you want to remove the custom resource definitions
+required by the compliance-operator.
+
 ### Deploying from source
 ```
 $ (clone repo)

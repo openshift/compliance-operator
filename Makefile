@@ -270,6 +270,8 @@ gosec:
 generate: operator-sdk ## Run operator-sdk's code generation (k8s and crds)
 	$(GOPATH)/bin/operator-sdk generate k8s
 	$(GOPATH)/bin/operator-sdk generate crds
+	## Make sure we update the Helm chart with the most recent CRDs
+	cp deploy/crds/*crd.yaml deploy/compliance-operator-chart/crds/
 
 .PHONY: test-unit
 test-unit: fmt ## Run the unit tests
@@ -460,6 +462,7 @@ bundle: check-operator-version operator-sdk ## Generate the bundle and packaging
 	$(GOPATH)/bin/operator-sdk generate bundle -q --overwrite --version "$(OPERATOR_VERSION)"
 	sed -i '/replaces:/d' deploy/olm-catalog/compliance-operator/manifests/compliance-operator.clusterserviceversion.yaml
 	sed -i "s/\(olm.skipRange: '>=.*\)<.*'/\1<$(OPERATOR_VERSION)'/" deploy/olm-catalog/compliance-operator/manifests/compliance-operator.clusterserviceversion.yaml
+	sed -i "s/^appVersion:.*$/appVersion: \"${OPERATOR_VERSION}\"/g" deploy/compliance-operator-chart/Chart.yaml
 	$(GOPATH)/bin/operator-sdk bundle validate ./deploy/olm-catalog/compliance-operator/
 
 .PHONY: package-version-to-tag
