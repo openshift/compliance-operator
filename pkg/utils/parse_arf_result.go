@@ -286,6 +286,7 @@ func GetRuleOvalTest(rule *xmlquery.Node, defTable NodeByIdHashTable) NodeByIdHa
 		return testList
 	}
 
+	// For default case where there isn't logic operator
 	ovalTests := ovalTest.SelectElements("//oval-def:criterion")
 	for i := range ovalTests {
 		if ovalTests[i].SelectAttr("test_ref") == "" {
@@ -294,8 +295,20 @@ func GetRuleOvalTest(rule *xmlquery.Node, defTable NodeByIdHashTable) NodeByIdHa
 		testList[ovalTests[i].SelectAttr("test_ref")] = ovalTests[i]
 	}
 
-	return testList
+	// For cases where there are extend definitions
+	extendDef := ovalTest.SelectElements("//oval-def:extend_definition")
 
+	if len(extendDef) == 0 {
+		return testList
+	}
+
+	for i := range extendDef {
+		if extendDef[i].SelectAttr("definition_ref") == "" {
+			continue
+		}
+		testList[extendDef[i].SelectAttr("definition_ref")] = extendDef[i]
+	}
+	return testList
 }
 
 func removeDuplicate(input []string) []string {
