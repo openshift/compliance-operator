@@ -653,34 +653,35 @@ func (r *ReconcileComplianceRemediation) verifyAndCompleteKC(obj *unstructured.U
 	// we need to patch the remediation if there is already a CustomKC present
 	if hasCustomKC {
 
-		kubletMC := &mcfgv1.MachineConfig{}
+		kubeletMC := &mcfgv1.MachineConfig{}
 		kMCKey := types.NamespacedName{Name: kubeletMCName}
 
-		if err := r.client.Get(context.TODO(), kMCKey, kubletMC); err != nil {
+		if err := r.client.Get(context.TODO(), kMCKey, kubeletMC); err != nil {
 			return fmt.Errorf("couldn't get current generated KubeletConfig MC: %w", err)
 		}
-		// WE need to get name of original kubelet config that used to generate this kubeletconfig machine config
-		if len(kubletMC.GetOwnerReferences()) == 0 {
-			return fmt.Errorf("the generated kubelet machine config does not have a owner")
+		// We need to get name of original kubelet config that used to generate this kubeletconfig machine config
+		// if we can't find owner of generated mc, we will create custom kubeletconfig instead
+		if len(kubeletMC.GetOwnerReferences()) != 0 {
+			if kubeletMC.GetOwnerReferences()[0].Kind == "KubeletConfig" {
+				kubeletName := kubeletMC.GetOwnerReferences()[0].Name
+				kubeletConfig := &mcfgv1.KubeletConfig{}
+				kcKey := types.NamespacedName{Name: kubeletName}
+				if err := r.client.Get(context.TODO(), kcKey, kubeletConfig); err != nil {
+					return fmt.Errorf("couldn't get current KubeletConfig: %w", err)
+				}
+				// Set kubelet config name
+				obj.SetName(kubeletConfig.GetName())
+				obj.SetLabels(kubeletConfig.GetLabels())
+				return nil
+			}
 		}
-		kubletName := kubletMC.GetOwnerReferences()[0].Name
-
-		kubeletConfig := &mcfgv1.KubeletConfig{}
-		kcKey := types.NamespacedName{Name: kubletName}
-		if err := r.client.Get(context.TODO(), kcKey, kubeletConfig); err != nil {
-			return fmt.Errorf("couldn't get current KubeletConfig: %w", err)
-		}
-		// Set kublet config name
-		obj.SetName(kubeletConfig.GetName())
-		obj.SetLabels(kubeletConfig.GetLabels())
-		return nil
 	}
 
 	// We will need to create a kubelet config if there is no custom KC
-	kubletName := "compliance-operator-kubelet-" + pool.GetName()
+	kubeletName := "compliance-operator-kubelet-" + pool.GetName()
 
-	// Set kublet config name
-	obj.SetName(kubletName)
+	// Set kubelet config name
+	obj.SetName(kubeletName)
 
 	// Set MachineConfigSelector
 	NodeSelector := []string{"spec", "machineConfigPoolSelector", "matchLabels"}
