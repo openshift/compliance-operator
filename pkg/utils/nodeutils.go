@@ -84,7 +84,8 @@ func IsMcfgPoolUsingKC(pool *mcfgv1.MachineConfigPool) (bool, string, error) {
 	var currentKCMC string
 	for i := range pool.Spec.Configuration.Source {
 		kcName := pool.Spec.Configuration.Source[i].Name
-		if strings.Contains(kcName, generatedKubelet) {
+		// The prefix has to start with 99 since the kubeletconfig generated machine config will always start with 99
+		if strings.HasPrefix(kcName, "99-") && strings.Contains(kcName, generatedKubelet) {
 			// First find if there is just one cutom KubeletConfig
 			if maxNum == -1 {
 				if strings.HasSuffix(kcName, generatedKubeletSuffix) {

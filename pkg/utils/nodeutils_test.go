@@ -100,6 +100,54 @@ var _ = Describe("Nodeutils", func() {
 
 		})
 
+		Context("MachineConfig Pool with no custom KubeletConfig", func() {
+			targetNodeSelector := map[string]string{
+				"test-node-role": "",
+			}
+
+			mcp := &mcfgv1.MachineConfigPool{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "MachineConfigPool",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "testPool Name",
+				},
+				Spec: mcfgv1.MachineConfigPoolSpec{
+					NodeSelector: &metav1.LabelSelector{
+						MatchLabels: targetNodeSelector,
+					},
+					Configuration: mcfgv1.MachineConfigPoolStatusConfiguration{
+						Source: []corev1.ObjectReference{
+							{
+								APIVersion: "machineconfiguration.openshift.io/v1",
+								Kind:       "MachineConfig",
+								Name:       "01-worker-kubelet",
+							},
+							{
+								APIVersion: "machineconfiguration.openshift.io/v1",
+								Kind:       "MachineConfig",
+								Name:       "50-workers-chrony-configuration",
+							},
+							{
+								APIVersion: "machineconfiguration.openshift.io/v1",
+								Kind:       "MachineConfig",
+								Name:       "98-worker-generated-kubelet",
+							},
+						},
+					},
+				},
+			}
+			It("Get correct custom KC name", func() {
+				isUsingKC, kc, err := utils.IsMcfgPoolUsingKC(mcp)
+				Expect(err).To(BeNil())
+				Expect(isUsingKC).To(BeFalse())
+				Expect(kc).To(BeEmpty())
+
+			})
+
+		})
+
 		Context("MachineConfig Pool with many custom KubeletConfig", func() {
 			targetNodeSelector := map[string]string{
 				"test-node-role": "",
