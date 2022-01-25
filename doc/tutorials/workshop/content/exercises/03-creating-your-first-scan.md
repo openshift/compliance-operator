@@ -23,15 +23,16 @@ For consumption by the Compliance Operator, the compliance content is
 packaged in container images, subsequently the Compliance Operator wraps
 and exposes the compliance content in a CustomResource for better
 usability:
-	* **rule.compliance** is a single compliance check. For example the
-	  rule `rhcos4-service-auditd-enabled` checks if the `auditd` daemon
-	  is running on RHCOS.
-	* **profile.compliance** is a collection of rules that form a single
-	  compliance baseline for a product. For example the `rhcos4-e8` profile
-	  implements the Australian Government's "Essential Eight" standard for
-	  RHCOS, `ocp4-e8` implements the same standard for OCP.
-	* **profilebundle.compliance** is a collection of profiles for a single
-          product where product might be `ocp4` or `rhcos4`.
+
+  * **rule.compliance** is a single compliance check. For example the rule
+    `rhcos4-service-auditd-enabled` checks if the `auditd` daemon is running on
+    RHCOS.
+  * **profile.compliance** is a collection of rules that form a single
+    compliance baseline for a product. For example the `rhcos4-e8` profile
+    implements the Australian Government's "Essential Eight" standard for
+    RHCOS, `ocp4-e8` implements the same standard for OCP.
+  * **profilebundle.compliance** is a collection of profiles for a single
+    product where product might be `ocp4` or `rhcos4`.
 
 By default, the Compliance Operator creates two `profilebundle` objects, one for
 OCP and one for RHCOS based on the [upstream ComplianceAsCode content images](https://quay.io/repository/complianceascode/ocp4):
@@ -221,6 +222,7 @@ The `ScanSetting` object helps you define properties such as:
  * how much storage will be allocated for the results
  * what is the retention policy for the results
  * will the scan run periodically, and if yes, how often
+
 To display more details about the `ScanSetting` object, run `oc explain scansettings`,
 similarly you can also let `oc` explain any of the nested objects, e.g.
 `oc explain scansettings.rawResultStorage`.
