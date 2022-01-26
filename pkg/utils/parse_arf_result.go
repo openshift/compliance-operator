@@ -81,15 +81,20 @@ type ResourcePath struct {
 //
 //  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
 //  </code></warning>
-func GetPathFromWarningXML(in *xmlquery.Node) []ResourcePath {
+func GetPathFromWarningXML(in *xmlquery.Node, valuesList map[string]string) ([]ResourcePath, error) {
 	apiPaths := []ResourcePath{}
 
 	codeNodes := in.SelectElements("//html:code")
+	errMsgs := []string{}
 
 	for _, codeNode := range codeNodes {
 		if strings.Contains(codeNode.SelectAttr("class"), endPointTag) {
-			path := codeNode.InnerText()
+			path, _, err := RenderValues(XmlNodeAsMarkdown(codeNode), valuesList)
 			if len(path) == 0 {
+				continue
+			}
+			if err != nil {
+				errMsgs = append(errMsgs, err.Error())
 				continue
 			}
 			dumpPath := path
@@ -106,8 +111,11 @@ func GetPathFromWarningXML(in *xmlquery.Node) []ResourcePath {
 			apiPaths = append(apiPaths, ResourcePath{ObjPath: path, DumpPath: dumpPath, Filter: filter})
 		}
 	}
-
-	return apiPaths
+	if len(errMsgs) > 0 {
+		return apiPaths, errors.New(strings.Join(errMsgs, "\n"))
+	} else {
+		return apiPaths, nil
+	}
 }
 
 func warningHasApiObjects(in *xmlquery.Node) bool {
