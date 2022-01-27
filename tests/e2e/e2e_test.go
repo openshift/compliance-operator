@@ -512,6 +512,10 @@ func TestE2E(t *testing.T) {
 						"ocp4-general-apply-scc",
 						compv1alpha1.CheckTypeNone,
 					},
+					{
+						"ocp4-kubelet-enable-protect-kernel-sysctl",
+						compv1alpha1.CheckTypeNode,
+					},
 				} {
 					targetRule := &compv1alpha1.Rule{}
 					key := types.NamespacedName{
@@ -3036,7 +3040,6 @@ func TestE2E(t *testing.T) {
 
 			},
 		},
-
 		testExecution{
 			Name:       "TestKubeletConfigRemediation",
 			IsParallel: false,
