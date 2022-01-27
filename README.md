@@ -381,12 +381,108 @@ rer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" https://metrics.
 
 ### Writing Release Notes
 
-Release notes are maintained in the [change log](CHANGELOG.md) and follow guidelines
-based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). We include additional
-guidelines for increased readability and consistency:
+Release notes are maintained in the [changelog](CHANGELOG.md) and follow
+guidelines based on [keep a changelog](https://keepachangelog.com/en/1.0.0/).
+This section describes additional guidelines, conventions, and the overall
+process for writing release notes.
 
-* Changes should be grouped by section, either as an enhancement, bug fix, or
-  internal change
-* References to code or configuration should render as literals
-* Bug fixes should link to bug reports (GitHub Issues or Jira items)
-* Features or enhancements should link to formal RFEs (GitHub Issues or Jira items)
+#### Guidelines
+
+* Each release should contain release notes
+* Changes should be applicable to at least one of the six types listed below
+* Use literals for code and configuration (e.g. `defaultScanSettingsSchedule`
+  or `nodeSelector`)
+* Write your notes with users as the audience
+* Link to additional documentation
+  - Bug fixes should link to bug reports (GitHub Issues or Jira items)
+  - Features or enhancements should link to RFEs (GitHub Issues or Jira items)
+* Use active voice
+  - Active voice is more direct and concise than passive voice, perfect for
+    release notes
+  - Focus on telling the user how a change will affect them
+  - Examples
+    - *You can now adjust the frequency of your scans by...*
+    - *The compliance-operator no longer supports...*
+
+#### Change Types
+
+The following describe each potential section for a release changelog.
+
+1. Enhancements
+2. Fixes
+3. Internal Changes
+4. Deprecations
+5. Removals
+6. Security
+
+*Enhancements* are reserved for communicating any new features or
+functionality. You should include any new configuration or processes a user
+needs to take to use the new feature.
+
+*Fixes* are for noting improvements to any existing functionality.
+
+*Internal Changes* are ideal for communicating refactors not exposed to end
+users. Even if a change does not directly impact end users, it is still
+important to highlight paying down technical debt and the rationale for those
+changes, especially since they impact the project's roadmap.
+
+*Deprecations* is for any functionality, feature, or configuration that is
+being deprecated and staged for removal. Deprecations should include why we're
+preparing to remove the functionality and signal any suitable replacements
+users should adopt.
+
+*Removals* is for any functionality, feature, or configuration that is being
+removed. Typically, entries in this section will have been deprecated for some
+period of time. The compliance-operator follows the
+[Kubernetes deprecation policy](https://kubernetes.io/docs/reference/using-api/deprecation-policy/).
+
+*Security* is reserved for communicating security fixes and remediations for
+CVEs.
+
+A change can apply to multiple change types. For example, a bug fix for a CVE
+should be mentioned in the *Fixes* and *Security* sections.
+
+#### Process
+
+Contributors must include a release note with their changes. New notes should
+be added to the [Unreleased section](CHANGELOG.md#unreleased) of the
+[changelog](CHANGELOG.md). Reviewers will assess the accuracy of the release
+note against the change.
+
+Maintainers preparing a new release will propose a change that renames the
+[Unreleased release notes](CHANGELOG.md#unreleased) to the newly released
+version and release date. Maintainers can remove empty sections if it does not
+contain any release notes for a specific release.
+
+Maintainers will remove the content of the [Unreleased section](CHANGELOG.md#unreleased)
+to allow for new release notes for the next release.
+
+Following this process makes it easier to maintain and release accurate release
+notes without having to retroactively write release notes for merged changes.
+
+#### Examples
+
+The following is an example release note for a feature with a security note.
+
+```
+## Unreleased
+### Enhancements
+
+- Allow configuring result servers using `nodeSelector` and `tolerations`
+  ([RFE](https://github.com/openshift/compliance-operator/issues/696))
+  - You can now specify which nodes to use for storing raw compliance results
+    using the `nodeSelector` and `tolerations` from `ScanSettings`.
+  - By default, raw results are stored on nodes labeled
+    `node-role.kubernetes.io/master`.
+  - Please refer to the upstream Kubernetes
+    [documentation](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/)
+    for details on how to use `nodeSelector` and `tolerations`.
+
+### Security
+
+- Allow configuring result servers using `nodeSelector` and `tolerations`
+  ([RFE](https://github.com/openshift/compliance-operator/issues/696))
+  - Raw compliance results may contain sensitive information about the
+    deployment, its infrastructure, or applications. Make sure you send raw
+    results to trusted nodes.
+```
