@@ -106,8 +106,6 @@ spec:
                         nodeSelector:
                           additionalProperties:
                             type: string
-                          default:
-                            node-role.kubernetes.io/master: ""
                           description: By setting this, it's possible to configure
                             where the result server instances are run. These instances
                             will mount a Persistent Volume to store the raw results,
@@ -148,10 +146,6 @@ spec:
                           nullable: true
                           type: string
                         tolerations:
-                          default:
-                          - effect: NoSchedule
-                            key: node-role.kubernetes.io/master
-                            operator: Exists
                           description: Specifies tolerations needed for the result
                             server to run on the nodes. This is useful in case the
                             target set of nodes have custom taints that don't allow
