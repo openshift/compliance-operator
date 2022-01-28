@@ -462,7 +462,7 @@ bundle: check-operator-version operator-sdk ## Generate the bundle and packaging
 	$(GOPATH)/bin/operator-sdk generate bundle -q --overwrite --version "$(OPERATOR_VERSION)"
 	sed -i '/replaces:/d' deploy/olm-catalog/compliance-operator/manifests/compliance-operator.clusterserviceversion.yaml
 	sed -i "s/\(olm.skipRange: '>=.*\)<.*'/\1<$(OPERATOR_VERSION)'/" deploy/olm-catalog/compliance-operator/manifests/compliance-operator.clusterserviceversion.yaml
-	sed -i "s/^appVersion:.*$/appVersion: \"${OPERATOR_VERSION}\"/g" deploy/compliance-operator-chart/Chart.yaml
+	sed -i "s/^appVersion:.*/appVersion: \"${OPERATOR_VERSION}\"/g" deploy/compliance-operator-chart/Chart.yaml
 	$(GOPATH)/bin/operator-sdk bundle validate ./deploy/olm-catalog/compliance-operator/
 
 .PHONY: package-version-to-tag
@@ -486,6 +486,7 @@ git-release: package-version-to-tag changelog
 	sed -i "s/\(.*Version = \"\).*/\1$(TAG)\"/" version/version.go
 	git add "version/version.go"
 	git add "deploy/olm-catalog/compliance-operator/"
+	git add "deploy/compliance-operator-chart/Chart.yaml"
 	git add "CHANGELOG.md"
 	git commit -m "Release v$(TAG)"
 	git tag "v$(TAG)"
