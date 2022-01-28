@@ -9,6 +9,33 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Enhancements
 
+-
+
+### Fixes
+
+-
+
+### Internal Changes
+
+-
+
+### Deprecations
+
+-
+
+### Removals
+
+-
+
+### Security
+
+-
+
+
+## [0.1.48] - 2022-01-28
+
+### Enhancements
+
 - The operator is now aware of other Kubernetes distributions outside of
   OpenShift to accommodate running the operator on other platforms. This allows
   `ScanSettings` to have different behaviors depending on the platform.
