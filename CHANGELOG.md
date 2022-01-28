@@ -9,27 +9,47 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Enhancements
 
--
+- The operator is now aware of other Kubernetes distributions outside of
+  OpenShift to accommodate running the operator on other platforms. This allows
+  `ScanSettings` to have different behaviors depending on the platform.
+  `ScanSettings` will automatically schedule to `worker` and `master` nodes
+  when running in an OpenShift cluster, maintaining the previous default
+  behavior for OpenShift clusters. When running on AWS EKS, `ScanSettings` will
+  schedule to all available nodes, by default. The operator will also inherit
+  the `nodeSelector` and `tolerations` from the operator pod when running on
+  EKS.
+- Improved support for running the operator in
+  [Hypershift](https://github.com/openshift/hypershift) environments by
+  allowing the rules to load values at runtime. For example, loading in the
+  `ConfigMap` based on different namespaces for each cluster, which affects the
+  API resource path of the `ConfigMap`. Previous versions of the operator
+  included hard-coded API paths, where now they can be loaded in from the
+  compliance content, better enabling operator usage in Hypershift deployments.
+- You can now install the operator using a Helm chart. This includes support
+  for deploying on OpenShift and AWS EKS. Please see the
+  [documentation](https://github.com/openshift/compliance-operator/#deploying-with-helm)
+  on how to deploy the operator using Helm.
+- Introduced a process and guidelines for writing release notes
+  ([documentation](https://github.com/openshift/compliance-operator/#writing-release-notes))
 
 ### Fixes
 
--
-
-### Internal Changes
-
--
-
-### Deprecations
-
--
-
-### Removals
-
--
-
-### Security
-
--
+- Improved rule parsing to check for extended OVAL definitions ([bug](https://bugzilla.redhat.com/show_bug.cgi?id=2040282))
+  - Previous versions of the operator wouldn't process extended OVAL
+    defintions, allowing some rules to have `CheckType=None`. This version
+    includes support for processing extended defintions so `CheckType` is
+    properly set.
+- Properly detect `MachineConfig` ownership for `KubeletConfig` objects
+  ([bug](https://bugzilla.redhat.com/show_bug.cgi?id=2040401))
+  - Previous versions of the operator assumed that all `MachineConfig` objects
+    were created by a `KubeletConfig`. In instances where a `MachineConfig` was
+    not generated using a `KubeletConfig`, the operator would stall during
+    remediation attempting to find the `MachineConfig` owner. The operator now
+    gracefully handles `MachineConfig` ownership checks during the remediation
+    process.
+- Updated documentation `TailoredProfile` example to be consistent with
+  `TailoredProfile` CRD
+- Minor grammatical documentation updates.
 
 ## [0.1.47] - 2021-12-15
 ### Changes
