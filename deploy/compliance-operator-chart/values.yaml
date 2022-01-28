@@ -1,0 +1,51 @@
+# Default values for compliance-operator-chart.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# By default, the compliance-operator will install into a dedicated namespace.
+# You can override this behavior by supplying a different namespace (e.g.,
+# namespace: compliance)
+namespace: openshift-compliance
+
+# The default platform for the compliance-operator. Available platforms are
+# 'openshift', 'eks', 'generic', and 'unknown'.
+platform: openshift
+
+# By default, the compliance-operator will deploy to nodes tagged with the
+# master kubernetes role, which is present in OpenShift deployments. You may
+# need to omit this option to run the compliance-operator on other platforms,
+# like EKS, where nodes do not have that role by default (e.g., nodeSelector:
+# null)
+nodeSelector:
+  node-role.kubernetes.io/master: ""
+
+# By default, only schedule to nodes labeled with the master kubernetes role,
+# which is present in OpenShift deployments. You may need to omit this option
+# to run the compliance-operator on other platforms, like EKS, where nodes are
+# not tainted with the master role by default (e.g., tolerations: null)
+tolerations:
+  - key: "node-role.kubernetes.io/master"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+serviceAccounts:
+  create: true
+  accountNames:
+    - compliance-operator
+    - resultscollector
+    - remediation-aggregator
+    - rerunner
+    - api-resource-collector
+    - profileparser
+    - resultserver
+
+scanSettingBindings:
+  # By default, don't bind a profile to a scan setting and run a scan. By
+  # setting `scanSettingBindings.create: true`, Helm will deploy a
+  # scanSettingBinding and initiate a scan. The binding provided here is simply
+  # an example of how you can use Helm to perform a scan.
+  create: false
+  Bindings:
+    - bindingName: nist-moderate
+      profileName: rhcos4-moderate
+      scanSettingName: default
