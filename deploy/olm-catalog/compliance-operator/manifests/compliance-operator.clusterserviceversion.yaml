@@ -188,15 +188,83 @@ spec:
       kind: ComplianceScan
       name: compliancescans.compliance.openshift.io
       version: v1alpha1
+      statusDescriptors:
+      - path: phase
+        displayName: Scan Phase
+        description: Is the phase where the scan is at. Normally, one must wait for the scan to reach the phase DONE.
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: result
+        displayName: Scan Result
+        description: |
+          Once the scan reaches the phase DONE,
+          this will contain the result of the scan. Where COMPLIANT means
+          that the scan succeeded; NON-COMPLIANT means that there were rule
+          violations; and ERROR means that the scan couldn't complete due
+          to an issue.
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: errorMessage
+        displayName: Error Message
+        description: If there are issues on the scan, this will be filled up with an error
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: warnings
+        displayName: Warnings
+        description: If there are warnings on the scan, this will be filled up with warning messages.
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
     - description: ComplianceSuite represents a set of scans that will be applied
         to the cluster. These should help deployers achieve a certain compliance target.
       kind: ComplianceSuite
       name: compliancesuites.compliance.openshift.io
       version: v1alpha1
+      statusDescriptors:
+      - path: phase
+        displayName: ComplianceSuites Scan Phase
+        description: Is the phase where the scan is at. Normally, one must wait for the scan to reach the phase DONE.
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: result
+        displayName: ComplianceSuites Scan Result
+        description: |
+          Once the scan reaches the phase DONE, this will
+          contain the result of the scan. Where COMPLIANT means that
+          the scan succeeded; NON-COMPLIANT means that there were rule
+          violations; and ERROR means that the scan couldn't complete
+          due to an issue.
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: errorMessage
+        displayName: Error Message
+        description: If there are issues on the scan, this will be filled up with an error.
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: warnings
+        displayName: Scan Warnings
+        description: If there are warnings on the scan, this will be filled up with warning messages.
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
     - description: ProfileBundle is the Schema for the profilebundles API
       kind: ProfileBundle
       name: profilebundles.compliance.openshift.io
       version: v1alpha1
+      statusDescriptors:
+      - path: dataStreamStatus
+        displayName: Datastream Status
+        description: Presents the current status for the datastream for this bundle.
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: errorMessage
+        displayName: Error Message
+        description: If there are issues on the scan, this will be filled up with an error.
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: conditions
+        displayName: Conditions
+        description: Defines the conditions for the ProfileBundle. Valid conditions are Ready, which indicates if the ProfileBundle is Ready parsing or not.
+        x-descriptors:
+        - 'urn:alm:descriptor:io.kubernetes.conditions'
     - description: Profile is the Schema for the profiles API
       kind: Profile
       name: profiles.compliance.openshift.io
@@ -209,6 +277,12 @@ spec:
       kind: ScanSettingBinding
       name: scansettingbindings.compliance.openshift.io
       version: v1alpha1
+      statusDescriptors:
+      - path: conditions
+        displayName: Conditions
+        description: Defines the conditions for the ScanSettingBinding.
+        x-descriptors:
+        - 'urn:alm:descriptor:io.kubernetes.conditions'
     - description: ScanSetting is the Schema for the scansettings API
       kind: ScanSetting
       name: scansettings.compliance.openshift.io
@@ -217,6 +291,22 @@ spec:
       kind: TailoredProfile
       name: tailoredprofiles.compliance.openshift.io
       version: v1alpha1
+      statusDescriptors:
+      - path: id
+        displayName: ID
+        description: The XCCDF ID of the tailored profile
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: state
+        displayName: State
+        description: The current state of the tailored profile
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: errorMessage
+        displayName: Error Message
+        description: If there are issues on the tailored profile, this will be filled up with an error.
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
     - description: Variable describes a tunable in the XCCDF profile
       kind: Variable
       name: variables.compliance.openshift.io
