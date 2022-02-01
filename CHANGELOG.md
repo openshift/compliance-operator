@@ -25,7 +25,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removals
 
--
+- The Deployment resource in `deploy/eks.yaml` has been removed in favor of a
+  generic resource in the compliance-operator-chart Helm templates. The
+  `deploy/eks.yaml` file conflicted with various development and build tools
+  that assumed a single Deployment resource in the `deploy/` directory. Please
+  use the Helm chart for
+  [deploying](https://github.com/openshift/compliance-operator#deploying-with-helm)
+  the operator on AWS EKS.
 
 ### Security
 
