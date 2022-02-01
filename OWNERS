@@ -1,15 +1,15 @@
 component: "Compliance Operator"
 approvers:
   - jhrozek
-  - JAORMX
   - mrogers950
   - pdhamdhe
   - xiaojiey
   - Vincent056
+  - rhmdnd
 reviewers:
   - jhrozek
-  - JAORMX
   - mrogers950
   - pdhamdhe
   - xiaojiey
   - Vincent056
+  - rhmdnd
