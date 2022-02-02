@@ -488,8 +488,6 @@ git-release: package-version-to-tag changelog
 	git add "deploy/olm-catalog/compliance-operator/"
 	git add "deploy/compliance-operator-chart/Chart.yaml"
 	git add "CHANGELOG.md"
-	git commit -m "Release v$(TAG)"
-	git tag "v$(TAG)"
 
 .PHONY: fetch-git-tags
 fetch-git-tags:
@@ -497,15 +495,17 @@ fetch-git-tags:
 	git fetch -t
 
 .PHONY: prepare-release
-prepare-release: bundle
+prepare-release: release-tag-image bundle git-release
 
 .PHONY: push-release
 push-release: ## Do an official release (Requires permissions)
+	git commit -m "Release v$(TAG)"
+	git tag "v$(TAG)"
 	git push origin "v$(TAG)"
 	git push origin "release-v$(TAG)"
 
 .PHONY: release-images
-release-images:release-tag-image push push-index undo-deploy-tag-image
+release-images: push push-index undo-deploy-tag-image
 	# This will ensure that we also push to the latest tag
 	$(MAKE) push TAG=latest
 
