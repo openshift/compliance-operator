@@ -153,7 +153,7 @@ func (c *scapContentDataStream) FigureResources(profile string) error {
 		},
 	}
 	effectiveProfile := profile
-	var valuesList map[string]string
+	var valuesList map[string]map[string]string
 
 	if c.tailoring != nil {
 		var selected []utils.ResourcePath
@@ -185,7 +185,7 @@ func (c *scapContentDataStream) FigureResources(profile string) error {
 //
 //  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
 //  </code></warning>
-func getPathFromWarningXML(in *xmlquery.Node, valueList map[string]string) []utils.ResourcePath {
+func getPathFromWarningXML(in *xmlquery.Node, valueList map[string]map[string]string) []utils.ResourcePath {
 	DBG("Parsing warning %s", in.OutputXML(false))
 	path, err := utils.GetPathFromWarningXML(in, valueList)
 	if err != nil {
@@ -197,12 +197,15 @@ func getPathFromWarningXML(in *xmlquery.Node, valueList map[string]string) []uti
 
 // Collect the resource paths for objects that this scan needs to obtain.
 // The profile will have a series of "selected" checks that we grab all of the path info from.
-func getResourcePaths(profileDefs *xmlquery.Node, ruleDefs *xmlquery.Node, profile string, overrideValueList map[string]string) ([]utils.ResourcePath, map[string]string) {
+func getResourcePaths(profileDefs *xmlquery.Node, ruleDefs *xmlquery.Node, profile string, overrideValueList map[string]map[string]string) ([]utils.ResourcePath, map[string]map[string]string) {
 	out := []utils.ResourcePath{}
 	selectedChecks := []string{}
 
 	// Before staring process, collect all of the variables in definitions.
-	valuesList := make(map[string]string)
+	valuesList := make(map[string]map[string]string)
+	valuesList["default"] = make(map[string]string)
+	valuesList["custom"] = make(map[string]string)
+
 	defs := [...]*xmlquery.Node{ruleDefs, profileDefs}
 	for _, def := range defs {
 		allValues := xmlquery.Find(def, "//xccdf-1.2:Value")
@@ -216,7 +219,8 @@ func getResourcePaths(profileDefs *xmlquery.Node, ruleDefs *xmlquery.Node, profi
 				if val.SelectAttr("selector") == "" {
 					// It is not an enum choice, but a default value instead
 					if strings.HasPrefix(variable.SelectAttr("id"), valuePrefix) {
-						valuesList[strings.TrimPrefix(variable.SelectAttr("id"), valuePrefix)] = val.OutputXML(false)
+						valuesList["default"][strings.TrimPrefix(variable.SelectAttr("id"), valuePrefix)] = val.OutputXML(false)
+						valuesList["custom"][strings.TrimPrefix(variable.SelectAttr("id"), valuePrefix)] = val.OutputXML(false)
 					}
 				}
 			}
@@ -224,16 +228,16 @@ func getResourcePaths(profileDefs *xmlquery.Node, ruleDefs *xmlquery.Node, profi
 		allSetValues := xmlquery.Find(def, "//xccdf-1.2:set-value")
 		for _, variable := range allSetValues {
 			if strings.HasPrefix(variable.SelectAttr("idref"), valuePrefix) {
-				valuesList[strings.TrimPrefix(variable.SelectAttr("idref"), valuePrefix)] = variable.OutputXML(false)
+				valuesList["custom"][strings.TrimPrefix(variable.SelectAttr("idref"), valuePrefix)] = variable.OutputXML(false)
 			}
 		}
 	}
 
 	// override variables which is defined in tailored profile
 	if overrideValueList != nil {
-		for k, v := range overrideValueList {
-			if _, exists := valuesList[k]; exists {
-				valuesList[k] = v
+		for k, v := range overrideValueList["custom"] {
+			if _, exists := valuesList["custom"][k]; exists {
+				valuesList["custom"][k] = v
 			}
 		}
 	}

@@ -81,7 +81,7 @@ type ResourcePath struct {
 //
 //  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
 //  </code></warning>
-func GetPathFromWarningXML(in *xmlquery.Node, valuesList map[string]string) ([]ResourcePath, error) {
+func GetPathFromWarningXML(in *xmlquery.Node, valuesList map[string]map[string]string) ([]ResourcePath, error) {
 	apiPaths := []ResourcePath{}
 
 	codeNodes := in.SelectElements("//html:code")
@@ -89,15 +89,22 @@ func GetPathFromWarningXML(in *xmlquery.Node, valuesList map[string]string) ([]R
 
 	for _, codeNode := range codeNodes {
 		if strings.Contains(codeNode.SelectAttr("class"), endPointTag) {
-			path, _, err := RenderValues(XmlNodeAsMarkdown(codeNode), valuesList)
-			if len(path) == 0 {
+
+			// create ObjPath
+			objPath, _, err := RenderValues(XmlNodeAsMarkdown(codeNode), valuesList["custom"])
+			if len(objPath) == 0 {
 				continue
 			}
 			if err != nil {
 				errMsgs = append(errMsgs, err.Error())
 				continue
 			}
-			dumpPath := path
+			// create DumpPath
+			dumpPath, _, err := RenderValues(XmlNodeAsMarkdown(codeNode), valuesList["default"])
+			if err != nil {
+				errMsgs = append(errMsgs, err.Error())
+				continue
+			}
 			var filter string
 			pathID := codeNode.SelectAttr("id")
 			if pathID != "" {
@@ -108,7 +115,7 @@ func GetPathFromWarningXML(in *xmlquery.Node, valuesList map[string]string) ([]R
 					dumpPath = dumpNode.InnerText()
 				}
 			}
-			apiPaths = append(apiPaths, ResourcePath{ObjPath: path, DumpPath: dumpPath, Filter: filter})
+			apiPaths = append(apiPaths, ResourcePath{ObjPath: objPath, DumpPath: dumpPath, Filter: filter})
 		}
 	}
 	if len(errMsgs) > 0 {
