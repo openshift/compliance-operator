@@ -535,7 +535,7 @@ running `make`, which should be a semantic version formatted string (e.g.,
 
 The first phase of the release process is preparing the release locally. You
 can do this by running the `make prepare-release` target. All changes are
-committed locally. This is intentional so that you have the opportunity to
+staged locally. This is intentional so that you have the opportunity to
 review the changes before proposing the release in the next step.
 
 #### Proposing the Release
