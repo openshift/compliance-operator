@@ -523,3 +523,34 @@ The following is an example release note for a feature with a security note.
     deployment, its infrastructure, or applications. Make sure you send raw
     results to trusted nodes.
 ```
+
+### Proposing Releases
+
+The release process is separated into three phases, with dedicated `make`
+targets. All targets require that you supply the `OPERATOR_VERSION` prior to
+running `make`, which should be a semantic version formatted string (e.g.,
+`OPERATOR_VERSION=0.1.49`).
+
+#### Preparing the Release
+
+The first phase of the release process is preparing the release locally. You
+can do this by running the `make prepare-release` target. All changes are
+committed locally. This is intentional so that you have the opportunity to
+review the changes before proposing the release in the next step.
+
+#### Proposing the Release
+
+The second phase of the release is to push the release to a dedicated branch
+against the origin repository. You can perform this step using the `make
+push-release` target.
+
+Please note, this step makes changes to the upstream repository, so it is
+imperative that you review the changes you're committing prior to this step.
+This steps also requires that you have necessary permissions on the repository.
+
+#### Releasing Images
+
+The third and final step of the release is to build new images and push them to
+an offical image registry. You can build new images and push using `make
+release-images`. Note that this operation also requires you have proper
+permissions on the remote registry.
