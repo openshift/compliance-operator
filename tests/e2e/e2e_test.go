@@ -2454,35 +2454,42 @@ func TestE2E(t *testing.T) {
 				}
 
 				var expectedInconsistentSource string
-				var shouldHaveMostCommonState bool
 
 				if len(workerNodes) >= 3 {
 					// The annotations should list the node that had a different result
 					expectedInconsistentSource = workerNodes[0].Name + ":" + string(compv1alpha1.CheckResultPass)
+					inconsistentSources := rootLoginCheck.Annotations[compv1alpha1.ComplianceCheckResultInconsistentSourceAnnotation]
+					if inconsistentSources != expectedInconsistentSource {
+						return fmt.Errorf("expected that node %s would report %s, instead it reports %s", workerNodes[0].Name, expectedInconsistentSource, inconsistentSources)
+					}
+
 					// Since all the other nodes consistently fail, there should also be a common result
-					shouldHaveMostCommonState = true
-				} else if len(workerNodes) == 2 {
-					// example: ip-10-0-184-135.us-west-1.compute.internal:PASS,ip-10-0-226-48.us-west-1.compute.internal:FAIL
-					expectedInconsistentSource = workerNodes[0].Name + ":" + string(compv1alpha1.CheckResultPass) + "," + workerNodes[1].Name + string(compv1alpha1.CheckResultFail)
-					// If there are only two worker nodes, we won't be able to find the common status, so both
-					// nodes would be listed as inconsistent -- we can't figure out which of the two results is
-					// consistent and which is not
-					shouldHaveMostCommonState = false
-				} else {
-					E2ELog(t, "Only one worker node? Shortcutting the test")
-					return nil
-				}
-
-				inconsistentSources := rootLoginCheck.Annotations[compv1alpha1.ComplianceCheckResultInconsistentSourceAnnotation]
-				if inconsistentSources != expectedInconsistentSource {
-					return fmt.Errorf("expected that node %s would report %s, instead it reports %s", workerNodes[0].Name, expectedInconsistentSource, inconsistentSources)
-				}
-
-				if shouldHaveMostCommonState {
 					mostCommonState := rootLoginCheck.Annotations[compv1alpha1.ComplianceCheckResultMostCommonAnnotation]
 					if mostCommonState != string(compv1alpha1.CheckResultFail) {
 						return fmt.Errorf("expected that there would be a common FAIL state, instead got %s", mostCommonState)
 					}
+				} else if len(workerNodes) == 2 {
+					// example: ip-10-0-184-135.us-west-1.compute.internal:PASS,ip-10-0-226-48.us-west-1.compute.internal:FAIL
+					var expectedInconsistentSource [2]string
+					expectedInconsistentSource[0] = workerNodes[0].Name + ":" + string(compv1alpha1.CheckResultPass) + "," + workerNodes[1].Name + string(compv1alpha1.CheckResultFail)
+					expectedInconsistentSource[1] = workerNodes[1].Name + ":" + string(compv1alpha1.CheckResultFail) + "," + workerNodes[0].Name + string(compv1alpha1.CheckResultPass)
+
+					inconsistentSources := rootLoginCheck.Annotations[compv1alpha1.ComplianceCheckResultInconsistentSourceAnnotation]
+					if inconsistentSources != expectedInconsistentSource[0] && inconsistentSources != expectedInconsistentSource[1] {
+						return fmt.Errorf(
+							"expected that node %s would report %s or %s, instead it reports %s",
+							workerNodes[0].Name,
+							expectedInconsistentSource[0], expectedInconsistentSource[1],
+							inconsistentSources)
+					}
+
+					// If there are only two worker nodes, we won't be able to find the common status, so both
+					// nodes would be listed as inconsistent -- we can't figure out which of the two results is
+					// consistent and which is not. Therefore this branch skips the check for
+					// compv1alpha1.ComplianceCheckResultMostCommonAnnotation
+				} else {
+					E2ELog(t, "Only one worker node? Shortcutting the test")
+					return nil
 				}
 
 				// Since all states were either pass or fail, we still create the remediation
