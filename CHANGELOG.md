@@ -20,6 +20,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Implemented a multi-step release process to prevent unintentional changes
   from making their way into the release
   ([bug](https://github.com/openshift/compliance-operator/issues/783)).
+- The TestInconsistentResult e2e test was relying on a certain order of results.
+  This bug was fixed and the test now passes with any order of results.
 
 ### Deprecations
 
