@@ -72,10 +72,19 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// Watch for changes to secordary resource ScanSetting. Since Setting does not link directly to a Binding,
+	// Watch for changes to secondary resource ScanSetting. Since Setting does not link directly to a Binding,
 	// but the other way around, we use a mapper to enqueue requests for Binding(s) used by a Setting
 	err = c.Watch(&source.Kind{Type: &compliancev1alpha1.ScanSetting{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: &scanSettingMapper{mgr.GetClient()},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource TailoredProfile. Since TailoredProfile does not link directly to a Binding,
+	// but the other way around, we use a mapper to enqueue requests for TailoredProfiles(s) used by a Setting
+	err = c.Watch(&source.Kind{Type: &compliancev1alpha1.TailoredProfile{}}, &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: &tailoredProfileMapper{mgr.GetClient()},
 	})
 	if err != nil {
 		return err

@@ -16,6 +16,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - When a TailoredProfile transitions from Ready to Error, the corresponding
   ConfigMap is removed. This prevents the ConfigMap from being reused with
   obsolete data while the parent object is in fact marked with an error
+- The ScanSettingBinding controller now reconciles TailoredProfile instances
+  related to a ScanSettingBinding. This ensures that the controller can
+  proceed with generating scans in case the binding used to point to 
+  TailoredProfile that had been marked with an error, but was subsequently
+  fixed ([upstream issue 791](https://github.com/openshift/compliance-operator/issues/791))
 
 ### Internal Changes
 
