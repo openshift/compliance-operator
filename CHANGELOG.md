@@ -13,7 +13,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixes
 
--
+- When a TailoredProfile transitions from Ready to Error, the corresponding
+  ConfigMap is removed. This prevents the ConfigMap from being reused with
+  obsolete data while the parent object is in fact marked with an error
 
 ### Internal Changes
 
