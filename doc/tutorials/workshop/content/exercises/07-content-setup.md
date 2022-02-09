@@ -103,7 +103,7 @@ host$ scp $KUBECONFIG user@compliance:
 This should allow us to even publish the content to our cluster:
 ```
 user@compliance$ cd content
-user@compliance$ ./utils/build_ds_container.sh
+user@compliance$ ./utils/build_ds_container.py
 ```
 This command might take a fair amount of time, but eventually would finish with:
 ```
