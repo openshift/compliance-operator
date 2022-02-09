@@ -19,7 +19,7 @@ In the [ComplianceAsCode/content](https://github.com/ComplianceAsCode/content)
 project there already is a utility that will help you create such images,
 upload them automatically to your own OpenShift cluster, and even automatically
 create `ProfileBundles` from these images. The aforementioned utility is:
-[utils/build_ds_container.sh](https://github.com/ComplianceAsCode/content/blob/master/utils/build_ds_container.sh)
+[utils/build_ds_container.py](https://github.com/ComplianceAsCode/content/blob/master/utils/build_ds_container.py)
 
 Before running the utility, make sure that you're able to build content at all.
 From the root of the **content** repo, run:
@@ -31,7 +31,7 @@ $ ./build_product ocp4 rhcos4
 If the command is successful, feel free to simply run the utility:
 
 ```
-$ ./utils/build_ds_container.sh
+$ ./utils/build_ds_container.py
 ```
 
 This will build the content and upload it to an `ImageStream` in your
@@ -41,7 +41,7 @@ To ask the utility to create `ProfileBundles` from the built content,
 you can call the utility as follows:
 
 ```
-$ ./utils/build_ds_container.sh -p
+$ ./utils/build_ds_container.py -p
 ```
 
 The data streams take some time to parse, you can see as the profiles get
@@ -67,7 +67,7 @@ upstream-rhcos4-moderate   0s
 
 You'll see them appear as time passes.
 
-With that in place, you can now modify, build the content using the `./utils/build_ds_container.sh`
+With that in place, you can now modify, build the content using the `./utils/build_ds_container.py`
 script, and changes will be captured by the `ProfileBundle` automatically!.
 
 ***
