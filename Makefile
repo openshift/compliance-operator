@@ -18,6 +18,13 @@ else ifeq ($(OS_NAME), Darwin)
     SED=sed -i ''
 endif
 
+ARCH?=$(shell uname -m)
+ifeq ($(ARCH), x86_64)
+    OPM_ARCH?=amd64
+else
+    OPM_ARCH?=$(ARCH)
+endif
+
 ifeq ($(RUNTIME), podman)
     LOGIN_PUSH_OPTS="--tls-verify=false"
 else ifeq ($(RUNTIME), docker)
@@ -75,14 +82,14 @@ export OPERATOR_NAMESPACE?=openshift-compliance
 # ======================
 SDK_VERSION?=v0.18.2
 ifeq ($(OS_NAME), Linux)
-    OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-x86_64-linux-gnu
+    OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-$(ARCH)-linux-gnu
 else ifeq ($(OS_NAME), Darwin)
     OPERATOR_SDK_URL=https://github.com/operator-framework/operator-sdk/releases/download/$(SDK_VERSION)/operator-sdk-$(SDK_VERSION)-x86_64-apple-darwin
 endif
 
-OPM_VERSION=v1.15.2
+OPM_VERSION=v1.20.0
 ifeq ($(OS_NAME), Linux)
-    OPM_URL=https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/linux-amd64-opm
+    OPM_URL=https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/linux-$(OPM_ARCH)-opm
 else ifeq ($(OS_NAME), Darwin)
     OPM_URL=https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/darwin-amd64-opm
 endif
