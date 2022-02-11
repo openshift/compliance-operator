@@ -114,7 +114,7 @@ func (r *ReconcileTailoredProfile) Reconcile(request reconcile.Request) (reconci
 		p, pb, pbgetErr = r.getProfileInfoFromExtends(instance)
 		if pbgetErr != nil && !common.IsRetriable(pbgetErr) {
 			// the Profile or ProfileBundle objects didn't exist. Surface the error.
-			err = r.updateTailoredProfileStatusError(instance, pbgetErr)
+			err = r.handleTailoredProfileStatusError(instance, pbgetErr)
 			return reconcile.Result{}, err
 		} else if pbgetErr != nil {
 			return reconcile.Result{}, pbgetErr
@@ -132,7 +132,7 @@ func (r *ReconcileTailoredProfile) Reconcile(request reconcile.Request) (reconci
 		pb, pbgetErr = r.getProfileBundleFromRulesOrVars(instance)
 		if pbgetErr != nil && !common.IsRetriable(pbgetErr) {
 			// the Profile or ProfileBundle objects didn't exist. Surface the error.
-			err = r.updateTailoredProfileStatusError(instance, pbgetErr)
+			err = r.handleTailoredProfileStatusError(instance, pbgetErr)
 			return reconcile.Result{}, err
 		} else if pbgetErr != nil {
 			return reconcile.Result{}, pbgetErr
@@ -166,7 +166,7 @@ func (r *ReconcileTailoredProfile) Reconcile(request reconcile.Request) (reconci
 	rules, ruleErr := r.getRulesFromSelections(instance, pb)
 	if ruleErr != nil && !common.IsRetriable(ruleErr) {
 		// Surface the error.
-		suerr := r.updateTailoredProfileStatusError(instance, ruleErr)
+		suerr := r.handleTailoredProfileStatusError(instance, ruleErr)
 		return reconcile.Result{}, suerr
 	} else if ruleErr != nil {
 		return reconcile.Result{}, ruleErr
@@ -174,14 +174,14 @@ func (r *ReconcileTailoredProfile) Reconcile(request reconcile.Request) (reconci
 
 	if ruleValidErr := assertValidRuleTypes(rules); ruleValidErr != nil {
 		// Surface the error.
-		suerr := r.updateTailoredProfileStatusError(instance, ruleValidErr)
+		suerr := r.handleTailoredProfileStatusError(instance, ruleValidErr)
 		return reconcile.Result{}, suerr
 	}
 
 	variables, varErr := r.getVariablesFromSelections(instance, pb)
 	if varErr != nil && !common.IsRetriable(varErr) {
 		// Surface the error.
-		suerr := r.updateTailoredProfileStatusError(instance, varErr)
+		suerr := r.handleTailoredProfileStatusError(instance, varErr)
 		return reconcile.Result{}, suerr
 	} else if varErr != nil {
 		return reconcile.Result{}, varErr
@@ -195,7 +195,7 @@ func (r *ReconcileTailoredProfile) Reconcile(request reconcile.Request) (reconci
 		return reconcile.Result{}, err
 	}
 
-	return r.ensureOutputObject(instance, tpcm, pb, reqLogger)
+	return r.ensureOutputObject(instance, tpcm, reqLogger)
 }
 
 // getProfileInfoFromExtends gets the Profile and ProfileBundle where the rules come from
@@ -345,6 +345,14 @@ func (r *ReconcileTailoredProfile) updateTailoredProfileStatusReady(tp *cmpv1alp
 	return r.client.Status().Update(context.TODO(), tpCopy)
 }
 
+func (r *ReconcileTailoredProfile) handleTailoredProfileStatusError(tp *cmpv1alpha1.TailoredProfile, err error) error {
+	if delErr := r.deleteOutputObject(tp); delErr != nil {
+		return delErr
+	}
+
+	return r.updateTailoredProfileStatusError(tp, err)
+}
+
 func (r *ReconcileTailoredProfile) updateTailoredProfileStatusError(tp *cmpv1alpha1.TailoredProfile, err error) error {
 	// Never update the original (update the copy)
 	tpCopy := tp.DeepCopy()
@@ -366,7 +374,26 @@ func (r *ReconcileTailoredProfile) getProfileBundleFrom(objtype string, o metav1
 	return &pb, err
 }
 
-func (r *ReconcileTailoredProfile) ensureOutputObject(tp *cmpv1alpha1.TailoredProfile, tpcm *corev1.ConfigMap, pb *cmpv1alpha1.ProfileBundle, logger logr.Logger) (reconcile.Result, error) {
+func (r *ReconcileTailoredProfile) deleteOutputObject(tp *cmpv1alpha1.TailoredProfile) error {
+	// make sure the configMap is removed so that we don't keep using the old one after
+	// breaking the TP
+	tpcm := newTailoredProfileCM(tp)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: tpcm.Name, Namespace: tpcm.Namespace}, tpcm)
+	if err != nil && kerrors.IsNotFound(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	err = r.client.Delete(context.TODO(), tpcm)
+	if err != nil && !kerrors.IsNotFound(err) {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ReconcileTailoredProfile) ensureOutputObject(tp *cmpv1alpha1.TailoredProfile, tpcm *corev1.ConfigMap, logger logr.Logger) (reconcile.Result, error) {
 	// Set TailoredProfile instance as the owner and controller
 	if err := controllerutil.SetControllerReference(tp, tpcm, r.scheme); err != nil {
 		return reconcile.Result{}, err
