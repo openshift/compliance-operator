@@ -13,6 +13,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixes
 
+- Added network resource to the list of resources we always fetch [1] so that network
+  OVN/SDN CPEs will be able to verify if the cluster has an OVN/SDN network type.
+  The CPEs have added here [2]. The SDN rules have been updated [3] to use SDN CPE,
+  so that these rules will show correct results based on cluster network type.
+  ([1](https://github.com/openshift/compliance-operator/pull/785)).
+  ([2](https://github.com/ComplianceAsCode/content/pull/8134)).
+  ([3](https://github.com/ComplianceAsCode/content/pull/8141)).
+  ([bug](https://bugzilla.redhat.com/show_bug.cgi?id=1994609)).
 - When a TailoredProfile transitions from Ready to Error, the corresponding
   ConfigMap is removed. This prevents the ConfigMap from being reused with
   obsolete data while the parent object is in fact marked with an error
