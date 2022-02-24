@@ -366,7 +366,11 @@ The following attributes can be set in the `ScanSetting:
 * **rawResultStorage.tolerations**:  Specifies tolerations needed
   for the result server to run on the nodes. This is useful in
   case the target set of nodes have custom taints that don't allow certain
-	workloads to run. Defaults to allowing scheduling on master nodes.
+  workloads to run. Defaults to allowing scheduling on master nodes.
+* **strictNodeScan**: Defines whether the scan should proceed if we're not able to
+  scan all the nodes or not. `true` means that the operator
+  should be strict and error out. `false` means that we don't
+  need to be strict and we can proceed.
 
 A single `ScanSetting` object can also be reused for multiple scans,
 as it merely defines the settings.
