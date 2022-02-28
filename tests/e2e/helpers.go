@@ -2299,6 +2299,23 @@ func updateImageStreamTag(f *framework.Framework, iSName, ns, imgPath string) er
 	return f.Client.Update(goctx.TODO(), stream)
 }
 
+func getImageStreamUpdatedDigest(f *framework.Framework, iSName string, ns string) (error, string) {
+	stream := &imagev1.ImageStream{}
+	tagItemNum := 0
+	key := types.NamespacedName{Name: iSName, Namespace: ns}
+	for tagItemNum < 2 {
+		if err := f.Client.Get(goctx.TODO(), key, stream); err != nil {
+			return err, ""
+		}
+		tagItemNum = len(stream.Status.Tags[0].Items)
+		time.Sleep(2 * time.Second)
+	}
+
+	// Last tag item is at index 0
+	imgDigest := stream.Status.Tags[0].Items[0].Image
+	return nil, imgDigest
+}
+
 func updateSuiteContentImage(t *testing.T, f *framework.Framework, newImg, suiteName, suiteNs string) error {
 	var lastErr error
 	timeoutErr := wait.Poll(retryInterval, timeout, func() (bool, error) {
