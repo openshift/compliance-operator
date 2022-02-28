@@ -104,7 +104,11 @@ func GetPathFromWarningXML(in *xmlquery.Node, valuesList map[string]string) ([]R
 				filterNode := in.SelectElement(fmt.Sprintf(`//*[@id="filter-%s"]`, pathID))
 				dumpNode := in.SelectElement(fmt.Sprintf(`//*[@id="dump-%s"]`, pathID))
 				if filterNode != nil && dumpNode != nil {
-					filter = filterNode.InnerText()
+					filter, _, err = RenderValues(filterNode.InnerText(), valuesList)
+					if err != nil {
+						errMsgs = append(errMsgs, err.Error())
+						continue
+					}
 					dumpPath = dumpNode.InnerText()
 				}
 			}
