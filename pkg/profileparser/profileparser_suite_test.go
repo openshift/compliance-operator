@@ -21,17 +21,17 @@ var _ = BeforeSuite(func() {
 	client = fake.NewFakeClientWithScheme(cmpScheme)
 
 	pInput = newParserInput("test-profile", testNamespace,
-		"quay.io/jhrozek/ocp4-openscap-content@sha256:a1709f5150b17a9560a5732fe48a89f07bffc72c0832aa8c49ee5504510ae687",
+		fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline"),
 		"../../tests/data/ssg-ocp4-ds-new.xml",
 		client, cmpScheme)
 
 	pInput2 = newParserInput("test-anotherprofile", testNamespace,
-		"quay.io/jhrozek/ocp4-openscap-content@sha256:a1709f5150b17a9560a5732fe48a89f07bffc72c0832aa8c49ee5504510ae687",
+		fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline"),
 		"../../tests/data/ssg-ocp4-ds-new.xml",
 		client, cmpScheme)
 
 	pInputModified = newParserInput("test-profile", testNamespace,
-		"quay.io/jhrozek/ocp4-openscap-content@sha256:7999243c0b005792bd58c6f5e1776ca88cf20adac1519c00ef08b18e77188db7",
+		fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod"),
 		"../../tests/data/ssg-ocp4-ds-new-modified.xml",
 		client, cmpScheme)
 })

@@ -30,11 +30,13 @@ func TestE2E(t *testing.T) {
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				const (
-					baselineImage       = "quay.io/jhrozek/ocp4-openscap-content@sha256:a1709f5150b17a9560a5732fe48a89f07bffc72c0832aa8c49ee5504510ae687"
-					modifiedImage       = "quay.io/jhrozek/ocp4-openscap-content@sha256:7999243c0b005792bd58c6f5e1776ca88cf20adac1519c00ef08b18e77188db7"
 					removedRule         = "chronyd-no-chronyc-network"
 					unlinkedRule        = "chronyd-client-only"
 					moderateProfileName = "moderate"
+				)
+				var (
+					baselineImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
+					modifiedImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
 				)
 
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
@@ -131,14 +133,13 @@ func TestE2E(t *testing.T) {
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				const (
-					baselineImage       = "quay.io/jhrozek/ocp4-openscap-content@sha256:a1709f5150b17a9560a5732fe48a89f07bffc72c0832aa8c49ee5504510ae687"
-					modifiedImageDigest = "sha256:7999243c0b005792bd58c6f5e1776ca88cf20adac1519c00ef08b18e77188db7"
 					removedRule         = "chronyd-no-chronyc-network"
 					unlinkedRule        = "chronyd-client-only"
 					moderateProfileName = "moderate"
 				)
 				var (
-					modifiedImage = fmt.Sprintf("quay.io/jhrozek/ocp4-openscap-content@%s", modifiedImageDigest)
+					baselineImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
+					modifiedImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
 				)
 
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
@@ -197,6 +198,11 @@ func TestE2E(t *testing.T) {
 					return err
 				}
 
+				err, modifiedImageDigest := getImageStreamUpdatedDigest(f, iSName, namespace)
+				if err != nil {
+					return err
+				}
+
 				// Note that when an update happens through an imagestream tag, the operator doesn't get
 				// a notification about it... It all happens on the Kube Deployment's side.
 				// So we don't need to wait for the profile bundle's statuses
@@ -236,14 +242,13 @@ func TestE2E(t *testing.T) {
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				const (
-					baselineImage       = "quay.io/jhrozek/ocp4-openscap-content@sha256:a1709f5150b17a9560a5732fe48a89f07bffc72c0832aa8c49ee5504510ae687"
-					modifiedImageDigest = "sha256:7999243c0b005792bd58c6f5e1776ca88cf20adac1519c00ef08b18e77188db7"
 					removedRule         = "chronyd-no-chronyc-network"
 					unlinkedRule        = "chronyd-client-only"
 					moderateProfileName = "moderate"
 				)
 				var (
-					modifiedImage = fmt.Sprintf("quay.io/jhrozek/ocp4-openscap-content@%s", modifiedImageDigest)
+					baselineImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
+					modifiedImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
 				)
 
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
@@ -300,6 +305,11 @@ func TestE2E(t *testing.T) {
 
 				// Update the reference in the image stream
 				if err := updateImageStreamTag(f, iSName, otherNs, modifiedImage); err != nil {
+					return err
+				}
+
+				err, modifiedImageDigest := getImageStreamUpdatedDigest(f, iSName, otherNs)
+				if err != nil {
 					return err
 				}
 
@@ -403,9 +413,9 @@ func TestE2E(t *testing.T) {
 			Name:       "TestParsingErrorRestartsParserInitContainer",
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
-				const (
-					badImage  = "quay.io/jhrozek/ocp4-errtest-content@sha256:71ebd0af76035dce6c6c9bfe27146e91bfe6ed40d4be56894c4ee66b420d1a3a"
-					goodImage = "quay.io/jhrozek/ocp4-errtest-content@sha256:5e75d3dec71706be7ac18b5d838b9fca130983e1b8482e739ea8ea7e974ce2c1"
+				var (
+					badImage  = fmt.Sprintf("%s:%s", brokenContentImagePath, "from")
+					goodImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "to")
 				)
 
 				pbName := getObjNameFromTest(t)
@@ -704,6 +714,7 @@ func TestE2E(t *testing.T) {
 			Name:       "TestScanWithUnexistentResourceFails",
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				var unexistentImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "unexistent_resource")
 				scanName := getObjNameFromTest(t)
 				testScan := &compv1alpha1.ComplianceScan{
 					ObjectMeta: metav1.ObjectMeta{
@@ -713,7 +724,7 @@ func TestE2E(t *testing.T) {
 					Spec: compv1alpha1.ComplianceScanSpec{
 						Profile:      "xccdf_org.ssgproject.content_profile_test",
 						Content:      unexistentResourceContentFile,
-						ContentImage: brokenContentImagePath,
+						ContentImage: unexistentImage,
 						Rule:         "xccdf_org.ssgproject.content_rule_api_server_unexistent_resource",
 						ScanType:     compv1alpha1.ScanTypePlatform,
 					},
@@ -1888,7 +1899,7 @@ func TestE2E(t *testing.T) {
 							{
 								Name: fmt.Sprintf("%s-workers-scan", suiteName),
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/jhrozek/ocp4-openscap-content:broken_os_detection",
+									ContentImage: fmt.Sprintf("%s:%s", brokenContentImagePath, "broken_os_detection"),
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Content:      "ssg-rhcos4-ds.xml",
 									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
@@ -2549,7 +2560,7 @@ func TestE2E(t *testing.T) {
 						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
 							{
 								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
-									ContentImage: "quay.io/complianceascode/ocp4:latest",
+									ContentImage: contentImagePath,
 									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
 									Rule:         "xccdf_org.ssgproject.content_rule_no_direct_root_logins",
 									Content:      rhcosContentFile,
@@ -2870,9 +2881,9 @@ func TestE2E(t *testing.T) {
 				origSuiteName := "test-update-remediation"
 				workerScanName := fmt.Sprintf("%s-e2e-scan", origSuiteName)
 
-				const (
-					origImage = "quay.io/jhrozek/ocp4-openscap-content:rem_mod_base"
-					modImage  = "quay.io/jhrozek/ocp4-openscap-content:rem_mod_change"
+				var (
+					origImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "rem_mod_base")
+					modImage  = fmt.Sprintf("%s:%s", brokenContentImagePath, "rem_mod_change")
 				)
 
 				origSuite := &compv1alpha1.ComplianceSuite{
@@ -2970,8 +2981,10 @@ func TestE2E(t *testing.T) {
 			Name:       "TestProfileBundleDefaultIsKept",
 			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
-				const otherImage = "quay.io/jhrozek/ocp4-openscap-content@sha256:a1709f5150b17a9560a5732fe48a89f07bffc72c0832aa8c49ee5504510ae687"
-				var bctx = goctx.Background()
+				var (
+					otherImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
+					bctx       = goctx.Background()
+				)
 
 				ocpPb, err := getReadyProfileBundle(t, f, "ocp4", namespace)
 				if err != nil {
@@ -3048,7 +3061,7 @@ func TestE2E(t *testing.T) {
 			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 
-				const baselineImage = "quay.io/wenshen/co_content@sha256:a299bd8c5e348fdc72208c0781509ccb94d4d326001156d03191b793be9bc2dc"
+				var baselineImage  = fmt.Sprintf("%s:%s", brokenContentImagePath, "variabletemplate")
 				const requiredRule = "audit-profile-set"
 				pbName := getObjNameFromTest(t)
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
@@ -3197,7 +3210,7 @@ func TestE2E(t *testing.T) {
 			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 
-				const baselineImage = "quay.io/wenshen/co_content@sha256:2c16e3d4732bdb2e87ef2833d2f1368295d96f134df805b34710cfeb62d1d028"
+				var baselineImage  = fmt.Sprintf("%s:%s", brokenContentImagePath, "kubeletconfig")
 				const requiredRule = "kubelet-eviction-thresholds-set-hard-imagefs-available"
 				pbName := getObjNameFromTest(t)
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
