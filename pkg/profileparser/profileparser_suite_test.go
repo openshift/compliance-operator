@@ -2,6 +2,8 @@ package profileparser
 
 import (
 	"testing"
+	"os"
+	"fmt"
 
 	compapis "github.com/openshift/compliance-operator/pkg/apis"
 	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -13,12 +15,20 @@ import (
 )
 
 var _ = BeforeSuite(func() {
+	var brokenContentImagePath string
+
 	objs := []k8sruntime.Object{}
 	objs = append(objs, &cmpv1alpha1.ProfileBundle{}, &cmpv1alpha1.Profile{}, &cmpv1alpha1.ProfileList{})
 
 	cmpScheme := k8sruntime.NewScheme()
 	_ = compapis.AddToScheme(cmpScheme)
 	client = fake.NewFakeClientWithScheme(cmpScheme)
+
+	brokenContentImagePath = os.Getenv("BROKEN_CONTENT_IMAGE")
+
+	if brokenContentImagePath == "" {
+		brokenContentImagePath = "quay.io/compliance-operator/test-broken-content"
+	}
 
 	pInput = newParserInput("test-profile", testNamespace,
 		fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline"),
