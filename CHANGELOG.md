@@ -29,6 +29,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   proceed with generating scans in case the binding used to point to 
   TailoredProfile that had been marked with an error, but was subsequently
   fixed ([upstream issue 791](https://github.com/openshift/compliance-operator/issues/791))
+- Node scans are only scheduled on nodes running Linux. This allows running
+  scans on cluster with a mix of Linux and Windows nodes. ([RHBZ #2059611](https://bugzilla.redhat.com/show_bug.cgi?id=2059611))
 
 ### Internal Changes
 
