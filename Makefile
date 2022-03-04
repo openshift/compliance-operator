@@ -1,5 +1,4 @@
 # Operator variables
-DEFAULT_IMAGE_OPENSCAP_PATH=quay.io/compliance-operator/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)
 # ==================
 export APP_NAME=compliance-operator
 RELATED_IMAGE_OPENSCAP_NAME=openscap-ocp
@@ -308,13 +307,13 @@ test-benchmark: ## Run the benchmark tests -- Note that this can only be ran for
 e2e: namespace tear-down operator-sdk image-to-cluster openshift-user deploy-crds ## Run the end-to-end tests
 	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
 	@echo "Replacing workload references in deploy/operator.yaml"
-	@$(SED) 's%$(DEFAULT_IMAGE_OPENSCAP_PATH)%$(RELATED_IMAGE_OPENSCAP_PATH):$(RELATED_IMAGE_OPENSCAP_TAG)%' deploy/operator.yaml
+	@$(SED) 's%$(DEFAULT_IMAGE_OPENSCAP_PATH)%$(RELATED_IMAGE_OPENSCAP_PATH)%' deploy/operator.yaml
 	@$(SED) 's%$(DEFAULT_IMAGE_OPERATOR_PATH)%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	@$(SED) 's%$(DEFAULT_CONTENT_IMAGE_PATH)%$(E2E_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 	@echo "Running e2e tests"
 	unset GOFLAGS && BROKEN_CONTENT_IMAGE=$(E2E_BROKEN_CONTENT_IMAGE_PATH) CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --skip-cleanup-error --image "$(RELATED_IMAGE_OPERATOR_PATH)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 	@echo "Restoring image references in deploy/operator.yaml"
-	@$(SED) 's%$(RELATED_IMAGE_OPENSCAP_PATH):$(RELATED_IMAGE_OPENSCAP_TAG)%$(DEFAULT_IMAGE_OPENSCAP_PATH)%' deploy/operator.yaml
+	@$(SED) 's%$(RELATED_IMAGE_OPENSCAP_PATH)%$(DEFAULT_IMAGE_OPENSCAP_PATH)%' deploy/operator.yaml
 	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(DEFAULT_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	@$(SED) 's%$(E2E_CONTENT_IMAGE_PATH)%$(DEFAULT_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 
@@ -398,12 +397,12 @@ deploy: namespace deploy-crds ## Deploy the operator from the manifests in the d
 .PHONY: deploy-local
 deploy-local: namespace image-to-cluster deploy-crds ## Deploy the operator from the manifests in the deploy/ directory and the images from a local build
 	@$(SED) 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
-	@$(SED) 's%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%$(RELATED_IMAGE_OPENSCAP_PATH):$(RELATED_IMAGE_OPENSCAP_TAG)%' deploy/operator.yaml
+	@$(SED) 's%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%$(RELATED_IMAGE_OPENSCAP_PATH)%' deploy/operator.yaml
 	@oc apply -n $(NAMESPACE) -f deploy/
 	@oc apply -f deploy/olm-catalog/compliance-operator/manifests/monitoring_clusterrolebinding.yaml
 	@oc apply -f deploy/olm-catalog/compliance-operator/manifests/monitoring_clusterrole.yaml
 	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
-	@$(SED) 's%$(RELATED_IMAGE_OPENSCAP_PATH):$(RELATED_IMAGE_OPENSCAP_TAG)%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%' deploy/operator.yaml
+	@$(SED) 's%$(RELATED_IMAGE_OPENSCAP_PATH)%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%' deploy/operator.yaml
 	@oc set triggers -n $(NAMESPACE) deployment/compliance-operator --from-image openshift/compliance-operator:latest -c compliance-operator
 
 .PHONY: deploy-crds
