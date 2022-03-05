@@ -3,12 +3,12 @@ package utils
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"io"
 	"net/url"
 	"regexp"
 	"sort"
 	"strings"
+	"text/template"
 	"text/template/parse"
 
 	"github.com/antchfx/xmlquery"
@@ -104,12 +104,12 @@ func GetPathFromWarningXML(in *xmlquery.Node, valuesList map[string]string) ([]R
 				filterNode := in.SelectElement(fmt.Sprintf(`//*[@id="filter-%s"]`, pathID))
 				dumpNode := in.SelectElement(fmt.Sprintf(`//*[@id="dump-%s"]`, pathID))
 				if filterNode != nil && dumpNode != nil {
-					filter, _, err = RenderValues(filterNode.InnerText(), valuesList)
+					filter, _, err = RenderValues(XmlNodeAsMarkdown(filterNode), valuesList)
 					if err != nil {
 						errMsgs = append(errMsgs, err.Error())
 						continue
 					}
-					dumpPath = dumpNode.InnerText()
+					dumpPath, _, err = RenderValues(XmlNodeAsMarkdown(dumpNode), valuesList)
 				}
 			}
 			apiPaths = append(apiPaths, ResourcePath{ObjPath: path, DumpPath: dumpPath, Filter: filter})

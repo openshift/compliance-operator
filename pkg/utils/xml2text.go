@@ -3,9 +3,9 @@ package utils
 import (
 	"bytes"
 	"encoding/xml"
-	"html/template"
 	"io"
 	"strings"
+	"text/template"
 
 	"github.com/antchfx/xmlquery"
 	"github.com/jaytaylor/html2text"
