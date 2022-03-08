@@ -34,3 +34,6 @@ do
         ${RUNTIME} push ${IMAGE_NAME}:${tag}
     fi
 done
+if [[ "$CMD" == "push" ]]; then
+    ${RUNTIME} push ${IMAGE_NAME}:unexistent_resource ${IMAGE_NAME}:latest
+fi
