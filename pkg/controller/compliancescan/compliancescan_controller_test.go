@@ -61,12 +61,14 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 		// Nodes in the deployment
 		nodeinstance1 = &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "node-1",
+				Name:   "node-1",
+				Labels: map[string]string{"kubernetes.io/os": "linux"},
 			},
 		}
 		nodeinstance2 = &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "node-2",
+				Name:   "node-2",
+				Labels: map[string]string{"kubernetes.io/os": "linux"},
 			},
 		}
 

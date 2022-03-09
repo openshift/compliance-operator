@@ -85,8 +85,10 @@ func (nh *nodeScanTypeHandler) getTargetNodes() ([]corev1.Node, error) {
 	case compv1alpha1.ScanTypePlatform:
 		return nodes.Items, nil // Nodes are only relevant to the node scan type. Return the empty node list otherwise.
 	case compv1alpha1.ScanTypeNode:
+		// we only scan Linux nodes
+		nodeScanSelector := map[string]string{"kubernetes.io/os": "linux"}
 		listOpts := client.ListOptions{
-			LabelSelector: labels.SelectorFromSet(nh.scan.Spec.NodeSelector),
+			LabelSelector: labels.SelectorFromSet(labels.Merge(nh.scan.Spec.NodeSelector, nodeScanSelector)),
 		}
 
 		if err := nh.r.client.List(context.TODO(), &nodes, &listOpts); err != nil {
