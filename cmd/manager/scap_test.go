@@ -76,6 +76,7 @@ var _ = Describe("Testing SCAP parsing and storage", func() {
 				{
 					ObjPath:  "/api/v1/namespaces/master-mycluster1/configmaps/kas-config",
 					DumpPath: "/api/v1/namespaces/master-mycluster1/configmaps/kas-config",
+					Filter:   ".apiServerArguments",
 				},
 			}
 			got, _ := getResourcePaths(contentDS, contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate", nil)
@@ -150,6 +151,7 @@ var _ = Describe("Testing SCAP parsing and storage", func() {
 				{
 					ObjPath:  "/api/v1/namespaces/customized/configmaps/kas-config",
 					DumpPath: "/api/v1/namespaces/customized/configmaps/kas-config",
+					Filter:   ".data[\"config.yaml\"] | fromjson | .apiServerArguments",
 				},
 			}
 			_, valuesList := getResourcePaths(tpContentDS, contentDS, "xccdf_org.ssgproject.content_profile_platform-moderate", nil)

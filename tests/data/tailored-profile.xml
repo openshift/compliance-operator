@@ -8,5 +8,6 @@
     <xccdf-1.2:description override="true">CIS Benchmark for Hypershift</xccdf-1.2:description>
     <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_ocp_idp_no_htpasswd" selected="true"/>
     <xccdf-1.2:set-value idref="xccdf_org.ssgproject.content_value_openshift_kube_apiserver_config_namespace">customized</xccdf-1.2:set-value>
+    <xccdf-1.2:set-value idref="xccdf_org.ssgproject.content_value_jqfilter">.data["config.yaml"] | fromjson | .apiServerArguments</xccdf-1.2:set-value>
   </xccdf-1.2:Profile>
 </xccdf-1.2:Tailoring></ds:component></ds:data-stream-collection>

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"io/ioutil"
 	"os"
@@ -220,7 +221,7 @@ func getResourcePaths(profileDefs *xmlquery.Node, ruleDefs *xmlquery.Node, profi
 				if val.SelectAttr("selector") == "" {
 					// It is not an enum choice, but a default value instead
 					if strings.HasPrefix(variable.SelectAttr("id"), valuePrefix) {
-						valuesList[strings.TrimPrefix(variable.SelectAttr("id"), valuePrefix)] = val.OutputXML(false)
+						valuesList[strings.TrimPrefix(variable.SelectAttr("id"), valuePrefix)] = html.UnescapeString(val.OutputXML(false))
 					}
 				}
 			}
@@ -228,7 +229,7 @@ func getResourcePaths(profileDefs *xmlquery.Node, ruleDefs *xmlquery.Node, profi
 		allSetValues := xmlquery.Find(def, "//xccdf-1.2:set-value")
 		for _, variable := range allSetValues {
 			if strings.HasPrefix(variable.SelectAttr("idref"), valuePrefix) {
-				valuesList[strings.TrimPrefix(variable.SelectAttr("idref"), valuePrefix)] = variable.OutputXML(false)
+				valuesList[strings.TrimPrefix(variable.SelectAttr("idref"), valuePrefix)] = html.UnescapeString(variable.OutputXML(false))
 			}
 		}
 	}
