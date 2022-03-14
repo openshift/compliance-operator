@@ -9,7 +9,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Enhancements
 
--
+- Restructured the project documentation into separate guides for different
+  audiences. This primarily includes an installation guide, a usage guide, and
+  a contributor guide.
 
 ### Fixes
 
