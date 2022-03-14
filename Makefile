@@ -37,8 +37,10 @@ RELATED_IMAGE_OPENSCAP_TAG?=1.3.5
 # Image path to use. Set this if you want to use a specific path for building
 # or your e2e tests. This is overwritten if we bulid the image and push it to
 # the cluster or if we're on CI.
+DEFAULT_IMAGE_OPERATOR_PATH=quay.io/compliance-operator/$(APP_NAME):latest
+DEFAULT_IMAGE_OPENSCAP_PATH=quay.io/compliance-operator/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)
 RELATED_IMAGE_OPERATOR_PATH?=$(IMAGE_REPO)/$(APP_NAME)
-RELATED_IMAGE_OPENSCAP_PATH=$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME)
+RELATED_IMAGE_OPENSCAP_PATH?=$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME)
 OPENSCAP_DOCKER_CONTEXT=./images/openscap
 
 # Image tag to use. Set this if you want to use a specific tag for building
@@ -112,8 +114,9 @@ E2E_GO_TEST_FLAGS?=-test.v -test.timeout 120m
 # Specifies the image path to use for the content in the tests
 DEFAULT_CONTENT_IMAGE_PATH=quay.io/complianceascode/ocp4:latest
 E2E_CONTENT_IMAGE_PATH?=quay.io/complianceascode/ocp4:latest
-# We specifically omit the tag here since we only use this for testing.
-E2E_BROKEN_CONTENT_IMAGE_PATH?=quay.io/compliance-operator/test-broken-content:latest
+# We specifically omit the tag here since we use this for testing
+# different images referenced by different tags.
+E2E_BROKEN_CONTENT_IMAGE_PATH?=quay.io/compliance-operator/test-broken-content
 
 QUAY_NAMESPACE=compliance-operator
 OPERATOR_VERSION?=
@@ -197,9 +200,13 @@ test-catalog: index-image-to-cluster
 	@oc apply -f deploy/olm-catalog/operator-group.yaml
 	@oc apply -f deploy/olm-catalog/subscription.yaml
 
-.PHONY: test-broken-content-image
-test-broken-content-image:
-	$(RUNTIME) build -t $(E2E_BROKEN_CONTENT_IMAGE_PATH) -f images/testcontent/broken-content.Dockerfile .
+.PHONY: e2e-content-images
+e2e-content-images:
+	RUNTIME=$(RUNTIME) images/testcontent/broken-content.sh build ${E2E_BROKEN_CONTENT_IMAGE_PATH}
+
+.PHONY: push-e2e-content
+push-e2e-content: e2e-content-images
+	RUNTIME=$(RUNTIME) images/testcontent/broken-content.sh push ${E2E_BROKEN_CONTENT_IMAGE_PATH}
 
 .PHONY: must-gather-image
 must-gather-image:
@@ -300,24 +307,24 @@ test-benchmark: ## Run the benchmark tests -- Note that this can only be ran for
 e2e: namespace tear-down operator-sdk image-to-cluster openshift-user deploy-crds ## Run the end-to-end tests
 	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
 	@echo "Replacing workload references in deploy/operator.yaml"
-	@$(SED) 's%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%$(RELATED_IMAGE_OPENSCAP_PATH)%' deploy/operator.yaml
-	@$(SED) 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
+	@$(SED) 's%$(DEFAULT_IMAGE_OPENSCAP_PATH)%$(RELATED_IMAGE_OPENSCAP_PATH)%' deploy/operator.yaml
+	@$(SED) 's%$(DEFAULT_IMAGE_OPERATOR_PATH)%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	@$(SED) 's%$(DEFAULT_CONTENT_IMAGE_PATH)%$(E2E_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 	@echo "Running e2e tests"
 	unset GOFLAGS && BROKEN_CONTENT_IMAGE=$(E2E_BROKEN_CONTENT_IMAGE_PATH) CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --skip-cleanup-error --image "$(RELATED_IMAGE_OPERATOR_PATH)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 	@echo "Restoring image references in deploy/operator.yaml"
-	@$(SED) 's%$(RELATED_IMAGE_OPENSCAP_PATH)%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%' deploy/operator.yaml
-	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
+	@$(SED) 's%$(RELATED_IMAGE_OPENSCAP_PATH)%$(DEFAULT_IMAGE_OPENSCAP_PATH)%' deploy/operator.yaml
+	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(DEFAULT_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	@$(SED) 's%$(E2E_CONTENT_IMAGE_PATH)%$(DEFAULT_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 
 e2e-local: operator-sdk tear-down deploy-crds ## Run the end-to-end tests on a locally running operator (e.g. using make run)
 	@echo "WARNING: This will temporarily modify deploy/operator.yaml"
 	@echo "Replacing workload references in deploy/operator.yaml"
-	@$(SED) 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
+	@$(SED) 's%$(DEFAULT_IMAGE_OPERATOR_PATH)%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	@$(SED) 's%$(DEFAULT_CONTENT_IMAGE_PATH)%$(E2E_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 	unset GOFLAGS && CONTENT_IMAGE=$(E2E_CONTENT_IMAGE_PATH) $(GOPATH)/bin/operator-sdk test local ./tests/e2e --up-local --skip-cleanup-error --image "$(RELATED_IMAGE_OPERATOR_PATH)" --go-test-flags "$(E2E_GO_TEST_FLAGS)"
 	@echo "Restoring image references in deploy/operator.yaml"
-	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(IMAGE_REPO)/$(APP_NAME):latest%' deploy/operator.yaml
+	@$(SED) 's%$(RELATED_IMAGE_OPERATOR_PATH)%$(DEFAULT_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
 	@$(SED) 's%$(E2E_CONTENT_IMAGE_PATH)%$(DEFAULT_CONTENT_IMAGE_PATH)%' deploy/operator.yaml
 
 # If IMAGE_FROM_CI is not defined, it means that we're not running on CI, so we
@@ -389,8 +396,8 @@ deploy: namespace deploy-crds ## Deploy the operator from the manifests in the d
 
 .PHONY: deploy-local
 deploy-local: namespace image-to-cluster deploy-crds ## Deploy the operator from the manifests in the deploy/ directory and the images from a local build
-	$(SED) 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
-	$(SED) 's%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%$(RELATED_IMAGE_OPENSCAP_PATH)%' deploy/operator.yaml
+	@$(SED) 's%$(IMAGE_REPO)/$(APP_NAME):latest%$(RELATED_IMAGE_OPERATOR_PATH)%' deploy/operator.yaml
+	@$(SED) 's%$(IMAGE_REPO)/$(RELATED_IMAGE_OPENSCAP_NAME):$(RELATED_IMAGE_OPENSCAP_TAG)%$(RELATED_IMAGE_OPENSCAP_PATH)%' deploy/operator.yaml
 	@oc apply -n $(NAMESPACE) -f deploy/
 	@oc apply -f deploy/olm-catalog/compliance-operator/manifests/monitoring_clusterrolebinding.yaml
 	@oc apply -f deploy/olm-catalog/compliance-operator/manifests/monitoring_clusterrole.yaml
