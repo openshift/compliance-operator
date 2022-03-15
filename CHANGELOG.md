@@ -222,7 +222,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changes
  - enhancements
      - Add option to make scan scheduling strict/not strict - adds a new
-       ComplianceScan/Suite/ScanSetting option called strictNode scan.
+       ComplianceScan/Suite/ScanSetting option called strictNodeScan.
        This option defaults to true meaning that the operator will error
        out of a scan pod can't be scheduled. Switching the option to
        true makes the scan more permissive and go forward. Useful for

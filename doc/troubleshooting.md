@@ -28,6 +28,15 @@ to a (CRD document)[crds.md] to learn more API objects.
      the `debug` option to be set. Enabling this option increases verbosity
      of the openscap scanner pods as well as some other helper pods.
 
+   * Many CRs, most importantly `ComplianceSuite` and `ScanSetting` allow
+     the `debug` option to be set. Enabling this option increases verbosity
+     of the openscap scanner pods as well as some other helper pods.
+
+   * The same CRs contain options that allow more precise scheduling of scanner
+     pods, such as `strictNodeScan` which controls whether the scan should 
+     proceed even if not all nodes can be scanned.
+     See `oc explain scansettings` for the full list of options.
+
    * If a single rule is passing or failing unexpectedly, it could be helpful
      to run a single scan or a suite with only that rule - you can find the
      rule ID from the corresponding `ComplianceCheckResult` object and use it
