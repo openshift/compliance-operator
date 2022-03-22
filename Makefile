@@ -512,14 +512,14 @@ fetch-git-tags:
 prepare-release: release-tag-image bundle git-release
 
 .PHONY: push-release
-push-release: ## Do an official release (Requires permissions)
+push-release: package-version-to-tag ## Do an official release (Requires permissions)
 	git commit -m "Release v$(TAG)"
 	git tag "v$(TAG)"
 	git push origin "v$(TAG)"
 	git push origin "release-v$(TAG)"
 
 .PHONY: release-images
-release-images: push push-index undo-deploy-tag-image
+release-images: package-version-to-tag push push-index undo-deploy-tag-image
 	# This will ensure that we also push to the latest tag
 	$(MAKE) push TAG=latest
 
