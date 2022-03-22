@@ -9,6 +9,33 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Enhancements
 
+-
+
+### Fixes
+
+-
+
+### Internal Changes
+
+-
+
+### Deprecations
+
+-
+
+### Removals
+
+-
+
+### Security
+
+-
+
+
+## [0.1.49] - 2022-03-22
+
+### Enhancements
+
 - Restructured the project documentation into separate guides for different
   audiences. This primarily includes an installation guide, a usage guide, and
   a contributor guide.
@@ -42,10 +69,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The TestInconsistentResult e2e test was relying on a certain order of results.
   This bug was fixed and the test now passes with any order of results.
 
-### Deprecations
-
--
-
 ### Removals
 
 - The Deployment resource in `deploy/eks.yaml` has been removed in favor of a
@@ -55,10 +78,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   use the Helm chart for
   [deploying](https://github.com/openshift/compliance-operator#deploying-with-helm)
   the operator on AWS EKS.
-
-### Security
-
--
 
 
 ## [0.1.48] - 2022-01-28
