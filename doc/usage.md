@@ -271,7 +271,7 @@ The current supported versions of OpenShift are 4.6 and up.
 
 ## Additional documentation
 
-See the [self-paced workshop](doc/tutorials/README.md) for a hands-on tutorial,
+See the [self-paced workshop](tutorials/README.md) for a hands-on tutorial,
 including advanced topics such as content building.
 
 ## Must-gather support
