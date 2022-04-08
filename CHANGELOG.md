@@ -31,6 +31,21 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 -
 
+## [0.1.50] - 2022-04-05
+
+### Enhancements
+
+- Added necessary permessions for api-resource-collector so that the new rule
+  `cluster_logging_operator_exist` can be evaluate properly. [1]
+  [1] https://github.com/ComplianceAsCode/content/pull/8511
+
+### Fixes
+
+- 
+
+### Removals
+
+- 
 
 ## [0.1.49] - 2022-03-22
 

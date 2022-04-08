@@ -1146,6 +1146,16 @@ rules:
   - list
   - watch
 - apiGroups:
+  - logging.openshift.io
+  resources:
+  - clusterloggings
+  resourceNames:
+  - instance
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - flowcontrol.apiserver.k8s.io
   resources:
   - flowschemas
