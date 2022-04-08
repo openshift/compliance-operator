@@ -414,6 +414,7 @@ rules:
   - ingresscontrollers
   - kubeapiservers
   - openshiftapiservers
+  - networks
   verbs:
   - get
   - list
