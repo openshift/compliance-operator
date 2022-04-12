@@ -36,8 +36,8 @@ func TestE2E(t *testing.T) {
 					moderateProfileName = "moderate"
 				)
 				var (
-					baselineImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
-					modifiedImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
+					baselineImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
+					modifiedImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
 				)
 
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
@@ -139,8 +139,8 @@ func TestE2E(t *testing.T) {
 					moderateProfileName = "moderate"
 				)
 				var (
-					baselineImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
-					modifiedImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
+					baselineImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
+					modifiedImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
 				)
 
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
@@ -248,8 +248,8 @@ func TestE2E(t *testing.T) {
 					moderateProfileName = "moderate"
 				)
 				var (
-					baselineImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
-					modifiedImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
+					baselineImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
+					modifiedImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
 				)
 
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
@@ -2152,13 +2152,13 @@ func TestE2E(t *testing.T) {
 					Spec: compv1alpha1.TailoredProfileSpec{
 						Title:       "TestScanProducesRemediations",
 						Description: "TestScanProducesRemediations",
-						DisableRules: []compv1alpha1.RuleReferenceSpec {
+						DisableRules: []compv1alpha1.RuleReferenceSpec{
 							{
 								Name:      "no-such-rule",
 								Rationale: "testing",
 							},
 						},
-						Extends:     "ocp4-cis",
+						Extends: "ocp4-cis",
 					},
 				}
 
@@ -2172,7 +2172,7 @@ func TestE2E(t *testing.T) {
 				err = wait.Poll(retryInterval, timeout, func() (bool, error) {
 					tpGet := &compv1alpha1.TailoredProfile{}
 					getErr := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: tpName, Namespace: namespace}, tpGet)
-					if  getErr != nil {
+					if getErr != nil {
 						// not gettable yet? retry
 						return false, nil
 					}
@@ -2213,7 +2213,7 @@ func TestE2E(t *testing.T) {
 				err = wait.Poll(retryInterval, timeout, func() (bool, error) {
 					ssbGet := &compv1alpha1.ScanSettingBinding{}
 					getErr := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: bindingName, Namespace: namespace}, ssbGet)
-					if  getErr != nil {
+					if getErr != nil {
 						// not gettable yet? retry
 						return false, nil
 					}
@@ -2240,7 +2240,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				tpUpdate := tpGet.DeepCopy()
-				tpUpdate.Spec.DisableRules = []compv1alpha1.RuleReferenceSpec {
+				tpUpdate.Spec.DisableRules = []compv1alpha1.RuleReferenceSpec{
 					{
 						Name:      "ocp4-file-owner-scheduler-kubeconfig",
 						Rationale: "testing",
@@ -2257,7 +2257,7 @@ func TestE2E(t *testing.T) {
 				err = wait.Poll(retryInterval, timeout, func() (bool, error) {
 					ssbGet := &compv1alpha1.ScanSettingBinding{}
 					getErr := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: bindingName, Namespace: namespace}, ssbGet)
-					if  getErr != nil {
+					if getErr != nil {
 						// not gettable yet? retry
 						return false, nil
 					}
@@ -2276,7 +2276,6 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-
 
 				return nil
 			},
@@ -3066,7 +3065,7 @@ func TestE2E(t *testing.T) {
 			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 
-				var baselineImage  = fmt.Sprintf("%s:%s", brokenContentImagePath, "variabletemplate")
+				var baselineImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "variabletemplate")
 				const requiredRule = "audit-profile-set"
 				pbName := getObjNameFromTest(t)
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
@@ -3215,7 +3214,7 @@ func TestE2E(t *testing.T) {
 			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 
-				var baselineImage  = fmt.Sprintf("%s:%s", brokenContentImagePath, "kubeletconfig")
+				var baselineImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "kubeletconfig")
 				const requiredRule = "kubelet-eviction-thresholds-set-hard-imagefs-available"
 				pbName := getObjNameFromTest(t)
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
