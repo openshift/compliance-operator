@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"runtime"
 	"testing"
 	"time"
 
@@ -1673,25 +1674,29 @@ func TestE2E(t *testing.T) {
 				}
 				assertCheckRemediation(f, checkWifiInBios.Name, checkWifiInBios.Namespace, false)
 
-				checkVsyscall := compv1alpha1.ComplianceCheckResult{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      fmt.Sprintf("%s-coreos-vsyscall-kernel-argument", workerScanName),
-						Namespace: namespace,
-						Labels: map[string]string{
-							compv1alpha1.ComplianceCheckResultHasRemediation: "",
+				if runtime.GOARCH == "amd64" {
+					// the purpose of this check is to make sure that also INFO-level checks produce remediations
+					// as of now, the only one we have is the vsyscall check that is x86-specific.
+					checkVsyscall := compv1alpha1.ComplianceCheckResult{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      fmt.Sprintf("%s-coreos-vsyscall-kernel-argument", workerScanName),
+							Namespace: namespace,
+							Labels: map[string]string{
+								compv1alpha1.ComplianceCheckResultHasRemediation: "",
+							},
 						},
-					},
-					ID:       "xccdf_org.ssgproject.content_rule_coreos_vsyscall_kernel_argument",
-					Status:   compv1alpha1.CheckResultInfo,
-					Severity: compv1alpha1.CheckResultSeverityMedium, // yes, it's really uknown in the DS
-				}
+						ID:       "xccdf_org.ssgproject.content_rule_coreos_vsyscall_kernel_argument",
+						Status:   compv1alpha1.CheckResultInfo,
+						Severity: compv1alpha1.CheckResultSeverityMedium,
+					}
 
-				err = assertHasCheck(f, suiteName, workerScanName, checkVsyscall)
-				if err != nil {
-					return err
+					err = assertHasCheck(f, suiteName, workerScanName, checkVsyscall)
+					if err != nil {
+						return err
+					}
+					// even INFO checks generate remediations, make sure the check was labeled appropriately
+					assertCheckRemediation(f, checkVsyscall.Name, checkVsyscall.Namespace, true)
 				}
-				// even INFO checks generate remediations, make sure the check was labeled appropriately
-				assertCheckRemediation(f, checkVsyscall.Name, checkVsyscall.Namespace, true)
 
 				return nil
 			},
