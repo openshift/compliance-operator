@@ -75,7 +75,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   obsolete data while the parent object is in fact marked with an error
 - The ScanSettingBinding controller now reconciles TailoredProfile instances
   related to a ScanSettingBinding. This ensures that the controller can
-  proceed with generating scans in case the binding used to point to 
+  proceed with generating scans in case the binding used to point to
   TailoredProfile that had been marked with an error, but was subsequently
   fixed ([upstream issue 791](https://github.com/openshift/compliance-operator/issues/791))
 - Node scans are only scheduled on nodes running Linux. This allows running
@@ -96,7 +96,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `deploy/eks.yaml` file conflicted with various development and build tools
   that assumed a single Deployment resource in the `deploy/` directory. Please
   use the Helm chart for
-  [deploying](https://github.com/openshift/compliance-operator#deploying-with-helm)
+  [deploying](https://github.com/openshift/compliance-operator/blob/master/doc/install.md#deploying-with-helm)
   the operator on AWS EKS.
 
 
@@ -210,7 +210,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
        - Create a `PrometheusRule` warning alert for the gauge.
      - Support deployments on all namespaces - adds support for watching all
        namespaces by passing an empty value to the `WATCH_NAMESPACE`
-       environment variable. Please note that the default objects 
+       environment variable. Please note that the default objects
        (`ProfileBundles`, `ScanSettings`) are always only created in the operator's
        namespace.
  - bug fixes
@@ -232,7 +232,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
        from the ComplianceAsCode project can now express their minimal requires
        Kubernetes or OpenShift versions. If the remediation is applied on a
        cluster that does not match the version requirement, such remediation
-       would not be created. This functionality is used e.g. by the 
+       would not be created. This functionality is used e.g. by the
        `rhcos4-configure-usbguard-auditbackend` rule, as seen from the
        `complianceascode.io/ocp-version: '>=4.7.0'` annotation on its fix.
      - Add "infrastructure" to resources we always fetch - this is an
@@ -266,7 +266,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
        out of a scan pod can't be scheduled. Switching the option to
        true makes the scan more permissive and go forward. Useful for
        clouds with ephemeral nodes.
-     - Result Server: Make nodeSelector and tolerations configurable - 
+     - Result Server: Make nodeSelector and tolerations configurable -
        exposes the nodeSelector and tolerations attributes through the
        ScanSettings object. This enables deployers to configure where
        the Result Server will run, and thus what node will host the
@@ -304,9 +304,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
         Allows to differentiate between objects that don't exist in
         the cluster versus objects that can't be fetched.
  - bug fixes
-      - Validate that rules in tailored profile are of appropriate type - 
+      - Validate that rules in tailored profile are of appropriate type -
         tightens the validation of TailoredProfiles so that only rules
-        of the same type (Platform/Node) are included 
+        of the same type (Platform/Node) are included
       - Fix needs-review unpause pool - remediations that need a varible
         to be set have the NeedsReview state. When auto-applying remediations,
         these need to have all variables set before the MachineConfig pool
@@ -328,7 +328,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   - enhancements
       - Add instructions and check type to Rule object - The rule objects now
         contain two additional attributes, `checkType` and `description` that
-        allow the user to see if the Rule pertains to a Node or a Platform 
+        allow the user to see if the Rule pertains to a Node or a Platform
         check and allow the user to audit what the check represented by the
         Rule does.
       - Add support for multi-value variable templating - When templating
