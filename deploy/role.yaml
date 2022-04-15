@@ -1227,4 +1227,12 @@ rules:
   verbs:
   - get
   - list
-
+# Necessary to check GitOps operator present for high requirements
+- apiGroups:
+  - gitopsservices.pipelines.openshift.io
+  resources:
+  - gitopsservices
+  verbs:
+  - get
+  - list
+  - watch
