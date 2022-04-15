@@ -156,6 +156,10 @@ func (c *scapContentDataStream) FigureResources(profile string) error {
 			ObjPath:  "/apis/config.openshift.io/v1/networks/cluster",
 			DumpPath: "/apis/config.openshift.io/v1/networks/cluster",
 		},
+		{
+			ObjPath:  "/api/v1/nodes",
+			DumpPath: "/api/v1/nodes",
+		},
 	}
 	effectiveProfile := profile
 	var valuesList map[string]string

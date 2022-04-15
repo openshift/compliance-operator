@@ -26,7 +26,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Internal Changes
 
--
+- Added node resource to the list of resources we always fetch so that arch CPEs will
+  be evaluated appropriately.
 
 ### Deprecations
 
