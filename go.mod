@@ -25,7 +25,7 @@ require (
 	github.com/openshift/machine-config-operator v0.0.1-0.20200913004441-7eba765c69c9
 	github.com/operator-framework/operator-sdk v0.19.4
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.7.1
+	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/client_model v0.2.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/securego/gosec/v2 v2.8.0
@@ -34,6 +34,8 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	go.uber.org/zap v1.17.0
+	golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8 // indirect
+	google.golang.org/protobuf v1.28.0 // indirect
 	k8s.io/api v0.19.11
 	k8s.io/apimachinery v0.19.11
 	k8s.io/apiserver v0.19.11
