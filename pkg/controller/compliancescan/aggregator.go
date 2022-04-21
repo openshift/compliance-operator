@@ -116,6 +116,7 @@ func (r *ReconcileComplianceScan) launchAggregatorPod(scanInstance *compv1alpha1
 }
 
 func (r *ReconcileComplianceScan) deleteAggregator(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
+	logger.Info("Deleting aggregator pod")
 	aggregator := r.newAggregatorPod(instance, logger)
 	err := r.client.Delete(context.TODO(), aggregator)
 	if err != nil && !errors.IsNotFound(err) {
