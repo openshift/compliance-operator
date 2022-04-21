@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"runtime"
 	"testing"
 	"time"
 
@@ -35,8 +36,8 @@ func TestE2E(t *testing.T) {
 					moderateProfileName = "moderate"
 				)
 				var (
-					baselineImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
-					modifiedImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
+					baselineImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
+					modifiedImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
 				)
 
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
@@ -138,8 +139,8 @@ func TestE2E(t *testing.T) {
 					moderateProfileName = "moderate"
 				)
 				var (
-					baselineImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
-					modifiedImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
+					baselineImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
+					modifiedImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
 				)
 
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
@@ -247,8 +248,8 @@ func TestE2E(t *testing.T) {
 					moderateProfileName = "moderate"
 				)
 				var (
-					baselineImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
-					modifiedImage       = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
+					baselineImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_baseline")
+					modifiedImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "proff_diff_mod")
 				)
 
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
@@ -1673,25 +1674,29 @@ func TestE2E(t *testing.T) {
 				}
 				assertCheckRemediation(f, checkWifiInBios.Name, checkWifiInBios.Namespace, false)
 
-				checkVsyscall := compv1alpha1.ComplianceCheckResult{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      fmt.Sprintf("%s-coreos-vsyscall-kernel-argument", workerScanName),
-						Namespace: namespace,
-						Labels: map[string]string{
-							compv1alpha1.ComplianceCheckResultHasRemediation: "",
+				if runtime.GOARCH == "amd64" {
+					// the purpose of this check is to make sure that also INFO-level checks produce remediations
+					// as of now, the only one we have is the vsyscall check that is x86-specific.
+					checkVsyscall := compv1alpha1.ComplianceCheckResult{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      fmt.Sprintf("%s-coreos-vsyscall-kernel-argument", workerScanName),
+							Namespace: namespace,
+							Labels: map[string]string{
+								compv1alpha1.ComplianceCheckResultHasRemediation: "",
+							},
 						},
-					},
-					ID:       "xccdf_org.ssgproject.content_rule_coreos_vsyscall_kernel_argument",
-					Status:   compv1alpha1.CheckResultInfo,
-					Severity: compv1alpha1.CheckResultSeverityMedium, // yes, it's really uknown in the DS
-				}
+						ID:       "xccdf_org.ssgproject.content_rule_coreos_vsyscall_kernel_argument",
+						Status:   compv1alpha1.CheckResultInfo,
+						Severity: compv1alpha1.CheckResultSeverityMedium,
+					}
 
-				err = assertHasCheck(f, suiteName, workerScanName, checkVsyscall)
-				if err != nil {
-					return err
+					err = assertHasCheck(f, suiteName, workerScanName, checkVsyscall)
+					if err != nil {
+						return err
+					}
+					// even INFO checks generate remediations, make sure the check was labeled appropriately
+					assertCheckRemediation(f, checkVsyscall.Name, checkVsyscall.Namespace, true)
 				}
-				// even INFO checks generate remediations, make sure the check was labeled appropriately
-				assertCheckRemediation(f, checkVsyscall.Name, checkVsyscall.Namespace, true)
 
 				return nil
 			},
@@ -2147,13 +2152,13 @@ func TestE2E(t *testing.T) {
 					Spec: compv1alpha1.TailoredProfileSpec{
 						Title:       "TestScanProducesRemediations",
 						Description: "TestScanProducesRemediations",
-						DisableRules: []compv1alpha1.RuleReferenceSpec {
+						DisableRules: []compv1alpha1.RuleReferenceSpec{
 							{
 								Name:      "no-such-rule",
 								Rationale: "testing",
 							},
 						},
-						Extends:     "ocp4-cis",
+						Extends: "ocp4-cis",
 					},
 				}
 
@@ -2167,7 +2172,7 @@ func TestE2E(t *testing.T) {
 				err = wait.Poll(retryInterval, timeout, func() (bool, error) {
 					tpGet := &compv1alpha1.TailoredProfile{}
 					getErr := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: tpName, Namespace: namespace}, tpGet)
-					if  getErr != nil {
+					if getErr != nil {
 						// not gettable yet? retry
 						return false, nil
 					}
@@ -2208,7 +2213,7 @@ func TestE2E(t *testing.T) {
 				err = wait.Poll(retryInterval, timeout, func() (bool, error) {
 					ssbGet := &compv1alpha1.ScanSettingBinding{}
 					getErr := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: bindingName, Namespace: namespace}, ssbGet)
-					if  getErr != nil {
+					if getErr != nil {
 						// not gettable yet? retry
 						return false, nil
 					}
@@ -2235,7 +2240,7 @@ func TestE2E(t *testing.T) {
 				}
 
 				tpUpdate := tpGet.DeepCopy()
-				tpUpdate.Spec.DisableRules = []compv1alpha1.RuleReferenceSpec {
+				tpUpdate.Spec.DisableRules = []compv1alpha1.RuleReferenceSpec{
 					{
 						Name:      "ocp4-file-owner-scheduler-kubeconfig",
 						Rationale: "testing",
@@ -2252,7 +2257,7 @@ func TestE2E(t *testing.T) {
 				err = wait.Poll(retryInterval, timeout, func() (bool, error) {
 					ssbGet := &compv1alpha1.ScanSettingBinding{}
 					getErr := f.Client.Get(goctx.TODO(), types.NamespacedName{Name: bindingName, Namespace: namespace}, ssbGet)
-					if  getErr != nil {
+					if getErr != nil {
 						// not gettable yet? retry
 						return false, nil
 					}
@@ -2271,7 +2276,6 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-
 
 				return nil
 			},
@@ -3061,7 +3065,7 @@ func TestE2E(t *testing.T) {
 			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 
-				var baselineImage  = fmt.Sprintf("%s:%s", brokenContentImagePath, "variabletemplate")
+				var baselineImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "variabletemplate")
 				const requiredRule = "audit-profile-set"
 				pbName := getObjNameFromTest(t)
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
@@ -3210,7 +3214,7 @@ func TestE2E(t *testing.T) {
 			IsParallel: false,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 
-				var baselineImage  = fmt.Sprintf("%s:%s", brokenContentImagePath, "kubeletconfig")
+				var baselineImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "kubeletconfig")
 				const requiredRule = "kubelet-eviction-thresholds-set-hard-imagefs-available"
 				pbName := getObjNameFromTest(t)
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
