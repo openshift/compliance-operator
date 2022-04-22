@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	DefaultContentContainerImage = "quay.io/complianceascode/ocp4:latest"
+	DefaultContentContainerImage = "quay.io/compliance-operator/compliance-operator-content:latest"
 	CACertDataKey                = "ca.crt"
 	CAKeyDataKey                 = "ca.key"
 	ServerCertInstanceSuffix     = "-rs"

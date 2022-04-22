@@ -1,1 +1,1 @@
-FROM quay.io/complianceascode/ocp4:latest
+FROM quay.io/compliance-operator/compliance-operator-content:latest

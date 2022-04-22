@@ -38,7 +38,7 @@ metadata:
             "scans": [
               {
                 "content": "ssg-rhcos4-ds.xml",
-                "contentImage": "quay.io/complianceascode/ocp4:latest",
+                "contentImage": "quay.io/compliance-operator/compliance-operator-content:latest",
                 "name": "workers-scan",
                 "nodeSelector": {
                   "node-role.kubernetes.io/worker": ""
@@ -47,7 +47,7 @@ metadata:
               },
               {
                 "content": "ssg-ocp4-ds.xml",
-                "contentImage": "quay.io/complianceascode/ocp4:latest",
+                "contentImage": "quay.io/compliance-operator/compliance-operator-content:latest",
                 "name": "platform-scan",
                 "profile": "xccdf_org.ssgproject.content_profile_moderate",
                 "scanType": "Platform"
@@ -64,7 +64,7 @@ metadata:
           },
           "spec": {
             "contentFile": "ssg-ocp4-ds.xml",
-            "contentImage": "quay.io/complianceascode/ocp4:latest"
+            "contentImage": "quay.io/compliance-operator/compliance-operator-content:latest"
           }
         },
         {
@@ -1291,7 +1291,7 @@ spec:
                 - name: RELATED_IMAGE_OPERATOR
                   value: quay.io/compliance-operator/compliance-operator:0.1.49
                 - name: RELATED_IMAGE_PROFILE
-                  value: quay.io/complianceascode/ocp4:latest
+                  value: quay.io/compliance-operator/compliance-operator-content:latest
                 image: quay.io/compliance-operator/compliance-operator:0.1.49
                 imagePullPolicy: Always
                 name: compliance-operator
