@@ -35,12 +35,12 @@ usability:
     product where product might be `ocp4` or `rhcos4`.
 
 By default, the Compliance Operator creates two `profilebundle` objects, one for
-OCP and one for RHCOS based on the [upstream ComplianceAsCode content images](https://quay.io/repository/complianceascode/ocp4):
+OCP and one for RHCOS based on the [upstream ComplianceAsCode content images](https://quay.io/repository/compliance-operator/compliance-operator-content):
 ```
 $ oc get profilebundle.compliance
 NAME     CONTENTIMAGE                           CONTENTFILE         STATUS
-ocp4     quay.io/complianceascode/ocp4:latest   ssg-ocp4-ds.xml     VALID
-rhcos4   quay.io/complianceascode/ocp4:latest   ssg-rhcos4-ds.xml   VALID
+ocp4     quay.io/compliance-operator/compliance-operator-content:latest   ssg-ocp4-ds.xml     VALID
+rhcos4   quay.io/compliance-operator/compliance-operator-content:latest   ssg-rhcos4-ds.xml   VALID
 ```
 
 Inspecting the ProfileBundle objects, you'll see that they mostly point to the
@@ -56,7 +56,7 @@ metadata:
   uid: f5516313-5f16-4ff8-9c69-d79d44126b8b
 spec:
   contentFile: ssg-rhcos4-ds.xml
-  contentImage: quay.io/complianceascode/ocp4:latest
+  contentImage: quay.io/compliance-operator/compliance-operator-content:latest
 status:
   dataStreamStatus: VALID
 ```

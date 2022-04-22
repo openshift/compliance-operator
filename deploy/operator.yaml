@@ -51,7 +51,7 @@ spec:
             - name: RELATED_IMAGE_OPERATOR
               value: "quay.io/compliance-operator/compliance-operator:latest"
             - name: RELATED_IMAGE_PROFILE
-              value: "quay.io/complianceascode/ocp4:latest"
+              value: "quay.io/compliance-operator/compliance-operator-content:latest"
           volumeMounts:
             - name: serving-cert
               mountPath: /var/run/secrets/serving-cert

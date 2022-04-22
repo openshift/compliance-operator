@@ -22,7 +22,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixes
 
--
+- The compliance content images have moved to
+  [compliance-operator/compliance-operator-content](https://quay.io/repository/compliance-operator/compliance-operator-content)
+  Quay repository. This should be a transparent change for end users and fixes
+  CI that relies on content for end-to-end testing.
 
 ### Internal Changes
 

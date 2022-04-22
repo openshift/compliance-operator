@@ -112,8 +112,8 @@ E2E_SKIP_CONTAINER_BUILD?=false
 E2E_GO_TEST_FLAGS?=-test.v -test.timeout 120m
 
 # Specifies the image path to use for the content in the tests
-DEFAULT_CONTENT_IMAGE_PATH=quay.io/complianceascode/ocp4:latest
-E2E_CONTENT_IMAGE_PATH?=quay.io/complianceascode/ocp4:latest
+DEFAULT_CONTENT_IMAGE_PATH=quay.io/compliance-operator/compliance-operator-content:latest
+E2E_CONTENT_IMAGE_PATH?=quay.io/compliance-operator/compliance-operator-content:latest
 # We specifically omit the tag here since we use this for testing
 # different images referenced by different tags.
 E2E_BROKEN_CONTENT_IMAGE_PATH?=quay.io/compliance-operator/test-broken-content

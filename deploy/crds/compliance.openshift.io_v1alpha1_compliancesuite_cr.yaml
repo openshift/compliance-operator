@@ -9,11 +9,11 @@ spec:
     - name: workers-scan
       profile: xccdf_org.ssgproject.content_profile_moderate
       content: ssg-rhcos4-ds.xml
-      contentImage: quay.io/complianceascode/ocp4:latest
+      contentImage: quay.io/compliance-operator/compliance-operator-content:latest
       nodeSelector:
         node-role.kubernetes.io/worker: ""
     - name: platform-scan
       scanType: Platform
       profile: xccdf_org.ssgproject.content_profile_moderate
       content: ssg-ocp4-ds.xml
-      contentImage: quay.io/complianceascode/ocp4:latest
+      contentImage: quay.io/compliance-operator/compliance-operator-content:latest
