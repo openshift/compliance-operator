@@ -661,20 +661,15 @@ func (r *ReconcileComplianceRemediation) verifyAndCompleteKC(obj *unstructured.U
 		}
 		// We need to get name of original kubelet config that used to generate this kubeletconfig machine config
 		// if we can't find owner of generated mc, we will create custom kubeletconfig instead
-		if len(kubeletMC.GetOwnerReferences()) != 0 {
-			if kubeletMC.GetOwnerReferences()[0].Kind == "KubeletConfig" {
-				kubeletName := kubeletMC.GetOwnerReferences()[0].Name
-				kubeletConfig := &mcfgv1.KubeletConfig{}
-				kcKey := types.NamespacedName{Name: kubeletName}
-				if err := r.client.Get(context.TODO(), kcKey, kubeletConfig); err != nil {
-					return fmt.Errorf("couldn't get current KubeletConfig: %w", err)
-				}
-				// Set kubelet config name
-				obj.SetName(kubeletConfig.GetName())
-				obj.SetLabels(kubeletConfig.GetLabels())
-				return nil
-			}
+		kubeletConfig, err := utils.GetKCFromMC(kubeletMC, r.client)
+		if err != nil {
+			return fmt.Errorf("couldn't get kubelet config from machine config: %w", err)
 		}
+		// Set kubelet config name
+		obj.SetName(kubeletConfig.GetName())
+		obj.SetLabels(kubeletConfig.GetLabels())
+		return nil
+
 	}
 
 	// We will need to create a kubelet config if there is no custom KC

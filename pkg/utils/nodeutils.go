@@ -16,12 +16,18 @@ limitations under the License.
 package utils
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
 
+	"github.com/PaesslerAG/jsonpath"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	"k8s.io/apimachinery/pkg/types"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
@@ -30,6 +36,7 @@ const (
 	nodeRolePrefix         = "node-role.kubernetes.io/"
 	generatedKubelet       = "generated-kubelet"
 	generatedKubeletSuffix = "kubelet"
+	mcPayloadPrefix        = `data:text/plain,`
 )
 
 func GetFirstNodeRoleLabel(nodeSelector map[string]string) string {
@@ -113,6 +120,87 @@ func IsMcfgPoolUsingKC(pool *mcfgv1.MachineConfigPool) (bool, string, error) {
 	}
 
 	return true, currentKCMC, nil
+}
+
+func AreKubeletConfigsRendered(pool *mcfgv1.MachineConfigPool, client runtimeclient.Client) (bool, error, string) {
+	// find out if pool is using a custom kubelet config
+	diffString := ""
+	isUsingKC, currentKCMCName, err := IsMcfgPoolUsingKC(pool)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if pool %s is using a custom kubelet config: %w", pool.Name, err), diffString
+	}
+	if !isUsingKC || currentKCMCName == "" {
+		return true, nil, diffString
+	}
+	// if the pool is using a custom kubelet config, check if the kubelet config is rendered
+	kcmcfg := &mcfgv1.MachineConfig{}
+	err = client.Get(context.TODO(), types.NamespacedName{Name: currentKCMCName}, kcmcfg)
+	if err != nil {
+		return false, fmt.Errorf("failed to get machine config %s: %w", currentKCMCName, err), diffString
+	}
+
+	kc, err := GetKCFromMC(kcmcfg, client)
+	if err != nil {
+		return false, fmt.Errorf("failed to get kubelet config from machine config %s: %w", currentKCMCName, err), diffString
+	}
+
+	var obj interface{}
+	err = json.Unmarshal(kcmcfg.Spec.Config.Raw, &obj)
+	if err != nil {
+		return false, fmt.Errorf("failed to unmarshal machine config %s: %w", currentKCMCName, err), diffString
+	}
+
+	encodedKC, err := jsonpath.Get("storage.files[0].contents.source", obj)
+	if err != nil {
+		return false, fmt.Errorf("failed to get encoded kubelet config from machine config %s: %w", currentKCMCName, err), diffString
+	}
+	encodedKCStr := encodedKC.(string)
+	if encodedKCStr == "" {
+		return false, fmt.Errorf("encoded kubeletconfig %s is empty", currentKCMCName), diffString
+	}
+	encodedKCStrTrimmed := strings.TrimPrefix(encodedKCStr, mcPayloadPrefix)
+
+	if encodedKCStrTrimmed == encodedKCStr {
+		return false, fmt.Errorf("encoded kubeletconfig %s does not contain %s prefix", currentKCMCName, mcPayloadPrefix), diffString
+	}
+
+	decodedKC, err := url.PathUnescape(encodedKCStrTrimmed)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode kubeletconfig %s: %w", currentKCMCName, err), diffString
+	}
+
+	isSubset, diff, err := JSONIsSubset(kc.Spec.KubeletConfig.Raw, []byte(decodedKC))
+	if err != nil {
+		return false, fmt.Errorf("failed to check if kubeletconfig %s is subset of rendered MC %s: %w", kc.Name, currentKCMCName, err), ""
+	}
+	if isSubset {
+		return true, nil, diffString
+	} else {
+		diffData := make([][]string, 0)
+		for _, r := range diff.Rows {
+			diffData = append(diffData, []string{fmt.Sprintf("Path: %s", r.Key), fmt.Sprintf("Expected: %s", r.Expected), fmt.Sprintf("Got: %s", r.Got)})
+		}
+		diffString = fmt.Sprintf("kubeletconfig %s is not subset of rendered MC %s, diff: %v", kc.Name, currentKCMCName, diffData)
+		return false, nil, diffString
+	}
+}
+
+func GetKCFromMC(mc *mcfgv1.MachineConfig, client runtimeclient.Client) (*mcfgv1.KubeletConfig, error) {
+	if mc == nil {
+		return nil, fmt.Errorf("machine config is nil")
+	}
+	if len(mc.GetOwnerReferences()) != 0 {
+		if mc.GetOwnerReferences()[0].Kind == "KubeletConfig" {
+			kubeletName := mc.GetOwnerReferences()[0].Name
+			kubeletConfig := &mcfgv1.KubeletConfig{}
+			kcKey := types.NamespacedName{Name: kubeletName}
+			if err := client.Get(context.TODO(), kcKey, kubeletConfig); err != nil {
+				return nil, fmt.Errorf("couldn't get current KubeletConfig: %w", err)
+			}
+			return kubeletConfig, nil
+		}
+	}
+	return nil, fmt.Errorf("machine config %s doesn't have a KubeletConfig owner reference", mc.GetName())
 }
 
 // McfgPoolLabelMatches verifies if the given nodeSelector matches the given MachineConfigPool's nodeSelector
