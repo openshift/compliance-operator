@@ -11,3 +11,5 @@ operator leverages OpenSCAP under the hood to perform the scans.
 [Usage Guide](doc/usage.md)
 
 [Contributor Guide](doc/contributor.md)
+
+foo
