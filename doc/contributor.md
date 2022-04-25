@@ -23,6 +23,43 @@ to the cluster:
 $ make deploy-local
 ```
 
+## Testing Changes
+
+This repository contains unit and functional tests for the compliance-operator.
+Both are invoked using Makefile targets.
+
+### Unit Tests
+
+Unit tests have no dependency on external systems, or a Kubernetes cluster. You
+can run them using:
+
+```console
+$ make test-unit
+```
+
+### Functional Tests
+
+The end-to-end tests for the compliance-operator require a Kubernetes
+deployment. You can also change test and test setup behavior using environment
+variables when invoking the tests.
+
+For example, you can specify a container registry for content images using
+`DEFAULT_CONTENT_IMAGE_PATH` and `E2E_CONTENT_IMAGE_PATH`. The default registry
+for these container images is available on
+[Quay](https://quay.io/repository/compliance-operator/compliance-operator-content).
+The [ComplianceAsCode/content](https://github.com/ComplianceAsCode/content/) is
+built and published to compliance-operator/compliance-operator-content so that
+we run end-to-end tests against the latest content images available from
+ComplianceAsCode. The content is built using a
+[Dockerfile](https://github.com/ComplianceAsCode/content/blob/master/Dockerfiles/ocp4_content)
+maintained in the ComplianceAsCode/content repository. You may not have a
+reason to change these values unless you want to test with different content
+images.
+
+```console
+$ make e2e
+```
+
 ## Writing Release Notes
 
 Release notes are maintained in the [changelog](CHANGELOG.md) and follow
