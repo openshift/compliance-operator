@@ -517,6 +517,16 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 	// Only un-pause MachineConfigPools once the remediations have been applied
 	for idx := range affectedMcfgPools {
 		pool := affectedMcfgPools[idx]
+		// only un-pause if the kubeletconfig is fully rendered for the pool
+		isRendered, err, diffString := utils.AreKubeletConfigsRendered(pool, r.client)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		if !isRendered {
+			logger.Info("Waiting until all kubeletconfigs are rendered before un-pausing", "MachineConfigPool.Name", pool.Name)
+			logger.Info("KubeletConfig render diff:", "MachineConfigPool.Name", pool.Name, "Diff", diffString)
+			return reconcile.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
+		}
 		poolKey := types.NamespacedName{Name: pool.GetName()}
 		// refresh pool reference directly from the API Server
 		if getErr := r.reader.Get(context.TODO(), poolKey, pool); getErr != nil {

@@ -3,6 +3,7 @@ module github.com/openshift/compliance-operator
 go 1.16
 
 require (
+	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/ajeddeloh/go-json v0.0.0-20200220154158-5ae607161559 // indirect
 	github.com/antchfx/xmlquery v1.3.6
 	github.com/antchfx/xpath v1.1.11 // indirect

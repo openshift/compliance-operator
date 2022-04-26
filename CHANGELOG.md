@@ -27,6 +27,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   Quay repository. This should be a transparent change for end users and fixes
   CI that relies on content for end-to-end testing.
 
+- Fix issues of unpausing machine config pool too soon after applying remediations,
+  added a check to check if kubeletconfig has been fully rendered into machine config
+  before unpause affected pool. [1]
+  ([1]https://bugzilla.redhat.com/show_bug.cgi?id=2071854).
+
 ### Internal Changes
 
 - Added node resource to the list of resources we always fetch so that arch CPEs will

@@ -2,6 +2,7 @@ package compliancesuite
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
@@ -20,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
@@ -439,6 +441,30 @@ var _ = Describe("ComplianceSuiteController", func() {
 
 	Context("When reconciling KubeletConfig remediations", func() {
 		var poolName = "test-pool"
+		remediationKCPayload := `
+			{
+				"something": "0s"
+			}
+			`
+		remediationKCMCPayload := `
+		{
+			"ignition": {
+				"version": "3.2.0"
+			},
+			"storage": {
+				"files": [
+					{
+						"contents": {
+							"source": "data:text/plain,%7B%0A%20%20%22kind%22%3A%20%22KubeletConfiguration%22%2C%0A%20%20%22apiVersion%22%3A%20%22kubelet.config.k8s.io%2Fv1beta1%22%2C%0A%20%20%22staticPodPath%22%3A%20%22%2Fetc%2Fkubernetes%2Fmanifests%22%2C%0A%20%20%22syncFrequency%22%3A%20%220s%22%2C%0A%20%20%22fileCheckFrequency%22%3A%20%220s%22%2C%0A%20%20%22httpCheckFrequency%22%3A%20%220s%22%2C%0A%20%20%22tlsCipherSuites%22%3A%20%5B%0A%20%20%20%20%22TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256%22%2C%0A%20%20%20%20%22TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256%22%2C%0A%20%20%20%20%22TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384%22%2C%0A%20%20%20%20%22TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384%22%2C%0A%20%20%20%20%22TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256%22%2C%0A%20%20%20%20%22TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256%22%0A%20%20%5D%2C%0A%20%20%22tlsMinVersion%22%3A%20%22VersionTLS12%22%2C%0A%20%20%22rotateCertificates%22%3A%20true%2C%0A%20%20%22serverTLSBootstrap%22%3A%20true%2C%0A%20%20%22authentication%22%3A%20%7B%0A%20%20%20%20%22x509%22%3A%20%7B%0A%20%20%20%20%20%20%22clientCAFile%22%3A%20%22%2Fetc%2Fkubernetes%2Fkubelet-ca.crt%22%0A%20%20%20%20%7D%2C%0A%20%20%20%20%22webhook%22%3A%20%7B%0A%20%20%20%20%20%20%22cacheTTL%22%3A%20%220s%22%0A%20%20%20%20%7D%2C%0A%20%20%20%20%22anonymous%22%3A%20%7B%0A%20%20%20%20%20%20%22enabled%22%3A%20false%0A%20%20%20%20%7D%0A%20%20%7D%2C%0A%20%20%22authorization%22%3A%20%7B%0A%20%20%20%20%22webhook%22%3A%20%7B%0A%20%20%20%20%20%20%22cacheAuthorizedTTL%22%3A%20%220s%22%2C%0A%20%20%20%20%20%20%22cacheUnauthorizedTTL%22%3A%20%220s%22%0A%20%20%20%20%7D%0A%20%20%7D%2C%0A%20%20%22clusterDomain%22%3A%20%22cluster.local%22%2C%0A%20%20%22clusterDNS%22%3A%20%5B%0A%20%20%20%20%22172.30.0.10%22%0A%20%20%5D%2C%0A%20%20%22streamingConnectionIdleTimeout%22%3A%20%220s%22%2C%0A%20%20%22nodeStatusUpdateFrequency%22%3A%20%220s%22%2C%0A%20%20%22nodeStatusReportFrequency%22%3A%20%220s%22%2C%0A%20%20%22imageMinimumGCAge%22%3A%20%220s%22%2C%0A%20%20%22volumeStatsAggPeriod%22%3A%20%220s%22%2C%0A%20%20%22systemCgroups%22%3A%20%22%2Fsystem.slice%22%2C%0A%20%20%22cgroupRoot%22%3A%20%22%2F%22%2C%0A%20%20%22cgroupDriver%22%3A%20%22systemd%22%2C%0A%20%20%22cpuManagerReconcilePeriod%22%3A%20%220s%22%2C%0A%20%20%22runtimeRequestTimeout%22%3A%20%220s%22%2C%0A%20%20%22maxPods%22%3A%20250%2C%0A%20%20%22something%22%3A%20%220s%22%2C%0A%20%20%22kubeAPIBurst%22%3A%20100%2C%0A%20%20%22serializeImagePulls%22%3A%20false%2C%0A%20%20%22evictionPressureTransitionPeriod%22%3A%20%220s%22%2C%0A%20%20%22featureGates%22%3A%20%7B%0A%20%20%20%20%22APIPriorityAndFairness%22%3A%20true%2C%0A%20%20%20%20%22CSIMigrationAWS%22%3A%20false%2C%0A%20%20%20%20%22CSIMigrationAzureDisk%22%3A%20false%2C%0A%20%20%20%20%22CSIMigrationAzureFile%22%3A%20false%2C%0A%20%20%20%20%22CSIMigrationGCE%22%3A%20false%2C%0A%20%20%20%20%22CSIMigrationOpenStack%22%3A%20false%2C%0A%20%20%20%20%22CSIMigrationvSphere%22%3A%20false%2C%0A%20%20%20%20%22DownwardAPIHugePages%22%3A%20true%2C%0A%20%20%20%20%22LegacyNodeRoleBehavior%22%3A%20false%2C%0A%20%20%20%20%22NodeDisruptionExclusion%22%3A%20true%2C%0A%20%20%20%20%22PodSecurity%22%3A%20true%2C%0A%20%20%20%20%22RotateKubeletServerCertificate%22%3A%20true%2C%0A%20%20%20%20%22ServiceNodeExclusion%22%3A%20true%2C%0A%20%20%20%20%22SupportPodPidsLimit%22%3A%20true%0A%20%20%7D%2C%0A%20%20%22memorySwap%22%3A%20%7B%7D%2C%0A%20%20%22containerLogMaxSize%22%3A%20%2250Mi%22%2C%0A%20%20%22systemReserved%22%3A%20%7B%0A%20%20%20%20%22ephemeral-storage%22%3A%20%221Gi%22%0A%20%20%7D%2C%0A%20%20%22logging%22%3A%20%7B%0A%20%20%20%20%22flushFrequency%22%3A%200%2C%0A%20%20%20%20%22verbosity%22%3A%200%2C%0A%20%20%20%20%22options%22%3A%20%7B%0A%20%20%20%20%20%20%22json%22%3A%20%7B%0A%20%20%20%20%20%20%20%20%22infoBufferSize%22%3A%20%220%22%0A%20%20%20%20%20%20%7D%0A%20%20%20%20%7D%0A%20%20%7D%2C%0A%20%20%22shutdownGracePeriod%22%3A%20%220s%22%2C%0A%20%20%22shutdownGracePeriodCriticalPods%22%3A%20%220s%22%0A%7D%0A"
+						},
+						"mode": 420,
+						"overwrite": true,
+						"path": "/etc/kubernetes/kubelet.conf"
+					}
+				]
+			}
+		}`
+
 		BeforeEach(func() {
 			mcp := &mcfgv1.MachineConfigPool{
 				TypeMeta: metav1.TypeMeta{
@@ -451,6 +477,9 @@ var _ = Describe("ComplianceSuiteController", func() {
 				Spec: mcfgv1.MachineConfigPoolSpec{
 					NodeSelector: &metav1.LabelSelector{
 						MatchLabels: targetNodeSelector,
+					},
+					Configuration: mcfgv1.MachineConfigPoolStatusConfiguration{
+						Source: []corev1.ObjectReference{{Name: "99-master-generated-kubelet"}},
 					},
 				},
 			}
@@ -475,19 +504,84 @@ var _ = Describe("ComplianceSuiteController", func() {
 					},
 				},
 			}
-			kc := &mcfgv1.KubeletConfig{
+			kcPayload := `{"apiVersion": "machineconfiguration.openshift.io/v1","kind": "KubeletConfig","spec": {"kubeletConfig": {"streamingConnectionIdleTimeout": "0s","something": "0s"}}}`
+
+			renderdKC := `
+			{
+				"ignition": {
+					"version": "3.2.0"
+				},
+				"storage": {
+					"files": [
+						{
+							"contents": {
+								"source": "data:text/plain,%7B%0A%20%20%22kind%22%3A%20%22KubeletConfiguration%22%2C%0A%20%20%22apiVersion%22%3A%20%22kubelet.config.k8s.io%2Fv1beta1%22%2C%0A%20%20%22staticPodPath%22%3A%20%22%2Fetc%2Fkubernetes%2Fmanifests%22%2C%0A%20%20%22syncFrequency%22%3A%20%220s%22%2C%0A%20%20%22fileCheckFrequency%22%3A%20%220s%22%2C%0A%20%20%22httpCheckFrequency%22%3A%20%220s%22%2C%0A%20%20%22tlsCipherSuites%22%3A%20%5B%0A%20%20%20%20%22TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256%22%2C%0A%20%20%20%20%22TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256%22%2C%0A%20%20%20%20%22TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384%22%2C%0A%20%20%20%20%22TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384%22%2C%0A%20%20%20%20%22TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256%22%2C%0A%20%20%20%20%22TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256%22%0A%20%20%5D%2C%0A%20%20%22tlsMinVersion%22%3A%20%22VersionTLS12%22%2C%0A%20%20%22rotateCertificates%22%3A%20true%2C%0A%20%20%22serverTLSBootstrap%22%3A%20true%2C%0A%20%20%22authentication%22%3A%20%7B%0A%20%20%20%20%22x509%22%3A%20%7B%0A%20%20%20%20%20%20%22clientCAFile%22%3A%20%22%2Fetc%2Fkubernetes%2Fkubelet-ca.crt%22%0A%20%20%20%20%7D%2C%0A%20%20%20%20%22webhook%22%3A%20%7B%0A%20%20%20%20%20%20%22cacheTTL%22%3A%20%220s%22%0A%20%20%20%20%7D%2C%0A%20%20%20%20%22anonymous%22%3A%20%7B%0A%20%20%20%20%20%20%22enabled%22%3A%20false%0A%20%20%20%20%7D%0A%20%20%7D%2C%0A%20%20%22authorization%22%3A%20%7B%0A%20%20%20%20%22webhook%22%3A%20%7B%0A%20%20%20%20%20%20%22cacheAuthorizedTTL%22%3A%20%220s%22%2C%0A%20%20%20%20%20%20%22cacheUnauthorizedTTL%22%3A%20%220s%22%0A%20%20%20%20%7D%0A%20%20%7D%2C%0A%20%20%22clusterDomain%22%3A%20%22cluster.local%22%2C%0A%20%20%22clusterDNS%22%3A%20%5B%0A%20%20%20%20%22172.30.0.10%22%0A%20%20%5D%2C%0A%20%20%22streamingConnectionIdleTimeout%22%3A%20%220s%22%2C%0A%20%20%22nodeStatusUpdateFrequency%22%3A%20%220s%22%2C%0A%20%20%22nodeStatusReportFrequency%22%3A%20%220s%22%2C%0A%20%20%22imageMinimumGCAge%22%3A%20%220s%22%2C%0A%20%20%22volumeStatsAggPeriod%22%3A%20%220s%22%2C%0A%20%20%22systemCgroups%22%3A%20%22%2Fsystem.slice%22%2C%0A%20%20%22cgroupRoot%22%3A%20%22%2F%22%2C%0A%20%20%22cgroupDriver%22%3A%20%22systemd%22%2C%0A%20%20%22cpuManagerReconcilePeriod%22%3A%20%220s%22%2C%0A%20%20%22runtimeRequestTimeout%22%3A%20%220s%22%2C%0A%20%20%22maxPods%22%3A%20250%2C%0A%20%20%22kubeAPIQPS%22%3A%2050%2C%0A%20%20%22kubeAPIBurst%22%3A%20100%2C%0A%20%20%22serializeImagePulls%22%3A%20false%2C%0A%20%20%22evictionPressureTransitionPeriod%22%3A%20%220s%22%2C%0A%20%20%22featureGates%22%3A%20%7B%0A%20%20%20%20%22APIPriorityAndFairness%22%3A%20true%2C%0A%20%20%20%20%22CSIMigrationAWS%22%3A%20false%2C%0A%20%20%20%20%22CSIMigrationAzureDisk%22%3A%20false%2C%0A%20%20%20%20%22CSIMigrationAzureFile%22%3A%20false%2C%0A%20%20%20%20%22CSIMigrationGCE%22%3A%20false%2C%0A%20%20%20%20%22CSIMigrationOpenStack%22%3A%20false%2C%0A%20%20%20%20%22CSIMigrationvSphere%22%3A%20false%2C%0A%20%20%20%20%22DownwardAPIHugePages%22%3A%20true%2C%0A%20%20%20%20%22LegacyNodeRoleBehavior%22%3A%20false%2C%0A%20%20%20%20%22NodeDisruptionExclusion%22%3A%20true%2C%0A%20%20%20%20%22PodSecurity%22%3A%20true%2C%0A%20%20%20%20%22RotateKubeletServerCertificate%22%3A%20true%2C%0A%20%20%20%20%22ServiceNodeExclusion%22%3A%20true%2C%0A%20%20%20%20%22SupportPodPidsLimit%22%3A%20true%0A%20%20%7D%2C%0A%20%20%22memorySwap%22%3A%20%7B%7D%2C%0A%20%20%22containerLogMaxSize%22%3A%20%2250Mi%22%2C%0A%20%20%22systemReserved%22%3A%20%7B%0A%20%20%20%20%22ephemeral-storage%22%3A%20%221Gi%22%0A%20%20%7D%2C%0A%20%20%22logging%22%3A%20%7B%0A%20%20%20%20%22flushFrequency%22%3A%200%2C%0A%20%20%20%20%22verbosity%22%3A%200%2C%0A%20%20%20%20%22options%22%3A%20%7B%0A%20%20%20%20%20%20%22json%22%3A%20%7B%0A%20%20%20%20%20%20%20%20%22infoBufferSize%22%3A%20%220%22%0A%20%20%20%20%20%20%7D%0A%20%20%20%20%7D%0A%20%20%7D%2C%0A%20%20%22shutdownGracePeriod%22%3A%20%220s%22%2C%0A%20%20%22shutdownGracePeriodCriticalPods%22%3A%20%220s%22%0A%7D%0A"
+							},
+							"mode": 420,
+							"overwrite": true,
+							"path": "/etc/kubernetes/kubelet.conf"
+						}
+					]
+				}
+			}`
+			//prepare machine config for testing
+			kcOwnerRef := metav1.OwnerReference{
+				APIVersion: "machineconfiguration.openshift.io/v1",
+				Kind:       "KubeletConfig",
+				Name:       "kubelet-config-compliance-operator",
+				UID:        "12345",
+			}
+
+			mc := &mcfgv1.MachineConfig{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       "KubeletConfig",
-					APIVersion: mcfgapi.GroupName + "/v1",
+					Kind:       "MachineConfig",
+					APIVersion: "machineconfiguration.openshift.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					OwnerReferences: []metav1.OwnerReference{kcOwnerRef},
+					Name:            "99-master-generated-kubelet",
+				},
+				Spec: mcfgv1.MachineConfigSpec{
+					Config: runtime.RawExtension{
+						Raw: []byte(renderdKC),
+					},
 				},
 			}
-			unstructuredKC, err := runtime.DefaultUnstructuredConverter.ToUnstructured(kc)
+			err = reconciler.client.Create(ctx, mc)
+			Expect(err).To(BeNil())
+
+			existingKCPayload := `
+			{
+				"streamingConnectionIdleTimeout": "0s"
+			}
+			`
+			existingKCObj := &mcfgv1.KubeletConfig{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "KubeletConfig",
+					APIVersion: "machineconfiguration.openshift.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "kubelet-config-compliance-operator",
+				},
+				Spec: mcfgv1.KubeletConfigSpec{
+					KubeletConfig: &runtime.RawExtension{
+						Raw: []byte(existingKCPayload),
+					},
+				},
+			}
+			//create existing kubelet config
+			err = reconciler.client.Create(ctx, existingKCObj.DeepCopy())
+			Expect(err).To(BeNil())
+
+			var obj map[string]interface{}
+			err = json.Unmarshal([]byte(kcPayload), &obj)
 			Expect(err).ToNot(HaveOccurred())
 			remediation.Spec.Current.Object = &unstructured.Unstructured{
-				Object: unstructuredKC,
+				Object: obj,
 			}
 			err = reconciler.client.Create(ctx, remediation.DeepCopy())
 			Expect(err).To(BeNil())
+
 		})
 
 		reconcileShouldApplyTheRemediationAndHandlePausingPools := func() {
@@ -507,14 +601,42 @@ var _ = Describe("ComplianceSuiteController", func() {
 			Expect(err).To(BeNil())
 			Expect(p.Spec.Paused).To(BeTrue())
 
+			By("The remediation controller should create/patch the kubelet config object")
+			kc := &mcfgv1.KubeletConfig{}
+			kckey := types.NamespacedName{Name: "kubelet-config-compliance-operator"}
+			err = reconciler.client.Get(ctx, kckey, kc)
+			Expect(err).To(BeNil())
+			kc.Spec.KubeletConfig.Raw = []byte(remediationKCPayload)
+			err = reconciler.client.Patch(ctx, kc, client.Merge)
+			Expect(err).To(BeNil())
+
 			By("Running a second reconcile loop")
 			_, err = reconciler.reconcileRemediations(suite, logger)
 			Expect(err).To(BeNil())
 
-			By("the pool should be un-paused")
+			By("the pool should not be un-paused because the KubeletConfig is not rendered into Machine Config")
+			err = reconciler.client.Get(ctx, poolkey, p)
+			Expect(err).To(BeNil())
+			Expect(p.Spec.Paused).To(BeTrue())
+
+			By("Render KubeLetconfig into Machine Config")
+			mcCurrent := &mcfgv1.MachineConfig{}
+			mckey := types.NamespacedName{Name: "99-master-generated-kubelet"}
+			err = reconciler.client.Get(ctx, mckey, mcCurrent)
+			Expect(err).To(BeNil())
+			mcCurrent.Spec.Config.Raw = []byte(remediationKCMCPayload)
+			err = reconciler.client.Update(ctx, mcCurrent)
+			Expect(err).To(BeNil())
+
+			By("Running a second reconcile loop")
+			_, err = reconciler.reconcileRemediations(suite, logger)
+			Expect(err).To(BeNil())
+
+			By("the pool should be un-paused because machine config has been updated with the new kubelet config content")
 			err = reconciler.client.Get(ctx, poolkey, p)
 			Expect(err).To(BeNil())
 			Expect(p.Spec.Paused).To(BeFalse())
+
 			s := &compv1alpha1.ComplianceRemediation{}
 			key := types.NamespacedName{Name: remediationName, Namespace: namespace}
 			reconciler.client.Get(ctx, key, s)
