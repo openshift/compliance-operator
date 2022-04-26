@@ -32,6 +32,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   before unpause affected pool. [1]
   ([1]https://bugzilla.redhat.com/show_bug.cgi?id=2071854).
 
+- Fixes memory pointer crashloop when there is invalid `MachineConfigPool` in the
+  cluster. 
+  [Cusomter Case](https://access.redhat.com/support/cases/#/case/03199627) for more
+  information
+
 ### Internal Changes
 
 - Added node resource to the list of resources we always fetch so that arch CPEs will

@@ -227,4 +227,49 @@ var _ = Describe("Nodeutils", func() {
 			Entry("@all", "@all", map[string]string{}),
 		)
 	})
+
+	Context("MachineConfig Pool with no node selector", func() {
+		targetNodeSelector := map[string]string{
+			"test-node-role": "",
+		}
+
+		mcp := &mcfgv1.MachineConfigPool{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "MachineConfigPool",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "invalidpool",
+			},
+			Spec: mcfgv1.MachineConfigPoolSpec{
+				Paused: false,
+			},
+		}
+		It("It should evaluate as false", func() {
+			isMatchingPool := utils.McfgPoolLabelMatches(targetNodeSelector, mcp)
+			Expect(isMatchingPool).To(BeFalse())
+
+		})
+
+		// no matching labels
+		mcp = &mcfgv1.MachineConfigPool{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "MachineConfigPool",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "invalidpool",
+			},
+			Spec: mcfgv1.MachineConfigPoolSpec{
+				NodeSelector: &metav1.LabelSelector{},
+				Paused:       false,
+			},
+		}
+		It("It should evaluate as false", func() {
+			isMatchingPool := utils.McfgPoolLabelMatches(targetNodeSelector, mcp)
+			Expect(isMatchingPool).To(BeFalse())
+
+		})
+
+	})
 })

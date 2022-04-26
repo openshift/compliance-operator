@@ -3272,6 +3272,8 @@ func TestE2E(t *testing.T) {
 					},
 				}
 				mcTctx.ensureE2EPool()
+				// To prevent pod from crashing when there is an invalid machine config pool in the cluster
+				mcTctx.ensureInvalidE2EPool()
 				createTPErr := f.Client.Create(goctx.TODO(), tp, getCleanupOpts(ctx))
 				if createTPErr != nil {
 					return createTPErr
