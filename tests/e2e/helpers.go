@@ -94,9 +94,10 @@ type testExecution struct {
 }
 
 type mcTestCtx struct {
-	f     *framework.Framework
-	t     *testing.T
-	pools []*mcfgv1.MachineConfigPool
+	f            *framework.Framework
+	t            *testing.T
+	pools        []*mcfgv1.MachineConfigPool
+	invalidPools []*mcfgv1.MachineConfigPool
 }
 
 func E2ELogf(t *testing.T, format string, args ...interface{}) {
@@ -184,6 +185,17 @@ func (c *mcTestCtx) cleanupTrackedPools() {
 	}
 }
 
+func (c *mcTestCtx) cleanupTrackedInvalidPools() {
+	for _, p := range c.invalidPools {
+		// delete the pool
+		E2ELogf(c.t, "Removing pool %s\n", p.Name)
+		err := c.f.Client.Delete(goctx.TODO(), p)
+		if err != nil {
+			E2EErrorf(c.t, "Could not remove pool %s: %v\n", p.Name, err)
+		}
+	}
+}
+
 func (c *mcTestCtx) trackPool(pool *mcfgv1.MachineConfigPool) {
 	for _, p := range c.pools {
 		if p.Name == pool.Name {
@@ -194,13 +206,32 @@ func (c *mcTestCtx) trackPool(pool *mcfgv1.MachineConfigPool) {
 	E2ELogf(c.t, "Tracking pool %s\n", pool.Name)
 }
 
-// This will creat a new machine config sub pool with one random node from worker pool to speed up the test.
+func (c *mcTestCtx) trackInvalidPool(pool *mcfgv1.MachineConfigPool) {
+	for _, p := range c.invalidPools {
+		if p.Name == pool.Name {
+			return
+		}
+	}
+	c.invalidPools = append(c.invalidPools, pool)
+	E2ELogf(c.t, "Tracking pool %s\n", pool.Name)
+}
+
+// This will create a new machine config sub pool with one random node from worker pool to speed up the test.
 func (c *mcTestCtx) ensureE2EPool() {
 	pool, err := createReadyMachineConfigPoolSubset(c.t, c.f, workerPoolName, testPoolName)
 	if err != nil {
 		E2EFatalf(c.t, "error ensuring that test e2e pool exists: %s", err)
 	}
 	c.trackPool(pool)
+}
+
+// This will create a new invalid machine config sub pool with one random node from worker pool to speed up the test.
+func (c *mcTestCtx) ensureInvalidE2EPool() {
+	pool, err := createInvalidMCPObject(c.t, c.f, testInvalidPoolName)
+	if err != nil {
+		E2EFatalf(c.t, "error ensuring that test e2e pool exists: %s", err)
+	}
+	c.trackInvalidPool(pool)
 }
 
 // executeTest sets up everything that a e2e test needs to run, and executes the test.
@@ -223,6 +254,7 @@ func executeTests(t *testing.T, tests ...testExecution) {
 	if err != nil {
 		t.Fatalf("could not create the MC test context: %v", err)
 	}
+	defer mcTctx.cleanupTrackedInvalidPools()
 	defer mcTctx.cleanupTrackedPools()
 
 	rhcosPb, err = getReadyProfileBundle(t, f, "rhcos4", ns)
@@ -1562,6 +1594,32 @@ func createMCPObject(t *testing.T, f *framework.Framework, newPoolNodeLabel, old
 
 	// We create but don't clean up, we'll call a function for this since we need to
 	// re-label hosts first.
+	createErr := backoff.RetryNotify(
+		func() error {
+			err := f.Client.Create(goctx.TODO(), newPool, nil)
+			if apierrors.IsAlreadyExists(err) {
+				return nil
+			}
+			return err
+		},
+		defaultBackoff,
+		func(err error, interval time.Duration) {
+			E2ELogf(t, "error while labeling node: %s. Retrying after %s", err, interval)
+		})
+	if createErr != nil {
+		return newPool, fmt.Errorf("couldn't create MCP: %w", createErr)
+	}
+	return newPool, nil
+}
+
+func createInvalidMCPObject(t *testing.T, f *framework.Framework, newPoolName string) (*mcfgv1.MachineConfigPool, error) {
+	newPool := &mcfgv1.MachineConfigPool{
+		ObjectMeta: metav1.ObjectMeta{Name: newPoolName},
+		Spec: mcfgv1.MachineConfigPoolSpec{
+			Paused: false,
+		},
+	}
+
 	createErr := backoff.RetryNotify(
 		func() error {
 			err := f.Client.Create(goctx.TODO(), newPool, nil)

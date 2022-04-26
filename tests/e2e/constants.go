@@ -12,6 +12,7 @@ const (
 	maxRetries                    = 5
 	workerPoolName                = "worker"
 	testPoolName                  = "e2e"
+	testInvalidPoolName           = "e2e-invalid"
 	rhcosContentFile              = "ssg-rhcos4-ds.xml"
 	ocpContentFile                = "ssg-ocp4-ds.xml"
 	unexistentResourceContentFile = "ocp4-unexistent-resource.xml"

@@ -208,7 +208,15 @@ func McfgPoolLabelMatches(nodeSelector map[string]string, pool *mcfgv1.MachineCo
 	if nodeSelector == nil {
 		return false
 	}
+
+	if pool.Spec.NodeSelector == nil {
+		return false
+	}
 	// TODO(jaosorior): Make this work with MatchExpression
+	if pool.Spec.NodeSelector.MatchLabels == nil {
+		return false
+	}
+
 	return reflect.DeepEqual(nodeSelector, pool.Spec.NodeSelector.MatchLabels)
 }
 
