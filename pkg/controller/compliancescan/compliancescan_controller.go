@@ -454,24 +454,30 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(h scanTypeHandler, instance *
 	var err error
 	logger.Info("Phase: Done")
 
-	// We need to remove resources before doing a re-scan
-	if doDelete || instance.NeedsRescan() {
-		logger.Info("Cleaning up scan's resources")
+	// the scan pods and the aggregator are done at this point and can be cleaned up regardless
+	// of the doDelete flag, unless we are running in debug mode and thus requested them to stay
+	// around for later inspection
+	if instance.Spec.Debug == false || instance.NeedsRescan() {
 		// Don't try to clean up scan-type specific resources
 		// if it was an unknown scan type
 		if h != nil {
 			if err := h.cleanup(); err != nil {
+				logger.Error(err, "Cannot clean up scan pods")
 				return reconcile.Result{}, err
 			}
 		}
 
-		if err := r.deleteResultServer(instance, logger); err != nil {
-			logger.Error(err, "Cannot delete result server")
-			return reconcile.Result{}, err
-		}
-
 		if err := r.deleteAggregator(instance, logger); err != nil {
 			logger.Error(err, "Cannot delete aggregator")
+			return reconcile.Result{}, err
+		}
+	}
+
+	// We need to remove resources before doing a re-scan
+	if doDelete || instance.NeedsRescan() {
+		logger.Info("Cleaning up scan's resources")
+		if err := r.deleteResultServer(instance, logger); err != nil {
+			logger.Error(err, "Cannot delete result server")
 			return reconcile.Result{}, err
 		}
 

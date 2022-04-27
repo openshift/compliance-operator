@@ -37,6 +37,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   [Cusomter Case](https://access.redhat.com/support/cases/#/case/03199627) for more
   information
 
+- The scan pods and the aggregator pod were never removed after a scan run which
+  might have [prevented](https://bugzilla.redhat.com/show_bug.cgi?id=2075029)
+  the cluster-autoscaler from running.
+
 ### Internal Changes
 
 - Added node resource to the list of resources we always fetch so that arch CPEs will
@@ -59,7 +63,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Enhancements
 
 - Added necessary permessions for api-resource-collector so that the new rule
-  `cluster_logging_operator_exist` can be evaluate properly. [1]
+  `cluster_logging_operator_exist` can be evaluated properly. [1]
   [1] https://github.com/ComplianceAsCode/content/pull/8511
 
 ### Fixes

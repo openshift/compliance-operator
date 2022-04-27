@@ -273,6 +273,7 @@ func (nh *nodeScanTypeHandler) gatherResults() (compv1alpha1.ComplianceScanStatu
 }
 
 func (nh *nodeScanTypeHandler) cleanup() error {
+	nh.l.Info("Deleting node scan pods")
 	if err := nh.r.deleteScanPods(nh.scan, nh.nodes, nh.l); err != nil {
 		nh.l.Error(err, "Cannot delete scan pods")
 		return err
@@ -384,6 +385,7 @@ func (ph *platformScanTypeHandler) gatherResults() (compv1alpha1.ComplianceScanS
 }
 
 func (ph *platformScanTypeHandler) cleanup() error {
+	ph.l.Info("Deleting platform scan pods")
 	if err := ph.r.deletePlatformScanPod(ph.scan, ph.l); err != nil {
 		ph.l.Error(err, "Cannot delete platform scan pod")
 		return err

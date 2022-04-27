@@ -23,6 +23,30 @@ import (
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 )
 
+func createFakeScanPods(reconciler ReconcileComplianceScan, scanName string, nodeNames ...string) {
+	for _, nodeName := range nodeNames {
+		podName1 := fmt.Sprintf("%s-%s-pod", scanName, nodeName)
+		reconciler.client.Create(context.TODO(), &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podName1,
+				Namespace: common.GetComplianceOperatorNamespace(),
+			},
+		})
+	}
+}
+
+func createFakeRsSecret(reconciler ReconcileComplianceScan, scanName string) {
+	// simulate result server secret as one of the resources that is cleaned up
+	// based on the value of the doDelete flag
+	secretName := fmt.Sprintf("%s%s", ServerCertPrefix, scanName)
+	reconciler.client.Create(context.TODO(), &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: common.GetComplianceOperatorNamespace(),
+		},
+	})
+}
+
 var _ = Describe("Testing compliancescan controller phases", func() {
 
 	var (
@@ -250,9 +274,6 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				result, err := reconciler.phaseRunningHandler(handler, logger)
 				pods := &corev1.PodList{}
 				reconciler.client.List(context.TODO(), pods)
-				for _, pod := range pods.Items {
-					fmt.Printf("* OZZ: Found pod: %s\n", pod.Name)
-				}
 				Expect(result).ToNot(BeNil())
 				Expect(err).To(BeNil())
 				Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseRunning))
@@ -303,66 +324,82 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 	Context("On the DONE phase", func() {
 		Context("with delete flag off", func() {
 			BeforeEach(func() {
-				// Create the pods for the test
-				podName1 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name)
-				reconciler.client.Create(context.TODO(), &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      podName1,
-						Namespace: common.GetComplianceOperatorNamespace(),
-					},
-				})
-
-				podName2 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name)
-				reconciler.client.Create(context.TODO(), &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      podName2,
-						Namespace: common.GetComplianceOperatorNamespace(),
-					},
-				})
+				// Create the pods and the secret for the test
+				createFakeScanPods(reconciler, compliancescaninstance.Name, nodeinstance1.Name, nodeinstance2.Name)
+				createFakeRsSecret(reconciler, compliancescaninstance.Name)
 
 				// Set state to DONE
 				compliancescaninstance.Status.Phase = compv1alpha1.PhaseDone
 				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
 			})
 			It("Should return success & preserve resources", func() {
-				var pods corev1.PodList
 				result, err := reconciler.phaseDoneHandler(handler, compliancescaninstance, logger, dontDelete)
-				reconciler.client.List(context.TODO(), &pods)
 				Expect(result).ToNot(BeNil())
+
+				// scan pods are cleaned up regardless
+				var pods corev1.PodList
+				reconciler.client.List(context.TODO(), &pods)
 				Expect(err).To(BeNil())
-				Expect(pods.Items).ToNot(BeEmpty())
+				Expect(pods.Items).To(BeEmpty())
+
+				// but other resources should be preserved
+				var secrets corev1.SecretList
+				reconciler.client.List(context.TODO(), &secrets)
+				Expect(err).To(BeNil())
+				Expect(secrets.Items).ToNot(BeEmpty())
 			})
 		})
 		Context("with delete flag on", func() {
 			BeforeEach(func() {
-				// Create the pods for the test
-				podName1 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance1.Name)
-				reconciler.client.Create(context.TODO(), &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      podName1,
-						Namespace: common.GetComplianceOperatorNamespace(),
-					},
-				})
-
-				podName2 := fmt.Sprintf("%s-%s-pod", compliancescaninstance.Name, nodeinstance2.Name)
-				reconciler.client.Create(context.TODO(), &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      podName2,
-						Namespace: common.GetComplianceOperatorNamespace(),
-					},
-				})
+				// Create the pods and the secret for the test
+				createFakeScanPods(reconciler, compliancescaninstance.Name, nodeinstance1.Name, nodeinstance2.Name)
+				createFakeRsSecret(reconciler, compliancescaninstance.Name)
 
 				// Set state to DONE
 				compliancescaninstance.Status.Phase = compv1alpha1.PhaseDone
 				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
 			})
 			It("Should return success & clean up resources", func() {
-				var pods corev1.PodList
 				result, err := reconciler.phaseDoneHandler(handler, compliancescaninstance, logger, doDelete)
-				reconciler.client.List(context.TODO(), &pods)
 				Expect(result).ToNot(BeNil())
+
+				var pods corev1.PodList
+				reconciler.client.List(context.TODO(), &pods)
 				Expect(err).To(BeNil())
 				Expect(pods.Items).To(BeEmpty())
+
+				// also other resources should be gone
+				var secrets corev1.SecretList
+				reconciler.client.List(context.TODO(), &secrets)
+				Expect(err).To(BeNil())
+				Expect(secrets.Items).To(BeEmpty())
+			})
+		})
+		Context("with delete flag on but debug on as well", func() {
+			BeforeEach(func() {
+				// Create the pods for the test
+				createFakeScanPods(reconciler, compliancescaninstance.Name, nodeinstance1.Name, nodeinstance2.Name)
+				createFakeRsSecret(reconciler, compliancescaninstance.Name)
+
+				// Set state to DONE
+				compliancescaninstance.Status.Phase = compv1alpha1.PhaseDone
+				compliancescaninstance.Spec.Debug = true
+				reconciler.client.Status().Update(context.TODO(), compliancescaninstance)
+			})
+			It("Should return success & not clean up the scan pods", func() {
+				result, err := reconciler.phaseDoneHandler(handler, compliancescaninstance, logger, dontDelete)
+				Expect(result).ToNot(BeNil())
+
+				var pods corev1.PodList
+				reconciler.client.List(context.TODO(), &pods)
+				Expect(err).To(BeNil())
+				Expect(pods.Items).ToNot(BeEmpty())
+
+				// but other resources should be preserved
+				var secrets corev1.SecretList
+				reconciler.client.List(context.TODO(), &secrets)
+				Expect(err).To(BeNil())
+				Expect(secrets.Items).ToNot(BeEmpty())
 			})
 		})
 	})
