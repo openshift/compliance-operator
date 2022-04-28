@@ -12,13 +12,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The `api-resource-collector` `ClusterRole` has been updated to fetch network
   resources for the `operator.openshift.io` API group. This is necessary to
   automate checks that ensure the cluster is using a CNI that supports network
-  policies. Please refere to the
+  policies. Please refer to the
   [bug](https://bugzilla.redhat.com/show_bug.cgi?id=2072431) for more
   information.
-
 - The `api-resource-collector` `ClusterRole` has been updated to fetch network
   resources for the `gitopsservices.pipelines.openshift.io` API group. This is
   necessary to automate checks that ensure the cluster is using GitOps operator.
+- Added necessary permissions for api-resource-collector so that the new
+  [rule](https://github.com/ComplianceAsCode/content/pull/8511)
+  `cluster_logging_operator_exist` can be evaluated properly.
 
 ### Fixes
 
@@ -26,20 +28,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   [compliance-operator/compliance-operator-content](https://quay.io/repository/compliance-operator/compliance-operator-content)
   Quay repository. This should be a transparent change for end users and fixes
   CI that relies on content for end-to-end testing.
-
-- Fix issues of unpausing machine config pool too soon after applying remediations,
-  added a check to check if kubeletconfig has been fully rendered into machine config
-  before unpause affected pool. [1]
-  ([1]https://bugzilla.redhat.com/show_bug.cgi?id=2071854).
-
-- Fixes memory pointer crashloop when there is invalid `MachineConfigPool` in the
-  cluster. 
-  [Cusomter Case](https://access.redhat.com/support/cases/#/case/03199627) for more
-  information
-
+- Improve how the Compliance Operator checks for Machine Config Pool readiness.
+  This prevents an [issue](https://bugzilla.redhat.com/show_bug.cgi?id=2071854)
+  where the Compliance Operator unpaused Machine Config Pools too soon after
+  applying remediations, causing the kubelet to go into a `NotReady` state.
+- Fix memory pointer crashloop
+  [issue](https://github.com/ComplianceAsCode/compliance-operator/issues/6)
+  when there is invalid `MachineConfigPool` in the cluster.
 - The scan pods and the aggregator pod were never removed after a scan run which
   might have [prevented](https://bugzilla.redhat.com/show_bug.cgi?id=2075029)
-  the cluster-autoscaler from running.
+  the cluster-autoscaler from running. Now those resources are removed from
+  each node by default unless explicitly saved for debug purposes.
 
 ### Internal Changes
 
@@ -57,22 +56,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Security
 
 -
-
-## [0.1.50] - 2022-04-05
-
-### Enhancements
-
-- Added necessary permessions for api-resource-collector so that the new rule
-  `cluster_logging_operator_exist` can be evaluated properly. [1]
-  [1] https://github.com/ComplianceAsCode/content/pull/8511
-
-### Fixes
-
-- 
-
-### Removals
-
-- 
 
 ## [0.1.49] - 2022-03-22
 
