@@ -517,6 +517,9 @@ push-release: package-version-to-tag ## Do an official release (Requires permiss
 	git tag "v$(TAG)"
 	git push origin "v$(TAG)"
 	git push origin "release-v$(TAG)"
+	git checkout ocp-0.1
+	git merge "release-v$(TAG)"
+	git push origin ocp-0.1
 
 .PHONY: release-images
 release-images: package-version-to-tag push push-index undo-deploy-tag-image

@@ -45,6 +45,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Added node resource to the list of resources we always fetch so that arch CPEs will
   be evaluated appropriately.
 
+- Modify `push-release` make target to sync `ocp-0.1` branch to the latest release branch.
+
 ### Deprecations
 
 -

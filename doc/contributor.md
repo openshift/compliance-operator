@@ -198,3 +198,9 @@ The third and final step of the release is to build new images and push them to
 an offical image registry. You can build new images and push using `make
 release-images`. Note that this operation also requires you have proper
 permissions on the remote registry.
+
+### Purpose of `ocp-0.1` Branch
+
+In order to fetch the source for OCP downstream pipeline, we have added a branch `ocp-0.1`,
+this branch should be synced to the latest upstream release branch. The sync process has 
+been included in `push-release` make target.
