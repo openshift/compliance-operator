@@ -9,6 +9,33 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Enhancements
 
+-
+
+### Fixes
+
+-
+
+### Internal Changes
+
+-
+
+### Deprecations
+
+-
+
+### Removals
+
+-
+
+### Security
+
+-
+
+
+## [0.1.50] - 2022-04-27
+
+### Enhancements
+
 - The `api-resource-collector` `ClusterRole` has been updated to fetch network
   resources for the `operator.openshift.io` API group. This is necessary to
   automate checks that ensure the cluster is using a CNI that supports network
@@ -19,6 +46,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The `api-resource-collector` `ClusterRole` has been updated to fetch network
   resources for the `gitopsservices.pipelines.openshift.io` API group. This is
   necessary to automate checks that ensure the cluster is using GitOps operator.
+
+- Added necessary permessions for api-resource-collector so that the new rule
+  `cluster_logging_operator_exist` can be evaluated properly. [1]
+  [1] https://github.com/ComplianceAsCode/content/pull/8511
 
 ### Fixes
 
@@ -57,22 +88,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Security
 
 -
-
-## [0.1.50] - 2022-04-05
-
-### Enhancements
-
-- Added necessary permessions for api-resource-collector so that the new rule
-  `cluster_logging_operator_exist` can be evaluated properly. [1]
-  [1] https://github.com/ComplianceAsCode/content/pull/8511
-
-### Fixes
-
-- 
-
-### Removals
-
-- 
 
 ## [0.1.49] - 2022-03-22
 

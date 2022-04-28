@@ -160,7 +160,7 @@ metadata:
       ]
     capabilities: Seamless Upgrades
     categories: Monitoring,Security
-    olm.skipRange: '>=0.1.17 <0.1.49'
+    olm.skipRange: '>=0.1.17 <0.1.50'
     operatorframework.io/cluster-monitoring: "true"
     operatorframework.io/suggested-namespace: openshift-compliance
     operators.openshift.io/infrastructure-features: '["disconnected", "fips", "proxy-aware"]'
@@ -170,7 +170,7 @@ metadata:
     operatorframework.io/arch.amd64: supported
     operatorframework.io/arch.ppc64le: supported
     operatorframework.io/arch.s390x: supported
-  name: compliance-operator.v0.1.49
+  name: compliance-operator.v0.1.50
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -432,6 +432,7 @@ spec:
           - ingresscontrollers
           - kubeapiservers
           - openshiftapiservers
+          - networks
           verbs:
           - get
           - list
@@ -1163,6 +1164,16 @@ spec:
           - list
           - watch
         - apiGroups:
+          - logging.openshift.io
+          resourceNames:
+          - instance
+          resources:
+          - clusterloggings
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
           - flowcontrol.apiserver.k8s.io
           resourceNames:
           - catch-all
@@ -1230,6 +1241,14 @@ spec:
           verbs:
           - get
           - list
+        - apiGroups:
+          - gitopsservices.pipelines.openshift.io
+          resources:
+          - gitopsservices
+          verbs:
+          - get
+          - list
+          - watch
         serviceAccountName: api-resource-collector
       - rules:
         - apiGroups:
@@ -1289,10 +1308,10 @@ spec:
                 - name: RELATED_IMAGE_OPENSCAP
                   value: quay.io/compliance-operator/openscap-ocp:1.3.5
                 - name: RELATED_IMAGE_OPERATOR
-                  value: quay.io/compliance-operator/compliance-operator:0.1.49
+                  value: quay.io/compliance-operator/compliance-operator:0.1.50
                 - name: RELATED_IMAGE_PROFILE
                   value: quay.io/compliance-operator/compliance-operator-content:latest
-                image: quay.io/compliance-operator/compliance-operator:0.1.49
+                image: quay.io/compliance-operator/compliance-operator:0.1.50
                 imagePullPolicy: Always
                 name: compliance-operator
                 resources:
@@ -1609,4 +1628,4 @@ spec:
   provider:
     name: Red Hat Inc.
     url: www.redhat.com
-  version: 0.1.49
+  version: 0.1.50
