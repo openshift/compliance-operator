@@ -9,6 +9,33 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Enhancements
 
+-
+
+### Fixes
+
+-
+
+### Internal Changes
+
+-
+
+### Deprecations
+
+-
+
+### Removals
+
+-
+
+### Security
+
+-
+
+
+## [0.1.50] - 2022-05-02
+
+### Enhancements
+
 - The `api-resource-collector` `ClusterRole` has been updated to fetch network
   resources for the `operator.openshift.io` API group. This is necessary to
   automate checks that ensure the cluster is using a CNI that supports network
@@ -47,17 +74,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Modify `push-release` make target to sync `ocp-0.1` branch to the latest release branch.
 
-### Deprecations
-
--
-
-### Removals
-
--
-
-### Security
-
--
 
 ## [0.1.49] - 2022-03-22
 
