@@ -1229,7 +1229,7 @@ rules:
   - list
 # Necessary to check GitOps operator present for high requirements
 - apiGroups:
-  - gitopsservices.pipelines.openshift.io
+  - pipelines.openshift.io
   resources:
   - gitopsservices
   verbs:

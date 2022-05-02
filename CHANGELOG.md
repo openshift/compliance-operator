@@ -16,7 +16,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   [bug](https://bugzilla.redhat.com/show_bug.cgi?id=2072431) for more
   information.
 - The `api-resource-collector` `ClusterRole` has been updated to fetch network
-  resources for the `gitopsservices.pipelines.openshift.io` API group. This is
+  resources for the `pipelines.openshift.io` API group. This is
   necessary to automate checks that ensure the cluster is using GitOps operator.
 - Added necessary permissions for api-resource-collector so that the new
   [rule](https://github.com/ComplianceAsCode/content/pull/8511)
