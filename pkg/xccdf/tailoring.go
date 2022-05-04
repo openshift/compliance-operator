@@ -118,7 +118,32 @@ func getSelections(tp *cmpv1alpha1.TailoredProfile, rules map[string]*cmpv1alpha
 		rule := rules[selection.Name]
 		selections = append(selections, getSelectElementFromCRRule(rule, false))
 	}
+
+	for _, selection := range tp.Spec.ManualRules {
+		rule := rules[selection.Name]
+		selections = append(selections, getSelectElementFromCRRule(rule, true))
+	}
 	return selections
+}
+
+func GetManualRules(tp *cmpv1alpha1.TailoredProfile) []string {
+	ruleList := []string{}
+	for _, selection := range tp.Spec.ManualRules {
+		ruleList = append(ruleList, selection.Name)
+	}
+	return ruleList
+}
+
+func IsManualRule(ruleName string, manualRules []string) bool {
+	if manualRules == nil {
+		return false
+	}
+	for _, manualRule := range manualRules {
+		if strings.HasSuffix(manualRule, ruleName) {
+			return true
+		}
+	}
+	return false
 }
 
 func getValuesFromVariables(variables []*cmpv1alpha1.Variable) []SetValueElement {

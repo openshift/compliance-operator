@@ -222,7 +222,7 @@ func (r *ReconcileTailoredProfile) getProfileInfoFromExtends(tp *cmpv1alpha1.Tai
 // getProfileBundleFromRulesOrVars gets the ProfileBundle where the rules come from
 func (r *ReconcileTailoredProfile) getProfileBundleFromRulesOrVars(tp *cmpv1alpha1.TailoredProfile) (*cmpv1alpha1.ProfileBundle, error) {
 	var ruleToBeChecked *cmpv1alpha1.Rule
-	for _, selection := range append(tp.Spec.EnableRules, tp.Spec.DisableRules...) {
+	for _, selection := range append(tp.Spec.EnableRules, append(tp.Spec.DisableRules, tp.Spec.ManualRules...)...) {
 		rule := &cmpv1alpha1.Rule{}
 		ruleKey := types.NamespacedName{Name: selection.Name, Namespace: tp.Namespace}
 		geterr := r.client.Get(context.TODO(), ruleKey, rule)
@@ -275,11 +275,12 @@ func (r *ReconcileTailoredProfile) getProfileBundleFromRulesOrVars(tp *cmpv1alph
 }
 
 func (r *ReconcileTailoredProfile) getRulesFromSelections(tp *cmpv1alpha1.TailoredProfile, pb *cmpv1alpha1.ProfileBundle) (map[string]*cmpv1alpha1.Rule, error) {
-	rules := make(map[string]*cmpv1alpha1.Rule, len(tp.Spec.EnableRules)+len(tp.Spec.DisableRules))
-	for _, selection := range append(tp.Spec.EnableRules, tp.Spec.DisableRules...) {
+	rules := make(map[string]*cmpv1alpha1.Rule, len(tp.Spec.EnableRules)+len(tp.Spec.DisableRules)+len(tp.Spec.ManualRules))
+
+	for _, selection := range append(tp.Spec.EnableRules, append(tp.Spec.DisableRules, tp.Spec.ManualRules...)...) {
 		_, ok := rules[selection.Name]
 		if ok {
-			return nil, common.NewNonRetriableCtrlError("Rule '%s' appears twice in selections (enableRules or disableRules)", selection.Name)
+			return nil, common.NewNonRetriableCtrlError("Rule '%s' appears twice in selections (enableRules or disableRules or manualRules)", selection.Name)
 		}
 		rule := &cmpv1alpha1.Rule{}
 		ruleKey := types.NamespacedName{Name: selection.Name, Namespace: tp.Namespace}

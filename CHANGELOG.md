@@ -9,7 +9,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Enhancements
 
--
+- Added `maunalRules` to `TailoredProfile` CRD, user can choose to add the rule
+  there so that those rules will show Manual as results and remediations will not be 
+  created.
 
 ### Fixes
 

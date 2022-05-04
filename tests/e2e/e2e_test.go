@@ -3354,5 +3354,129 @@ func TestE2E(t *testing.T) {
 
 			},
 		},
+
+		testExecution{
+			Name:       "TestManualRulesTailoredProfile",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				var baselineImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "kubeletconfig")
+				const requiredRule = "kubelet-eviction-thresholds-set-soft-imagefs-available"
+				pbName := getObjNameFromTest(t)
+				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
+
+				ocpPb := &compv1alpha1.ProfileBundle{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      pbName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ProfileBundleSpec{
+						ContentImage: baselineImage,
+						ContentFile:  ocpContentFile,
+					},
+				}
+				if err := f.Client.Create(goctx.TODO(), ocpPb, getCleanupOpts(ctx)); err != nil {
+					return err
+				}
+				if err := waitForProfileBundleStatus(t, f, namespace, pbName, compv1alpha1.DataStreamValid); err != nil {
+					return err
+				}
+
+				// Check that if the rule we are going to test is there
+				err, found := doesRuleExist(f, ocpPb.Namespace, prefixName(pbName, requiredRule))
+				if err != nil {
+					return err
+				} else if found != true {
+					E2EErrorf(t, "Expected rule %s not found", prefixName(pbName, requiredRule))
+					return err
+				}
+
+				suiteName := "manual-rules-test-node"
+				masterScanName := fmt.Sprintf("%s-master", suiteName)
+
+				tp := &compv1alpha1.TailoredProfile{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.TailoredProfileSpec{
+						Title:       "manual-rules-test",
+						Description: "A test tailored profile to test manual-rules",
+						ManualRules: []compv1alpha1.RuleReferenceSpec{
+							{
+								Name:      prefixName(pbName, requiredRule),
+								Rationale: "To be tested",
+							},
+						},
+					},
+				}
+
+				createTPErr := f.Client.Create(goctx.TODO(), tp, getCleanupOpts(ctx))
+				if createTPErr != nil {
+					return createTPErr
+				}
+
+				ssb := &compv1alpha1.ScanSettingBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Profiles: []compv1alpha1.NamedObjectReference{
+						{
+							APIGroup: "compliance.openshift.io/v1alpha1",
+							Kind:     "TailoredProfile",
+							Name:     suiteName,
+						},
+					},
+					SettingsRef: &compv1alpha1.NamedObjectReference{
+						APIGroup: "compliance.openshift.io/v1alpha1",
+						Kind:     "ScanSetting",
+						Name:     "default",
+					},
+				}
+
+				err = f.Client.Create(goctx.TODO(), ssb, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultNonCompliant)
+				if err != nil {
+					return err
+				}
+
+				// the check should be shown as manual
+				checkResult := compv1alpha1.ComplianceCheckResult{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf("%s-kubelet-eviction-thresholds-set-soft-imagefs-available", masterScanName),
+						Namespace: namespace,
+					},
+					ID:       "xccdf_org.ssgproject.content_rule_kubelet_eviction_thresholds_set_soft_imagefs_available",
+					Status:   compv1alpha1.CheckResultManual,
+					Severity: compv1alpha1.CheckResultSeverityMedium,
+				}
+				err = assertHasCheck(f, suiteName, masterScanName, checkResult)
+				if err != nil {
+					return err
+				}
+
+				inNs := client.InNamespace(namespace)
+				withLabel := client.MatchingLabels{"profile-bundle": pbName}
+
+				remList := &compv1alpha1.ComplianceRemediationList{}
+				err = f.Client.List(goctx.TODO(), remList, inNs, withLabel)
+				if err != nil {
+					return err
+				}
+
+				if len(remList.Items) != 0 {
+					return fmt.Errorf("expected no remediation")
+				}
+
+				E2ELogf(t, "The test succeeded!")
+				return nil
+
+			},
+		},
 	)
 }

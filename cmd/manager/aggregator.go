@@ -55,12 +55,14 @@ import (
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
+	"github.com/openshift/compliance-operator/pkg/xccdf"
 )
 
 const (
 	configMapRemediationsProcessed = "compliance-remediations/processed"
 	configMapCompressed            = "openscap-scan-result/compressed"
 	apiserverOperatorName          = "openshift-apiserver"
+	tailoredProfileSuffix          = "-tp"
 )
 
 var aggregatorCmd = &cobra.Command{
@@ -171,7 +173,7 @@ func readCompressedData(compressed string) (*bzip2.Reader, error) {
 // Returns a triple of (array-of-ParseResults, source, error) where source identifies the entity whose
 // scan produced this configMap -- typically a nodeName for node scans. For platform scans, the source
 // is empty. The source is used later when reconciling inconsistent results
-func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string, content *xmlquery.Node, cm *v1.ConfigMap) ([]*utils.ParseResult, string, error) {
+func parseResultRemediations(client runtimeclient.Client, scheme *runtime.Scheme, scanName, namespace string, content *xmlquery.Node, cm *v1.ConfigMap) ([]*utils.ParseResult, string, error) {
 	var scanReader io.Reader
 
 	_, ok := cm.Annotations[configMapRemediationsProcessed]
@@ -200,9 +202,29 @@ func parseResultRemediations(scheme *runtime.Scheme, scanName, namespace string,
 
 	// This would return an empty string for a platform check that is handled later explicitly
 	nodeName := cm.Annotations["openscap-scan-result/node"]
+	manualRules := []string{}
 
-	table, err := utils.ParseResultsFromContentAndXccdf(scheme, scanName, namespace, content, scanReader)
-	return table, nodeName, err
+	//get all manual rules from tailored profile
+	scan := &compv1alpha1.ComplianceScan{}
+
+	err := client.Get(context.TODO(), types.NamespacedName{Name: scanName, Namespace: namespace}, scan)
+	if err != nil {
+		errStr := "ErrorGettingTailoredProfileScan." + err.Error() + "\n"
+		return nil, nodeName, fmt.Errorf(errStr)
+	}
+	// scan has tailored profile CM
+	if scan.Spec.TailoringConfigMap != nil {
+		tailoredProfileName := strings.TrimSuffix(scan.Spec.TailoringConfigMap.Name, tailoredProfileSuffix)
+		tp := &compv1alpha1.TailoredProfile{}
+		err = client.Get(context.TODO(), types.NamespacedName{Name: tailoredProfileName, Namespace: namespace}, tp)
+		if err != nil {
+			log.Info("GettingTailoredProfile", "TailoredProfile.Name", tailoredProfileName, "error", err.Error())
+		}
+		manualRules = xccdf.GetManualRules(tp)
+	}
+
+	table, err := utils.ParseResultsFromContentAndXccdf(scheme, scanName, namespace, content, scanReader, manualRules)
+	return table, nodeName, nil
 }
 
 func getScanResult(cm *v1.ConfigMap) (compv1alpha1.ComplianceScanStatusResult, string) {
@@ -507,7 +529,7 @@ func getCheckResultLabels(pr *utils.ParseResult, resultLabels map[string]string,
 
 func getCheckResultAnnotations(cr *compv1alpha1.ComplianceCheckResult, resultAnnotations map[string]string) map[string]string {
 	annotations := make(map[string]string)
-	annotations[compv1alpha1.ComplianceCheckResultRuleAnnotation] = cr.IDToDNSFriendlyName()
+	annotations[compv1alpha1.ComplianceCheckResultRuleAnnotation] = utils.IDToDNSFriendlyName(cr.ID)
 	for k, v := range resultAnnotations {
 		annotations[k] = v
 	}
@@ -759,7 +781,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 		cm := &configMaps[i]
 		log.Info("processing ConfigMap", "ConfigMap.Name", cm.Name)
 
-		cmParsedResults, source, err := parseResultRemediations(crclient.getScheme(), aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, cm)
+		cmParsedResults, source, err := parseResultRemediations(crclient.getClient(), crclient.getScheme(), aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, cm)
 		if err != nil {
 			log.Error(err, "Cannot parse ConfigMap into remediations", "ConfigMap.Name", cm.Name)
 		} else if cmParsedResults == nil {

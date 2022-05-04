@@ -3,6 +3,7 @@ package tailoredprofile
 import (
 	"context"
 	"fmt"
+
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/openshift/compliance-operator/pkg/controller/metrics"
@@ -144,6 +145,12 @@ var _ = Describe("TailoredprofileController", func() {
 							Rationale: "Why not",
 						},
 					},
+					ManualRules: []compv1alpha1.RuleReferenceSpec{
+						{
+							Name:      "rule-1",
+							Rationale: "Why not",
+						},
+					},
 				},
 			}
 
@@ -198,6 +205,7 @@ var _ = Describe("TailoredprofileController", func() {
 			Expect(data).To(ContainSubstring(`extends="profile_1"`))
 			Expect(data).To(ContainSubstring(`select idref="rule_3" selected="true"`))
 			Expect(data).To(ContainSubstring(`select idref="rule_2" selected="false"`))
+			Expect(data).To(ContainSubstring(`select idref="rule_1" selected="true"`))
 		})
 		It("Updates a configMap when the TP is updated", func() {
 			tpKey := types.NamespacedName{

@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/openshift/compliance-operator/pkg/xccdf"
 )
 
 const (
@@ -422,7 +423,7 @@ func ParseContent(dsReader io.Reader) (*xmlquery.Node, error) {
 }
 
 func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, namespace string,
-	dsDom *xmlquery.Node, resultsReader io.Reader) ([]*ParseResult, error) {
+	dsDom *xmlquery.Node, resultsReader io.Reader, manualRules []string) ([]*ParseResult, error) {
 
 	resultsDom, err := xmlquery.Parse(resultsReader)
 	if err != nil {
@@ -444,6 +445,7 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 	results := resultsDom.SelectElements("//rule-result")
 	parsedResults := make([]*ParseResult, 0)
 	var remErrs string
+
 	for i := range results {
 		result := results[i]
 		ruleIDRef := result.SelectAttr("idref")
@@ -458,7 +460,7 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 
 		instructions := GetInstructionsForRule(resultRule, questionsTable)
 		ruleValues := getValueListUsedForRule(resultRule, ovalTestVarTable, defTable, valuesList)
-		resCheck, err := newComplianceCheckResult(result, resultRule, ruleIDRef, instructions, scanName, namespace, ruleValues)
+		resCheck, err := newComplianceCheckResult(result, resultRule, ruleIDRef, instructions, scanName, namespace, ruleValues, manualRules)
 		if err != nil {
 			continue
 		}
@@ -483,7 +485,7 @@ func ParseResultsFromContentAndXccdf(scheme *runtime.Scheme, scanName string, na
 }
 
 // Returns a new complianceCheckResult if the check data is usable
-func newComplianceCheckResult(result *xmlquery.Node, rule *xmlquery.Node, ruleIdRef, instructions, scanName, namespace string, ruleValues []string) (*compv1alpha1.ComplianceCheckResult, error) {
+func newComplianceCheckResult(result *xmlquery.Node, rule *xmlquery.Node, ruleIdRef, instructions, scanName, namespace string, ruleValues []string, manualRules []string) (*compv1alpha1.ComplianceCheckResult, error) {
 	name := nameFromId(scanName, ruleIdRef)
 	mappedStatus, err := mapComplianceCheckResultStatus(result)
 	if err != nil {
@@ -496,6 +498,11 @@ func newComplianceCheckResult(result *xmlquery.Node, rule *xmlquery.Node, ruleId
 	mappedSeverity, err := mapComplianceCheckResultSeverity(rule)
 	if err != nil {
 		return nil, err
+	}
+
+	// check if rule is set as manual rules in TailoredProfile
+	if xccdf.IsManualRule(IDToDNSFriendlyName(ruleIdRef), manualRules) {
+		mappedStatus = compv1alpha1.CheckResultManual
 	}
 
 	return &compv1alpha1.ComplianceCheckResult{
@@ -650,10 +657,7 @@ func isRelevantFix(fix *xmlquery.Node) bool {
 }
 
 func nameFromId(scanName, ruleIdRef string) string {
-	ruleName := strings.TrimPrefix(ruleIdRef, rulePrefix)
-	dnsFriendlyFixId := strings.ReplaceAll(ruleName, "_", "-")
-	dnsFriendlyFixId = strings.ToLower(dnsFriendlyFixId)
-	return fmt.Sprintf("%s-%s", scanName, dnsFriendlyFixId)
+	return fmt.Sprintf("%s-%s", scanName, IDToDNSFriendlyName(ruleIdRef))
 }
 
 func remediationFromFixElement(scheme *runtime.Scheme, fix *xmlquery.Node, scanName, namespace string, resultValues map[string]string) ([]*compv1alpha1.ComplianceRemediation, error) {

@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // LengthName creates a string of maximum defined length.
@@ -35,4 +36,13 @@ func DNSLengthName(hashPrefix string, format string, a ...interface{}) string {
 	// TODO(jaosorior): Handle error
 	name, _ := LengthName(maxDNSLen, hashPrefix, format, a...)
 	return name
+}
+
+// IDToDNSFriendlyName gets the ID from the scan and returns a DNS
+// friendly name
+func IDToDNSFriendlyName(ruleIdRef string) string {
+	const rulePrefix = "xccdf_org.ssgproject.content_rule_"
+	ruleName := strings.TrimPrefix(ruleIdRef, rulePrefix)
+	dnsFriendlyFixID := strings.ReplaceAll(ruleName, "_", "-")
+	return strings.ToLower(dnsFriendlyFixID)
 }
