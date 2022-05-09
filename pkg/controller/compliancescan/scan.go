@@ -274,7 +274,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 }
 
 func (r *ReconcileComplianceScan) newPlatformScanPod(scanInstance *compv1alpha1.ComplianceScan, logger logr.Logger) *corev1.Pod {
-	mode := int32(0744)
+	mode := int32(0755)
 	podName := getPodForNodeName(scanInstance.Name, PlatformScanName)
 	cmName := getConfigMapForNodeName(scanInstance.Name, PlatformScanName)
 	podLabels := map[string]string{
