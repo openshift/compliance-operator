@@ -758,23 +758,23 @@ func newStandardParser() *referenceParser {
 	p := referenceParser{}
 	p.registeredStds = make([]*complianceStandard, 0)
 	p.annotationFormatters = make([]annotationsFormatterFn, 0)
-	err := p.registerStandard("NIST-800-53", `^http://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST\.SP\.800-53r4\.pdf$`)
+	err := p.registerStandard("NIST-800-53", `^http://nvlpubs\.nist\.gov/nistpubs/SpecialPublications/NIST\.SP\.800-53r4\.pdf$`)
 	if err != nil {
 		log.Error(err, "Could not register NIST-800-53 reference parser") // not much we can do here..
 	}
-	cocperr := p.registerStandard("CIS-OCP", `^https://www.cisecurity.org/benchmark/kubernetes/$`)
+	cocperr := p.registerStandard("CIS-OCP", `^https://www\.cisecurity\.org/benchmark/kubernetes/$`)
 	if cocperr != nil {
 		log.Error(cocperr, "Could not register CIS OpenShift reference parser") // not much we can do here..
 	}
-	crherr := p.registerStandard("CIS-RHEL", `^https://www.cisecurity.org/benchmark/red_hat_linux/$`)
+	crherr := p.registerStandard("CIS-RHEL", `^https://www\.cisecurity\.org/benchmark/red_hat_linux/$`)
 	if crherr != nil {
 		log.Error(crherr, "Could not register CIS Red Hat Linux reference parser") // not much we can do here..
 	}
-	nciperr := p.registerStandard("NERC-CIP", `^https://www.nerc.com/pa/Stand/Standard%20Purpose%20Statement%20DL/US_Standard_One-Stop-Shop.xlsx$`)
+	nciperr := p.registerStandard("NERC-CIP", `^https://www\.nerc\.com/pa/Stand/Standard%20Purpose%20Statement%20DL/US_Standard_One-Stop-Shop\.xlsx$`)
 	if nciperr != nil {
 		log.Error(nciperr, "Could not register NERC-CIP reference parser") // not much we can do here..
 	}
-	pcidssperr := p.registerStandard("PCI-DSS", `^https://www.pcisecuritystandards.org/documents/PCI_DSS_v3-2-1.pdf$`)
+	pcidssperr := p.registerStandard("PCI-DSS", `^https://www\.pcisecuritystandards\.org/documents/PCI_DSS_v3-2-1\.pdf$`)
 	if pcidssperr != nil {
 		log.Error(nciperr, "Could not register PCI-DSS reference parser") // not much we can do here..
 	}
