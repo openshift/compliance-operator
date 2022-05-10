@@ -213,9 +213,10 @@ func server(c *resultServerConfig) {
 		}
 		// TODO(jaosorior): Check that content-type is application/xml
 		filePath := path.Join(c.Path, filename+".xml"+extraExtension)
-		f, err := os.Create(filePath)
+		cleanPath := filepath.Clean(filePath)
+		f, err := os.Create(cleanPath)
 		if err != nil {
-			log.Info("Error creating file", "file-path", filePath)
+			log.Info("Error creating file", "file-path", cleanPath)
 			http.Error(w, "Error creating file", 500)
 			return
 		}
@@ -224,11 +225,11 @@ func server(c *resultServerConfig) {
 
 		_, err = io.Copy(f, r.Body)
 		if err != nil {
-			log.Info("Error writing file", "file-path", filePath)
+			log.Info("Error writing file", "file-path", cleanPath)
 			http.Error(w, "Error writing file", 500)
 			return
 		}
-		log.Info("Received file", "file-path", filePath)
+		log.Info("Received file", "file-path", cleanPath)
 	})
 
 	log.Info("Listening...")
