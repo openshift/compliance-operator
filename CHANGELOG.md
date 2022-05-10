@@ -16,7 +16,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixes
 
 - Fix OpenScap scanner container crashloop caused by script mount permission issue
-  on a security envronment where DAC_OVERRIDE capability is dropped. This PR chanes
+  on a security envronment where DAC_OVERRIDE capability is dropped. This PR changes
   script mount permission to give excute permission to all users.
   [bug](https://bugzilla.redhat.com/show_bug.cgi?id=2082151) for more information.
 
