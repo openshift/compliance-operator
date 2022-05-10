@@ -271,6 +271,11 @@ Notable attributes:
 * **spec.disableRules**: A list of `name` and `rationale` pairs. Each name refers to a name
   of a `Rule` object that is supposed to be disabled. `Rationale` is a human-readable text
   describing why the rule is disabled.
+* **spec.manualRules**: A list of `name` and `rationale` pairs. Each name refers to a name
+  of a `Rule` object that is supposed to be disabled for its automated check. `Rationale` 
+  is a human-readable text describing why the rule is disabled for manual checks. When `rule`
+  is added as manual rule, it will always show `MANUAL` as check result status, and remediation
+  will not be generated.
 * **spec.enableRules**: Equivalent of `disableRules`, except enables rules that might be
   disabled by default.
 * **spec.setValues**: Allows for setting specific values to something other

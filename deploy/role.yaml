@@ -338,6 +338,12 @@ rules:
   - get
   - update
   - patch
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - tailoredprofiles
+  verbs:
+  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

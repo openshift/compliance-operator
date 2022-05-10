@@ -43,6 +43,10 @@ type TailoredProfileSpec struct {
 	// +optional
 	// +nullable
 	DisableRules []RuleReferenceSpec `json:"disableRules,omitempty"`
+	// Disables the automated check on referenced rules for manual check
+	// +optional
+	// +nullable
+	ManualRules []RuleReferenceSpec `json:"manualRules,omitempty"`
 	// Sets the referenced variables to selected values
 	// +optional
 	// +nullable

@@ -75,7 +75,8 @@ var _ = Describe("XCCDF parser", func() {
 		Expect(err).NotTo(HaveOccurred())
 		dsDom, err := ParseContent(ds)
 		Expect(err).NotTo(HaveOccurred())
-		resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+		manualRules := []string{}
+		resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf, manualRules)
 
 		Context("Make Sure it handles the Wrongly formatted Remdiation TemplateF", func() {
 			//It will parse all other checks and remediation as normal
@@ -115,7 +116,8 @@ var _ = Describe("XCCDF parser", func() {
 			Expect(err).NotTo(HaveOccurred())
 			dsDom, err := ParseContent(ds)
 			Expect(err).NotTo(HaveOccurred())
-			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+			manualRules := []string{}
+			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf, manualRules)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resultList).NotTo(BeEmpty())
 
@@ -248,7 +250,8 @@ Server 3.fedora.pool.ntp.org`
 			Expect(err).NotTo(HaveOccurred())
 			dsDom, err := ParseContent(ds)
 			Expect(err).NotTo(HaveOccurred())
-			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+			manualRules := []string{}
+			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf, manualRules)
 			Expect(resultList).NotTo(BeEmpty())
 			nChecks, nRems = countResultItems(resultList)
 		})
@@ -302,6 +305,60 @@ Server 3.fedora.pool.ntp.org`
 		})
 
 	})
+
+	Describe("Test for manual Rules", func() {
+		BeforeEach(func() {
+			mcInstance := &mcfgv1.MachineConfig{}
+			schema = scheme.Scheme
+			schema.AddKnownTypes(mcfgv1.SchemeGroupVersion, mcInstance)
+			resultsFilename = "../../tests/data/xccdf-result-remdiation-templating.xml"
+			dsFilename = "../../tests/data/ds-input-for-remediation-value.xml"
+		})
+
+		JustBeforeEach(func() {
+			xccdf, err = os.Open(resultsFilename)
+			Expect(err).NotTo(HaveOccurred())
+
+			ds, err = os.Open(dsFilename)
+			Expect(err).NotTo(HaveOccurred())
+			dsDom, err := ParseContent(ds)
+			Expect(err).NotTo(HaveOccurred())
+			manualRules := []string{}
+			manualRules = append(manualRules, "rhcos4-auditd-data-retention-space-left")
+			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf, manualRules)
+			Expect(resultList).NotTo(BeEmpty())
+		})
+
+		Context("Check if the check result has correct value used attribute with one variable", func() {
+			const (
+				expCheckResultName = "testScan-auditd-data-retention-space-left"
+			)
+
+			var (
+				check *compv1alpha1.ComplianceCheckResult
+			)
+
+			BeforeEach(func() {
+				for i := range resultList {
+					if resultList[i].CheckResult != nil && resultList[i].CheckResult.Name == expCheckResultName {
+						check = resultList[i].CheckResult
+						break
+					}
+				}
+			})
+			Context("Valid rule result", func() {
+				It("Should have the correct rule", func() {
+					Expect(check.Name).To(Equal(expCheckResultName))
+
+				})
+				It("Should have the expected check result status", func() {
+					Expect(check.Status).To(Equal(compv1alpha1.CheckResultManual))
+				})
+			})
+		})
+
+	})
+
 	Describe("Load the XCCDF and the DS separately", func() {
 		BeforeEach(func() {
 			mcInstance := &mcfgv1.MachineConfig{}
@@ -319,7 +376,8 @@ Server 3.fedora.pool.ntp.org`
 			Expect(err).NotTo(HaveOccurred())
 			dsDom, err := ParseContent(ds)
 			Expect(err).NotTo(HaveOccurred())
-			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf)
+			manualRules := []string{}
+			resultList, err = ParseResultsFromContentAndXccdf(schema, "testScan", "testNamespace", dsDom, xccdf, manualRules)
 			Expect(resultList).NotTo(BeEmpty())
 			nChecks, nRems = countResultItems(resultList)
 		})

@@ -1158,6 +1158,11 @@ func (in *TailoredProfileSpec) DeepCopyInto(out *TailoredProfileSpec) {
 		*out = make([]RuleReferenceSpec, len(*in))
 		copy(*out, *in)
 	}
+	if in.ManualRules != nil {
+		in, out := &in.ManualRules, &out.ManualRules
+		*out = make([]RuleReferenceSpec, len(*in))
+		copy(*out, *in)
+	}
 	if in.SetValues != nil {
 		in, out := &in.SetValues, &out.SetValues
 		*out = make([]VariableValueSpec, len(*in))

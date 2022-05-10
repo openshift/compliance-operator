@@ -1,8 +1,6 @@
 package v1alpha1
 
 import (
-	"strings"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -95,15 +93,6 @@ type ComplianceCheckResult struct {
 	Warnings []string `json:"warnings,omitempty"`
 	// It stores a list of values used by the check
 	ValuesUsed []string `json:"valuesUsed,omitempty"`
-}
-
-// IDToDNSFriendlyName gets the ID from the scan and returns a DNS
-// friendly name
-func (ccr *ComplianceCheckResult) IDToDNSFriendlyName() string {
-	const rulePrefix = "xccdf_org.ssgproject.content_rule_"
-	ruleName := strings.TrimPrefix(ccr.ID, rulePrefix)
-	dnsFriendlyFixID := strings.ReplaceAll(ruleName, "_", "-")
-	return strings.ToLower(dnsFriendlyFixID)
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
