@@ -145,7 +145,7 @@ Notable attributes:
 Example usage:
 ```
 # List all available profiles
-oc get profile.complliance -nopenshift-compliance
+oc get profile.compliance -nopenshift-compliance
 # List all profiles generated from the rhcos4 profile bundle
 oc get profile.compliance -nopenshift-compliance -lcompliance.openshift.io/profile-bundle=rhcos4
 ```
