@@ -1,0 +1,16 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v**
+
+jobs:
+  container-main:
+    uses: metal-toolbox/container-push/.github/workflows/container-push.yml@main
+    with:
+      name: compliance-operator
+      registry_org: complianceascode
+      tag: ${GITHUB_REF_NAME}
+      dockerfile_path: Dockerfile
+      vendor: 'Compliance Operator Authors'
