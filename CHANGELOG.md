@@ -9,16 +9,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Enhancements
 
-- Added `maunalRules` to `TailoredProfile` CRD, user can choose to add the rule
-  there so that those rules will show Manual as results and remediations will not be 
-  created.
+-
 
 ### Fixes
 
-- Fix OpenScap scanner container crashloop caused by script mount permission issue
-  on a security envronment where DAC_OVERRIDE capability is dropped. This PR changes
-  script mount permission to give excute permission to all users.
-  [bug](https://bugzilla.redhat.com/show_bug.cgi?id=2082151) for more information.
+-
 
 ### Internal Changes
 
@@ -35,6 +30,22 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Security
 
 -
+
+
+## [0.1.51] - 2022-05-10
+
+### Enhancements
+
+- Added `maunalRules` to `TailoredProfile` CRD, user can choose to add the rule
+  there so that those rules will show Manual as results and remediation will not be 
+  created.
+
+### Fixes
+
+- Fix OpenScap scanner container crashloop caused by script mount permission issue
+  on a security environment where DAC_OVERRIDE capability is dropped. This PR changes
+  script mount permission to give execute permission to all users.
+  [bug](https://bugzilla.redhat.com/show_bug.cgi?id=2082151) for more information.
 
 
 ## [0.1.50] - 2022-05-02
