@@ -17,6 +17,7 @@ package utils
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -37,6 +38,7 @@ const (
 	generatedKubelet       = "generated-kubelet"
 	generatedKubeletSuffix = "kubelet"
 	mcPayloadPrefix        = `data:text/plain,`
+	mcBase64PayloadPrefix  = `data:text/plain;charset=utf-8;base64,`
 )
 
 func GetFirstNodeRoleLabel(nodeSelector map[string]string) string {
@@ -158,18 +160,26 @@ func AreKubeletConfigsRendered(pool *mcfgv1.MachineConfigPool, client runtimecli
 	if encodedKCStr == "" {
 		return false, fmt.Errorf("encoded kubeletconfig %s is empty", currentKCMCName), diffString
 	}
-	encodedKCStrTrimmed := strings.TrimPrefix(encodedKCStr, mcPayloadPrefix)
-
-	if encodedKCStrTrimmed == encodedKCStr {
-		return false, fmt.Errorf("encoded kubeletconfig %s does not contain %s prefix", currentKCMCName, mcPayloadPrefix), diffString
+	var encodedKCStrTrimmed string
+	var decodedKC []byte
+	if strings.HasPrefix(encodedKCStr, mcBase64PayloadPrefix) {
+		encodedKCStrTrimmed = strings.TrimPrefix(encodedKCStr, mcBase64PayloadPrefix)
+		decodedKC, err = base64.StdEncoding.DecodeString(encodedKCStrTrimmed)
+		if err != nil {
+			return false, fmt.Errorf("failed to decode base64 encoded kubeletconfig %s: %w", currentKCMCName, err), diffString
+		}
+	} else if strings.HasPrefix(encodedKCStr, mcPayloadPrefix) {
+		encodedKCStrTrimmed = strings.TrimPrefix(encodedKCStr, mcPayloadPrefix)
+		decodedStr, err := url.PathUnescape(encodedKCStrTrimmed)
+		decodedKC = []byte(decodedStr)
+		if err != nil {
+			return false, fmt.Errorf("failed to decode urlencoded kubeletconfig %s: %w", currentKCMCName, err), diffString
+		}
+	} else {
+		return false, fmt.Errorf("encoded kubeletconfig %s does not contain encoding prefix", currentKCMCName), diffString
 	}
 
-	decodedKC, err := url.PathUnescape(encodedKCStrTrimmed)
-	if err != nil {
-		return false, fmt.Errorf("failed to decode kubeletconfig %s: %w", currentKCMCName, err), diffString
-	}
-
-	isSubset, diff, err := JSONIsSubset(kc.Spec.KubeletConfig.Raw, []byte(decodedKC))
+	isSubset, diff, err := JSONIsSubset(kc.Spec.KubeletConfig.Raw, decodedKC)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if kubeletconfig %s is subset of rendered MC %s: %w", kc.Name, currentKCMCName, err), ""
 	}
