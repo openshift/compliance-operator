@@ -715,4 +715,283 @@ var _ = Describe("ComplianceSuiteController", func() {
 		})
 	})
 
+	// testing for KC remediation Base64 encoding
+	// OVN cluster has base64 encoding
+
+	Context("When reconciling KubeletConfig remediations", func() {
+		var poolName = "test-pool-base64"
+		remediationKCPayload := `
+				{
+					"something": "0s"
+				}
+				`
+		remediationKCMCPayload := `
+			{
+				"ignition": {
+					"version": "3.2.0"
+				},
+				"storage": {
+					"files": [
+						{
+							"contents": {
+								"source": "data:text/plain;charset=utf-8;base64,ewogICJraW5kIjogIkt1YmVsZXRDb25maWd1cmF0aW9uIiwKICAiYXBpVmVyc2lvbiI6ICJrdWJlbGV0LmNvbmZpZy5rOHMuaW8vdjFiZXRhMSIsCiAgInN0YXRpY1BvZFBhdGgiOiAiL2V0Yy9rdWJlcm5ldGVzL21hbmlmZXN0cyIsCiAgInN5bmNGcmVxdWVuY3kiOiAiMHMiLAogICJmaWxlQ2hlY2tGcmVxdWVuY3kiOiAiMHMiLAogICJodHRwQ2hlY2tGcmVxdWVuY3kiOiAiMHMiLAogICJ0bHNDaXBoZXJTdWl0ZXMiOiBbCiAgICAiVExTX0VDREhFX0VDRFNBX1dJVEhfQUVTXzEyOF9HQ01fU0hBMjU2IiwKICAgICJUTFNfRUNESEVfUlNBX1dJVEhfQUVTXzEyOF9HQ01fU0hBMjU2IiwKICAgICJUTFNfRUNESEVfRUNEU0FfV0lUSF9BRVNfMjU2X0dDTV9TSEEzODQiLAogICAgIlRMU19FQ0RIRV9SU0FfV0lUSF9BRVNfMjU2X0dDTV9TSEEzODQiLAogICAgIlRMU19FQ0RIRV9FQ0RTQV9XSVRIX0NIQUNIQTIwX1BPTFkxMzA1X1NIQTI1NiIsCiAgICAiVExTX0VDREhFX1JTQV9XSVRIX0NIQUNIQTIwX1BPTFkxMzA1X1NIQTI1NiIKICBdLAogICJ0bHNNaW5WZXJzaW9uIjogIlZlcnNpb25UTFMxMiIsCiAgInJvdGF0ZUNlcnRpZmljYXRlcyI6IHRydWUsCiAgInNlcnZlclRMU0Jvb3RzdHJhcCI6IHRydWUsCiAgImF1dGhlbnRpY2F0aW9uIjogewogICAgIng1MDkiOiB7CiAgICAgICJjbGllbnRDQUZpbGUiOiAiL2V0Yy9rdWJlcm5ldGVzL2t1YmVsZXQtY2EuY3J0IgogICAgfSwKICAgICJ3ZWJob29rIjogewogICAgICAiY2FjaGVUVEwiOiAiMHMiCiAgICB9LAogICAgImFub255bW91cyI6IHsKICAgICAgImVuYWJsZWQiOiBmYWxzZQogICAgfQogIH0sCiAgImF1dGhvcml6YXRpb24iOiB7CiAgICAid2ViaG9vayI6IHsKICAgICAgImNhY2hlQXV0aG9yaXplZFRUTCI6ICIwcyIsCiAgICAgICJjYWNoZVVuYXV0aG9yaXplZFRUTCI6ICIwcyIKICAgIH0KICB9LAogICJjbHVzdGVyRG9tYWluIjogImNsdXN0ZXIubG9jYWwiLAogICJjbHVzdGVyRE5TIjogWwogICAgIjE3Mi4zMC4wLjEwIgogIF0sCiAgInN0cmVhbWluZ0Nvbm5lY3Rpb25JZGxlVGltZW91dCI6ICIwcyIsCiAgIm5vZGVTdGF0dXNVcGRhdGVGcmVxdWVuY3kiOiAiMHMiLAogICJub2RlU3RhdHVzUmVwb3J0RnJlcXVlbmN5IjogIjBzIiwKICAiaW1hZ2VNaW5pbXVtR0NBZ2UiOiAiMHMiLAogICJ2b2x1bWVTdGF0c0FnZ1BlcmlvZCI6ICIwcyIsCiAgInN5c3RlbUNncm91cHMiOiAiL3N5c3RlbS5zbGljZSIsCiAgImNncm91cFJvb3QiOiAiLyIsCiAgImNncm91cERyaXZlciI6ICJzeXN0ZW1kIiwKICAiY3B1TWFuYWdlclJlY29uY2lsZVBlcmlvZCI6ICIwcyIsCiAgInJ1bnRpbWVSZXF1ZXN0VGltZW91dCI6ICIwcyIsCiAgIm1heFBvZHMiOiAyNTAsCiAgInNvbWV0aGluZyI6ICIwcyIsCiAgImt1YmVBUElCdXJzdCI6IDEwMCwKICAic2VyaWFsaXplSW1hZ2VQdWxscyI6IGZhbHNlLAogICJldmljdGlvblByZXNzdXJlVHJhbnNpdGlvblBlcmlvZCI6ICIwcyIsCiAgImZlYXR1cmVHYXRlcyI6IHsKICAgICJBUElQcmlvcml0eUFuZEZhaXJuZXNzIjogdHJ1ZSwKICAgICJDU0lNaWdyYXRpb25BV1MiOiBmYWxzZSwKICAgICJDU0lNaWdyYXRpb25BenVyZURpc2siOiBmYWxzZSwKICAgICJDU0lNaWdyYXRpb25BenVyZUZpbGUiOiBmYWxzZSwKICAgICJDU0lNaWdyYXRpb25HQ0UiOiBmYWxzZSwKICAgICJDU0lNaWdyYXRpb25PcGVuU3RhY2siOiBmYWxzZSwKICAgICJDU0lNaWdyYXRpb252U3BoZXJlIjogZmFsc2UsCiAgICAiRG93bndhcmRBUElIdWdlUGFnZXMiOiB0cnVlLAogICAgIkxlZ2FjeU5vZGVSb2xlQmVoYXZpb3IiOiBmYWxzZSwKICAgICJOb2RlRGlzcnVwdGlvbkV4Y2x1c2lvbiI6IHRydWUsCiAgICAiUG9kU2VjdXJpdHkiOiB0cnVlLAogICAgIlJvdGF0ZUt1YmVsZXRTZXJ2ZXJDZXJ0aWZpY2F0ZSI6IHRydWUsCiAgICAiU2VydmljZU5vZGVFeGNsdXNpb24iOiB0cnVlLAogICAgIlN1cHBvcnRQb2RQaWRzTGltaXQiOiB0cnVlCiAgfSwKICAibWVtb3J5U3dhcCI6IHt9LAogICJjb250YWluZXJMb2dNYXhTaXplIjogIjUwTWkiLAogICJzeXN0ZW1SZXNlcnZlZCI6IHsKICAgICJlcGhlbWVyYWwtc3RvcmFnZSI6ICIxR2kiCiAgfSwKICAibG9nZ2luZyI6IHsKICAgICJmbHVzaEZyZXF1ZW5jeSI6IDAsCiAgICAidmVyYm9zaXR5IjogMCwKICAgICJvcHRpb25zIjogewogICAgICAianNvbiI6IHsKICAgICAgICAiaW5mb0J1ZmZlclNpemUiOiAiMCIKICAgICAgfQogICAgfQogIH0sCiAgInNodXRkb3duR3JhY2VQZXJpb2QiOiAiMHMiLAogICJzaHV0ZG93bkdyYWNlUGVyaW9kQ3JpdGljYWxQb2RzIjogIjBzIgp9Cg=="
+							},
+							"mode": 420,
+							"overwrite": true,
+							"path": "/etc/kubernetes/kubelet.conf"
+						}
+					]
+				}
+			}`
+
+		BeforeEach(func() {
+			mcp := &mcfgv1.MachineConfigPool{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "MachineConfigPool",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: poolName,
+				},
+				Spec: mcfgv1.MachineConfigPoolSpec{
+					NodeSelector: &metav1.LabelSelector{
+						MatchLabels: targetNodeSelector,
+					},
+					Configuration: mcfgv1.MachineConfigPoolStatusConfiguration{
+						Source: []corev1.ObjectReference{{Name: "99-master-generated-kubelet"}},
+					},
+				},
+			}
+			err := reconciler.client.Create(ctx, mcp)
+			Expect(err).To(BeNil())
+
+			remediation := &compv1alpha1.ComplianceRemediation{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      remediationName,
+					Namespace: namespace,
+					Labels: map[string]string{
+						compv1alpha1.SuiteLabel:          suiteName,
+						compv1alpha1.ComplianceScanLabel: "testScanNode",
+					},
+				},
+				Spec: compv1alpha1.ComplianceRemediationSpec{
+					ComplianceRemediationSpecMeta: compv1alpha1.ComplianceRemediationSpecMeta{
+						Apply: false,
+					},
+					Current: compv1alpha1.ComplianceRemediationPayload{
+						Object: nil,
+					},
+				},
+			}
+			kcPayload := `{"apiVersion": "machineconfiguration.openshift.io/v1","kind": "KubeletConfig","spec": {"kubeletConfig": {"streamingConnectionIdleTimeout": "0s","something": "0s"}}}`
+
+			renderdKC := `
+				{
+					"ignition": {
+						"version": "3.2.0"
+					},
+					"storage": {
+						"files": [
+							{
+								"contents": {
+									"source": "data:text/plain;charset=utf-8;base64,ewogICJraW5kIjogIkt1YmVsZXRDb25maWd1cmF0aW9uIiwKICAiYXBpVmVyc2lvbiI6ICJrdWJlbGV0LmNvbmZpZy5rOHMuaW8vdjFiZXRhMSIsCiAgInN0YXRpY1BvZFBhdGgiOiAiL2V0Yy9rdWJlcm5ldGVzL21hbmlmZXN0cyIsCiAgInN5bmNGcmVxdWVuY3kiOiAiMHMiLAogICJmaWxlQ2hlY2tGcmVxdWVuY3kiOiAiMHMiLAogICJodHRwQ2hlY2tGcmVxdWVuY3kiOiAiMHMiLAogICJ0bHNDaXBoZXJTdWl0ZXMiOiBbCiAgICAiVExTX0VDREhFX0VDRFNBX1dJVEhfQUVTXzEyOF9HQ01fU0hBMjU2IiwKICAgICJUTFNfRUNESEVfUlNBX1dJVEhfQUVTXzEyOF9HQ01fU0hBMjU2IiwKICAgICJUTFNfRUNESEVfRUNEU0FfV0lUSF9BRVNfMjU2X0dDTV9TSEEzODQiLAogICAgIlRMU19FQ0RIRV9SU0FfV0lUSF9BRVNfMjU2X0dDTV9TSEEzODQiLAogICAgIlRMU19FQ0RIRV9FQ0RTQV9XSVRIX0NIQUNIQTIwX1BPTFkxMzA1X1NIQTI1NiIsCiAgICAiVExTX0VDREhFX1JTQV9XSVRIX0NIQUNIQTIwX1BPTFkxMzA1X1NIQTI1NiIKICBdLAogICJ0bHNNaW5WZXJzaW9uIjogIlZlcnNpb25UTFMxMiIsCiAgInJvdGF0ZUNlcnRpZmljYXRlcyI6IHRydWUsCiAgInNlcnZlclRMU0Jvb3RzdHJhcCI6IHRydWUsCiAgImF1dGhlbnRpY2F0aW9uIjogewogICAgIng1MDkiOiB7CiAgICAgICJjbGllbnRDQUZpbGUiOiAiL2V0Yy9rdWJlcm5ldGVzL2t1YmVsZXQtY2EuY3J0IgogICAgfSwKICAgICJ3ZWJob29rIjogewogICAgICAiY2FjaGVUVEwiOiAiMHMiCiAgICB9LAogICAgImFub255bW91cyI6IHsKICAgICAgImVuYWJsZWQiOiBmYWxzZQogICAgfQogIH0sCiAgImF1dGhvcml6YXRpb24iOiB7CiAgICAid2ViaG9vayI6IHsKICAgICAgImNhY2hlQXV0aG9yaXplZFRUTCI6ICIwcyIsCiAgICAgICJjYWNoZVVuYXV0aG9yaXplZFRUTCI6ICIwcyIKICAgIH0KICB9LAogICJjbHVzdGVyRG9tYWluIjogImNsdXN0ZXIubG9jYWwiLAogICJjbHVzdGVyRE5TIjogWwogICAgIjE3Mi4zMC4wLjEwIgogIF0sCiAgInN0cmVhbWluZ0Nvbm5lY3Rpb25JZGxlVGltZW91dCI6ICIwcyIsCiAgIm5vZGVTdGF0dXNVcGRhdGVGcmVxdWVuY3kiOiAiMHMiLAogICJub2RlU3RhdHVzUmVwb3J0RnJlcXVlbmN5IjogIjBzIiwKICAiaW1hZ2VNaW5pbXVtR0NBZ2UiOiAiMHMiLAogICJ2b2x1bWVTdGF0c0FnZ1BlcmlvZCI6ICIwcyIsCiAgInN5c3RlbUNncm91cHMiOiAiL3N5c3RlbS5zbGljZSIsCiAgImNncm91cFJvb3QiOiAiLyIsCiAgImNncm91cERyaXZlciI6ICJzeXN0ZW1kIiwKICAiY3B1TWFuYWdlclJlY29uY2lsZVBlcmlvZCI6ICIwcyIsCiAgInJ1bnRpbWVSZXF1ZXN0VGltZW91dCI6ICIwcyIsCiAgIm1heFBvZHMiOiAyNTAsCiAgImt1YmVBUElRUFMiOiA1MCwKICAia3ViZUFQSUJ1cnN0IjogMTAwLAogICJzZXJpYWxpemVJbWFnZVB1bGxzIjogZmFsc2UsCiAgImV2aWN0aW9uUHJlc3N1cmVUcmFuc2l0aW9uUGVyaW9kIjogIjBzIiwKICAiZmVhdHVyZUdhdGVzIjogewogICAgIkFQSVByaW9yaXR5QW5kRmFpcm5lc3MiOiB0cnVlLAogICAgIkNTSU1pZ3JhdGlvbkFXUyI6IGZhbHNlLAogICAgIkNTSU1pZ3JhdGlvbkF6dXJlRGlzayI6IGZhbHNlLAogICAgIkNTSU1pZ3JhdGlvbkF6dXJlRmlsZSI6IGZhbHNlLAogICAgIkNTSU1pZ3JhdGlvbkdDRSI6IGZhbHNlLAogICAgIkNTSU1pZ3JhdGlvbk9wZW5TdGFjayI6IGZhbHNlLAogICAgIkNTSU1pZ3JhdGlvbnZTcGhlcmUiOiBmYWxzZSwKICAgICJEb3dud2FyZEFQSUh1Z2VQYWdlcyI6IHRydWUsCiAgICAiTGVnYWN5Tm9kZVJvbGVCZWhhdmlvciI6IGZhbHNlLAogICAgIk5vZGVEaXNydXB0aW9uRXhjbHVzaW9uIjogdHJ1ZSwKICAgICJQb2RTZWN1cml0eSI6IHRydWUsCiAgICAiUm90YXRlS3ViZWxldFNlcnZlckNlcnRpZmljYXRlIjogdHJ1ZSwKICAgICJTZXJ2aWNlTm9kZUV4Y2x1c2lvbiI6IHRydWUsCiAgICAiU3VwcG9ydFBvZFBpZHNMaW1pdCI6IHRydWUKICB9LAogICJtZW1vcnlTd2FwIjoge30sCiAgImNvbnRhaW5lckxvZ01heFNpemUiOiAiNTBNaSIsCiAgInN5c3RlbVJlc2VydmVkIjogewogICAgImVwaGVtZXJhbC1zdG9yYWdlIjogIjFHaSIKICB9LAogICJsb2dnaW5nIjogewogICAgImZsdXNoRnJlcXVlbmN5IjogMCwKICAgICJ2ZXJib3NpdHkiOiAwLAogICAgIm9wdGlvbnMiOiB7CiAgICAgICJqc29uIjogewogICAgICAgICJpbmZvQnVmZmVyU2l6ZSI6ICIwIgogICAgICB9CiAgICB9CiAgfSwKICAic2h1dGRvd25HcmFjZVBlcmlvZCI6ICIwcyIsCiAgInNodXRkb3duR3JhY2VQZXJpb2RDcml0aWNhbFBvZHMiOiAiMHMiCn0K"
+								},
+								"mode": 420,
+								"overwrite": true,
+								"path": "/etc/kubernetes/kubelet.conf"
+							}
+						]
+					}
+				}`
+			//prepare machine config for testing
+			kcOwnerRef := metav1.OwnerReference{
+				APIVersion: "machineconfiguration.openshift.io/v1",
+				Kind:       "KubeletConfig",
+				Name:       "kubelet-config-compliance-operator",
+				UID:        "12345",
+			}
+
+			mc := &mcfgv1.MachineConfig{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "MachineConfig",
+					APIVersion: "machineconfiguration.openshift.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					OwnerReferences: []metav1.OwnerReference{kcOwnerRef},
+					Name:            "99-master-generated-kubelet",
+				},
+				Spec: mcfgv1.MachineConfigSpec{
+					Config: runtime.RawExtension{
+						Raw: []byte(renderdKC),
+					},
+				},
+			}
+			err = reconciler.client.Create(ctx, mc)
+			Expect(err).To(BeNil())
+
+			existingKCPayload := `
+				{
+					"streamingConnectionIdleTimeout": "0s"
+				}
+				`
+			existingKCObj := &mcfgv1.KubeletConfig{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "KubeletConfig",
+					APIVersion: "machineconfiguration.openshift.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "kubelet-config-compliance-operator",
+				},
+				Spec: mcfgv1.KubeletConfigSpec{
+					KubeletConfig: &runtime.RawExtension{
+						Raw: []byte(existingKCPayload),
+					},
+				},
+			}
+			//create existing kubelet config
+			err = reconciler.client.Create(ctx, existingKCObj.DeepCopy())
+			Expect(err).To(BeNil())
+
+			var obj map[string]interface{}
+			err = json.Unmarshal([]byte(kcPayload), &obj)
+			Expect(err).ToNot(HaveOccurred())
+			remediation.Spec.Current.Object = &unstructured.Unstructured{
+				Object: obj,
+			}
+			err = reconciler.client.Create(ctx, remediation.DeepCopy())
+			Expect(err).To(BeNil())
+
+		})
+
+		reconcileShouldApplyTheRemediationAndHandlePausingPools := func() {
+			By("Running a reconcile loop")
+			rem := reconcileAndGetRemediation()
+			Expect(rem.Spec.Apply).To(BeTrue())
+
+			By("The remediation controller setting the applied status")
+			rem.Status.ApplicationState = compv1alpha1.RemediationApplied
+			err := reconciler.client.Update(ctx, rem)
+			Expect(err).To(BeNil())
+
+			By("the pool should be paused")
+			p := &mcfgv1.MachineConfigPool{}
+			poolkey := types.NamespacedName{Name: poolName}
+			err = reconciler.client.Get(ctx, poolkey, p)
+			Expect(err).To(BeNil())
+			Expect(p.Spec.Paused).To(BeTrue())
+
+			By("The remediation controller should create/patch the kubelet config object")
+			kc := &mcfgv1.KubeletConfig{}
+			kckey := types.NamespacedName{Name: "kubelet-config-compliance-operator"}
+			err = reconciler.client.Get(ctx, kckey, kc)
+			Expect(err).To(BeNil())
+			kc.Spec.KubeletConfig.Raw = []byte(remediationKCPayload)
+			err = reconciler.client.Patch(ctx, kc, client.Merge)
+			Expect(err).To(BeNil())
+
+			By("Running a second reconcile loop")
+			_, err = reconciler.reconcileRemediations(suite, logger)
+			Expect(err).To(BeNil())
+
+			By("the pool should not be un-paused because the KubeletConfig is not rendered into Machine Config")
+			err = reconciler.client.Get(ctx, poolkey, p)
+			Expect(err).To(BeNil())
+			Expect(p.Spec.Paused).To(BeTrue())
+
+			By("Render KubeLetconfig into Machine Config")
+			mcCurrent := &mcfgv1.MachineConfig{}
+			mckey := types.NamespacedName{Name: "99-master-generated-kubelet"}
+			err = reconciler.client.Get(ctx, mckey, mcCurrent)
+			Expect(err).To(BeNil())
+			mcCurrent.Spec.Config.Raw = []byte(remediationKCMCPayload)
+			err = reconciler.client.Update(ctx, mcCurrent)
+			Expect(err).To(BeNil())
+
+			By("Running a second reconcile loop")
+			_, err = reconciler.reconcileRemediations(suite, logger)
+			Expect(err).To(BeNil())
+
+			By("the pool should be un-paused because machine config has been updated with the new kubelet config content")
+			err = reconciler.client.Get(ctx, poolkey, p)
+			Expect(err).To(BeNil())
+			Expect(p.Spec.Paused).To(BeFalse())
+
+			s := &compv1alpha1.ComplianceRemediation{}
+			key := types.NamespacedName{Name: remediationName, Namespace: namespace}
+			reconciler.client.Get(ctx, key, s)
+
+		}
+
+		Context("With spec.AutoApplyRemediations = true", func() {
+			BeforeEach(func() {
+				suite.Spec.AutoApplyRemediations = true
+				err := reconciler.client.Status().Update(ctx, suite)
+				Expect(err).To(BeNil())
+			})
+			Context("With ComplianceSuite and Scans not done", func() {
+				It("Should not apply the remediation", reconcileShouldNotApplyTheRemediation)
+			})
+			Context("With ComplianceSuite and Scans DONE", func() {
+				BeforeEach(suiteAndScansInDonePhase)
+				It("Should apply the remediation", reconcileShouldApplyTheRemediationAndHandlePausingPools)
+
+				Context("With remove-outdated annotation", func() {
+					BeforeEach(prepareForRemoveOutdatedScenarios)
+					It("Should remove the outdated remediation and remove the annotation", func() {
+						By("Reconciling the remediations")
+						shouldRemoveOutdatedRemediation()
+
+						By("Verifying the suite no longer has the remove-outdated annotation")
+						key := types.NamespacedName{Name: suiteName, Namespace: namespace}
+						s := &compv1alpha1.ComplianceSuite{}
+						err := reconciler.client.Get(ctx, key, s)
+						Expect(err).To(BeNil())
+						Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.RemoveOutdatedAnnotation))
+					})
+				})
+			})
+		})
+
+		Context("With apply-remediations annotation", func() {
+			BeforeEach(func() {
+				suite.Annotations = make(map[string]string, 2)
+				suite.Annotations[compv1alpha1.ApplyRemediationsAnnotation] = ""
+				err := reconciler.client.Update(ctx, suite)
+				Expect(err).To(BeNil())
+			})
+			Context("With ComplianceSuite and Scans not done", func() {
+				It("Should not apply the remediation", reconcileShouldNotApplyTheRemediation)
+			})
+			Context("With ComplianceSuite and Scans DONE", func() {
+				BeforeEach(suiteAndScansInDonePhase)
+				It("Should apply the remediation and remove the annotation", func() {
+					By("Reconciling the remediations")
+					reconcileShouldApplyTheRemediationAndHandlePausingPools()
+
+					By("Verifying the suite no longer has the apply-remediation annotation")
+					key := types.NamespacedName{Name: suiteName, Namespace: namespace}
+					s := &compv1alpha1.ComplianceSuite{}
+					err := reconciler.client.Get(ctx, key, s)
+					Expect(err).To(BeNil())
+					Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.ApplyRemediationsAnnotation))
+				})
+
+				Context("With remove-outdated annotation", func() {
+					BeforeEach(prepareForRemoveOutdatedScenarios)
+					It("Should remove the outdated remediation and remove the annotation", func() {
+						By("Reconciling the remediations")
+						shouldRemoveOutdatedRemediation()
+
+						By("Verifying the suite no longer has the remove-outdated annotation")
+						key := types.NamespacedName{Name: suiteName, Namespace: namespace}
+						s := &compv1alpha1.ComplianceSuite{}
+						err := reconciler.client.Get(ctx, key, s)
+						Expect(err).To(BeNil())
+						Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.RemoveOutdatedAnnotation))
+					})
+				})
+			})
+		})
+	})
+
 })
