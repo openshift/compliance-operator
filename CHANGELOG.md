@@ -13,12 +13,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixes
 
-- It came to notice that Machine Config Operator is using base64 encoding
-  instead of url-encoding for Machine Config source on OVN cluster. And it
-  is causing remediation to fail on OVN cluster. This fix addresses that issue
-  by checking encoding to handle both base64 and url-encoded MC source, so
-  that the remediation will work properly. 
-  [bug](https://bugzilla.redhat.com/show_bug.cgi?id=2082431) for more information.
+-
 
 ### Internal Changes
 
@@ -35,6 +30,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Security
 
 -
+
+
+## [0.1.52] - 2022-05-19
+
+
+### Fixes
+
+- It came to notice that Machine Config Operator is using base64 encoding
+  instead of url-encoding for Machine Config source on OVN cluster. And it
+  is causing remediation to fail on OVN cluster. This fix addresses that issue
+  by checking encoding to handle both base64 and url-encoded MC source, so
+  that the remediation will work properly. 
+  [bug](https://bugzilla.redhat.com/show_bug.cgi?id=2082431) for more information.
 
 
 ## [0.1.51] - 2022-05-10
