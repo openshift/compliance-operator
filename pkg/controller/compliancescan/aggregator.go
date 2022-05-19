@@ -45,6 +45,9 @@ func (r *ReconcileComplianceScan) newAggregatorPod(scanInstance *compv1alpha1.Co
 			NodeSelector:       r.schedulingInfo.Selector,
 			Tolerations:        r.schedulingInfo.Tolerations,
 			ServiceAccountName: aggregatorSA,
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot: &trueP,
+			},
 			InitContainers: []corev1.Container{
 				{
 					Name:  "content-container",
@@ -58,6 +61,9 @@ func (r *ReconcileComplianceScan) newAggregatorPod(scanInstance *compv1alpha1.Co
 					SecurityContext: &corev1.SecurityContext{
 						AllowPrivilegeEscalation: &falseP,
 						ReadOnlyRootFilesystem:   &trueP,
+						Capabilities: &corev1.Capabilities{
+							Drop: []corev1.Capability{"ALL"},
+						},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
@@ -80,6 +86,9 @@ func (r *ReconcileComplianceScan) newAggregatorPod(scanInstance *compv1alpha1.Co
 					SecurityContext: &corev1.SecurityContext{
 						AllowPrivilegeEscalation: &falseP,
 						ReadOnlyRootFilesystem:   &trueP,
+						Capabilities: &corev1.Capabilities{
+							Drop: []corev1.Capability{"ALL"},
+						},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{

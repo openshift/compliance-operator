@@ -210,6 +210,9 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 							SecurityContext: &corev1.SecurityContext{
 								AllowPrivilegeEscalation: &falseP,
 								ReadOnlyRootFilesystem:   &trueP,
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{

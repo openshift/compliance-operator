@@ -14,6 +14,8 @@ spec:
       annotations:
         workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
     spec:
+      securityContext:
+        runAsNonRoot: true
       serviceAccountName: compliance-operator
       containers:
         - name: compliance-operator
@@ -25,6 +27,9 @@ spec:
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
           resources:
             requests:
               memory: "20Mi"

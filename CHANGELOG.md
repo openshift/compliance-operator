@@ -23,7 +23,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Internal Changes
 
--
+- Several workloads have had their permissions tightened, including explicitly
+  running as a non-root user or dropping all capabilities as appropriate
 
 ### Deprecations
 
