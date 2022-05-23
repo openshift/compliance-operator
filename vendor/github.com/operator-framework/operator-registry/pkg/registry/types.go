@@ -4,14 +4,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
-	"github.com/blang/semver"
+	"github.com/blang/semver/v4"
+	"github.com/operator-framework/api/pkg/constraints"
 )
 
 var (
 	// ErrPackageNotInDatabase is an error that describes a package not found error when querying the registry
 	ErrPackageNotInDatabase = errors.New("Package not in database")
+
+	// ErrBundleImageNotInDatabase is an error that describes a bundle image not found when querying the registry
+	ErrBundleImageNotInDatabase = errors.New("Bundle Image not in database")
+
+	// ErrRemovingDefaultChannelDuringDeprecation is an error that describes a bundle deprecation causing the deletion
+	// of the default channel
+	ErrRemovingDefaultChannelDuringDeprecation = errors.New("Bundle deprecation causing default channel removal")
 )
 
 // BundleImageAlreadyAddedErr is an error that describes a bundle is already added
@@ -32,9 +41,22 @@ func (e PackageVersionAlreadyAddedErr) Error() string {
 	return e.ErrorString
 }
 
+// OverwritesErr is an error that describes that an error with the add request with --force enabled.
+type OverwriteErr struct {
+	ErrorString string
+}
+
+func (e OverwriteErr) Error() string {
+	return e.ErrorString
+}
+
 const (
-	GVKType     = "olm.gvk"
-	PackageType = "olm.package"
+	GVKType        = "olm.gvk"
+	PackageType    = "olm.package"
+	DeprecatedType = "olm.deprecated"
+	LabelType      = "olm.label"
+	PropertyKey    = "olm.properties"
+	ConstraintType = "olm.constraint"
 )
 
 // APIKey stores GroupVersionKind for use as map keys
@@ -140,19 +162,25 @@ type Annotations struct {
 	DefaultChannelName string `json:"operators.operatorframework.io.bundle.channel.default.v1" yaml:"operators.operatorframework.io.bundle.channel.default.v1"`
 }
 
-// DependenciesFile holds dependency information about a bundle
+// DependenciesFile holds dependency information about a bundle.
 type DependenciesFile struct {
 	// Dependencies is a list of dependencies for a given bundle
 	Dependencies []Dependency `json:"dependencies" yaml:"dependencies"`
 }
 
-// Dependency specifies a single constraint that can be satisfied by a property on another bundle..
+// Dependency specifies a single constraint that can be satisfied by a property on another bundle.
 type Dependency struct {
 	// The type of dependency. This field is required.
 	Type string `json:"type" yaml:"type"`
 
 	// The serialized value of the dependency
 	Value json.RawMessage `json:"value" yaml:"value"`
+}
+
+// PropertiesFile holds the properties associated with a bundle.
+type PropertiesFile struct {
+	// Properties is a list of properties.
+	Properties []Property `json:"properties" yaml:"properties"`
 }
 
 // Property defines a single piece of the public interface for a bundle. Dependencies are specified over properties.
@@ -163,7 +191,11 @@ type Property struct {
 	Type string `json:"type" yaml:"type"`
 
 	// The serialized value of the propertuy
-	Value string `json:"value" yaml:"value"`
+	Value json.RawMessage `json:"value" yaml:"value"`
+}
+
+func (p Property) String() string {
+	return fmt.Sprintf("type: %s, value: %s", p.Type, p.Value)
 }
 
 type GVKDependency struct {
@@ -185,6 +217,21 @@ type PackageDependency struct {
 	Version string `json:"version" yaml:"version"`
 }
 
+type LabelDependency struct {
+	// The Label name of dependency
+	Label string `json:"label" yaml:"label"`
+}
+
+type CelConstraint struct {
+	// Constraint failure message that surfaces in resolution
+	// This field is optional
+	FailureMessage string `json:"failureMessage" yaml:"failureMessage"`
+
+	// The cel struct that contraints CEL expression
+	// This field is required
+	Cel *constraints.Cel `json:"cel" yaml:"cel"`
+}
+
 type GVKProperty struct {
 	// The group of GVK based property
 	Group string `json:"group" yaml:"group"`
@@ -204,6 +251,15 @@ type PackageProperty struct {
 	Version string `json:"version" yaml:"version"`
 }
 
+type DeprecatedProperty struct {
+	// Whether the bundle is deprecated
+}
+
+type LabelProperty struct {
+	// The name of Label
+	Label string `json:"label" yaml:"label"`
+}
+
 // Validate will validate GVK dependency type and return error(s)
 func (gd *GVKDependency) Validate() []error {
 	errs := []error{}
@@ -215,6 +271,15 @@ func (gd *GVKDependency) Validate() []error {
 	}
 	if gd.Kind == "" {
 		errs = append(errs, fmt.Errorf("API Kind is empty"))
+	}
+	return errs
+}
+
+// Validate will validate Label dependency type and return error(s)
+func (ld *LabelDependency) Validate() []error {
+	errs := []error{}
+	if *ld == (LabelDependency{}) {
+		errs = append(errs, fmt.Errorf("Label information is missing"))
 	}
 	return errs
 }
@@ -231,6 +296,25 @@ func (pd *PackageDependency) Validate() []error {
 		_, err := semver.ParseRange(pd.Version)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("Invalid semver format version"))
+		}
+	}
+	return errs
+}
+
+// Validate will validate constraint type and return error(s)
+func (cc *CelConstraint) Validate() []error {
+	errs := []error{}
+	if cc.Cel == nil {
+		errs = append(errs, fmt.Errorf("The CEL field is missing"))
+	} else {
+		if cc.Cel.Rule == "" {
+			errs = append(errs, fmt.Errorf("The CEL expression is missing"))
+			return errs
+		}
+		validator := constraints.NewCelEnvironment()
+		_, err := validator.Validate(cc.Cel.Rule)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("Invalid CEL expression: %s", err.Error()))
 		}
 	}
 	return errs
@@ -269,6 +353,20 @@ func (e *Dependency) GetTypeValue() interface{} {
 			return nil
 		}
 		return dep
+	case LabelType:
+		dep := LabelDependency{}
+		err := json.Unmarshal([]byte(e.GetValue()), &dep)
+		if err != nil {
+			return nil
+		}
+		return dep
+	case ConstraintType:
+		dep := CelConstraint{}
+		err := json.Unmarshal([]byte(e.GetValue()), &dep)
+		if err != nil {
+			return nil
+		}
+		return dep
 	}
 	return nil
 }
@@ -293,12 +391,22 @@ func (a *AnnotationsFile) GetChannels() []string {
 
 // GetDefaultChannelName returns the name of the default channel
 func (a *AnnotationsFile) GetDefaultChannelName() string {
-	if a.Annotations.DefaultChannelName != "" {
-		return a.Annotations.DefaultChannelName
+	return a.Annotations.DefaultChannelName
+}
+
+// SelectDefaultChannel returns the first item in channel list that is sorted
+// in lexicographic order.
+func (a *AnnotationsFile) SelectDefaultChannel() string {
+	return a.Annotations.SelectDefaultChannel()
+}
+
+func (a Annotations) SelectDefaultChannel() string {
+	if len(a.Channels) < 1 {
+		return ""
 	}
-	channels := a.GetChannels()
-	if len(channels) == 1 {
-		return channels[0]
-	}
-	return ""
+
+	channels := strings.Split(a.Channels, ",")
+	sort.Strings(channels)
+
+	return channels[0]
 }

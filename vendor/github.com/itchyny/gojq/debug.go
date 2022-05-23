@@ -1,12 +1,13 @@
+//go:build debug
 // +build debug
 
 package gojq
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -26,6 +27,11 @@ func init() {
 	}
 }
 
+type codeinfo struct {
+	name string
+	pc   int
+}
+
 func (c *compiler) appendCodeInfo(x interface{}) {
 	if !debug {
 		return
@@ -38,7 +44,7 @@ func (c *compiler) appendCodeInfo(x interface{}) {
 		name = fmt.Sprint(x)
 	}
 	var diff int
-	if len(c.codes) > 0 && c.codes[len(c.codes)-1].op == opret && strings.HasPrefix(name, "end of ") {
+	if c.codes[len(c.codes)-1] != nil && c.codes[len(c.codes)-1].op == opret && strings.HasPrefix(name, "end of ") {
 		diff = -1
 	}
 	c.codeinfos = append(c.codeinfos, codeinfo{name, c.pc() + diff})
@@ -74,7 +80,7 @@ func (env *env) debugCodes() {
 	for i, c := range env.codes {
 		pc := i
 		switch c.op {
-		case opcall:
+		case opcall, opcallrec:
 			if x, ok := c.v.(int); ok {
 				pc = x
 			}
@@ -86,9 +92,14 @@ func (env *env) debugCodes() {
 		}
 		var s string
 		if name := env.lookupInfoName(pc); name != "" {
-			if (c.op == opcall || c.op == opjump) && !strings.HasPrefix(name, "module ") {
-				s = "\t## call " + name
-			} else {
+			switch c.op {
+			case opcall, opcallrec, opjump:
+				if !strings.HasPrefix(name, "module ") {
+					s = "\t## call " + name
+					break
+				}
+				fallthrough
+			default:
 				s = "\t## " + name
 			}
 		}
@@ -110,10 +121,10 @@ func (env *env) debugState(pc int, backtrack bool) {
 	}
 	for i := len(xs) - 1; i >= 0; i-- {
 		sb.WriteString("\t")
-		sb.WriteString(debugJSON(env.stack.data[xs[i]].value))
+		sb.WriteString(debugValue(env.stack.data[xs[i]].value))
 	}
 	switch c.op {
-	case opcall:
+	case opcall, opcallrec:
 		if x, ok := c.v.(int); ok {
 			pc = x
 		}
@@ -124,9 +135,14 @@ func (env *env) debugState(pc int, backtrack bool) {
 		}
 	}
 	if name := env.lookupInfoName(pc); name != "" {
-		if (c.op == opcall || c.op == opjump) && !strings.HasPrefix(name, "module ") {
-			sb.WriteString("\t\t\t## call " + name)
-		} else {
+		switch c.op {
+		case opcall, opcallrec, opjump:
+			if !strings.HasPrefix(name, "module ") {
+				sb.WriteString("\t\t\t## call " + name)
+				break
+			}
+			fallthrough
+		default:
 			sb.WriteString("\t\t\t## " + name)
 		}
 	}
@@ -152,7 +168,7 @@ func (env *env) debugForks(pc int, op string) {
 		if i == len(env.forks)-1 {
 			sb.WriteByte('<')
 		}
-		fmt.Fprintf(&sb, "%d, %s", v.pc, debugJSON(env.stack.data[v.stackindex].value))
+		fmt.Fprintf(&sb, "%d, %s", v.pc, debugValue(env.stack.data[v.stackindex].value))
 		if i == len(env.forks)-1 {
 			sb.WriteByte('>')
 		}
@@ -161,25 +177,32 @@ func (env *env) debugForks(pc int, op string) {
 }
 
 func debugOperand(c *code) string {
-	if c.op == opcall {
+	switch c.op {
+	case opcall, opcallrec:
 		switch v := c.v.(type) {
 		case int:
-			return debugJSON(v)
+			return strconv.Itoa(v)
 		case [3]interface{}:
 			return fmt.Sprintf("%s/%d", v[2], v[1])
 		default:
 			panic(c)
 		}
-	} else {
-		return debugJSON(c.v)
+	default:
+		return debugValue(c.v)
 	}
 }
 
-func debugJSON(v interface{}) string {
-	if _, ok := v.(Iter); ok {
+func debugValue(v interface{}) string {
+	switch v := v.(type) {
+	case Iter:
 		return fmt.Sprintf("gojq.Iter(%#v)", v)
+	case [2]int:
+		return fmt.Sprintf("[%d,%d]", v[0], v[1])
+	case [3]int:
+		return fmt.Sprintf("[%d,%d,%d]", v[0], v[1], v[2])
+	case [3]interface{}:
+		return fmt.Sprintf("[%v,%v,%v]", v[0], v[1], v[2])
+	default:
+		return previewValue(v)
 	}
-	var sb strings.Builder
-	json.NewEncoder(&sb).Encode(v)
-	return strings.TrimSpace(sb.String())
 }

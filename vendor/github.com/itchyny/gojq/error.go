@@ -1,8 +1,8 @@
 package gojq
 
 import (
+	"fmt"
 	"math/big"
-	"reflect"
 	"strconv"
 	"strings"
 )
@@ -30,6 +30,14 @@ type expectedArrayError struct {
 
 func (err *expectedArrayError) Error() string {
 	return "expected an array but got: " + typeErrorPreview(err.v)
+}
+
+type expectedStringError struct {
+	v interface{}
+}
+
+func (err *expectedStringError) Error() string {
+	return "expected a string but got: " + typeErrorPreview(err.v)
 }
 
 type iteratorError struct {
@@ -72,6 +80,15 @@ func (err *expectedStartEndError) Error() string {
 	return `expected "start" and "end" for slicing but got: ` + typeErrorPreview(err.v)
 }
 
+type lengthMismatchError struct {
+	name string
+	v, x []interface{}
+}
+
+func (err *lengthMismatchError) Error() string {
+	return "length mismatch in " + err.name + ": " + typeErrorPreview(err.v) + ", " + typeErrorPreview(err.x)
+}
+
 type inputNotAllowedError struct{}
 
 func (*inputNotAllowedError) Error() string {
@@ -112,12 +129,16 @@ func (err *exitCodeError) IsEmptyError() bool {
 	return err.value == nil
 }
 
+func (err *exitCodeError) Value() interface{} {
+	return err.value
+}
+
 func (err *exitCodeError) ExitCode() int {
 	return err.code
 }
 
-func (err *exitCodeError) Value() interface{} {
-	return err.value
+func (err *exitCodeError) IsHaltError() bool {
+	return err.halt
 }
 
 type funcContainsError struct {
@@ -227,6 +248,7 @@ func (err *variableNameError) Error() string {
 
 type breakError struct {
 	n string
+	v interface{}
 }
 
 func (err *breakError) Error() string {
@@ -306,37 +328,73 @@ func typeErrorPreview(v interface{}) string {
 	return typeof(v) + p
 }
 
-func typeof(v interface{}) (s string) {
-	if v == nil {
+func typeof(v interface{}) string {
+	switch v := v.(type) {
+	case nil:
 		return "null"
-	}
-	k := reflect.TypeOf(v).Kind()
-	switch k {
-	case reflect.Array, reflect.Slice:
-		return "array"
-	case reflect.Map:
-		return "object"
-	case reflect.Bool:
+	case bool:
 		return "boolean"
-	case reflect.Int, reflect.Uint, reflect.Float64:
+	case int, float64, *big.Int:
 		return "number"
-	case reflect.String:
+	case string:
 		return "string"
-	case reflect.Ptr:
-		if _, ok := v.(*big.Int); ok {
-			return "number"
-		}
-		return "ptr"
+	case []interface{}:
+		return "array"
+	case map[string]interface{}:
+		return "object"
 	default:
-		return k.String()
+		panic(fmt.Sprintf("invalid value: %v", v))
 	}
+}
+
+type limitedWriter struct {
+	buf []byte
+	off int
+}
+
+func (w *limitedWriter) Write(bs []byte) (int, error) {
+	n := copy(w.buf[w.off:], bs)
+	if w.off += n; w.off == len(w.buf) {
+		panic(nil)
+	}
+	return n, nil
+}
+
+func (w *limitedWriter) WriteByte(b byte) error {
+	w.buf[w.off] = b
+	if w.off++; w.off == len(w.buf) {
+		panic(nil)
+	}
+	return nil
+}
+
+func (w *limitedWriter) WriteString(s string) (int, error) {
+	n := copy(w.buf[w.off:], s)
+	if w.off += n; w.off == len(w.buf) {
+		panic(nil)
+	}
+	return n, nil
+}
+
+func (w *limitedWriter) String() string {
+	return string(w.buf[:w.off])
+}
+
+func jsonLimitedMarshal(v interface{}, n int) (s string) {
+	w := &limitedWriter{buf: make([]byte, n)}
+	defer func() {
+		recover()
+		s = w.String()
+	}()
+	(&encoder{w: w}).encode(v)
+	return
 }
 
 func preview(v interface{}) string {
 	if v == nil {
 		return ""
 	}
-	s := jsonMarshal(v)
+	s := jsonLimitedMarshal(v, 32)
 	if l := 30; len(s) > l {
 		var trailing string
 		switch v.(type) {

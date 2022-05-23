@@ -1,6 +1,9 @@
+//go:build !debug
 // +build !debug
 
 package gojq
+
+type codeinfo struct{}
 
 func (c *compiler) appendCodeInfo(interface{}) {}
 
