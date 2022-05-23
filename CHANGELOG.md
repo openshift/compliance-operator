@@ -13,11 +13,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixes
 
--
+- The openshift-compliance namespace was labeled with pod-security.kubernetes.io/
+  labels. Previously on clusters where Pod Security Admission is used and the
+  restricted profiles is in use, the Compliance Operator privileged pods would
+  have either been denied or, in case the cluster is configured to only warn
+  about non-compliant pods, would trigger events with warnings.
+  See this [bug](https://bugzilla.redhat.com/show_bug.cgi?id=2088202) for more
+  information.
 
 ### Internal Changes
 
--
+- Several workloads have had their permissions tightened, including explicitly
+  running as a non-root user or dropping all capabilities as appropriate
 
 ### Deprecations
 

@@ -427,6 +427,9 @@ func (r *ReconcileProfileBundle) newWorkloadForBundle(pb *compliancev1alpha1.Pro
 				Spec: corev1.PodSpec{
 					NodeSelector: r.schedulingInfo.Selector,
 					Tolerations:  r.schedulingInfo.Tolerations,
+					SecurityContext: &corev1.PodSecurityContext{
+						RunAsNonRoot: &trueP,
+					},
 					InitContainers: []corev1.Container{
 						{
 							Name:  "content-container",
@@ -440,6 +443,9 @@ func (r *ReconcileProfileBundle) newWorkloadForBundle(pb *compliancev1alpha1.Pro
 							SecurityContext: &corev1.SecurityContext{
 								AllowPrivilegeEscalation: &falseP,
 								ReadOnlyRootFilesystem:   &trueP,
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
 							},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
@@ -464,6 +470,9 @@ func (r *ReconcileProfileBundle) newWorkloadForBundle(pb *compliancev1alpha1.Pro
 							SecurityContext: &corev1.SecurityContext{
 								AllowPrivilegeEscalation: &falseP,
 								ReadOnlyRootFilesystem:   &trueP,
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
 							},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
