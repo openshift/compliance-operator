@@ -3,11 +3,11 @@ package utils
 import (
 	"fmt"
 
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/clarketm/json"
 	igntypes "github.com/coreos/ignition/v2/config/v3_1/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -7,14 +7,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/openshift/compliance-operator/pkg/utils"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
+	cmpv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/xccdf"
 	"github.com/antchfx/xmlquery"
-	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/xccdf"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
@@ -200,9 +200,11 @@ func parseAction(parsedItem parsedItemIface, kind string, pb *cmpv1alpha1.Profil
 	return nil
 }
 
-func createOrUpdate(cli runtimeclient.Client, kind string, key types.NamespacedName, obj k8sruntime.Object, updateFn func(found, updated interface{}) error) error {
+func createOrUpdate(cli runtimeclient.Client, kind string, key types.NamespacedName, obj runtimeclient.Object, updateFn func(found, updated interface{}) error) error {
 	log.Info("Creating object", "kind", kind, "key", key)
-	found := obj.DeepCopyObject()
+	found := obj // shadow for function readability
+
+	updateTo := obj.DeepCopyObject()
 	err := cli.Get(context.TODO(), key, found)
 	if errors.IsNotFound(err) {
 		err := cli.Create(context.TODO(), obj)
@@ -216,7 +218,7 @@ func createOrUpdate(cli runtimeclient.Client, kind string, key types.NamespacedN
 	}
 
 	// Object exist, call up to update
-	if err := updateFn(found, obj); err != nil {
+	if err := updateFn(found, updateTo); err != nil {
 		return err
 	}
 

@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package main
+package manager
 
 import (
 	"context"
@@ -32,16 +32,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
 
-	utils "github.com/openshift/compliance-operator/pkg/utils"
+	utils "github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 )
 
-var resultServerCmd = &cobra.Command{
+var ResultServerCmd = &cobra.Command{
 	Use:   "resultserver",
 	Short: "A tool to receive raw SCAP scan results.",
 	Long:  "A tool to receive raw SCAP scan results.",
@@ -51,8 +51,7 @@ var resultServerCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(resultServerCmd)
-	defineResultServerFlags(resultServerCmd)
+	defineResultServerFlags(ResultServerCmd)
 }
 
 func defineResultServerFlags(cmd *cobra.Command) {
@@ -67,7 +66,6 @@ func defineResultServerFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint16("rotation", 3, "Amount of raw result directories to keep")
 
 	flags := cmd.Flags()
-	flags.AddFlagSet(zap.FlagSet())
 
 	// Add flags registered by imported packages (e.g. glog and
 	// controller-runtime)
@@ -100,7 +98,7 @@ func parseResultServerConfig(cmd *cobra.Command) *resultServerConfig {
 		Rotation: rotation,
 	}
 
-	logf.SetLogger(zap.Logger())
+	logf.SetLogger(zap.New())
 
 	return conf
 }
@@ -108,7 +106,7 @@ func parseResultServerConfig(cmd *cobra.Command) *resultServerConfig {
 func ensureDir(path string) error {
 	err := os.MkdirAll(path, 0750)
 	if err != nil && !os.IsExist(err) {
-		log.Error(err, "Couldn't ensure directory")
+		cmdLog.Error(err, "Couldn't ensure directory")
 		return err
 	}
 
@@ -118,13 +116,13 @@ func ensureDir(path string) error {
 func rotateResultDirectories(rootPath string, rotation uint16) error {
 	// If rotation is a negative number, we don't rotate
 	if rotation == 0 {
-		log.Info("Rotation policy set to '0'. No need to rotate.")
+		cmdLog.Info("Rotation policy set to '0'. No need to rotate.")
 		return nil
 	}
 	dirs := []utils.Directory{}
 	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			log.Error(err, "Error accessing directory. Prevent panic by handling failure accessing a path", "filepath", path)
+			cmdLog.Error(err, "Error accessing directory. Prevent panic by handling failure accessing a path", "filepath", path)
 			return err
 		}
 		if path == rootPath {
@@ -133,7 +131,7 @@ func rotateResultDirectories(rootPath string, rotation uint16) error {
 		}
 		if strings.Contains(path, "lost+found") {
 			// Do nothing on base directory
-			log.Info("Rotation: Skipping 'lost+found' directory")
+			cmdLog.Info("Rotation: Skipping 'lost+found' directory")
 			return filepath.SkipDir
 		}
 		if info.IsDir() {
@@ -143,7 +141,7 @@ func rotateResultDirectories(rootPath string, rotation uint16) error {
 		return nil
 	})
 	if err != nil {
-		log.Error(err, "Couldn't rotate directories")
+		cmdLog.Error(err, "Couldn't rotate directories")
 		return err
 	}
 	sort.Slice(dirs, func(i, j int) bool { return dirs[i].CreationTime.After(dirs[j].CreationTime) })
@@ -153,7 +151,7 @@ func rotateResultDirectories(rootPath string, rotation uint16) error {
 		return nil
 	}
 	for _, dir := range dirs[rotation:] {
-		log.Info("Removing directory because of rotation policy", "directory", dir.Path)
+		cmdLog.Info("Removing directory because of rotation policy", "directory", dir.Path)
 		err := os.RemoveAll(dir.Path)
 		if err != nil {
 			lastError = err
@@ -168,7 +166,7 @@ func server(c *resultServerConfig) {
 
 	err := ensureDir(c.Path)
 	if err != nil {
-		log.Error(err, "Error ensuring result path: %s", c.Path)
+		cmdLog.Error(err, "Error ensuring result path: %s", c.Path)
 		os.Exit(1)
 	}
 
@@ -176,7 +174,7 @@ func server(c *resultServerConfig) {
 
 	caCert, err := ioutil.ReadFile(c.CA)
 	if err != nil {
-		log.Error(err, "Error reading CA file")
+		cmdLog.Error(err, "Error reading CA file")
 		os.Exit(1)
 	}
 	caCertPool := x509.NewCertPool()
@@ -198,14 +196,14 @@ func server(c *resultServerConfig) {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		filename := r.Header.Get("X-Report-Name")
 		if filename == "" {
-			log.Info("Rejecting. No \"X-Report-Name\" header given.")
+			cmdLog.Info("Rejecting. No \"X-Report-Name\" header given.")
 			http.Error(w, "Missing report name header", 400)
 			return
 		}
 		encoding := r.Header.Get("Content-Encoding")
 		extraExtension := encoding
 		if encoding != "" && encoding != "bzip2" {
-			log.Info("Rejecting. Invalid \"Content-Encoding\" header given.")
+			cmdLog.Info("Rejecting. Invalid \"Content-Encoding\" header given.")
 			http.Error(w, "invalid content encoding header", 400)
 			return
 		} else if encoding == "bzip2" {
@@ -216,7 +214,7 @@ func server(c *resultServerConfig) {
 		cleanPath := filepath.Clean(filePath)
 		f, err := os.Create(cleanPath)
 		if err != nil {
-			log.Info("Error creating file", "file-path", cleanPath)
+			cmdLog.Info("Error creating file", "file-path", cleanPath)
 			http.Error(w, "Error creating file", 500)
 			return
 		}
@@ -225,31 +223,31 @@ func server(c *resultServerConfig) {
 
 		_, err = io.Copy(f, r.Body)
 		if err != nil {
-			log.Info("Error writing file", "file-path", cleanPath)
+			cmdLog.Info("Error writing file", "file-path", cleanPath)
 			http.Error(w, "Error writing file", 500)
 			return
 		}
-		log.Info("Received file", "file-path", cleanPath)
+		cmdLog.Info("Received file", "file-path", cleanPath)
 	})
 
-	log.Info("Listening...")
+	cmdLog.Info("Listening...")
 
 	go func() {
 		err := server.ListenAndServeTLS(c.Cert, c.Key)
 		if err != nil && err != http.ErrServerClosed {
-			log.Error(err, "Error in result server")
+			cmdLog.Error(err, "Error in result server")
 		}
 	}()
 
 	<-exit
-	log.Info("Server stopped.")
+	cmdLog.Info("Server stopped.")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Error(err, "Server shutdown failed")
+		cmdLog.Error(err, "Server shutdown failed")
 	}
 
-	log.Info("Server exited gracefully")
+	cmdLog.Info("Server exited gracefully")
 }

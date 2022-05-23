@@ -1,0 +1,20 @@
+# permissions for end users to view profilebundles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: profilebundle-viewer-role
+rules:
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - profilebundles
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - profilebundles/status
+  verbs:
+  - get

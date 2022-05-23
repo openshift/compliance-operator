@@ -14,39 +14,36 @@ that namespace. You may run the operator in another namespace, but you need to
 ensure all subsequent resources, like service accounts, operator groups, and
 subscriptions also use the same namespace as the operator.
 
-## Deploying packages
+### Deploying:
 
-Deploying from package deploys the latest released version.
-
-First, create the `CatalogSource` and optionally verify it's been created
-successfuly:
-
+To deploy the operator using the latest released compliance-operator images available on quay.io, run:
 ```
-$ oc create -f deploy/olm-catalog/catalog-source.yaml
-$ oc get catalogsource -n openshift-marketplace
+$ make deploy
 ```
-
-Next, create the target namespace and either install the operator from the Web
-Console or from the CLI following these steps:
-
+Alternately, to deploy the latest release through OLM, run:
 ```
-$ oc create -f deploy/ns.yaml
-$ oc create -f deploy/olm-catalog/operator-group.yaml
-$ oc create -f deploy/olm-catalog/subscription.yaml
+$ make catalog-deploy
 ```
 
-The Subscription file can be edited to optionally deploy a custom version,
-see the `startingCSV` attribute in the `deploy/olm-catalog/subscription.yaml`
-file.
+### Building and deploying from source:
 
-Verify that the expected objects have been created:
-
+First set an image repo and tag to use. Make sure that you have permissions to push `compliance-operator*` images (and relevant tag) to the repo.
 ```
-$ oc get sub --namespace openshift-compliance
-$ oc get ip --namespace openshift-compliance
-$ oc get csv --namespace openshift-compliance
+$ export IMAGE_REPO=quay.io/myrepo
+$ export TAG=mytag
 ```
-
+With these set, they will apply to the rest of the Makefile targets. Next, build and push the operator and bundle images by running:
+```
+$ make images && make push
+```
+Finally, deploy the operator with the built images,
+```
+$ make deploy
+```
+or build a catalog and deploy from OLM:
+```
+$ make catalog && make catalog-deploy
+```
 
 ## Deploying with Helm
 
@@ -84,30 +81,6 @@ You can use Helm to uninstall, or delete a release, but Helm does not cleanup
 definitions](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/#helm).
 You must do this manually if you want to remove the custom resource definitions
 required by the compliance-operator.
-
-## Deploying from source
-
-You can deploy the compliance-operator by creating the necessary resources
-manually.
-
-Make sure you create the namespace:
-
-```
-$ oc create -f deploy/ns.yaml
-$ oc project openshift-compliance
-```
-
-Next, create all the necessary custom resource defintions:
-
-```
-$ for f in $(ls -1 deploy/crds/*crd.yaml); do oc apply -f $f --namespace openshift-compliance; done
-```
-
-Finally, configure the service account, permissions, and deployment:
-
-```
-$ oc apply --namespace openshift-compliance -f deploy/
-```
 
 ## Verifying the installation
 

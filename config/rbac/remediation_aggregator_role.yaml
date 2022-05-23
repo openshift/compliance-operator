@@ -1,0 +1,70 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: remediation-aggregator
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - get
+      - list
+      - create
+      - patch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - update
+  - apiGroups:
+      - compliance.openshift.io
+    resources:
+      - compliancescans
+    verbs:
+      - get
+  - apiGroups:
+      - compliance.openshift.io
+    resources:
+      - compliancescans/finalizers
+      - compliancecheckresults/finalizers
+    verbs:
+      - update
+  - apiGroups:
+      - compliance.openshift.io
+    resources:
+      - complianceremediations
+      - complianceremediations/status
+    verbs:
+      - create
+      - get
+      - update
+      - patch
+  - apiGroups:
+      - compliance.openshift.io
+    resources:
+      - compliancecheckresults
+    verbs:
+      - create
+      - get
+      - update
+      - patch
+  - apiGroups:
+      - compliance.openshift.io
+    resources:
+      - tailoredprofiles
+    verbs:
+      - get
+  - apiGroups:
+      - scheduling.k8s.io
+    resources:
+      - priorityclasses
+    verbs:
+      - get
+      - list
+      - watch

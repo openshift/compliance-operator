@@ -1,4 +1,4 @@
-package main
+package manager
 
 import (
 	"context"
@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"os"
 
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
 	backoff "github.com/cenkalti/backoff/v4"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
@@ -19,7 +18,7 @@ import (
 
 const maxScanUpdateRetries = 5
 
-var rerunnerCmd = &cobra.Command{
+var RerunnerCmd = &cobra.Command{
 	Use:   "suitererunner",
 	Short: "Re-runs a ComplianceSuite",
 	Long:  `makes sure that a ComplianceSuite's scans get re-run.`,
@@ -27,8 +26,7 @@ var rerunnerCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(rerunnerCmd)
-	defineRerunnerFlags(rerunnerCmd)
+	defineRerunnerFlags(RerunnerCmd)
 }
 
 type rerunnerconfig struct {
@@ -42,7 +40,6 @@ func defineRerunnerFlags(cmd *cobra.Command) {
 	cmd.Flags().String("namespace", "", "The namespace of the ComplianceSuite to be re-run")
 
 	flags := cmd.Flags()
-	flags.AddFlagSet(zap.FlagSet())
 
 	// Add flags registered by imported packages (e.g. glog and
 	// controller-runtime)
@@ -56,7 +53,7 @@ func getRerunnerConfig(cmd *cobra.Command) *rerunnerconfig {
 
 	cfg, err := config.GetConfig()
 	if err != nil {
-		log.Error(err, "")
+		cmdLog.Error(err, "")
 		os.Exit(1)
 	}
 

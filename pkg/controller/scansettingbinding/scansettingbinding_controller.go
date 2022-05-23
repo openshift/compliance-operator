@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"strings"
 	"time"
 
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics"
 
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 	"github.com/go-logr/logr"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	compliancev1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 const (
@@ -44,15 +45,21 @@ const (
 
 var log = logf.Log.WithName("scansettingbindingctrl")
 
+func (r *ReconcileScanSettingBinding) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&compliancev1alpha1.ScanSettingBinding{}).
+		Complete(r)
+}
+
 func Add(mgr manager.Manager, met *metrics.Metrics, _ utils.CtlplaneSchedulingInfo) error {
 	return add(mgr, newReconciler(mgr, met))
 }
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager, met *metrics.Metrics) reconcile.Reconciler {
-	return &ReconcileScanSettingBinding{client: mgr.GetClient(), scheme: mgr.GetScheme(),
-		recorder:    common.NewSafeRecorder("scansettingbindingctrl", mgr),
-		metrics:     met,
+	return &ReconcileScanSettingBinding{Client: mgr.GetClient(), Scheme: mgr.GetScheme(),
+		Recorder:    common.NewSafeRecorder("scansettingbindingctrl", mgr),
+		Metrics:     met,
 		roleVal:     regexp.MustCompile(roleValRegexp),
 		invalidRole: regexp.MustCompile(invalidRoleRegexp),
 	}
@@ -74,18 +81,16 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 	// Watch for changes to secondary resource ScanSetting. Since Setting does not link directly to a Binding,
 	// but the other way around, we use a mapper to enqueue requests for Binding(s) used by a Setting
-	err = c.Watch(&source.Kind{Type: &compliancev1alpha1.ScanSetting{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: &scanSettingMapper{mgr.GetClient()},
-	})
+	ssMapper := &scanSettingMapper{mgr.GetClient()}
+	err = c.Watch(&source.Kind{Type: &compliancev1alpha1.ScanSetting{}}, handler.EnqueueRequestsFromMapFunc(ssMapper.Map))
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to secondary resource TailoredProfile. Since TailoredProfile does not link directly to a Binding,
 	// but the other way around, we use a mapper to enqueue requests for TailoredProfiles(s) used by a Setting
-	err = c.Watch(&source.Kind{Type: &compliancev1alpha1.TailoredProfile{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: &tailoredProfileMapper{mgr.GetClient()},
-	})
+	tpMapper := &tailoredProfileMapper{mgr.GetClient()}
+	err = c.Watch(&source.Kind{Type: &compliancev1alpha1.TailoredProfile{}}, handler.EnqueueRequestsFromMapFunc(tpMapper.Map))
 	if err != nil {
 		return err
 	}
@@ -107,30 +112,30 @@ var _ reconcile.Reconciler = &ReconcileScanSettingBinding{}
 
 // ReconcileScanSettingBinding reconciles a ScanSettingBinding object
 type ReconcileScanSettingBinding struct {
-	client      client.Client
-	scheme      *runtime.Scheme
-	recorder    *common.SafeRecorder
-	metrics     *metrics.Metrics
+	Client      client.Client
+	Scheme      *runtime.Scheme
+	Recorder    *common.SafeRecorder
+	Metrics     *metrics.Metrics
 	roleVal     *regexp.Regexp
 	invalidRole *regexp.Regexp
 }
 
 // FIXME: generalize for other controllers?
 func (r *ReconcileScanSettingBinding) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
-	if r.recorder == nil {
+	if r.Recorder == nil {
 		return
 	}
 
-	r.recorder.Eventf(object, eventtype, reason, messageFmt, args...)
+	r.Recorder.Eventf(object, eventtype, reason, messageFmt, args...)
 }
 
-func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *ReconcileScanSettingBinding) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling ScanSettingBinding")
 
 	// Fetch the ScanSettingBinding instance
 	instance := &compliancev1alpha1.ScanSettingBinding{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
+	err := r.Client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -146,7 +151,7 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 	if instance.Status.Conditions.GetCondition("Ready") == nil {
 		ssb := instance.DeepCopy()
 		ssb.Status.SetConditionPending()
-		err := r.client.Status().Update(context.TODO(), ssb)
+		err := r.Client.Status().Update(context.TODO(), ssb)
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf("Couldn't update ScanSettingBinding status: %s", err)
 		}
@@ -163,7 +168,7 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 	}
 
 	// Set SettingBinding as the owner of the Suite
-	if err := controllerutil.SetControllerReference(instance, &suite, r.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(instance, &suite, r.Scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -193,7 +198,7 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 				msg := "The TailoredProfile referenced has an error and is not usable"
 				ssb := instance.DeepCopy()
 				ssb.Status.SetConditionInvalid(msg)
-				if updateErr := r.client.Status().Update(context.TODO(), ssb); updateErr != nil {
+				if updateErr := r.Client.Status().Update(context.TODO(), ssb); updateErr != nil {
 					return reconcile.Result{}, fmt.Errorf("couldn't update ScanSettingBinding condition: %w", updateErr)
 				}
 				return reconcile.Result{}, nil
@@ -218,7 +223,7 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 
 			ssb := instance.DeepCopy()
 			ssb.Status.SetConditionInvalid(msg)
-			if updateErr := r.client.Status().Update(context.TODO(), ssb); updateErr != nil {
+			if updateErr := r.Client.Status().Update(context.TODO(), ssb); updateErr != nil {
 				return reconcile.Result{}, fmt.Errorf("couldn't update ScanSettingBinding condition: %w", updateErr)
 			}
 			// Don't requeue in this case, nothing we can do
@@ -236,9 +241,9 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 	}
 
 	found := compliancev1alpha1.ComplianceSuite{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: suite.Namespace, Name: suite.Name}, &found)
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Namespace: suite.Namespace, Name: suite.Name}, &found)
 	if errors.IsNotFound(err) {
-		err = r.client.Create(context.TODO(), &suite)
+		err = r.Client.Create(context.TODO(), &suite)
 		if err == nil {
 			reqLogger.Info("Suite created", "suite.Name", suite.Name)
 			r.Eventf(
@@ -253,7 +258,7 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 				Kind:     "ComplianceSuite",
 				Name:     suite.GetName(),
 			}
-			if updateErr := r.client.Status().Update(context.TODO(), ssb); updateErr != nil {
+			if updateErr := r.Client.Status().Update(context.TODO(), ssb); updateErr != nil {
 				return reconcile.Result{}, fmt.Errorf("couldn't update ScanSettingBinding condition: %w", updateErr)
 			}
 			return reconcile.Result{}, nil
@@ -272,7 +277,7 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 	// The suite already exists, should we update?
 	if suiteNeedsUpdate(&suite, &found) {
 		found.Spec = suite.Spec
-		err = r.client.Update(context.TODO(), &found)
+		err = r.Client.Update(context.TODO(), &found)
 		if err == nil {
 			reqLogger.Info("Suite updated", "suite.Name", suite.Name)
 			r.Eventf(
@@ -298,7 +303,7 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 			Kind:     found.GroupVersionKind().Kind,
 			Name:     found.GetName(),
 		}
-		if updateErr := r.client.Status().Update(context.TODO(), ssb); updateErr != nil {
+		if updateErr := r.Client.Status().Update(context.TODO(), ssb); updateErr != nil {
 			return reconcile.Result{}, fmt.Errorf("couldn't update ScanSettingBinding condition: %w", updateErr)
 		}
 	} else {
@@ -307,7 +312,7 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 
 	if found.Status.Phase == compliancev1alpha1.PhaseDone {
 		reqLogger.Info("Generating events for scansettingbinding")
-		common.GenerateEventForResult(r.recorder, instance, instance, found.Status.Result)
+		common.GenerateEventForResult(r.Recorder, instance, instance, found.Status.Result)
 	}
 
 	return reconcile.Result{}, nil
@@ -613,7 +618,7 @@ func resolveProfileReference(r *ReconcileScanSettingBinding, instance *complianc
 			return nil, common.NewNonRetriableCtrlError("TailoredProfile must be owned by a Profile or ProfileBundle")
 		}
 	} else {
-		r.recorder.Eventf(
+		r.Recorder.Eventf(
 			instance, corev1.EventTypeWarning, "ReferenceError",
 			"unsupported Kind %s, use one of Profile, TailoredProfile", profile.GetKind(),
 		)
@@ -630,7 +635,7 @@ func resolveProfile(r *ReconcileScanSettingBinding, instance *compliancev1alpha1
 func resolveTypedParent(r *ReconcileScanSettingBinding, instance *compliancev1alpha1.ScanSettingBinding, expectedKind string, child *unstructured.Unstructured, logger logr.Logger) (*unstructured.Unstructured, error) {
 	parentReference := ownerReferenceWithKind(child, expectedKind)
 	if parentReference == nil {
-		r.recorder.Eventf(
+		r.Recorder.Eventf(
 			instance, corev1.EventTypeWarning, "BadReference",
 			"Couldn't find a %s owning %s %s", expectedKind, child.GetKind(), child.GetName(),
 		)
@@ -672,7 +677,7 @@ func getUnstructured(r *ReconcileScanSettingBinding, instance *compliancev1alpha
 	o.SetAPIVersion(apiGroup)
 	o.SetKind(kind)
 
-	err := r.client.Get(context.TODO(), key, &o)
+	err := r.Client.Get(context.TODO(), key, &o)
 	if errors.IsNotFound(err) {
 		return nil, common.NewRetriableCtrlErrorWithCustomHandler(func() (reconcile.Result, error) {
 			// This might be a temporary issue in the order the objects are being created

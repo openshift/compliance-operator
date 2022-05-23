@@ -3,14 +3,15 @@ package tailoredprofile
 import (
 	"context"
 	"fmt"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"strings"
 
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
-	"github.com/openshift/compliance-operator/pkg/utils"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/xccdf"
 	"github.com/go-logr/logr"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/xccdf"
 
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,7 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	cmpv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 var log = logf.Log.WithName("tailoredprofilectrl")
@@ -34,6 +35,12 @@ var log = logf.Log.WithName("tailoredprofilectrl")
 const (
 	tailoringFile string = "tailoring.xml"
 )
+
+func (r *ReconcileTailoredProfile) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&cmpv1alpha1.TailoredProfile{}).
+		Complete(r)
+}
 
 // Add creates a new TailoredProfile Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -43,7 +50,7 @@ func Add(mgr manager.Manager, met *metrics.Metrics, _ utils.CtlplaneSchedulingIn
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager, met *metrics.Metrics) reconcile.Reconciler {
-	return &ReconcileTailoredProfile{client: mgr.GetClient(), scheme: mgr.GetScheme(), metrics: met}
+	return &ReconcileTailoredProfile{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Metrics: met}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -76,11 +83,11 @@ var _ reconcile.Reconciler = &ReconcileTailoredProfile{}
 
 // ReconcileTailoredProfile reconciles a TailoredProfile object
 type ReconcileTailoredProfile struct {
-	// This client, initialized using mgr.Client() above, is a split client
+	// This Client, initialized using mgr.Client() above, is a split Client
 	// that reads objects from the cache and writes to the apiserver
-	client  client.Client
-	scheme  *runtime.Scheme
-	metrics *metrics.Metrics
+	Client  client.Client
+	Scheme  *runtime.Scheme
+	Metrics *metrics.Metrics
 }
 
 // Reconcile reads that state of the cluster for a TailoredProfile object and makes changes based on the state read
@@ -88,13 +95,13 @@ type ReconcileTailoredProfile struct {
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcileTailoredProfile) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *ReconcileTailoredProfile) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling TailoredProfile")
 
 	// Fetch the TailoredProfile instance
 	instance := &cmpv1alpha1.TailoredProfile{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
+	err := r.Client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -203,7 +210,7 @@ func (r *ReconcileTailoredProfile) Reconcile(request reconcile.Request) (reconci
 func (r *ReconcileTailoredProfile) getProfileInfoFromExtends(tp *cmpv1alpha1.TailoredProfile) (*cmpv1alpha1.Profile, *cmpv1alpha1.ProfileBundle, error) {
 	p := &cmpv1alpha1.Profile{}
 	// Get the Profile being extended
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: tp.Spec.Extends, Namespace: tp.Namespace}, p)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: tp.Spec.Extends, Namespace: tp.Namespace}, p)
 	if kerrors.IsNotFound(err) {
 		return nil, nil, common.NewNonRetriableCtrlError("fetching profile to be extended: %w", err)
 	}
@@ -225,7 +232,7 @@ func (r *ReconcileTailoredProfile) getProfileBundleFromRulesOrVars(tp *cmpv1alph
 	for _, selection := range append(tp.Spec.EnableRules, append(tp.Spec.DisableRules, tp.Spec.ManualRules...)...) {
 		rule := &cmpv1alpha1.Rule{}
 		ruleKey := types.NamespacedName{Name: selection.Name, Namespace: tp.Namespace}
-		geterr := r.client.Get(context.TODO(), ruleKey, rule)
+		geterr := r.Client.Get(context.TODO(), ruleKey, rule)
 		if geterr != nil {
 			// We'll validate this later in the Reconcile loop
 			if kerrors.IsNotFound(geterr) {
@@ -249,7 +256,7 @@ func (r *ReconcileTailoredProfile) getProfileBundleFromRulesOrVars(tp *cmpv1alph
 	for _, setValues := range tp.Spec.SetValues {
 		variable := &cmpv1alpha1.Variable{}
 		varKey := types.NamespacedName{Name: setValues.Name, Namespace: tp.Namespace}
-		err := r.client.Get(context.TODO(), varKey, variable)
+		err := r.Client.Get(context.TODO(), varKey, variable)
 		if err != nil {
 			// We'll verify this later in the reconcile loop
 			if kerrors.IsNotFound(err) {
@@ -284,7 +291,7 @@ func (r *ReconcileTailoredProfile) getRulesFromSelections(tp *cmpv1alpha1.Tailor
 		}
 		rule := &cmpv1alpha1.Rule{}
 		ruleKey := types.NamespacedName{Name: selection.Name, Namespace: tp.Namespace}
-		err := r.client.Get(context.TODO(), ruleKey, rule)
+		err := r.Client.Get(context.TODO(), ruleKey, rule)
 		if err != nil {
 			if kerrors.IsNotFound(err) {
 				return nil, common.NewNonRetriableCtrlError("Fetching rule: %w", err)
@@ -308,7 +315,7 @@ func (r *ReconcileTailoredProfile) getVariablesFromSelections(tp *cmpv1alpha1.Ta
 	for _, setValues := range tp.Spec.SetValues {
 		variable := &cmpv1alpha1.Variable{}
 		varKey := types.NamespacedName{Name: setValues.Name, Namespace: tp.Namespace}
-		err := r.client.Get(context.TODO(), varKey, variable)
+		err := r.Client.Get(context.TODO(), varKey, variable)
 		if err != nil {
 			if kerrors.IsNotFound(err) {
 				return nil, common.NewNonRetriableCtrlError("fetching variable: %w", err)
@@ -343,7 +350,7 @@ func (r *ReconcileTailoredProfile) updateTailoredProfileStatusReady(tp *cmpv1alp
 		Namespace: out.GetNamespace(),
 	}
 	tpCopy.Status.ID = xccdf.GetXCCDFProfileID(tp)
-	return r.client.Status().Update(context.TODO(), tpCopy)
+	return r.Client.Status().Update(context.TODO(), tpCopy)
 }
 
 func (r *ReconcileTailoredProfile) handleTailoredProfileStatusError(tp *cmpv1alpha1.TailoredProfile, err error) error {
@@ -359,7 +366,7 @@ func (r *ReconcileTailoredProfile) updateTailoredProfileStatusError(tp *cmpv1alp
 	tpCopy := tp.DeepCopy()
 	tpCopy.Status.State = cmpv1alpha1.TailoredProfileStateError
 	tpCopy.Status.ErrorMessage = err.Error()
-	return r.client.Status().Update(context.TODO(), tpCopy)
+	return r.Client.Status().Update(context.TODO(), tpCopy)
 }
 
 func (r *ReconcileTailoredProfile) getProfileBundleFrom(objtype string, o metav1.Object) (*cmpv1alpha1.ProfileBundle, error) {
@@ -371,7 +378,7 @@ func (r *ReconcileTailoredProfile) getProfileBundleFrom(objtype string, o metav1
 	pb := cmpv1alpha1.ProfileBundle{}
 	// we use the profile's namespace as either way the object's have to be in the same namespace
 	// in order for OwnerReferences to work
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pbRef.Name, Namespace: o.GetNamespace()}, &pb)
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: pbRef.Name, Namespace: o.GetNamespace()}, &pb)
 	return &pb, err
 }
 
@@ -379,14 +386,14 @@ func (r *ReconcileTailoredProfile) deleteOutputObject(tp *cmpv1alpha1.TailoredPr
 	// make sure the configMap is removed so that we don't keep using the old one after
 	// breaking the TP
 	tpcm := newTailoredProfileCM(tp)
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: tpcm.Name, Namespace: tpcm.Namespace}, tpcm)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: tpcm.Name, Namespace: tpcm.Namespace}, tpcm)
 	if err != nil && kerrors.IsNotFound(err) {
 		return nil
 	} else if err != nil {
 		return err
 	}
 
-	err = r.client.Delete(context.TODO(), tpcm)
+	err = r.Client.Delete(context.TODO(), tpcm)
 	if err != nil && !kerrors.IsNotFound(err) {
 		return err
 	}
@@ -396,13 +403,13 @@ func (r *ReconcileTailoredProfile) deleteOutputObject(tp *cmpv1alpha1.TailoredPr
 
 func (r *ReconcileTailoredProfile) ensureOutputObject(tp *cmpv1alpha1.TailoredProfile, tpcm *corev1.ConfigMap, logger logr.Logger) (reconcile.Result, error) {
 	// Set TailoredProfile instance as the owner and controller
-	if err := controllerutil.SetControllerReference(tp, tpcm, r.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(tp, tpcm, r.Scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	// Check if this ConfigMap already exists
 	found := &corev1.ConfigMap{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: tpcm.Name, Namespace: tpcm.Namespace}, found)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: tpcm.Name, Namespace: tpcm.Namespace}, found)
 	if err != nil && kerrors.IsNotFound(err) {
 		// update status
 		err = r.updateTailoredProfileStatusReady(tp, tpcm)
@@ -413,7 +420,7 @@ func (r *ReconcileTailoredProfile) ensureOutputObject(tp *cmpv1alpha1.TailoredPr
 
 		// create CM
 		logger.Info("Creating a new ConfigMap", "ConfigMap.Namespace", tpcm.Namespace, "ConfigMap.Name", tpcm.Name)
-		err = r.client.Create(context.TODO(), tpcm)
+		err = r.Client.Create(context.TODO(), tpcm)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -427,7 +434,7 @@ func (r *ReconcileTailoredProfile) ensureOutputObject(tp *cmpv1alpha1.TailoredPr
 	// ConfigMap already exists - update
 	update := found.DeepCopy()
 	update.Data = tpcm.Data
-	err = r.client.Update(context.TODO(), update)
+	err = r.Client.Update(context.TODO(), update)
 	if err != nil {
 		fmt.Printf("Couldn't update TailoredProfile configMap: %v\n", err)
 		return reconcile.Result{}, err
@@ -438,10 +445,10 @@ func (r *ReconcileTailoredProfile) ensureOutputObject(tp *cmpv1alpha1.TailoredPr
 }
 
 func (r *ReconcileTailoredProfile) setOwnership(tp *cmpv1alpha1.TailoredProfile, obj metav1.Object) (reconcile.Result, error) {
-	if err := controllerutil.SetControllerReference(obj, tp, r.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(obj, tp, r.Scheme); err != nil {
 		return reconcile.Result{}, err
 	}
-	err := r.client.Update(context.TODO(), tp)
+	err := r.Client.Update(context.TODO(), tp)
 	return reconcile.Result{}, err
 }
 

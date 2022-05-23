@@ -3,6 +3,7 @@ package compliancesuite
 import (
 	"context"
 	"fmt"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -22,10 +23,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
-	"github.com/openshift/compliance-operator/pkg/utils"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 )
 
 var log = logf.Log.WithName("suitectrl")
@@ -34,6 +35,12 @@ const (
 	// The default time we should wait before requeuing
 	requeueAfterDefault = 10 * time.Second
 )
+
+func (r *ReconcileComplianceSuite) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&compv1alpha1.ComplianceSuite{}).
+		Complete(r)
+}
 
 // Add creates a new ComplianceSuite Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -44,11 +51,11 @@ func Add(mgr manager.Manager, met *metrics.Metrics, si utils.CtlplaneSchedulingI
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager, met *metrics.Metrics, si utils.CtlplaneSchedulingInfo) reconcile.Reconciler {
 	return &ReconcileComplianceSuite{
-		reader:         mgr.GetAPIReader(),
-		client:         mgr.GetClient(),
-		scheme:         mgr.GetScheme(),
-		recorder:       mgr.GetEventRecorderFor("suitectrl"),
-		metrics:        met,
+		Reader:         mgr.GetAPIReader(),
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		Recorder:       mgr.GetEventRecorderFor("suitectrl"),
+		Metrics:        met,
 		schedulingInfo: si,
 	}
 }
@@ -85,13 +92,13 @@ var _ reconcile.Reconciler = &ReconcileComplianceSuite{}
 // ReconcileComplianceSuite reconciles a ComplianceSuite object
 type ReconcileComplianceSuite struct {
 	// Accesses the API server directly
-	reader client.Reader
-	// This client, initialized using mgr.Client() above, is a split client
+	Reader client.Reader
+	// This Client, initialized using mgr.Client() above, is a split Client
 	// that reads objects from the cache and writes to the apiserver
-	client   client.Client
-	scheme   *runtime.Scheme
-	recorder record.EventRecorder
-	metrics  *metrics.Metrics
+	Client   client.Client
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
+	Metrics  *metrics.Metrics
 	// helps us schedule platform scans on the nodes labeled for the
 	// compliance operator's control plane
 	schedulingInfo utils.CtlplaneSchedulingInfo
@@ -101,13 +108,13 @@ type ReconcileComplianceSuite struct {
 // and what is in the ComplianceSuite.Spec
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *ReconcileComplianceSuite) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling ComplianceSuite")
 
 	// Fetch the ComplianceSuite suite
 	suite := &compv1alpha1.ComplianceSuite{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, suite)
+	err := r.Client.Get(context.TODO(), request.NamespacedName, suite)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -127,7 +134,7 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 		// registering our finalizer.
 		if !common.ContainsFinalizer(suite.ObjectMeta.Finalizers, compv1alpha1.SuiteFinalizer) {
 			suite.ObjectMeta.Finalizers = append(suite.ObjectMeta.Finalizers, compv1alpha1.SuiteFinalizer)
-			if err := r.client.Update(context.TODO(), suite); err != nil {
+			if err := r.Client.Update(context.TODO(), suite); err != nil {
 				return reconcile.Result{}, err
 			}
 			return reconcile.Result{}, nil
@@ -147,7 +154,7 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 		if sCopy.Status.ScanStatuses == nil {
 			sCopy.Status.ScanStatuses = make([]compv1alpha1.ComplianceScanStatusWrapper, 0)
 		}
-		updateErr := r.client.Status().Update(context.TODO(), sCopy)
+		updateErr := r.Client.Status().Update(context.TODO(), sCopy)
 		if updateErr != nil {
 			return reconcile.Result{}, fmt.Errorf("Error setting initial status for suite: %w", updateErr)
 		}
@@ -162,7 +169,7 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 	if suite.Status.Conditions.GetCondition("Processing") == nil {
 		sCopy := suite.DeepCopy()
 		sCopy.Status.SetConditionsProcessing()
-		updateErr := r.client.Status().Update(context.TODO(), sCopy)
+		updateErr := r.Client.Status().Update(context.TODO(), sCopy)
 		if updateErr != nil {
 			return reconcile.Result{}, fmt.Errorf("Error setting processing status for suite: %w", updateErr)
 		}
@@ -185,7 +192,7 @@ func (r *ReconcileComplianceSuite) Reconcile(request reconcile.Request) (reconci
 	if suiteCopy.IsResultAvailable() {
 		sCopy := suite.DeepCopy()
 		sCopy.Status.SetConditionReady()
-		updateErr := r.client.Status().Update(context.TODO(), sCopy)
+		updateErr := r.Client.Status().Update(context.TODO(), sCopy)
 		if updateErr != nil {
 			return reconcile.Result{}, fmt.Errorf("Error setting ready status for suite: %w", updateErr)
 		}
@@ -202,9 +209,9 @@ func (r *ReconcileComplianceSuite) suiteDeleteHandler(suite *compv1alpha1.Compli
 		logger.Error(err, "Cannot get priority class name, scan will not be run with set priority class")
 	}
 	if priorityClassName != "" {
-		if priorityClassExist, why := utils.ValidatePriorityClassExist(priorityClassName, r.client); !priorityClassExist {
+		if priorityClassExist, why := utils.ValidatePriorityClassExist(priorityClassName, r.Client); !priorityClassExist {
 			log.Info(why, "Suit.Name", suite.Name)
-			r.recorder.Eventf(suite, corev1.EventTypeWarning, "PriorityClass", why+" Suit:"+suite.Name)
+			r.Recorder.Eventf(suite, corev1.EventTypeWarning, "PriorityClass", why+" Suit:"+suite.Name)
 		}
 		rerunner.Spec.JobTemplate.Spec.Template.Spec.PriorityClassName = priorityClassName
 	}
@@ -215,7 +222,7 @@ func (r *ReconcileComplianceSuite) suiteDeleteHandler(suite *compv1alpha1.Compli
 	suiteCopy := suite.DeepCopy()
 	// remove our finalizer from the list and update it.
 	suiteCopy.ObjectMeta.Finalizers = common.RemoveFinalizer(suiteCopy.ObjectMeta.Finalizers, compv1alpha1.SuiteFinalizer)
-	if err := r.client.Update(context.TODO(), suiteCopy); err != nil {
+	if err := r.Client.Update(context.TODO(), suiteCopy); err != nil {
 		return err
 	}
 	return nil
@@ -233,7 +240,7 @@ func (r *ReconcileComplianceSuite) issueValidationError(suite *compv1alpha1.Comp
 	logger.Info(enhancedMessage)
 
 	// Issue event
-	r.recorder.Event(
+	r.Recorder.Event(
 		suite,
 		corev1.EventTypeWarning,
 		"SuiteValidationError",
@@ -249,14 +256,14 @@ func (r *ReconcileComplianceSuite) issueValidationError(suite *compv1alpha1.Comp
 	if suiteCopy.Status.ScanStatuses == nil {
 		suiteCopy.Status.ScanStatuses = make([]compv1alpha1.ComplianceScanStatusWrapper, 0)
 	}
-	return r.client.Status().Update(context.TODO(), suiteCopy)
+	return r.Client.Status().Update(context.TODO(), suiteCopy)
 }
 
 func (r *ReconcileComplianceSuite) reconcileScans(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) (bool, error) {
 	for idx := range suite.Spec.Scans {
 		scanWrap := &suite.Spec.Scans[idx]
 		scan := &compv1alpha1.ComplianceScan{}
-		err := r.client.Get(context.TODO(), types.NamespacedName{Name: scanWrap.Name, Namespace: suite.Namespace}, scan)
+		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: scanWrap.Name, Namespace: suite.Namespace}, scan)
 		if err != nil && errors.IsNotFound(err) {
 			// If the scan was not found, launch it
 			logger.Info("Scan not found, launching..", "ComplianceScan.Name", scanWrap.Name)
@@ -298,7 +305,7 @@ func (r *ReconcileComplianceSuite) reconcileScanStatus(suite *compv1alpha1.Compl
 				logger.Error(err, "Could not update scan status")
 				return err
 			}
-			if r.recorder != nil && suite.IsResultAvailable() {
+			if r.Recorder != nil && suite.IsResultAvailable() {
 				r.generateEventsForSuite(suite, logger)
 			}
 			return nil
@@ -324,7 +331,7 @@ func (r *ReconcileComplianceSuite) reconcileScanSpec(scanWrap *compv1alpha1.Comp
 	// Fetch the scan again in case the status is updated. Updating the scan spec
 	// is so rare that the extra API server round-trip shouldn't matter
 	foundScan := &compv1alpha1.ComplianceScan{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: origScan.Name, Namespace: origScan.Namespace}, foundScan)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: origScan.Name, Namespace: origScan.Namespace}, foundScan)
 	if err != nil {
 		return false, err
 	}
@@ -338,7 +345,7 @@ func (r *ReconcileComplianceSuite) reconcileScanSpec(scanWrap *compv1alpha1.Comp
 	}
 
 	scanWrap.ComplianceScanSpec.DeepCopyInto(&foundScan.Spec)
-	err = r.client.Update(context.TODO(), foundScan)
+	err = r.Client.Update(context.TODO(), foundScan)
 	if err != nil {
 		logger.Error(err, "Cannot update scan spec", "ComplianceScan.Name", origScan.Name)
 		return false, err
@@ -372,7 +379,7 @@ func (r *ReconcileComplianceSuite) updateScanStatus(suite *compv1alpha1.Complian
 	}
 
 	logger.Info("Updating scan status", "ComplianceScan.Name", modScanStatus.Name, "ComplianceScan.Phase", modScanStatus.Phase)
-	if err := r.client.Status().Update(context.TODO(), suite); err != nil {
+	if err := r.Client.Status().Update(context.TODO(), suite); err != nil {
 		return err
 	}
 	return r.setSuiteMetric(suite)
@@ -382,27 +389,27 @@ func (r *ReconcileComplianceSuite) generateEventsForSuite(suite *compv1alpha1.Co
 	logger.Info("Generating events for suite")
 
 	if suite.Status.Result == compv1alpha1.ResultNotApplicable {
-		r.recorder.Eventf(
+		r.Recorder.Eventf(
 			suite, corev1.EventTypeNormal, "SuiteNotApplicable",
 			"The suite result is not applicable, please check if you're using the correct platform")
 	} else if suite.Status.Result == compv1alpha1.ResultInconsistent {
-		r.recorder.Eventf(
+		r.Recorder.Eventf(
 			suite, corev1.EventTypeNormal, "SuiteNotConsistent",
 			"The suite result is not consistent, please check for scan results labeled with %s",
 			compv1alpha1.ComplianceCheckInconsistentLabel)
 	}
 
-	err, haveOutdatedRems := utils.HaveOutdatedRemediations(r.client)
+	err, haveOutdatedRems := utils.HaveOutdatedRemediations(r.Client)
 	if err != nil {
 		logger.Info("Could not check if there exist any obsolete remediations", "Suite.Name", suite.Name)
 	}
 	if haveOutdatedRems {
-		r.recorder.Eventf(
+		r.Recorder.Eventf(
 			suite, corev1.EventTypeNormal, "HaveOutdatedRemediations",
 			"One of suite's scans produced outdated remediations, please check for complianceremediation objects labeled with %s",
 			compv1alpha1.OutdatedRemediationLabel)
 	}
-	common.GenerateEventForResult(r.recorder, suite, suite, suite.Status.Result)
+	common.GenerateEventForResult(r.Recorder, suite, suite, suite.Status.Result)
 }
 
 func (r *ReconcileComplianceSuite) addScanStatus(suite *compv1alpha1.ComplianceSuite, scan *compv1alpha1.ComplianceScan, logger logr.Logger) error {
@@ -415,7 +422,7 @@ func (r *ReconcileComplianceSuite) addScanStatus(suite *compv1alpha1.ComplianceS
 	logger.Info("Adding scan status", "ComplianceScan.Name", newScanStatus.Name, "ComplianceScan.Phase", newScanStatus.Phase)
 	suite.Status.Phase = suite.LowestCommonState()
 	suite.Status.Result = suite.LowestCommonResult()
-	if err := r.client.Status().Update(context.TODO(), suite); err != nil {
+	if err := r.Client.Status().Update(context.TODO(), suite); err != nil {
 		return err
 	}
 	return r.setSuiteMetric(suite)
@@ -427,12 +434,12 @@ func launchScanForSuite(r *ReconcileComplianceSuite, suite *compv1alpha1.Complia
 		return fmt.Errorf("cannot create ComplianceScan for %s:%s", suite.Name, scanWrap.Name)
 	}
 
-	if err := controllerutil.SetControllerReference(suite, scan, r.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(suite, scan, r.Scheme); err != nil {
 		log.Error(err, "Failed to set scan ownership", "ComplianceScan.Name", scan.Name)
 		return err
 	}
 
-	err := r.client.Create(context.TODO(), scan)
+	err := r.Client.Create(context.TODO(), scan)
 	if errors.IsAlreadyExists(err) {
 		// Was there a race that created the scan in the meantime?
 		return nil
@@ -469,12 +476,12 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 		LabelSelector: labels.SelectorFromSet(labels.Set{compv1alpha1.SuiteLabel: suite.Name}),
 	}
 
-	if err := r.client.List(context.TODO(), remList, &listOpts); err != nil {
+	if err := r.Client.List(context.TODO(), remList, &listOpts); err != nil {
 		log.Error(err, "Failed to list remediations")
 		return reconcile.Result{}, err
 	}
 
-	if err := r.client.List(context.TODO(), mcfgpools); err != nil {
+	if err := r.Client.List(context.TODO(), mcfgpools); err != nil {
 		log.Error(err, "Failed to list pools")
 		return reconcile.Result{}, err
 	}
@@ -484,7 +491,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 		// get relevant scan
 		scan := &compv1alpha1.ComplianceScan{}
 		scanKey := types.NamespacedName{Name: rem.Labels[compv1alpha1.ComplianceScanLabel], Namespace: rem.Namespace}
-		if err := r.client.Get(context.TODO(), scanKey, scan); err != nil {
+		if err := r.Client.Get(context.TODO(), scanKey, scan); err != nil {
 			return reconcile.Result{}, err
 		}
 
@@ -510,7 +517,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 	logger.Info("All scans are in Done phase. Post-processing remediations")
 	// refresh remediationList
 	postProcessRemList := &compv1alpha1.ComplianceRemediationList{}
-	if err := r.client.List(context.TODO(), postProcessRemList, &listOpts); err != nil {
+	if err := r.Client.List(context.TODO(), postProcessRemList, &listOpts); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -518,7 +525,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 	for _, rem := range postProcessRemList.Items {
 		if !rem.IsApplied() {
 			if rem.Status.ApplicationState == compv1alpha1.RemediationNeedsReview {
-				r.recorder.Event(suite, corev1.EventTypeWarning, "CannotRemediate", "Remediation needs-review. Values not set"+" Remediation:"+rem.Name)
+				r.Recorder.Event(suite, corev1.EventTypeWarning, "CannotRemediate", "Remediation needs-review. Values not set"+" Remediation:"+rem.Name)
 				continue
 			}
 			logger.Info("Remediation not applied yet. Skipping post-processing", "ComplianceRemediation.Name", rem.Name)
@@ -530,7 +537,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 	for idx := range affectedMcfgPools {
 		pool := affectedMcfgPools[idx]
 		// only un-pause if the kubeletconfig is fully rendered for the pool
-		isRendered, err, diffString := utils.AreKubeletConfigsRendered(pool, r.client)
+		isRendered, err, diffString := utils.AreKubeletConfigsRendered(pool, r.Client)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -541,7 +548,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 		}
 		poolKey := types.NamespacedName{Name: pool.GetName()}
 		// refresh pool reference directly from the API Server
-		if getErr := r.reader.Get(context.TODO(), poolKey, pool); getErr != nil {
+		if getErr := r.Reader.Get(context.TODO(), poolKey, pool); getErr != nil {
 			logger.Error(getErr, "Could get newer machine config pool reference", "MachineConfigPool.Name", poolKey.Name)
 			return reconcile.Result{}, getErr
 		}
@@ -549,7 +556,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 			logger.Info("Unpausing pool", "MachineConfigPool.Name", pool.Name)
 			poolCopy := pool.DeepCopy()
 			poolCopy.Spec.Paused = false
-			if err := r.client.Update(context.TODO(), poolCopy); err != nil {
+			if err := r.Client.Update(context.TODO(), poolCopy); err != nil {
 				logger.Error(err, "Could not unpause pool", "MachineConfigPool.Name", pool.Name)
 				return reconcile.Result{}, err
 			}
@@ -564,7 +571,7 @@ func (r *ReconcileComplianceSuite) reconcileRemediations(suite *compv1alpha1.Com
 		if suite.RemoveOutdatedAnnotationSet() {
 			delete(suiteCopy.Annotations, compv1alpha1.RemoveOutdatedAnnotation)
 		}
-		updateErr := r.client.Update(context.TODO(), suiteCopy)
+		updateErr := r.Client.Update(context.TODO(), suiteCopy)
 		return reconcile.Result{}, updateErr
 	}
 	return reconcile.Result{}, nil
@@ -611,7 +618,7 @@ func (r *ReconcileComplianceSuite) applyGenericRemediation(rem compv1alpha1.Comp
 		remCopy.Spec.Outdated.Object = nil
 	}
 	logger.Info("Setting Remediation to applied", "ComplianceRemediation.Name", rem.Name)
-	if err := r.client.Update(context.TODO(), remCopy); err != nil {
+	if err := r.Client.Update(context.TODO(), remCopy); err != nil {
 		return err
 	}
 	return nil
@@ -628,7 +635,7 @@ func (r *ReconcileComplianceSuite) applyMcfgRemediationAndPausePool(rem compv1al
 	if !pool.Spec.Paused {
 		logger.Info("Pausing pool", "MachineConfigPool.Name", pool.Name)
 		pool.Spec.Paused = true
-		if err := r.client.Update(context.TODO(), pool); err != nil {
+		if err := r.Client.Update(context.TODO(), pool); err != nil {
 			logger.Error(err, "Could not pause pool", "MachineConfigPool.Name", pool.Name)
 			return err
 		}
@@ -639,7 +646,7 @@ func (r *ReconcileComplianceSuite) applyMcfgRemediationAndPausePool(rem compv1al
 		logger.Info("Updating Outdated Remediation", "Remediation.Name", remCopy.Name)
 		remCopy.Spec.Outdated.Object = nil
 	}
-	if err := r.client.Update(context.TODO(), remCopy); err != nil {
+	if err := r.Client.Update(context.TODO(), remCopy); err != nil {
 		return err
 	}
 	return nil
@@ -661,13 +668,13 @@ func remediationNeedsOutdatedRemoval(rem *compv1alpha1.ComplianceRemediation, su
 
 func (r *ReconcileComplianceSuite) setSuiteMetric(suite *compv1alpha1.ComplianceSuite) error {
 	if suite.Status.Result == compv1alpha1.ResultCompliant {
-		r.metrics.SetComplianceStateInCompliance(suite.Name)
+		r.Metrics.SetComplianceStateInCompliance(suite.Name)
 	} else if suite.Status.Result == compv1alpha1.ResultNonCompliant {
-		r.metrics.SetComplianceStateOutOfCompliance(suite.Name)
+		r.Metrics.SetComplianceStateOutOfCompliance(suite.Name)
 	} else if suite.Status.Result == compv1alpha1.ResultInconsistent {
-		r.metrics.SetComplianceStateInconsistent(suite.Name)
+		r.Metrics.SetComplianceStateInconsistent(suite.Name)
 	} else if suite.Status.Result == compv1alpha1.ResultError {
-		r.metrics.SetComplianceStateError(suite.Name)
+		r.Metrics.SetComplianceStateError(suite.Name)
 	}
 	return nil
 }

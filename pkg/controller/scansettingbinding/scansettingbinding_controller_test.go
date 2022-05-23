@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	conditions "github.com/operator-framework/operator-sdk/pkg/status"
 	"go.uber.org/zap"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -18,10 +17,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics/metricsfakes"
 )
 
 var _ = Describe("Testing scansettingbinding controller", func() {
@@ -228,9 +227,9 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 		Expect(err).To(BeNil())
 
 		reconciler = ReconcileScanSettingBinding{
-			client:      client,
-			scheme:      scheme,
-			metrics:     mockMetrics,
+			Client:      client,
+			Scheme:      scheme,
+			Metrics:     mockMetrics,
 			roleVal:     regexp.MustCompile(roleValRegexp),
 			invalidRole: regexp.MustCompile(invalidRoleRegexp),
 		}
@@ -259,10 +258,10 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 
 			ssb.Status.SetConditionPending()
 
-			err := reconciler.client.Create(context.TODO(), ssb)
+			err := reconciler.Client.Create(context.TODO(), ssb)
 			Expect(err).To(BeNil())
 
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
@@ -270,7 +269,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 		})
 
 		It("Should create a basic suite from a Profile", func() {
-			_, err := reconciler.Reconcile(reconcile.Request{
+			_, err := reconciler.Reconcile(context.TODO(), reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Namespace: ssb.Namespace,
 					Name:      ssb.Name,
@@ -278,7 +277,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			})
 			Expect(err).To(BeNil())
 
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
@@ -286,7 +285,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			Expect(ssb.Status.Conditions.GetCondition("Ready")).ToNot(BeNil())
 			Expect(ssb.Status.Conditions.IsTrueFor("Ready")).To(BeTrue())
 
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
 			Expect(err).To(BeNil())
 
 			Expect(suite.Spec.Schedule).To(BeEquivalentTo(setting.Schedule))
@@ -351,9 +350,9 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			}
 			ssb.Status.SetConditionPending()
 
-			err := reconciler.client.Create(context.TODO(), ssb)
+			err := reconciler.Client.Create(context.TODO(), ssb)
 			Expect(err).To(BeNil())
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
@@ -361,7 +360,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 		})
 
 		It("Should create a basic suite from a TailoredProfile", func() {
-			_, err := reconciler.Reconcile(reconcile.Request{
+			_, err := reconciler.Reconcile(context.TODO(), reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Namespace: ssb.Namespace,
 					Name:      ssb.Name,
@@ -369,7 +368,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			})
 			Expect(err).To(BeNil())
 
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
@@ -377,7 +376,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			Expect(ssb.Status.Conditions.GetCondition("Ready")).ToNot(BeNil())
 			Expect(ssb.Status.Conditions.IsTrueFor("Ready")).To(BeTrue())
 
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
 			Expect(err).To(BeNil())
 
 			Expect(suite.OwnerReferences).To(HaveLen(1))
@@ -450,9 +449,9 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			}
 			ssb.Status.SetConditionPending()
 
-			err := reconciler.client.Create(context.TODO(), ssb)
+			err := reconciler.Client.Create(context.TODO(), ssb)
 			Expect(err).To(BeNil())
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
@@ -460,7 +459,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 		})
 
 		It("Should create a suite from the TailoredProfile", func() {
-			_, err := reconciler.Reconcile(reconcile.Request{
+			_, err := reconciler.Reconcile(context.TODO(), reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Namespace: ssb.Namespace,
 					Name:      ssb.Name,
@@ -468,7 +467,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			})
 			Expect(err).To(BeNil())
 
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
@@ -476,7 +475,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			Expect(ssb.Status.Conditions.GetCondition("Ready")).ToNot(BeNil())
 			Expect(ssb.Status.Conditions.IsTrueFor("Ready")).To(BeTrue())
 
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
 			Expect(err).To(BeNil())
 
 			Expect(suite.OwnerReferences).To(HaveLen(1))
@@ -544,9 +543,9 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			}
 			ssb.Status.SetConditionPending()
 
-			err := reconciler.client.Create(context.TODO(), ssb)
+			err := reconciler.Client.Create(context.TODO(), ssb)
 			Expect(err).To(BeNil())
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
@@ -554,7 +553,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 		})
 
 		It("Should not create a suite", func() {
-			_, err := reconciler.Reconcile(reconcile.Request{
+			_, err := reconciler.Reconcile(context.TODO(), reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Namespace: ssb.Namespace,
 					Name:      ssb.Name,
@@ -562,7 +561,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			})
 			Expect(err).ToNot(BeNil())
 
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
@@ -570,7 +569,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			Expect(ssb.Status.Conditions.GetCondition("Ready")).ToNot(BeNil())
 			Expect(ssb.Status.Conditions.IsTrueFor("Ready")).To(BeFalse())
 
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
 			Expect(err).ToNot(BeNil())
 		})
 	})
@@ -579,7 +578,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 		JustBeforeEach(func() {
 			By("Setting the TP to PENDING")
 			scratchTP.Status.State = compv1alpha1.TailoredProfileStatePending
-			updateErr := reconciler.client.Status().Update(context.TODO(), scratchTP)
+			updateErr := reconciler.Client.Status().Update(context.TODO(), scratchTP)
 			Expect(updateErr).To(BeNil())
 
 			ssb = &compv1alpha1.ScanSettingBinding{
@@ -597,9 +596,9 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			}
 			ssb.Status.SetConditionPending()
 
-			err := reconciler.client.Create(context.TODO(), ssb)
+			err := reconciler.Client.Create(context.TODO(), ssb)
 			Expect(err).To(BeNil())
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
@@ -607,7 +606,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 		})
 
 		It("Be requeued and should not create a suite", func() {
-			res, err := reconciler.Reconcile(reconcile.Request{
+			res, err := reconciler.Reconcile(context.TODO(), reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Namespace: ssb.Namespace,
 					Name:      ssb.Name,
@@ -616,7 +615,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			Expect(err).To(BeNil())
 			Expect(res.Requeue).To(BeTrue())
 
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
@@ -630,7 +629,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 		JustBeforeEach(func() {
 			By("Setting the TP to ERROR")
 			scratchTP.Status.State = compv1alpha1.TailoredProfileStateError
-			updateErr := reconciler.client.Status().Update(context.TODO(), scratchTP)
+			updateErr := reconciler.Client.Status().Update(context.TODO(), scratchTP)
 			Expect(updateErr).To(BeNil())
 
 			ssb = &compv1alpha1.ScanSettingBinding{
@@ -648,9 +647,9 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			}
 			ssb.Status.SetConditionPending()
 
-			err := reconciler.client.Create(context.TODO(), ssb)
+			err := reconciler.Client.Create(context.TODO(), ssb)
 			Expect(err).To(BeNil())
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
@@ -658,7 +657,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 		})
 
 		It("report error and should not create a suite", func() {
-			res, err := reconciler.Reconcile(reconcile.Request{
+			res, err := reconciler.Reconcile(context.TODO(), reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Namespace: ssb.Namespace,
 					Name:      ssb.Name,
@@ -667,14 +666,14 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			Expect(err).To(BeNil())
 			Expect(res.Requeue).To(BeFalse())
 
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
 			Expect(err).To(BeNil())
 			Expect(ssb.Status.Conditions.GetCondition("Ready")).ToNot(BeNil())
 			Expect(ssb.Status.Conditions.IsTrueFor("Ready")).To(BeFalse())
-			Expect(ssb.Status.Conditions.GetCondition("Ready").Reason).To(Equal(conditions.ConditionReason("Invalid")))
+			Expect(ssb.Status.Conditions.GetCondition("Ready").Reason).To(Equal(compv1alpha1.ConditionReason("Invalid")))
 		})
 	})
 
@@ -690,7 +689,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			profRhcosE8Badproduct.Annotations = platformBadProfileAnnotations
 			profRhcosE8Badproduct.SetResourceVersion("")
 
-			err := reconciler.client.Create(context.TODO(), profRhcosE8Badproduct)
+			err := reconciler.Client.Create(context.TODO(), profRhcosE8Badproduct)
 			Expect(err).To(BeNil())
 
 			ssb = &compv1alpha1.ScanSettingBinding{
@@ -713,9 +712,9 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			}
 			ssb.Status.SetConditionPending()
 
-			err = reconciler.client.Create(context.TODO(), ssb)
+			err = reconciler.Client.Create(context.TODO(), ssb)
 			Expect(err).To(BeNil())
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
@@ -723,7 +722,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 		})
 
 		It("Should not create a suite", func() {
-			_, err := reconciler.Reconcile(reconcile.Request{
+			_, err := reconciler.Reconcile(context.TODO(), reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Namespace: ssb.Namespace,
 					Name:      ssb.Name,
@@ -731,7 +730,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			})
 			Expect(err).To(BeNil())
 
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: ssb.Namespace,
 				Name:      ssb.Name,
 			}, ssb)
@@ -739,7 +738,7 @@ var _ = Describe("Testing scansettingbinding controller", func() {
 			Expect(ssb.Status.Conditions.GetCondition("Ready")).ToNot(BeNil())
 			Expect(ssb.Status.Conditions.IsTrueFor("Ready")).To(BeFalse())
 
-			err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
+			err = reconciler.Client.Get(context.TODO(), types.NamespacedName{Name: ssb.Name, Namespace: ssb.Namespace}, suite)
 			Expect(err).ToNot(BeNil())
 		})
 	})

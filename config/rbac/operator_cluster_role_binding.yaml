@@ -1,0 +1,13 @@
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: compliance-operator
+subjects:
+  - kind: ServiceAccount
+    name: compliance-operator
+    namespace: openshift-compliance
+roleRef:
+  kind: ClusterRole
+  name: compliance-operator
+  apiGroup: rbac.authorization.k8s.io

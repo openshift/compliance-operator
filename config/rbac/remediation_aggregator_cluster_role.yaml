@@ -1,0 +1,14 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: remediation-aggregator
+rules:
+  - apiGroups:
+      - config.openshift.io
+    resources:
+      - clusteroperators  # Needed for version filtering
+    verbs:
+      - get
+      - list
+      - watch

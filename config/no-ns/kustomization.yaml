@@ -1,0 +1,4 @@
+# This is for e2e setup - it's like default/ except no crd or ns
+bases:
+  - ../rbac
+  - ../manager

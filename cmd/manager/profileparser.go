@@ -1,4 +1,4 @@
-package main
+package manager
 
 import (
 	"bufio"
@@ -9,17 +9,17 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	"github.com/antchfx/xmlquery"
-	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/profileparser"
+	cmpv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/profileparser"
 )
 
-var profileparserCmd = &cobra.Command{
+var ProfileparserCmd = &cobra.Command{
 	Use:   "profileparser",
 	Short: "Runs the profile parser",
 	Long:  `The profileparser reads a data stream file and generates profile objects from it.`,
@@ -27,8 +27,7 @@ var profileparserCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(profileparserCmd)
-	defineProfileParserFlags(profileparserCmd)
+	defineProfileParserFlags(ProfileparserCmd)
 }
 
 func defineProfileParserFlags(cmd *cobra.Command) {
@@ -37,7 +36,6 @@ func defineProfileParserFlags(cmd *cobra.Command) {
 	cmd.Flags().String("namespace", "", "Namespace of the ProfileBundle object")
 
 	flags := cmd.Flags()
-	flags.AddFlagSet(zap.FlagSet())
 
 	// Add flags registered by imported packages (e.g. glog and
 	// controller-runtime)
@@ -48,23 +46,20 @@ func newParserConfig(cmd *cobra.Command) *profileparser.ParserConfig {
 	pcfg := profileparser.ParserConfig{}
 
 	flags := cmd.Flags()
-	if err := flags.Parse(zap.FlagSet().Args()); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse zap flagset: %v", zap.FlagSet().Args())
-		os.Exit(1)
-	}
+	flags.AddGoFlagSet(flag.CommandLine)
 
 	pcfg.DataStreamPath = getValidStringArg(cmd, "ds-path")
 	pcfg.ProfileBundleKey.Name = getValidStringArg(cmd, "name")
 	pcfg.ProfileBundleKey.Namespace = getValidStringArg(cmd, "namespace")
 
-	logf.SetLogger(zap.Logger())
+	logf.SetLogger(zap.New())
 
 	printVersion()
 
 	// Get a config to talk to the apiserver
 	cfg, err := config.GetConfig()
 	if err != nil {
-		log.Error(err, "")
+		cmdLog.Error(err, "")
 		os.Exit(1)
 	}
 
@@ -84,7 +79,7 @@ func getProfileBundle(pcfg *profileparser.ParserConfig) (*cmpv1alpha1.ProfileBun
 
 	err := pcfg.Client.Get(context.TODO(), pcfg.ProfileBundleKey, &pb)
 	if err != nil {
-		log.Error(err, "")
+		cmdLog.Error(err, "")
 		os.Exit(1)
 	}
 
@@ -102,7 +97,7 @@ func updateProfileBundleStatus(pcfg *profileparser.ParserConfig, pb *cmpv1alpha1
 		pbCopy.Status.SetConditionInvalid()
 		err = pcfg.Client.Status().Update(context.TODO(), pbCopy)
 		if err != nil {
-			log.Error(err, "Couldn't update ProfileBundle status")
+			cmdLog.Error(err, "Couldn't update ProfileBundle status")
 			os.Exit(1)
 		}
 	} else {
@@ -112,7 +107,7 @@ func updateProfileBundleStatus(pcfg *profileparser.ParserConfig, pb *cmpv1alpha1
 		pbCopy.Status.SetConditionReady()
 		err = pcfg.Client.Status().Update(context.TODO(), pbCopy)
 		if err != nil {
-			log.Error(err, "Couldn't update ProfileBundle status")
+			cmdLog.Error(err, "Couldn't update ProfileBundle status")
 			os.Exit(1)
 		}
 	}
@@ -123,24 +118,24 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 
 	pb, err := getProfileBundle(pcfg)
 	if err != nil {
-		log.Error(err, "Couldn't get ProfileBundle")
+		cmdLog.Error(err, "Couldn't get ProfileBundle")
 
 		os.Exit(1)
 	}
 
 	contentFile, err := readContent(pcfg.DataStreamPath)
 	if err != nil {
-		log.Error(err, "Couldn't read the content")
+		cmdLog.Error(err, "Couldn't read the content")
 		updateProfileBundleStatus(pcfg, pb, fmt.Errorf("Couldn't read content file: %s", err))
 		os.Exit(1)
 	}
 	bufContentFile := bufio.NewReader(contentFile)
 	contentDom, err := xmlquery.Parse(bufContentFile)
 	if err != nil {
-		log.Error(err, "Couldn't read the content XML")
+		cmdLog.Error(err, "Couldn't read the content XML")
 		updateProfileBundleStatus(pcfg, pb, fmt.Errorf("Couldn't read content XML: %s", err))
 		if closeErr := contentFile.Close(); closeErr != nil {
-			log.Error(err, "Couldn't close the content file")
+			cmdLog.Error(err, "Couldn't close the content file")
 		}
 		os.Exit(1)
 	}
@@ -152,11 +147,11 @@ func runProfileParser(cmd *cobra.Command, args []string) {
 	updateProfileBundleStatus(pcfg, pb, err)
 
 	if err != nil {
-		log.Error(err, "Parsing the bundle failed, will restart the container")
+		cmdLog.Error(err, "Parsing the bundle failed, will restart the container")
 		os.Exit(1)
 	}
 
 	if closeErr := contentFile.Close(); closeErr != nil {
-		log.Error(err, "Couldn't close the content file")
+		cmdLog.Error(err, "Couldn't close the content file")
 	}
 }

@@ -3,15 +3,14 @@ package compliancesuite
 import (
 	"context"
 	"encoding/json"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics/metricsfakes"
 
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
-
+	"github.com/ComplianceAsCode/compliance-operator/pkg/apis"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/openshift/compliance-operator/pkg/apis"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"go.uber.org/zap"
@@ -24,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 var _ = Describe("ComplianceSuiteController", func() {
@@ -46,16 +45,16 @@ var _ = Describe("ComplianceSuiteController", func() {
 
 		scan1 := &compv1alpha1.ComplianceScan{}
 
-		err := reconciler.client.Get(ctx, scan1Key, scan1)
+		err := reconciler.Client.Get(ctx, scan1Key, scan1)
 		Expect(err).To(BeNil())
 
 		suite.Status.Phase = compv1alpha1.PhaseDone
 		scan1Copy := scan1.DeepCopy()
 		scan1Copy.Status.Phase = compv1alpha1.PhaseDone
 
-		err = reconciler.client.Status().Update(ctx, scan1Copy)
+		err = reconciler.Client.Status().Update(ctx, scan1Copy)
 		Expect(err).To(BeNil())
-		err = reconciler.client.Status().Update(ctx, suite)
+		err = reconciler.Client.Status().Update(ctx, suite)
 		Expect(err).To(BeNil())
 	}
 
@@ -67,8 +66,9 @@ var _ = Describe("ComplianceSuiteController", func() {
 
 		suite = &compv1alpha1.ComplianceSuite{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      suiteName,
-				Namespace: namespace,
+				Name:            suiteName,
+				Namespace:       namespace,
+				ResourceVersion: "0",
 			},
 			Spec: compv1alpha1.ComplianceSuiteSpec{
 				Scans: []compv1alpha1.ComplianceScanSpecWrapper{
@@ -98,7 +98,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 		err = mockMetrics.Register()
 		Expect(err).To(BeNil())
 
-		reconciler = &ReconcileComplianceSuite{reader: client, client: client, scheme: cscheme, metrics: mockMetrics}
+		reconciler = &ReconcileComplianceSuite{Reader: client, Client: client, Scheme: cscheme, Metrics: mockMetrics}
 		zaplog, _ := zap.NewDevelopment()
 		logger = zapr.NewLogger(zaplog)
 	})
@@ -109,7 +109,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 
 		rem := &compv1alpha1.ComplianceRemediation{}
 		key := types.NamespacedName{Name: remediationName, Namespace: namespace}
-		getErr := reconciler.client.Get(ctx, key, rem)
+		getErr := reconciler.Client.Get(ctx, key, rem)
 		Expect(getErr).To(BeNil())
 		return rem
 	}
@@ -122,7 +122,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 	prepareOutdatedRemediation := func() {
 		rem := &compv1alpha1.ComplianceRemediation{}
 		remKey := types.NamespacedName{Name: remediationName, Namespace: namespace}
-		err := reconciler.client.Get(ctx, remKey, rem)
+		err := reconciler.Client.Get(ctx, remKey, rem)
 		Expect(err).To(BeNil())
 		cm := &corev1.ConfigMap{
 			TypeMeta: metav1.TypeMeta{
@@ -136,11 +136,11 @@ var _ = Describe("ComplianceSuiteController", func() {
 		remCopy.Spec.Current.Object = &unstructured.Unstructured{
 			Object: unstructuredCM,
 		}
-		err = reconciler.client.Update(ctx, remCopy)
+		err = reconciler.Client.Update(ctx, remCopy)
 		Expect(err).To(BeNil())
 		remCopyForStatus := remCopy.DeepCopy()
 		remCopyForStatus.Status.ApplicationState = compv1alpha1.RemediationOutdated
-		err = reconciler.client.Status().Update(ctx, remCopyForStatus)
+		err = reconciler.Client.Status().Update(ctx, remCopyForStatus)
 		Expect(err).To(BeNil())
 	}
 
@@ -150,7 +150,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 			suite.Annotations = make(map[string]string, 1)
 		}
 		suite.Annotations[compv1alpha1.RemoveOutdatedAnnotation] = ""
-		err := reconciler.client.Update(ctx, suite)
+		err := reconciler.Client.Update(ctx, suite)
 		Expect(err).To(BeNil())
 	}
 
@@ -191,7 +191,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 			remediation.Spec.Current.Object = &unstructured.Unstructured{
 				Object: unstructuredCM,
 			}
-			err = reconciler.client.Create(ctx, remediation.DeepCopy())
+			err = reconciler.Client.Create(ctx, remediation.DeepCopy())
 			Expect(err).To(BeNil())
 		})
 
@@ -202,7 +202,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 
 			By("The remediation controller setting the applied status")
 			rem.Status.ApplicationState = compv1alpha1.RemediationApplied
-			err := reconciler.client.Update(ctx, rem)
+			err := reconciler.Client.Update(ctx, rem)
 			Expect(err).To(BeNil())
 
 			By("Running a second reconcile loop")
@@ -217,7 +217,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 		Context("With spec.AutoApplyRemediations = true", func() {
 			BeforeEach(func() {
 				suite.Spec.AutoApplyRemediations = true
-				err := reconciler.client.Status().Update(ctx, suite)
+				err := reconciler.Client.Status().Update(ctx, suite)
 				Expect(err).To(BeNil())
 			})
 			Context("With ComplianceSuite and Scans not done", func() {
@@ -236,7 +236,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 						By("Verifying the suite no longer has the remove-outdated annotation")
 						key := types.NamespacedName{Name: suiteName, Namespace: namespace}
 						s := &compv1alpha1.ComplianceSuite{}
-						err := reconciler.client.Get(ctx, key, s)
+						err := reconciler.Client.Get(ctx, key, s)
 						Expect(err).To(BeNil())
 						Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.RemoveOutdatedAnnotation))
 					})
@@ -248,7 +248,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 			BeforeEach(func() {
 				suite.Annotations = make(map[string]string, 2)
 				suite.Annotations[compv1alpha1.ApplyRemediationsAnnotation] = ""
-				err := reconciler.client.Update(ctx, suite)
+				err := reconciler.Client.Update(ctx, suite)
 				Expect(err).To(BeNil())
 			})
 			Context("With ComplianceSuite and Scans not done", func() {
@@ -263,7 +263,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 					By("Verifying the suite no longer has the apply-remediation annotation")
 					key := types.NamespacedName{Name: suiteName, Namespace: namespace}
 					s := &compv1alpha1.ComplianceSuite{}
-					err := reconciler.client.Get(ctx, key, s)
+					err := reconciler.Client.Get(ctx, key, s)
 					Expect(err).To(BeNil())
 					Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.ApplyRemediationsAnnotation))
 				})
@@ -277,7 +277,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 						By("Verifying the suite no longer has the remove-outdated annotation")
 						key := types.NamespacedName{Name: suiteName, Namespace: namespace}
 						s := &compv1alpha1.ComplianceSuite{}
-						err := reconciler.client.Get(ctx, key, s)
+						err := reconciler.Client.Get(ctx, key, s)
 						Expect(err).To(BeNil())
 						Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.RemoveOutdatedAnnotation))
 					})
@@ -303,7 +303,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 					},
 				},
 			}
-			err := reconciler.client.Create(ctx, mcp)
+			err := reconciler.Client.Create(ctx, mcp)
 			Expect(err).To(BeNil())
 
 			remediation := &compv1alpha1.ComplianceRemediation{
@@ -335,7 +335,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 			remediation.Spec.Current.Object = &unstructured.Unstructured{
 				Object: unstructuredMC,
 			}
-			err = reconciler.client.Create(ctx, remediation.DeepCopy())
+			err = reconciler.Client.Create(ctx, remediation.DeepCopy())
 			Expect(err).To(BeNil())
 		})
 
@@ -346,13 +346,13 @@ var _ = Describe("ComplianceSuiteController", func() {
 
 			By("The remediation controller setting the applied status")
 			rem.Status.ApplicationState = compv1alpha1.RemediationApplied
-			err := reconciler.client.Update(ctx, rem)
+			err := reconciler.Client.Update(ctx, rem)
 			Expect(err).To(BeNil())
 
 			By("the pool should be paused")
 			p := &mcfgv1.MachineConfigPool{}
 			poolkey := types.NamespacedName{Name: poolName}
-			err = reconciler.client.Get(ctx, poolkey, p)
+			err = reconciler.Client.Get(ctx, poolkey, p)
 			Expect(err).To(BeNil())
 			Expect(p.Spec.Paused).To(BeTrue())
 
@@ -361,7 +361,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 			Expect(err).To(BeNil())
 
 			By("the pool should be un-paused")
-			err = reconciler.client.Get(ctx, poolkey, p)
+			err = reconciler.Client.Get(ctx, poolkey, p)
 			Expect(err).To(BeNil())
 			Expect(p.Spec.Paused).To(BeFalse())
 		}
@@ -369,7 +369,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 		Context("With spec.AutoApplyRemediations = true", func() {
 			BeforeEach(func() {
 				suite.Spec.AutoApplyRemediations = true
-				err := reconciler.client.Status().Update(ctx, suite)
+				err := reconciler.Client.Status().Update(ctx, suite)
 				Expect(err).To(BeNil())
 			})
 			Context("With ComplianceSuite and Scans not done", func() {
@@ -388,7 +388,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 						By("Verifying the suite no longer has the remove-outdated annotation")
 						key := types.NamespacedName{Name: suiteName, Namespace: namespace}
 						s := &compv1alpha1.ComplianceSuite{}
-						err := reconciler.client.Get(ctx, key, s)
+						err := reconciler.Client.Get(ctx, key, s)
 						Expect(err).To(BeNil())
 						Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.RemoveOutdatedAnnotation))
 					})
@@ -400,7 +400,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 			BeforeEach(func() {
 				suite.Annotations = make(map[string]string, 2)
 				suite.Annotations[compv1alpha1.ApplyRemediationsAnnotation] = ""
-				err := reconciler.client.Update(ctx, suite)
+				err := reconciler.Client.Update(ctx, suite)
 				Expect(err).To(BeNil())
 			})
 			Context("With ComplianceSuite and Scans not done", func() {
@@ -415,7 +415,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 					By("Verifying the suite no longer has the apply-remediation annotation")
 					key := types.NamespacedName{Name: suiteName, Namespace: namespace}
 					s := &compv1alpha1.ComplianceSuite{}
-					err := reconciler.client.Get(ctx, key, s)
+					err := reconciler.Client.Get(ctx, key, s)
 					Expect(err).To(BeNil())
 					Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.ApplyRemediationsAnnotation))
 				})
@@ -429,7 +429,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 						By("Verifying the suite no longer has the remove-outdated annotation")
 						key := types.NamespacedName{Name: suiteName, Namespace: namespace}
 						s := &compv1alpha1.ComplianceSuite{}
-						err := reconciler.client.Get(ctx, key, s)
+						err := reconciler.Client.Get(ctx, key, s)
 						Expect(err).To(BeNil())
 						Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.RemoveOutdatedAnnotation))
 					})
@@ -483,7 +483,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 					},
 				},
 			}
-			err := reconciler.client.Create(ctx, mcp)
+			err := reconciler.Client.Create(ctx, mcp)
 			Expect(err).To(BeNil())
 
 			remediation := &compv1alpha1.ComplianceRemediation{
@@ -547,7 +547,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 					},
 				},
 			}
-			err = reconciler.client.Create(ctx, mc)
+			err = reconciler.Client.Create(ctx, mc)
 			Expect(err).To(BeNil())
 
 			existingKCPayload := `
@@ -570,7 +570,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 				},
 			}
 			//create existing kubelet config
-			err = reconciler.client.Create(ctx, existingKCObj.DeepCopy())
+			err = reconciler.Client.Create(ctx, existingKCObj.DeepCopy())
 			Expect(err).To(BeNil())
 
 			var obj map[string]interface{}
@@ -579,7 +579,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 			remediation.Spec.Current.Object = &unstructured.Unstructured{
 				Object: obj,
 			}
-			err = reconciler.client.Create(ctx, remediation.DeepCopy())
+			err = reconciler.Client.Create(ctx, remediation.DeepCopy())
 			Expect(err).To(BeNil())
 
 		})
@@ -591,23 +591,23 @@ var _ = Describe("ComplianceSuiteController", func() {
 
 			By("The remediation controller setting the applied status")
 			rem.Status.ApplicationState = compv1alpha1.RemediationApplied
-			err := reconciler.client.Update(ctx, rem)
+			err := reconciler.Client.Update(ctx, rem)
 			Expect(err).To(BeNil())
 
 			By("the pool should be paused")
 			p := &mcfgv1.MachineConfigPool{}
 			poolkey := types.NamespacedName{Name: poolName}
-			err = reconciler.client.Get(ctx, poolkey, p)
+			err = reconciler.Client.Get(ctx, poolkey, p)
 			Expect(err).To(BeNil())
 			Expect(p.Spec.Paused).To(BeTrue())
 
 			By("The remediation controller should create/patch the kubelet config object")
 			kc := &mcfgv1.KubeletConfig{}
 			kckey := types.NamespacedName{Name: "kubelet-config-compliance-operator"}
-			err = reconciler.client.Get(ctx, kckey, kc)
+			err = reconciler.Client.Get(ctx, kckey, kc)
 			Expect(err).To(BeNil())
 			kc.Spec.KubeletConfig.Raw = []byte(remediationKCPayload)
-			err = reconciler.client.Patch(ctx, kc, client.Merge)
+			err = reconciler.Client.Patch(ctx, kc, client.Merge)
 			Expect(err).To(BeNil())
 
 			By("Running a second reconcile loop")
@@ -615,17 +615,17 @@ var _ = Describe("ComplianceSuiteController", func() {
 			Expect(err).To(BeNil())
 
 			By("the pool should not be un-paused because the KubeletConfig is not rendered into Machine Config")
-			err = reconciler.client.Get(ctx, poolkey, p)
+			err = reconciler.Client.Get(ctx, poolkey, p)
 			Expect(err).To(BeNil())
 			Expect(p.Spec.Paused).To(BeTrue())
 
 			By("Render KubeLetconfig into Machine Config")
 			mcCurrent := &mcfgv1.MachineConfig{}
 			mckey := types.NamespacedName{Name: "99-master-generated-kubelet"}
-			err = reconciler.client.Get(ctx, mckey, mcCurrent)
+			err = reconciler.Client.Get(ctx, mckey, mcCurrent)
 			Expect(err).To(BeNil())
 			mcCurrent.Spec.Config.Raw = []byte(remediationKCMCPayload)
-			err = reconciler.client.Update(ctx, mcCurrent)
+			err = reconciler.Client.Update(ctx, mcCurrent)
 			Expect(err).To(BeNil())
 
 			By("Running a second reconcile loop")
@@ -633,20 +633,20 @@ var _ = Describe("ComplianceSuiteController", func() {
 			Expect(err).To(BeNil())
 
 			By("the pool should be un-paused because machine config has been updated with the new kubelet config content")
-			err = reconciler.client.Get(ctx, poolkey, p)
+			err = reconciler.Client.Get(ctx, poolkey, p)
 			Expect(err).To(BeNil())
 			Expect(p.Spec.Paused).To(BeFalse())
 
 			s := &compv1alpha1.ComplianceRemediation{}
 			key := types.NamespacedName{Name: remediationName, Namespace: namespace}
-			reconciler.client.Get(ctx, key, s)
+			reconciler.Client.Get(ctx, key, s)
 
 		}
 
 		Context("With spec.AutoApplyRemediations = true", func() {
 			BeforeEach(func() {
 				suite.Spec.AutoApplyRemediations = true
-				err := reconciler.client.Status().Update(ctx, suite)
+				err := reconciler.Client.Status().Update(ctx, suite)
 				Expect(err).To(BeNil())
 			})
 			Context("With ComplianceSuite and Scans not done", func() {
@@ -665,7 +665,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 						By("Verifying the suite no longer has the remove-outdated annotation")
 						key := types.NamespacedName{Name: suiteName, Namespace: namespace}
 						s := &compv1alpha1.ComplianceSuite{}
-						err := reconciler.client.Get(ctx, key, s)
+						err := reconciler.Client.Get(ctx, key, s)
 						Expect(err).To(BeNil())
 						Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.RemoveOutdatedAnnotation))
 					})
@@ -677,7 +677,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 			BeforeEach(func() {
 				suite.Annotations = make(map[string]string, 2)
 				suite.Annotations[compv1alpha1.ApplyRemediationsAnnotation] = ""
-				err := reconciler.client.Update(ctx, suite)
+				err := reconciler.Client.Update(ctx, suite)
 				Expect(err).To(BeNil())
 			})
 			Context("With ComplianceSuite and Scans not done", func() {
@@ -692,7 +692,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 					By("Verifying the suite no longer has the apply-remediation annotation")
 					key := types.NamespacedName{Name: suiteName, Namespace: namespace}
 					s := &compv1alpha1.ComplianceSuite{}
-					err := reconciler.client.Get(ctx, key, s)
+					err := reconciler.Client.Get(ctx, key, s)
 					Expect(err).To(BeNil())
 					Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.ApplyRemediationsAnnotation))
 				})
@@ -706,7 +706,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 						By("Verifying the suite no longer has the remove-outdated annotation")
 						key := types.NamespacedName{Name: suiteName, Namespace: namespace}
 						s := &compv1alpha1.ComplianceSuite{}
-						err := reconciler.client.Get(ctx, key, s)
+						err := reconciler.Client.Get(ctx, key, s)
 						Expect(err).To(BeNil())
 						Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.RemoveOutdatedAnnotation))
 					})
@@ -762,7 +762,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 					},
 				},
 			}
-			err := reconciler.client.Create(ctx, mcp)
+			err := reconciler.Client.Create(ctx, mcp)
 			Expect(err).To(BeNil())
 
 			remediation := &compv1alpha1.ComplianceRemediation{
@@ -826,7 +826,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 					},
 				},
 			}
-			err = reconciler.client.Create(ctx, mc)
+			err = reconciler.Client.Create(ctx, mc)
 			Expect(err).To(BeNil())
 
 			existingKCPayload := `
@@ -849,7 +849,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 				},
 			}
 			//create existing kubelet config
-			err = reconciler.client.Create(ctx, existingKCObj.DeepCopy())
+			err = reconciler.Client.Create(ctx, existingKCObj.DeepCopy())
 			Expect(err).To(BeNil())
 
 			var obj map[string]interface{}
@@ -858,7 +858,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 			remediation.Spec.Current.Object = &unstructured.Unstructured{
 				Object: obj,
 			}
-			err = reconciler.client.Create(ctx, remediation.DeepCopy())
+			err = reconciler.Client.Create(ctx, remediation.DeepCopy())
 			Expect(err).To(BeNil())
 
 		})
@@ -870,23 +870,23 @@ var _ = Describe("ComplianceSuiteController", func() {
 
 			By("The remediation controller setting the applied status")
 			rem.Status.ApplicationState = compv1alpha1.RemediationApplied
-			err := reconciler.client.Update(ctx, rem)
+			err := reconciler.Client.Update(ctx, rem)
 			Expect(err).To(BeNil())
 
 			By("the pool should be paused")
 			p := &mcfgv1.MachineConfigPool{}
 			poolkey := types.NamespacedName{Name: poolName}
-			err = reconciler.client.Get(ctx, poolkey, p)
+			err = reconciler.Client.Get(ctx, poolkey, p)
 			Expect(err).To(BeNil())
 			Expect(p.Spec.Paused).To(BeTrue())
 
 			By("The remediation controller should create/patch the kubelet config object")
 			kc := &mcfgv1.KubeletConfig{}
 			kckey := types.NamespacedName{Name: "kubelet-config-compliance-operator"}
-			err = reconciler.client.Get(ctx, kckey, kc)
+			err = reconciler.Client.Get(ctx, kckey, kc)
 			Expect(err).To(BeNil())
 			kc.Spec.KubeletConfig.Raw = []byte(remediationKCPayload)
-			err = reconciler.client.Patch(ctx, kc, client.Merge)
+			err = reconciler.Client.Patch(ctx, kc, client.Merge)
 			Expect(err).To(BeNil())
 
 			By("Running a second reconcile loop")
@@ -894,17 +894,17 @@ var _ = Describe("ComplianceSuiteController", func() {
 			Expect(err).To(BeNil())
 
 			By("the pool should not be un-paused because the KubeletConfig is not rendered into Machine Config")
-			err = reconciler.client.Get(ctx, poolkey, p)
+			err = reconciler.Client.Get(ctx, poolkey, p)
 			Expect(err).To(BeNil())
 			Expect(p.Spec.Paused).To(BeTrue())
 
 			By("Render KubeLetconfig into Machine Config")
 			mcCurrent := &mcfgv1.MachineConfig{}
 			mckey := types.NamespacedName{Name: "99-master-generated-kubelet"}
-			err = reconciler.client.Get(ctx, mckey, mcCurrent)
+			err = reconciler.Client.Get(ctx, mckey, mcCurrent)
 			Expect(err).To(BeNil())
 			mcCurrent.Spec.Config.Raw = []byte(remediationKCMCPayload)
-			err = reconciler.client.Update(ctx, mcCurrent)
+			err = reconciler.Client.Update(ctx, mcCurrent)
 			Expect(err).To(BeNil())
 
 			By("Running a second reconcile loop")
@@ -912,20 +912,20 @@ var _ = Describe("ComplianceSuiteController", func() {
 			Expect(err).To(BeNil())
 
 			By("the pool should be un-paused because machine config has been updated with the new kubelet config content")
-			err = reconciler.client.Get(ctx, poolkey, p)
+			err = reconciler.Client.Get(ctx, poolkey, p)
 			Expect(err).To(BeNil())
 			Expect(p.Spec.Paused).To(BeFalse())
 
 			s := &compv1alpha1.ComplianceRemediation{}
 			key := types.NamespacedName{Name: remediationName, Namespace: namespace}
-			reconciler.client.Get(ctx, key, s)
+			reconciler.Client.Get(ctx, key, s)
 
 		}
 
 		Context("With spec.AutoApplyRemediations = true", func() {
 			BeforeEach(func() {
 				suite.Spec.AutoApplyRemediations = true
-				err := reconciler.client.Status().Update(ctx, suite)
+				err := reconciler.Client.Status().Update(ctx, suite)
 				Expect(err).To(BeNil())
 			})
 			Context("With ComplianceSuite and Scans not done", func() {
@@ -944,7 +944,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 						By("Verifying the suite no longer has the remove-outdated annotation")
 						key := types.NamespacedName{Name: suiteName, Namespace: namespace}
 						s := &compv1alpha1.ComplianceSuite{}
-						err := reconciler.client.Get(ctx, key, s)
+						err := reconciler.Client.Get(ctx, key, s)
 						Expect(err).To(BeNil())
 						Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.RemoveOutdatedAnnotation))
 					})
@@ -956,7 +956,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 			BeforeEach(func() {
 				suite.Annotations = make(map[string]string, 2)
 				suite.Annotations[compv1alpha1.ApplyRemediationsAnnotation] = ""
-				err := reconciler.client.Update(ctx, suite)
+				err := reconciler.Client.Update(ctx, suite)
 				Expect(err).To(BeNil())
 			})
 			Context("With ComplianceSuite and Scans not done", func() {
@@ -971,7 +971,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 					By("Verifying the suite no longer has the apply-remediation annotation")
 					key := types.NamespacedName{Name: suiteName, Namespace: namespace}
 					s := &compv1alpha1.ComplianceSuite{}
-					err := reconciler.client.Get(ctx, key, s)
+					err := reconciler.Client.Get(ctx, key, s)
 					Expect(err).To(BeNil())
 					Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.ApplyRemediationsAnnotation))
 				})
@@ -985,7 +985,7 @@ var _ = Describe("ComplianceSuiteController", func() {
 						By("Verifying the suite no longer has the remove-outdated annotation")
 						key := types.NamespacedName{Name: suiteName, Namespace: namespace}
 						s := &compv1alpha1.ComplianceSuite{}
-						err := reconciler.client.Get(ctx, key, s)
+						err := reconciler.Client.Get(ctx, key, s)
 						Expect(err).To(BeNil())
 						Expect(s.Annotations).ToNot(HaveKey(compv1alpha1.RemoveOutdatedAnnotation))
 					})

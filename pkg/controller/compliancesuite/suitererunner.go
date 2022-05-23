@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
 	"github.com/go-logr/logr"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
 	cron "github.com/robfig/cron/v3"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
@@ -18,6 +16,9 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 )
 
 const rerunnerServiceAccount = "rerunner"
@@ -29,9 +30,9 @@ func (r *ReconcileComplianceSuite) reconcileScanRerunnerCronJob(suite *compv1alp
 		logger.Error(err, "Cannot get priority class name, scan will not be run with set priority class")
 	}
 	// this is a validation and should warn the user
-	if priorityClassExist, why := utils.ValidatePriorityClassExist(priorityClassName, r.client); !priorityClassExist {
+	if priorityClassExist, why := utils.ValidatePriorityClassExist(priorityClassName, r.Client); !priorityClassExist {
 		log.Info(why, "Suite", suite.Name)
-		r.recorder.Eventf(suite, corev1.EventTypeWarning, "PriorityClass", why+" Suite:"+suite.Name)
+		r.Recorder.Eventf(suite, corev1.EventTypeWarning, "PriorityClass", why+" Suite:"+suite.Name)
 	}
 	rerunner.Spec.JobTemplate.Spec.Template.Spec.PriorityClassName = priorityClassName
 
@@ -58,11 +59,11 @@ func (r *ReconcileComplianceSuite) validateSchedule(suite *compv1alpha1.Complian
 func (r *ReconcileComplianceSuite) handleCreate(suite *compv1alpha1.ComplianceSuite, rerunner *batchv1beta1.CronJob, logger logr.Logger) error {
 	key := types.NamespacedName{Name: rerunner.GetName(), Namespace: rerunner.GetNamespace()}
 	found := &batchv1beta1.CronJob{}
-	err := r.client.Get(context.TODO(), key, found)
+	err := r.Client.Get(context.TODO(), key, found)
 	if err != nil && errors.IsNotFound(err) {
 		// No re-runner found, create it
 		logger.Info("Creating rerunner", "CronJob.Name", rerunner.GetName())
-		return r.client.Create(context.TODO(), rerunner)
+		return r.Client.Create(context.TODO(), rerunner)
 	} else if err != nil {
 		return err
 	}
@@ -70,7 +71,7 @@ func (r *ReconcileComplianceSuite) handleCreate(suite *compv1alpha1.ComplianceSu
 		cronJobCopy := found.DeepCopy()
 		cronJobCopy.Spec.Schedule = suite.Spec.Schedule
 		logger.Info("Updating rerunner", "CronJob.Name", rerunner.GetName())
-		return r.client.Update(context.TODO(), cronJobCopy)
+		return r.Client.Update(context.TODO(), cronJobCopy)
 	}
 	return nil
 }
@@ -85,7 +86,7 @@ func (r *ReconcileComplianceSuite) getPriorityClassName(suite *compv1alpha1.Comp
 		LabelSelector: labels.SelectorFromSet(scanSuiteSelector),
 		Namespace:     suite.Namespace,
 	}
-	err := r.client.List(context.TODO(), scans, listOpts)
+	err := r.Client.List(context.TODO(), scans, listOpts)
 	if err != nil {
 		return "", fmt.Errorf("Error while getting scans for ComplianceSuite '%s', err: %s\n", suite.Name, err)
 	}
@@ -98,7 +99,7 @@ func (r *ReconcileComplianceSuite) getPriorityClassName(suite *compv1alpha1.Comp
 func (r *ReconcileComplianceSuite) handleRerunnerDelete(rerunner *batchv1beta1.CronJob, suiteName string, logger logr.Logger) error {
 	key := types.NamespacedName{Name: rerunner.GetName(), Namespace: rerunner.GetNamespace()}
 	found := &batchv1beta1.CronJob{}
-	err := r.client.Get(context.TODO(), key, found)
+	err := r.Client.Get(context.TODO(), key, found)
 	if err != nil && errors.IsNotFound(err) {
 		// No re-runner found, we're good
 		return nil
@@ -111,22 +112,28 @@ func (r *ReconcileComplianceSuite) handleRerunnerDelete(rerunner *batchv1beta1.C
 		compv1alpha1.SuiteLabel:       suiteName,
 		compv1alpha1.SuiteScriptLabel: "",
 	}
-	err = r.client.DeleteAllOf(context.Background(), &corev1.Pod{}, inNs, withLabel)
+	err = r.Client.DeleteAllOf(context.Background(), &corev1.Pod{}, inNs, withLabel)
 	if err != nil {
 		return err
 	}
 
-	err = r.client.DeleteAllOf(context.Background(), &batchv1.Job{}, inNs, withLabel)
+	err = r.Client.DeleteAllOf(context.Background(), &batchv1.Job{}, inNs, withLabel)
 	if err != nil {
 		return err
 	}
 
 	logger.Info("Deleting rerunner", "CronJob.Name", rerunner.GetName())
-	return r.client.Delete(context.TODO(), rerunner)
+	return r.Client.Delete(context.TODO(), rerunner)
 }
 
 // GetRerunnerName gets the name of the rerunner workload based on the suite name
 func GetRerunnerName(suiteName string) string {
+	// Operator SDK doesn't allow CronJob with names longer than 52
+	// characters. Trim everything but the first 42 characters so we have
+	// enough room for the "-rerunner" string.
+	if len(suiteName) >= 42 {
+		suiteName = suiteName[0:42]
+	}
 	return suiteName + "-rerunner"
 }
 

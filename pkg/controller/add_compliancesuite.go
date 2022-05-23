@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"github.com/openshift/compliance-operator/pkg/controller/compliancesuite"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/compliancesuite"
 )
 
 func init() {

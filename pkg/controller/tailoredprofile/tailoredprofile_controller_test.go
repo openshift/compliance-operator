@@ -6,12 +6,12 @@ import (
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics/metricsfakes"
 
+	"github.com/ComplianceAsCode/compliance-operator/pkg/apis"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/openshift/compliance-operator/pkg/apis"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -21,8 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	cmpv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 var _ = Describe("TailoredprofileController", func() {
@@ -120,7 +120,7 @@ var _ = Describe("TailoredprofileController", func() {
 		err = mockMetrics.Register()
 		Expect(err).To(BeNil())
 
-		r = &ReconcileTailoredProfile{client: client, scheme: cscheme, metrics: mockMetrics}
+		r = &ReconcileTailoredProfile{Client: client, Scheme: cscheme, Metrics: mockMetrics}
 	})
 
 	When("extending a profile", func() {
@@ -154,7 +154,7 @@ var _ = Describe("TailoredprofileController", func() {
 				},
 			}
 
-			createErr := r.client.Create(ctx, tp)
+			createErr := r.Client.Create(ctx, tp)
 			Expect(createErr).To(BeNil())
 		})
 		It("successfully creates a profile with an extra rule", func() {
@@ -167,11 +167,11 @@ var _ = Describe("TailoredprofileController", func() {
 			tpReq.Namespace = namespace
 
 			By("Reconciling the first time")
-			_, err := r.Reconcile(tpReq)
+			_, err := r.Reconcile(context.TODO(), tpReq)
 			Expect(err).To(BeNil())
 
 			tp := &compv1alpha1.TailoredProfile{}
-			geterr := r.client.Get(ctx, tpKey, tp)
+			geterr := r.Client.Get(ctx, tpKey, tp)
 			Expect(geterr).To(BeNil())
 
 			By("Sets the extended profile as the owner")
@@ -181,10 +181,10 @@ var _ = Describe("TailoredprofileController", func() {
 			Expect(ownerRefs[0].Kind).To(Equal("Profile"))
 
 			By("Reconciling a second time")
-			_, err = r.Reconcile(tpReq)
+			_, err = r.Reconcile(context.TODO(), tpReq)
 			Expect(err).To(BeNil())
 
-			geterr = r.client.Get(ctx, tpKey, tp)
+			geterr = r.Client.Get(ctx, tpKey, tp)
 			Expect(geterr).To(BeNil())
 
 			By("Has the appropriate status")
@@ -199,7 +199,7 @@ var _ = Describe("TailoredprofileController", func() {
 				Namespace: tp.Status.OutputRef.Namespace,
 			}
 
-			geterr = r.client.Get(ctx, cmKey, cm)
+			geterr = r.Client.Get(ctx, cmKey, cm)
 			Expect(geterr).To(BeNil())
 			data := cm.Data["tailoring.xml"]
 			Expect(data).To(ContainSubstring(`extends="profile_1"`))
@@ -217,7 +217,7 @@ var _ = Describe("TailoredprofileController", func() {
 			tpReq.Namespace = namespace
 
 			By("Reconciling the first time")
-			_, err := r.Reconcile(tpReq)
+			_, err := r.Reconcile(context.TODO(), tpReq)
 			Expect(err).To(BeNil())
 
 			By("Update the TP")
@@ -238,19 +238,19 @@ var _ = Describe("TailoredprofileController", func() {
 			}
 
 			tp := &compv1alpha1.TailoredProfile{}
-			geterr := r.client.Get(ctx, tpKey, tp)
+			geterr := r.Client.Get(ctx, tpKey, tp)
 			Expect(geterr).To(BeNil())
 
 			tp.Spec = *tpUpdate.Spec.DeepCopy()
-			updateErr := r.client.Update(ctx, tp)
+			updateErr := r.Client.Update(ctx, tp)
 			Expect(updateErr).To(BeNil())
 
 			By("Reconcile the updated TP")
-			_, err = r.Reconcile(tpReq)
+			_, err = r.Reconcile(context.TODO(), tpReq)
 			Expect(err).To(BeNil())
 
 			By("Fetch the updated TP")
-			geterr = r.client.Get(ctx, tpKey, tp)
+			geterr = r.Client.Get(ctx, tpKey, tp)
 			Expect(geterr).To(BeNil())
 
 			By("Assert that rule-3 is still there but rule-2 not anymore")
@@ -260,7 +260,7 @@ var _ = Describe("TailoredprofileController", func() {
 				Namespace: tp.Status.OutputRef.Namespace,
 			}
 
-			geterr = r.client.Get(ctx, cmKey, cm)
+			geterr = r.Client.Get(ctx, cmKey, cm)
 			Expect(geterr).To(BeNil())
 			data := cm.Data["tailoring.xml"]
 			Expect(data).To(ContainSubstring(`extends="profile_1"`))
@@ -277,15 +277,15 @@ var _ = Describe("TailoredprofileController", func() {
 			tpReq.Namespace = namespace
 
 			By("Reconciling the first time")
-			_, err := r.Reconcile(tpReq)
+			_, err := r.Reconcile(context.TODO(), tpReq)
 			Expect(err).To(BeNil())
 
 			By("Reconciling a second time")
-			_, err = r.Reconcile(tpReq)
+			_, err = r.Reconcile(context.TODO(), tpReq)
 			Expect(err).To(BeNil())
 
 			tp := &compv1alpha1.TailoredProfile{}
-			geterr := r.client.Get(ctx, tpKey, tp)
+			geterr := r.Client.Get(ctx, tpKey, tp)
 			Expect(geterr).To(BeNil())
 
 			By("Generated an appropriate ConfigMap")
@@ -295,7 +295,7 @@ var _ = Describe("TailoredprofileController", func() {
 				Namespace: tp.Status.OutputRef.Namespace,
 			}
 
-			geterr = r.client.Get(ctx, cmKey, cm)
+			geterr = r.Client.Get(ctx, cmKey, cm)
 			Expect(geterr).To(BeNil())
 			data := cm.Data["tailoring.xml"]
 			Expect(data).To(ContainSubstring(`extends="profile_1"`))
@@ -320,19 +320,19 @@ var _ = Describe("TailoredprofileController", func() {
 			}
 
 			tp.Spec = *tpUpdate.Spec.DeepCopy()
-			updateErr := r.client.Update(ctx, tp)
+			updateErr := r.Client.Update(ctx, tp)
 			Expect(updateErr).To(BeNil())
 
 			By("Reconcile the updated TP")
-			_, err = r.Reconcile(tpReq)
+			_, err = r.Reconcile(context.TODO(), tpReq)
 			Expect(err).To(BeNil())
 
 			By("Fetch the updated TP")
-			geterr = r.client.Get(ctx, tpKey, tp)
+			geterr = r.Client.Get(ctx, tpKey, tp)
 			Expect(geterr).To(BeNil())
 
 			By("Assert that the CM is now removed")
-			geterr = r.client.Get(ctx, cmKey, cm)
+			geterr = r.Client.Get(ctx, cmKey, cm)
 			Expect(kerrors.IsNotFound(geterr)).To(BeTrue())
 		})
 	})
@@ -357,7 +357,7 @@ var _ = Describe("TailoredprofileController", func() {
 					},
 				}
 
-				createErr := r.client.Create(ctx, tp)
+				createErr := r.Client.Create(ctx, tp)
 				Expect(createErr).To(BeNil())
 			})
 			It("reports an error", func() {
@@ -370,11 +370,11 @@ var _ = Describe("TailoredprofileController", func() {
 				tpReq.Namespace = namespace
 
 				By("Reconciling the first time")
-				_, err := r.Reconcile(tpReq)
+				_, err := r.Reconcile(context.TODO(), tpReq)
 				Expect(err).To(BeNil())
 
 				tp := &compv1alpha1.TailoredProfile{}
-				geterr := r.client.Get(ctx, tpKey, tp)
+				geterr := r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Sets the profile as the owner")
@@ -384,9 +384,9 @@ var _ = Describe("TailoredprofileController", func() {
 				Expect(ownerRefs[0].Kind).To(Equal("Profile"))
 
 				By("Reconciling a second time")
-				_, err = r.Reconcile(tpReq)
+				_, err = r.Reconcile(context.TODO(), tpReq)
 
-				geterr = r.client.Get(ctx, tpKey, tp)
+				geterr = r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Has the appropriate error status")
@@ -415,7 +415,7 @@ var _ = Describe("TailoredprofileController", func() {
 					},
 				}
 
-				createErr := r.client.Create(ctx, tp)
+				createErr := r.Client.Create(ctx, tp)
 				Expect(createErr).To(BeNil())
 			})
 			It("reports an error", func() {
@@ -428,11 +428,11 @@ var _ = Describe("TailoredprofileController", func() {
 				tpReq.Namespace = namespace
 
 				By("Reconciling the first time")
-				_, err := r.Reconcile(tpReq)
+				_, err := r.Reconcile(context.TODO(), tpReq)
 				Expect(err).To(BeNil())
 
 				tp := &compv1alpha1.TailoredProfile{}
-				geterr := r.client.Get(ctx, tpKey, tp)
+				geterr := r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Sets the profile as the owner")
@@ -442,9 +442,9 @@ var _ = Describe("TailoredprofileController", func() {
 				Expect(ownerRefs[0].Kind).To(Equal("Profile"))
 
 				By("Reconciling a second time")
-				_, err = r.Reconcile(tpReq)
+				_, err = r.Reconcile(context.TODO(), tpReq)
 
-				geterr = r.client.Get(ctx, tpKey, tp)
+				geterr = r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Has the appropriate error status")
@@ -473,7 +473,7 @@ var _ = Describe("TailoredprofileController", func() {
 				},
 			}
 
-			createErr := r.client.Create(ctx, tp)
+			createErr := r.Client.Create(ctx, tp)
 			Expect(createErr).To(BeNil())
 		})
 		It("reports an error", func() {
@@ -486,14 +486,14 @@ var _ = Describe("TailoredprofileController", func() {
 			tpReq.Namespace = namespace
 
 			By("Reconciling the first time")
-			_, err := r.Reconcile(tpReq)
+			_, err := r.Reconcile(context.TODO(), tpReq)
 			Expect(err).To(BeNil())
 
 			By("Reconciling a second time")
-			_, err = r.Reconcile(tpReq)
+			_, err = r.Reconcile(context.TODO(), tpReq)
 
 			tp := &compv1alpha1.TailoredProfile{}
-			geterr := r.client.Get(ctx, tpKey, tp)
+			geterr := r.Client.Get(ctx, tpKey, tp)
 			Expect(geterr).To(BeNil())
 
 			By("Has the appropriate error status")
@@ -509,7 +509,7 @@ var _ = Describe("TailoredprofileController", func() {
 			}
 
 			tp := &compv1alpha1.TailoredProfile{}
-			geterr := r.client.Get(ctx, tpKey, tp)
+			geterr := r.Client.Get(ctx, tpKey, tp)
 			Expect(geterr).To(BeNil())
 
 			tp.Spec.EnableRules = []compv1alpha1.RuleReferenceSpec{
@@ -519,7 +519,7 @@ var _ = Describe("TailoredprofileController", func() {
 				},
 			}
 
-			err := r.client.Update(ctx, tp)
+			err := r.Client.Update(ctx, tp)
 			Expect(err).To(BeNil())
 
 			tpReq := reconcile.Request{}
@@ -527,13 +527,13 @@ var _ = Describe("TailoredprofileController", func() {
 			tpReq.Namespace = namespace
 
 			By("Reconciling the first time")
-			_, err = r.Reconcile(tpReq)
+			_, err = r.Reconcile(context.TODO(), tpReq)
 			Expect(err).To(BeNil())
 
 			By("Reconciling a second time")
-			_, err = r.Reconcile(tpReq)
+			_, err = r.Reconcile(context.TODO(), tpReq)
 
-			geterr = r.client.Get(ctx, tpKey, tp)
+			geterr = r.Client.Get(ctx, tpKey, tp)
 			Expect(geterr).To(BeNil())
 
 			Expect(tp.Status.State).To(Equal(compv1alpha1.TailoredProfileStateReady))
@@ -559,7 +559,7 @@ var _ = Describe("TailoredprofileController", func() {
 				},
 			}
 
-			createErr := r.client.Create(ctx, tp)
+			createErr := r.Client.Create(ctx, tp)
 			Expect(createErr).To(BeNil())
 		})
 		It("reports an error", func() {
@@ -572,14 +572,14 @@ var _ = Describe("TailoredprofileController", func() {
 			tpReq.Namespace = namespace
 
 			By("Reconciling the first time")
-			_, err := r.Reconcile(tpReq)
+			_, err := r.Reconcile(context.TODO(), tpReq)
 			Expect(err).To(BeNil())
 
 			By("Reconciling a second time")
-			_, err = r.Reconcile(tpReq)
+			_, err = r.Reconcile(context.TODO(), tpReq)
 
 			tp := &compv1alpha1.TailoredProfile{}
-			geterr := r.client.Get(ctx, tpKey, tp)
+			geterr := r.Client.Get(ctx, tpKey, tp)
 			Expect(geterr).To(BeNil())
 
 			By("Has the appropriate error status")
@@ -628,7 +628,7 @@ var _ = Describe("TailoredprofileController", func() {
 					},
 				}
 
-				createErr := r.client.Create(ctx, tp)
+				createErr := r.Client.Create(ctx, tp)
 				Expect(createErr).To(BeNil())
 			})
 			It("succeeds", func() {
@@ -641,11 +641,11 @@ var _ = Describe("TailoredprofileController", func() {
 				tpReq.Namespace = namespace
 
 				By("Reconciling the first time (setting ownership)")
-				_, err := r.Reconcile(tpReq)
+				_, err := r.Reconcile(context.TODO(), tpReq)
 				Expect(err).To(BeNil())
 
 				tp := &compv1alpha1.TailoredProfile{}
-				geterr := r.client.Get(ctx, tpKey, tp)
+				geterr := r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Sets the profile bundle as the owner")
@@ -656,10 +656,10 @@ var _ = Describe("TailoredprofileController", func() {
 				Expect(tp.GetAnnotations()[cmpv1alpha1.ProductTypeAnnotation]).To(Equal(string(compv1alpha1.ScanTypePlatform)))
 
 				By("Reconciling a second time (setting status)")
-				_, err = r.Reconcile(tpReq)
+				_, err = r.Reconcile(context.TODO(), tpReq)
 
 				tp = &compv1alpha1.TailoredProfile{}
-				geterr = r.client.Get(ctx, tpKey, tp)
+				geterr = r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Has the appropriate status")
@@ -674,7 +674,7 @@ var _ = Describe("TailoredprofileController", func() {
 					Namespace: tp.Status.OutputRef.Namespace,
 				}
 
-				geterr = r.client.Get(ctx, cmKey, cm)
+				geterr = r.Client.Get(ctx, cmKey, cm)
 				Expect(geterr).To(BeNil())
 				data := cm.Data["tailoring.xml"]
 				Expect(data).To(ContainSubstring(`select idref="rule_1" selected="true"`))
@@ -720,7 +720,7 @@ var _ = Describe("TailoredprofileController", func() {
 					},
 				}
 
-				createErr := r.client.Create(ctx, tp)
+				createErr := r.Client.Create(ctx, tp)
 				Expect(createErr).To(BeNil())
 			})
 			It("returns an error", func() {
@@ -733,11 +733,11 @@ var _ = Describe("TailoredprofileController", func() {
 				tpReq.Namespace = namespace
 
 				By("Reconciling the first time (setting ownership)")
-				_, err := r.Reconcile(tpReq)
+				_, err := r.Reconcile(context.TODO(), tpReq)
 				Expect(err).To(BeNil())
 
 				tp := &compv1alpha1.TailoredProfile{}
-				geterr := r.client.Get(ctx, tpKey, tp)
+				geterr := r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Sets the profile bundle as the owner")
@@ -746,10 +746,10 @@ var _ = Describe("TailoredprofileController", func() {
 				Expect(ownerRefs[0].Kind).To(Equal("ProfileBundle"))
 
 				By("Reconciling a second time (setting status)")
-				_, err = r.Reconcile(tpReq)
+				_, err = r.Reconcile(context.TODO(), tpReq)
 
 				tp = &compv1alpha1.TailoredProfile{}
-				geterr = r.client.Get(ctx, tpKey, tp)
+				geterr = r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Has an error status")
@@ -795,7 +795,7 @@ var _ = Describe("TailoredprofileController", func() {
 					},
 				}
 
-				createErr := r.client.Create(ctx, tp)
+				createErr := r.Client.Create(ctx, tp)
 				Expect(createErr).To(BeNil())
 			})
 			It("returns an error", func() {
@@ -808,11 +808,11 @@ var _ = Describe("TailoredprofileController", func() {
 				tpReq.Namespace = namespace
 
 				By("Reconciling the first time (setting ownership)")
-				_, err := r.Reconcile(tpReq)
+				_, err := r.Reconcile(context.TODO(), tpReq)
 				Expect(err).To(BeNil())
 
 				tp := &compv1alpha1.TailoredProfile{}
-				geterr := r.client.Get(ctx, tpKey, tp)
+				geterr := r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Sets the profile bundle as the owner")
@@ -821,10 +821,10 @@ var _ = Describe("TailoredprofileController", func() {
 				Expect(ownerRefs[0].Kind).To(Equal("ProfileBundle"))
 
 				By("Reconciling a second time (setting status)")
-				_, err = r.Reconcile(tpReq)
+				_, err = r.Reconcile(context.TODO(), tpReq)
 
 				tp = &compv1alpha1.TailoredProfile{}
-				geterr = r.client.Get(ctx, tpKey, tp)
+				geterr = r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Has an error status")
@@ -845,7 +845,7 @@ var _ = Describe("TailoredprofileController", func() {
 					},
 				}
 
-				createErr := r.client.Create(ctx, tp)
+				createErr := r.Client.Create(ctx, tp)
 				Expect(createErr).To(BeNil())
 			})
 			It("returns an error since it can't determine the bundle", func() {
@@ -858,11 +858,11 @@ var _ = Describe("TailoredprofileController", func() {
 				tpReq.Namespace = namespace
 
 				By("Reconciling")
-				_, err := r.Reconcile(tpReq)
+				_, err := r.Reconcile(context.TODO(), tpReq)
 				Expect(err).To(BeNil())
 
 				tp := &compv1alpha1.TailoredProfile{}
-				geterr := r.client.Get(ctx, tpKey, tp)
+				geterr := r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Has an error status")
@@ -891,7 +891,7 @@ var _ = Describe("TailoredprofileController", func() {
 					},
 				}
 
-				createErr := r.client.Create(ctx, tp)
+				createErr := r.Client.Create(ctx, tp)
 				Expect(createErr).To(BeNil())
 			})
 			It("succeeds", func() {
@@ -904,11 +904,11 @@ var _ = Describe("TailoredprofileController", func() {
 				tpReq.Namespace = namespace
 
 				By("Reconciling the first time (setting ownership)")
-				_, err := r.Reconcile(tpReq)
+				_, err := r.Reconcile(context.TODO(), tpReq)
 				Expect(err).To(BeNil())
 
 				tp := &compv1alpha1.TailoredProfile{}
-				geterr := r.client.Get(ctx, tpKey, tp)
+				geterr := r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Sets the profile bundle as the owner")
@@ -919,10 +919,10 @@ var _ = Describe("TailoredprofileController", func() {
 				Expect(tp.GetAnnotations()[cmpv1alpha1.ProductTypeAnnotation]).To(Equal(string(compv1alpha1.ScanTypePlatform)))
 
 				By("Reconciling a second time (setting status)")
-				_, err = r.Reconcile(tpReq)
+				_, err = r.Reconcile(context.TODO(), tpReq)
 
 				tp = &compv1alpha1.TailoredProfile{}
-				geterr = r.client.Get(ctx, tpKey, tp)
+				geterr = r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Has the appropriate status")
@@ -937,7 +937,7 @@ var _ = Describe("TailoredprofileController", func() {
 					Namespace: tp.Status.OutputRef.Namespace,
 				}
 
-				geterr = r.client.Get(ctx, cmKey, cm)
+				geterr = r.Client.Get(ctx, cmKey, cm)
 				Expect(geterr).To(BeNil())
 				data := cm.Data["tailoring.xml"]
 				Expect(data).To(ContainSubstring(`select idref="rule_5" selected="true"`))
@@ -970,7 +970,7 @@ var _ = Describe("TailoredprofileController", func() {
 					},
 				}
 
-				createErr := r.client.Create(ctx, tp)
+				createErr := r.Client.Create(ctx, tp)
 				Expect(createErr).To(BeNil())
 			})
 			It("succeeds", func() {
@@ -983,11 +983,11 @@ var _ = Describe("TailoredprofileController", func() {
 				tpReq.Namespace = namespace
 
 				By("Reconciling the first time (setting ownership)")
-				_, err := r.Reconcile(tpReq)
+				_, err := r.Reconcile(context.TODO(), tpReq)
 				Expect(err).To(BeNil())
 
 				tp := &compv1alpha1.TailoredProfile{}
-				geterr := r.client.Get(ctx, tpKey, tp)
+				geterr := r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Sets the profile bundle as the owner")
@@ -998,10 +998,10 @@ var _ = Describe("TailoredprofileController", func() {
 				Expect(tp.GetAnnotations()[cmpv1alpha1.ProductTypeAnnotation]).To(Equal(string(compv1alpha1.ScanTypePlatform)))
 
 				By("Reconciling a second time (setting status)")
-				_, err = r.Reconcile(tpReq)
+				_, err = r.Reconcile(context.TODO(), tpReq)
 
 				tp = &compv1alpha1.TailoredProfile{}
-				geterr = r.client.Get(ctx, tpKey, tp)
+				geterr = r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Has the appropriate status")
@@ -1016,7 +1016,7 @@ var _ = Describe("TailoredprofileController", func() {
 					Namespace: tp.Status.OutputRef.Namespace,
 				}
 
-				geterr = r.client.Get(ctx, cmKey, cm)
+				geterr = r.Client.Get(ctx, cmKey, cm)
 				Expect(geterr).To(BeNil())
 				data := cm.Data["tailoring.xml"]
 				Expect(data).To(ContainSubstring(`select idref="rule_5" selected="true"`))
@@ -1046,7 +1046,7 @@ var _ = Describe("TailoredprofileController", func() {
 					},
 				}
 
-				createErr := r.client.Create(ctx, tp)
+				createErr := r.Client.Create(ctx, tp)
 				Expect(createErr).To(BeNil())
 			})
 			It("succeeds", func() {
@@ -1059,11 +1059,11 @@ var _ = Describe("TailoredprofileController", func() {
 				tpReq.Namespace = namespace
 
 				By("Reconciling the first time (setting ownership)")
-				_, err := r.Reconcile(tpReq)
+				_, err := r.Reconcile(context.TODO(), tpReq)
 				Expect(err).To(BeNil())
 
 				tp := &compv1alpha1.TailoredProfile{}
-				geterr := r.client.Get(ctx, tpKey, tp)
+				geterr := r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Sets the profile bundle as the owner")
@@ -1074,10 +1074,10 @@ var _ = Describe("TailoredprofileController", func() {
 				Expect(tp.GetAnnotations()[cmpv1alpha1.ProductTypeAnnotation]).To(Equal(string(compv1alpha1.ScanTypePlatform)))
 
 				By("Reconciling a second time (setting status)")
-				_, err = r.Reconcile(tpReq)
+				_, err = r.Reconcile(context.TODO(), tpReq)
 
 				tp = &compv1alpha1.TailoredProfile{}
-				geterr = r.client.Get(ctx, tpKey, tp)
+				geterr = r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Has the appropriate status")
@@ -1092,7 +1092,7 @@ var _ = Describe("TailoredprofileController", func() {
 					Namespace: tp.Status.OutputRef.Namespace,
 				}
 
-				geterr = r.client.Get(ctx, cmKey, cm)
+				geterr = r.Client.Get(ctx, cmKey, cm)
 				Expect(geterr).To(BeNil())
 				data := cm.Data["tailoring.xml"]
 				Expect(data).To(ContainSubstring(`select idref="rule_8" selected="true"`))
@@ -1125,7 +1125,7 @@ var _ = Describe("TailoredprofileController", func() {
 					},
 				}
 
-				createErr := r.client.Create(ctx, tp)
+				createErr := r.Client.Create(ctx, tp)
 				Expect(createErr).To(BeNil())
 			})
 			It("succeeds", func() {
@@ -1138,11 +1138,11 @@ var _ = Describe("TailoredprofileController", func() {
 				tpReq.Namespace = namespace
 
 				By("Reconciling the first time (setting ownership)")
-				_, err := r.Reconcile(tpReq)
+				_, err := r.Reconcile(context.TODO(), tpReq)
 				Expect(err).To(BeNil())
 
 				tp := &compv1alpha1.TailoredProfile{}
-				geterr := r.client.Get(ctx, tpKey, tp)
+				geterr := r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Sets the profile bundle as the owner")
@@ -1153,10 +1153,10 @@ var _ = Describe("TailoredprofileController", func() {
 				Expect(tp.GetAnnotations()[cmpv1alpha1.ProductTypeAnnotation]).To(Equal(string(compv1alpha1.ScanTypePlatform)))
 
 				By("Reconciling a second time (setting status)")
-				_, err = r.Reconcile(tpReq)
+				_, err = r.Reconcile(context.TODO(), tpReq)
 
 				tp = &compv1alpha1.TailoredProfile{}
-				geterr = r.client.Get(ctx, tpKey, tp)
+				geterr = r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Has the appropriate status")
@@ -1171,7 +1171,7 @@ var _ = Describe("TailoredprofileController", func() {
 					Namespace: tp.Status.OutputRef.Namespace,
 				}
 
-				geterr = r.client.Get(ctx, cmKey, cm)
+				geterr = r.Client.Get(ctx, cmKey, cm)
 				Expect(geterr).To(BeNil())
 				data := cm.Data["tailoring.xml"]
 				Expect(data).To(ContainSubstring(`select idref="rule_8" selected="true"`))
@@ -1205,7 +1205,7 @@ var _ = Describe("TailoredprofileController", func() {
 					},
 				}
 
-				createErr := r.client.Create(ctx, tp)
+				createErr := r.Client.Create(ctx, tp)
 				Expect(createErr).To(BeNil())
 			})
 			It("it fails because of a validation error", func() {
@@ -1218,11 +1218,11 @@ var _ = Describe("TailoredprofileController", func() {
 				tpReq.Namespace = namespace
 
 				By("Reconciling the first time (setting ownership)")
-				_, err := r.Reconcile(tpReq)
+				_, err := r.Reconcile(context.TODO(), tpReq)
 				Expect(err).To(BeNil())
 
 				tp := &compv1alpha1.TailoredProfile{}
-				geterr := r.client.Get(ctx, tpKey, tp)
+				geterr := r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Sets the profile bundle as the owner")
@@ -1233,10 +1233,10 @@ var _ = Describe("TailoredprofileController", func() {
 				Expect(tp.GetAnnotations()[cmpv1alpha1.ProductTypeAnnotation]).To(Equal(string(compv1alpha1.ScanTypePlatform)))
 
 				By("Reconciling a second time (setting status)")
-				_, err = r.Reconcile(tpReq)
+				_, err = r.Reconcile(context.TODO(), tpReq)
 
 				tp = &compv1alpha1.TailoredProfile{}
-				geterr = r.client.Get(ctx, tpKey, tp)
+				geterr = r.Client.Get(ctx, tpKey, tp)
 				Expect(geterr).To(BeNil())
 
 				By("Has the appropriate error status")

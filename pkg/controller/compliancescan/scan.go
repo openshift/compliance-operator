@@ -14,9 +14,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 )
 
 const (
@@ -35,7 +35,7 @@ func (r *ReconcileComplianceScan) launchScanPod(instance *compv1alpha1.Complianc
 	}
 
 	// ..and launch it..
-	err := r.client.Create(context.TODO(), pod)
+	err := r.Client.Create(context.TODO(), pod)
 	if errors.IsAlreadyExists(err) {
 		podLogger.Info("Pod already exists. This is fine.")
 	} else if err != nil {
@@ -563,7 +563,7 @@ func (r *ReconcileComplianceScan) deleteScanPods(instance *compv1alpha1.Complian
 		pod := newScanPodForNode(instance, node, logger)
 
 		// Delete it.
-		err := r.client.Delete(context.TODO(), pod)
+		err := r.Client.Delete(context.TODO(), pod)
 		if errors.IsNotFound(err) {
 			logger.Info("Pod is already gone. This is fine.", "Pod.Name", pod.Name)
 		} else if err != nil {
@@ -641,7 +641,7 @@ func (r *ReconcileComplianceScan) deletePlatformScanPod(instance *compv1alpha1.C
 	logger.Info("Deleting the platform scan pod for instance", "instance", instance.Name)
 	pod := r.newPlatformScanPod(instance, logger)
 
-	err := r.client.Delete(context.TODO(), pod)
+	err := r.Client.Delete(context.TODO(), pod)
 	if errors.IsNotFound(err) {
 		logger.Info("Pod is already gone. This is fine.", "pod", pod)
 	} else if err != nil {
@@ -660,15 +660,15 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 
 	origCM := &corev1.ConfigMap{}
 	origKey := types.NamespacedName{Name: origName, Namespace: origNs}
-	err := r.client.Get(context.TODO(), origKey, origCM)
+	err := r.Client.Get(context.TODO(), origKey, origCM)
 	// Tailoring ConfigMap not found
 	if err != nil && errors.IsNotFound(err) {
 		// We previously had dealt with this issue, just requeue
 		if strings.HasPrefix(scan.Status.ErrorMessage, tailoringNotFoundPrefix) {
 			return common.NewRetriableCtrlErrorWithCustomHandler(func() (reconcile.Result, error) {
 				// A ConfigMap not being found might be a temporary issue
-				if r.recorder != nil {
-					r.recorder.Eventf(
+				if r.Recorder != nil {
+					r.Recorder.Eventf(
 						scan, corev1.EventTypeWarning, "TailoringError",
 						"Tailoring ConfigMap '%s' not found", origKey,
 					)
@@ -679,8 +679,8 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 		}
 		// A ConfigMap not being found might be a temporary issue (update and let the reconcile loop requeue)
 		return common.NewRetriableCtrlErrorWithCustomHandler(func() (reconcile.Result, error) {
-			if r.recorder != nil {
-				r.recorder.Eventf(
+			if r.Recorder != nil {
+				r.Recorder.Eventf(
 					scan, corev1.EventTypeWarning, "TailoringError",
 					"Tailoring ConfigMap '%s' not found", origKey,
 				)
@@ -690,7 +690,7 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 			scanCopy := scan.DeepCopy()
 			scanCopy.Status.ErrorMessage = tailoringNotFoundPrefix + err.Error()
 			scanCopy.Status.Result = compv1alpha1.ResultError
-			if updateerr := r.client.Status().Update(context.TODO(), scanCopy); updateerr != nil {
+			if updateerr := r.Client.Status().Update(context.TODO(), scanCopy); updateerr != nil {
 				log.Error(updateerr, "Failed to update a scan")
 				return reconcile.Result{}, updateerr
 			}
@@ -707,7 +707,7 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 				scanCopy := scan.DeepCopy()
 				scanCopy.Status.ErrorMessage = ""
 				scanCopy.Status.Result = compv1alpha1.ResultNotAvailable
-				if updateerr := r.client.Status().Update(context.TODO(), scanCopy); updateerr != nil {
+				if updateerr := r.Client.Status().Update(context.TODO(), scanCopy); updateerr != nil {
 					log.Error(updateerr, "Failed to update a scan")
 					return reconcile.Result{}, updateerr
 				}
@@ -726,7 +726,7 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 
 	privCM := &corev1.ConfigMap{}
 	privKey := types.NamespacedName{Name: privName, Namespace: privNs}
-	err = r.client.Get(context.TODO(), privKey, privCM)
+	err = r.Client.Get(context.TODO(), privKey, privCM)
 	if err != nil && errors.IsNotFound(err) {
 		newCM := &corev1.ConfigMap{}
 		newCM.SetName(privName)
@@ -741,7 +741,7 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 		}
 		newCM.Data["tailoring.xml"] = origData
 		logger.Info("Creating private Tailoring ConfigMap", "ConfigMap.Name", privName, "ConfigMap.Namespace", privNs)
-		err = r.client.Create(context.TODO(), newCM)
+		err = r.Client.Create(context.TODO(), newCM)
 		// Ignore error if CM already exists
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return nil
@@ -766,7 +766,7 @@ func (r *ReconcileComplianceScan) reconcileReplicatedTailoringConfigMap(scan *co
 		updatedCM.Labels[compv1alpha1.ScriptLabel] = ""
 		updatedCM.Data["tailoring.xml"] = origData
 		logger.Info("Updating private Tailoring ConfigMap", "ConfigMap.Name", privName, "ConfigMap.Namespace", privNs)
-		return r.client.Update(context.TODO(), updatedCM)
+		return r.Client.Update(context.TODO(), updatedCM)
 	}
 	logger.Info("Private Tailoring ConfigMap is up-to-date", "ConfigMap.Name", privName, "ConfigMap.Namespace", privNs)
 	return nil

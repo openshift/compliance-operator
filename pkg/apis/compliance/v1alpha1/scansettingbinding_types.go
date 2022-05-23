@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	conditions "github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -12,32 +11,35 @@ type NamedObjectReference struct {
 	APIGroup string `json:"apiGroup,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ScanSettingBinding is the Schema for the scansettingbindings API
-// +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=scansettingbindings,scope=Namespaced,shortName=ssb
 type ScanSettingBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
+	Spec        ScanSettingBindingSpec `json:"spec,omitempty"`
 	Profiles    []NamedObjectReference `json:"profiles,omitempty"`
 	SettingsRef *NamedObjectReference  `json:"settingsRef,omitempty"`
 	// +optional
 	Status ScanSettingBindingStatus `json:"status,omitempty"`
 }
 
+// This is a dummy spec to accommodate https://github.com/operator-framework/operator-sdk/issues/5584
+type ScanSettingBindingSpec struct{}
+
 type ScanSettingBindingStatus struct {
 	// +optional
-	Conditions conditions.Conditions `json:"conditions,omitempty"`
+	Conditions Conditions `json:"conditions,omitempty"`
 	// Reference to the object generated from this ScanSettingBinding
 	// +optional
 	// +nullable
 	OutputRef *corev1.TypedLocalObjectReference `json:"outputRef,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ScanSettingBindingList contains a list of ScanSettingBinding
 type ScanSettingBindingList struct {
@@ -47,7 +49,7 @@ type ScanSettingBindingList struct {
 }
 
 func (s *ScanSettingBindingStatus) SetConditionPending() {
-	s.Conditions.SetCondition(conditions.Condition{
+	s.Conditions.SetCondition(Condition{
 		Type:    "Ready",
 		Status:  corev1.ConditionFalse,
 		Reason:  "Pending",
@@ -56,7 +58,7 @@ func (s *ScanSettingBindingStatus) SetConditionPending() {
 }
 
 func (s *ScanSettingBindingStatus) SetConditionInvalid(msg string) {
-	s.Conditions.SetCondition(conditions.Condition{
+	s.Conditions.SetCondition(Condition{
 		Type:    "Ready",
 		Status:  corev1.ConditionFalse,
 		Reason:  "Invalid",
@@ -65,7 +67,7 @@ func (s *ScanSettingBindingStatus) SetConditionInvalid(msg string) {
 }
 
 func (s *ScanSettingBindingStatus) SetConditionReady() {
-	s.Conditions.SetCondition(conditions.Condition{
+	s.Conditions.SetCondition(Condition{
 		Type:    "Ready",
 		Status:  corev1.ConditionTrue,
 		Reason:  "Processed",

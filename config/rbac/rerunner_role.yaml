@@ -1,0 +1,22 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rerunner
+rules:
+  - apiGroups:
+      - compliance.openshift.io
+    resources:
+      - compliancescans
+    verbs:
+      - get
+      - list
+      - update
+  - apiGroups:
+      - scheduling.k8s.io
+    resources:
+      - priorityclasses
+    verbs:
+      - get
+      - list
+      - watch

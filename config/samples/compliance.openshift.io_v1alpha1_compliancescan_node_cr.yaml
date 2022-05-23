@@ -1,0 +1,7 @@
+apiVersion: compliance.openshift.io/v1alpha1
+kind: ComplianceScan
+metadata:
+  name: example-compliancescan-node
+spec:
+  profile: xccdf_org.ssgproject.content_profile_moderate
+  content: ssg-rhcos4-ds.xml

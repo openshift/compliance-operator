@@ -1,0 +1,9 @@
+# bundle variant
+# Adds namespace to all resources.
+namespace: openshift-compliance
+
+bases:
+- ../crd
+- ../rbac
+- ../manager
+- ../ns

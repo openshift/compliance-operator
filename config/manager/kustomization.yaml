@@ -1,0 +1,9 @@
+resources:
+- deployment.yaml
+
+images:
+- name: compliance-operator
+  newName: quay.io/compliance-operator/compliance-operator
+  newTag: latest
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization

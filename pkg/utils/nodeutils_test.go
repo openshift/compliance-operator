@@ -9,7 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/openshift/compliance-operator/pkg/utils"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 )
 
 var _ = Describe("Nodeutils", func() {

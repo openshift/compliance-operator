@@ -1,6 +1,6 @@
 # Exclude test files
-*_test.go
-tests/
+tests/contrib
+tests/e2e
 .git/
 build/_output
 build/_test

@@ -1,0 +1,10 @@
+## Append samples you want in your CSV to this file as resources ##
+resources:
+- compliance.openshift.io_v1alpha1_compliancescan_node_cr.yaml
+- compliance.openshift.io_v1alpha1_compliancescan_platform_cr.yaml
+- compliance.openshift.io_v1alpha1_compliancesuite_cr.yaml
+- compliance.openshift.io_v1alpha1_profilebundle_cr.yaml
+- compliance.openshift.io_v1alpha1_scansetting_cr.yaml
+- compliance.openshift.io_v1alpha1_scansettingbinding_cr.yaml
+- compliance.openshift.io_v1alpha1_tailoredprofile_cr.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

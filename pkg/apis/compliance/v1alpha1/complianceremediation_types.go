@@ -143,7 +143,7 @@ type ComplianceRemediationStatus struct {
 	ErrorMessage     string                      `json:"errorMessage,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ComplianceRemediation represents a remediation that can be applied to the
 // cluster to fix the found issues.
@@ -284,7 +284,7 @@ func (r *ComplianceRemediation) ParseRemediationDependencyRefs() ([]RemediationO
 	return deps, nil
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ComplianceRemediationList contains a list of ComplianceRemediation
 type ComplianceRemediationList struct {

@@ -1,9 +1,9 @@
-package main
+package manager
 
 import (
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
 )
 
 var _ = Describe("Operator Startup Function tests", func() {
