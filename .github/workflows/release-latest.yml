@@ -1,0 +1,17 @@
+name: Release latest
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # Push to latest
+  container-push-latest:
+    uses: metal-toolbox/container-push/.github/workflows/container-push.yml@main
+    with:
+      name: compliance-operator
+      registry_org: complianceascode
+      tag: latest
+      dockerfile_path: build/Dockerfile
+      vendor: 'Compliance Operator Authors'
