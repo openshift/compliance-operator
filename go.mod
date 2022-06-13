@@ -23,7 +23,7 @@ require (
 	github.com/onsi/gomega v1.11.0
 	github.com/openshift/api v0.0.0-20200829102639-8a3a835f1acf
 	github.com/openshift/library-go v0.0.0-20200831114015-2ab0c61c15de
-	github.com/openshift/machine-config-operator v0.0.1-0.20200913004441-7eba765c69c9
+	github.com/openshift/machine-config-operator v0.0.1-0.20201123223240-d4188ac400eb
 	github.com/operator-framework/operator-sdk v0.19.4
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.1
@@ -46,7 +46,6 @@ require (
 
 replace (
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20200829102639-8a3a835f1acf
-	github.com/openshift/machine-config-operator => github.com/openshift/machine-config-operator v0.0.1-0.20200913004441-7eba765c69c9
 	k8s.io/api => k8s.io/api v0.19.11
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.19.11
 	k8s.io/apimachinery => k8s.io/apimachinery v0.19.11

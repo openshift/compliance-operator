@@ -34,6 +34,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
     this difference. See this [bug report](https://bugzilla.redhat.com/show_bug.cgi?id=2072597)
     for more information.
 
+### Internal Changes
+
+- The MachineConfigOperator dependency was bumped to one supporting Ignition
+  3.2.0 in preparation of adding code that parses and filters out MachineConfig
+  objects
+
 ### Security
 
 - Several workloads have had their permissions tightened, including explicitly
