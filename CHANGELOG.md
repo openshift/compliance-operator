@@ -21,7 +21,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   out the file contents of the MachineConfigs. This addressses
   [bugs](https://bugzilla.redhat.com/show_bug.cgi?id=2094854) where especially
   with the PCI-DSS profile, the `api-resource-collector` pod would have crashed
-  due to reaching its memory limit.
+  due to reaching its memory limit. At the same time, the memory limit of the
+  `api-resource-collector` container was doubled from 100Mi to 200Mi to allow
+  the container to fetch large amount of objects the profile might need to examine.
 - Fixes to OCP4/RHCOS4 compliance content:
   - A previous update to compliance content broke rules that are checking for the proper
     file ownership of API server's and kubelet's certificates and keys on OCP 4.8 and earlier
