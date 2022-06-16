@@ -2,14 +2,12 @@ component: "Compliance Operator"
 approvers:
   - jhrozek
   - mrogers950
-  - pdhamdhe
   - xiaojiey
   - Vincent056
   - rhmdnd
 reviewers:
   - jhrozek
   - mrogers950
-  - pdhamdhe
   - xiaojiey
   - Vincent056
   - rhmdnd
