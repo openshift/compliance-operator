@@ -17,16 +17,22 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	mcfgcommon "github.com/openshift/machine-config-operator/pkg/controller/common"
 	"html"
 	"io"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/runtime"
+	runtimejson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"os"
 	"path"
 	"path/filepath"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 	"time"
 
@@ -47,10 +53,19 @@ var (
 	MoreThanOneObjErr = errors.New("more than one object returned from the filter")
 )
 
+// resourceFetcherClients just gathers several needed structs together so we can
+// pass them on easily to functions
+type resourceFetcherClients struct {
+	// Client, right now used to retrieve MCs
+	client runtimeclient.Client
+	// ClientSet for Gets
+	clientset *kubernetes.Clientset
+	scheme    *runtime.Scheme
+}
+
 // For OpenSCAP content as an XML data stream. Implements ResourceFetcher.
 type scapContentDataStream struct {
-	// Client for Gets
-	client *kubernetes.Clientset
+	resourceFetcherClients
 	// Staging objects
 	dataStream *xmlquery.Node
 	tailoring  *xmlquery.Node
@@ -58,9 +73,13 @@ type scapContentDataStream struct {
 	found      map[string][]byte
 }
 
-func NewDataStreamResourceFetcher(client *kubernetes.Clientset) ResourceFetcher {
+func NewDataStreamResourceFetcher(scheme *runtime.Scheme, client runtimeclient.Client, clientSet *kubernetes.Clientset) ResourceFetcher {
 	return &scapContentDataStream{
-		client: client,
+		resourceFetcherClients: resourceFetcherClients{
+			clientset: clientSet,
+			client:    client,
+			scheme:    scheme,
+		},
 	}
 }
 
@@ -336,9 +355,7 @@ func (c *scapContentDataStream) getExtendedProfileFromTailoring(ds *xmlquery.Nod
 }
 
 func (c *scapContentDataStream) FetchResources() ([]string, error) {
-	found, warnings, err := fetch(func(uri string) (io.ReadCloser, error) {
-		return c.client.RESTClient().Get().RequestURI(uri).Stream(context.Background())
-	}, c.resources)
+	found, warnings, err := fetch(context.Background(), getStreamerFn, c.resourceFetcherClients, c.resources)
 	if err != nil {
 		return warnings, err
 	}
@@ -346,15 +363,124 @@ func (c *scapContentDataStream) FetchResources() ([]string, error) {
 	return warnings, nil
 }
 
-func fetch(streamFunc func(string) (io.ReadCloser, error), objects []utils.ResourcePath) (map[string][]byte, []string, error) {
+// resourceStreamer is an interface capable of streaming a particular URI
+type resourceStreamer interface {
+	Stream(ctx context.Context, rfClients resourceFetcherClients) (io.ReadCloser, error)
+}
+
+type streamerDispatcherFn func(string) resourceStreamer
+
+// getStreamerFn returns a structure implementing resourceStreamer interface based on the
+// uri passed to it
+func getStreamerFn(uri string) resourceStreamer {
+	if uri == "/apis/machineconfiguration.openshift.io/v1/machineconfigs" {
+		return &mcStreamer{}
+	}
+
+	return &uriStreamer{
+		uri: uri,
+	}
+}
+
+// uriStreamer implements resourceStreamer for fetching a generic URI
+type uriStreamer struct {
+	uri string
+}
+
+func (us *uriStreamer) Stream(ctx context.Context, rfClients resourceFetcherClients) (io.ReadCloser, error) {
+	return rfClients.clientset.RESTClient().Get().RequestURI(us.uri).Stream(ctx)
+}
+
+// mcStreamer implements resourceStreamer for fetching a list of MachineConfigs
+type mcStreamer struct{}
+
+// bufCloser is a kludge so that mcStreamer's Stream() method can return an io.ReadCloser
+type bufCloser struct {
+	*bytes.Buffer
+}
+
+// Close is a dummy method because a buffer doesn't have to be closed, just enables us to return io.ReadCloser
+// from mcStreamer's Stream() method
+func (bc *bufCloser) Close() error {
+	return nil
+}
+
+// Stream fetches MachineConfigs in batches of pageSize, removes the file contents from each MC in the batch,
+// adds each batch to a resulting list which is finally returned as JSON
+func (ms *mcStreamer) Stream(ctx context.Context, rfClients resourceFetcherClients) (io.ReadCloser, error) {
+	mcfgListNoFiles := mcfgv1.MachineConfigList{}
+	const pageSize = 5
+
+	continueToken := ""
+	for {
+		mcfgList := mcfgv1.MachineConfigList{}
+		listOpts := runtimeclient.ListOptions{
+			Limit: int64(pageSize),
+		}
+		if continueToken != "" {
+			listOpts.Continue = continueToken
+		}
+		if err := rfClients.client.List(ctx, &mcfgList, &listOpts); err != nil {
+			return nil, fmt.Errorf("failed to list MachineConfigs: %w", err)
+		}
+
+		mcfgListNoFilesBatch, err := filterMcList(&mcfgList)
+		if err != nil {
+			return nil, fmt.Errorf("failed to filter machine configs: %w", err)
+		}
+
+		mcfgListNoFiles.Items = append(mcfgListNoFiles.Items, mcfgListNoFilesBatch.Items...)
+
+		continueToken = mcfgList.ListMeta.Continue
+		if continueToken == "" {
+			break
+		}
+	}
+
+	jsonSerializer := runtimejson.NewSerializerWithOptions(runtimejson.DefaultMetaFactory,
+		rfClients.scheme,
+		rfClients.scheme,
+		runtimejson.SerializerOptions{Pretty: true})
+	buf := &bufCloser{&bytes.Buffer{}}
+	if err := jsonSerializer.Encode(&mcfgListNoFiles, buf); err != nil {
+		return nil, fmt.Errorf("failed to serialize MC list: %w", err)
+	}
+	return buf, nil
+}
+
+func filterMcList(mcListIn *mcfgv1.MachineConfigList) (*mcfgv1.MachineConfigList, error) {
+	mcfgListNoFiles := mcfgv1.MachineConfigList{}
+	mcfgListNoFiles.TypeMeta = mcListIn.TypeMeta
+	mcfgListNoFiles.ListMeta = mcListIn.ListMeta
+
+	for i := 0; i < len(mcListIn.Items); i++ {
+		mcCopy := mcListIn.Items[i]
+		ign, err := mcfgcommon.ParseAndConvertConfig(mcCopy.Spec.Config.Raw)
+		if err != nil {
+			return nil, fmt.Errorf("cannot parse MC %s: %w", mcCopy.Name, err)
+		}
+		ign.Storage.Files = nil // just get rid of the files the easy way
+		rawOutIgn, err := json.Marshal(ign)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal Ignition object back to a a raw object: %w", err)
+		}
+		mcCopy.Spec.Config.Raw = rawOutIgn
+		mcfgListNoFiles.Items = append(mcfgListNoFiles.Items, mcCopy)
+	}
+
+	return &mcfgListNoFiles, nil
+}
+
+func fetch(ctx context.Context, streamDispatcher streamerDispatcherFn, rfClients resourceFetcherClients, objects []utils.ResourcePath) (map[string][]byte, []string, error) {
 	var warnings []string
 	results := map[string][]byte{}
-	ctx := context.Background()
+
 	for _, rpath := range objects {
 		err := func() error {
 			uri := rpath.ObjPath
 			LOG("Fetching URI: '%s'", uri)
-			stream, err := streamFunc(uri)
+			streamer := streamDispatcher(uri)
+			stream, err := streamer.Stream(ctx, rfClients)
 			if meta.IsNoMatchError(err) || kerrors.IsForbidden(err) || kerrors.IsNotFound(err) {
 				DBG("Encountered non-fatal error to be persisted in the scan: %s", err)
 				objerr := fmt.Errorf("could not fetch %s: %w", uri, err)
@@ -365,7 +491,7 @@ func fetch(streamFunc func(string) (io.ReadCloser, error), objects []utils.Resou
 				}
 				return nil
 			} else if err != nil {
-				return err
+				return fmt.Errorf("streaming URIs failed: %w", err)
 			}
 			defer stream.Close()
 			body, err := ioutil.ReadAll(stream)
@@ -382,7 +508,7 @@ func fetch(streamFunc func(string) (io.ReadCloser, error), objects []utils.Resou
 				if errors.Is(filterErr, MoreThanOneObjErr) {
 					warnings = append(warnings, filterErr.Error())
 				} else if filterErr != nil {
-					return fmt.Errorf("Couldn't filter: %w", filterErr)
+					return fmt.Errorf("couldn't filter '%s': %w", body, filterErr)
 				}
 				results[rpath.DumpPath] = filteredBody
 			} else {

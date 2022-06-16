@@ -17,6 +17,8 @@ package main
 
 import (
 	"flag"
+	"k8s.io/apimachinery/pkg/runtime"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
@@ -99,14 +101,32 @@ func getConfig() *rest.Config {
 	return cfg
 }
 
+func getApiCollectorClient(config *rest.Config, scheme *runtime.Scheme) (runtimeclient.Client, error) {
+	client, err := runtimeclient.New(config, runtimeclient.Options{
+		Scheme: scheme,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
 func runAPIResourceCollector(cmd *cobra.Command, args []string) {
 	fetcherConf := parseAPIResourceCollectorConfig(cmd)
-	kubeClient, err := kubernetes.NewForConfig(getConfig())
+	restConfig := getConfig()
+	scheme := getScheme()
+
+	kubeClientSet, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
-		FATAL("Error building kubeClient: %v", err)
+		FATAL("Error building kubeClientSet: %v", err)
 	}
 
-	fetcher := NewDataStreamResourceFetcher(kubeClient)
+	client, err := getApiCollectorClient(restConfig, scheme)
+	if err != nil {
+		FATAL("Error building kubeClientSet: %v", err)
+	}
+
+	fetcher := NewDataStreamResourceFetcher(scheme, client, kubeClientSet)
 
 	if err := fetcher.LoadSource(fetcherConf.Content); err != nil {
 		FATAL("Error loading source data: %v", err)
