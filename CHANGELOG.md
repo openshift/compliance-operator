@@ -16,6 +16,23 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   pods, would trigger events with warnings. See this
   [bug](https://bugzilla.redhat.com/show_bug.cgi?id=2088202) for more
   information. No action is required from users to consume this fix.
+- Fixes to OCP4/RHCOS4 compliance content:
+  - A previous update to compliance content broke rules that are checking for the proper
+    file ownership of API server's and kubelet's certificates and keys on OCP 4.8 and earlier
+    as reported in this [bug](https://bugzilla.redhat.com/show_bug.cgi?id=2079813). New
+    compatibility rules were added for those older releases, thus fixing the issue.
+  - The automatic remediations for several rules that were setting `sysctl` parameters
+    did not work correctly as tracked by this [bug report](https://bugzilla.redhat.com/show_bug.cgi?id=2094382)
+  - The rule `kubelet_enable_streaming_connections` was not honoring the value of the
+    variable `streaming_connection_timeouts` but instead was checking if the `streamingConnectionIdleTimeout`
+    value in kubelet's config was non-zero. This was preventing checks where the user
+    set the variable's value to zero from passing. Please refer to the [bug report](https://bugzilla.redhat.com/show_bug.cgi?id=2069891)
+    for more information.
+  - Rules that check for proper group ownership of OVS config file were always failing
+    on OCP clusters running on s390x as the OVS configuration files are owned by a different
+    UID and GID. New rules specific to the s390x architecture were introduced to cover
+    this difference. See this [bug report](https://bugzilla.redhat.com/show_bug.cgi?id=2072597)
+    for more information.
 
 ### Security
 
