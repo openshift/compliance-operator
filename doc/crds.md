@@ -237,6 +237,7 @@ metadata:
 spec:
   extends: rhcos4-moderate
   title: RHCOS4 moderate profile that allows USB support
+  description: This profile disables rules that are not applicable to our organization
   disableRules:
     - name: rhcos4-grub2-nousb-argument
       rationale: We use USB peripherals in our environment
