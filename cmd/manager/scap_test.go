@@ -3,16 +3,22 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"io"
-	"io/ioutil"
-	"os"
-
 	"github.com/antchfx/xmlquery"
+	igntypes "github.com/coreos/ignition/v2/config/v3_2/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/openshift/compliance-operator/pkg/controller/common"
 	"github.com/openshift/compliance-operator/pkg/utils"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	"io"
+	"io/ioutil"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes/scheme"
+	"os"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 var _ = Describe("Testing SCAP parsing and storage", func() {
@@ -246,21 +252,142 @@ var _ = Describe("Testing filtering", func() {
 	})
 })
 
+type notFoundFetcher struct{}
+
+func (ff *notFoundFetcher) Stream(_ context.Context, _ resourceFetcherClients) (io.ReadCloser, error) {
+	return nil, errors.NewNotFound(schema.GroupResource{
+		Group:    "some group",
+		Resource: "some resource",
+	}, "some name")
+}
+
 var _ = Describe("Testing fetching", func() {
-	Context("fetches", func() {
+	var (
+		fakeClients resourceFetcherClients
+	)
+
+	const (
+		mcFipsFilter   = `[.items[] | select(.metadata.name | test("^[0-9]{2}-worker-fips$|^[0-9]{2}-master-fips$"))]|map(.spec.fips == true)`
+		mcClevisFilter = `[.items[] | select(.metadata.name | test("^[0-9]{2}-worker-fips$|^[0-9]{2}-master-fips$"))]|map(.spec.config.storage.luks[0].clevis != null)`
+	)
+
+	Context("handle fetch failures", func() {
 		It("fetches and stores 404s", func() {
-			files, warnings, err := fetch(func(_ string) (io.ReadCloser, error) {
-				return nil, errors.NewNotFound(schema.GroupResource{
-					Group:    "some group",
-					Resource: "some resource",
-				}, "some name")
-			}, []utils.ResourcePath{{DumpPath: "key"}})
+			fakeDispatcher := func(uri string) resourceStreamer {
+				return &notFoundFetcher{}
+			}
+
+			files, warnings, err := fetch(context.TODO(),
+				fakeDispatcher,
+				resourceFetcherClients{},
+				[]utils.ResourcePath{{DumpPath: "key"}})
 
 			Expect(err).To(BeNil())
 			Expect(files).To(HaveLen(1))
 			Expect(string(files["key"])).To(Equal("# kube-api-error=NotFound"))
 			Expect(warnings).To(HaveLen(1))
 			Expect(warnings[0]).To(Equal("could not fetch : some resource.some group \"some name\" not found"))
+		})
+	})
+	Context("handle Machine Config fetching", func() {
+		var filter string
+		var files map[string][]byte
+		var warnings []string
+		var err error
+
+		JustBeforeEach(func() {
+			testDevice := "/dev/test"
+
+			fakeIgn := igntypes.Config{
+				Ignition: igntypes.Ignition{
+					Version: "3.2.0",
+				},
+				Storage: igntypes.Storage{
+					Luks: []igntypes.Luks{
+						{
+							Device: &testDevice,
+							Clevis: &igntypes.Clevis{},
+						},
+					},
+					Files: []igntypes.File{
+						{
+							Node: igntypes.Node{
+								Path: "/etc/foo",
+							},
+						},
+					},
+				},
+			}
+
+			rawFakeIgn, err := json.Marshal(fakeIgn)
+			Expect(err).To(BeNil())
+
+			mcList := mcfgv1.MachineConfigList{Items: []mcfgv1.MachineConfig{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "99-worker-fips",
+						Namespace: common.GetComplianceOperatorNamespace(),
+					},
+					Spec: mcfgv1.MachineConfigSpec{
+						FIPS: true,
+						Config: runtime.RawExtension{
+							Raw: rawFakeIgn,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "99-master-fips",
+						Namespace: common.GetComplianceOperatorNamespace(),
+					},
+					Spec: mcfgv1.MachineConfigSpec{
+						FIPS: false,
+						Config: runtime.RawExtension{
+							Raw: rawFakeIgn,
+						},
+					},
+				},
+			}}
+
+			scheme := scheme.Scheme
+			scheme.AddKnownTypes(mcfgv1.SchemeGroupVersion, &mcList, &mcList.Items[0])
+
+			client := fake.NewFakeClientWithScheme(scheme, &mcList)
+			fakeClients = resourceFetcherClients{client: client}
+
+			fetchMcResources := []utils.ResourcePath{
+				{
+					ObjPath:  "/apis/machineconfiguration.openshift.io/v1/machineconfigs",
+					Filter:   filter,
+					DumpPath: "mcDumpPath",
+				},
+			}
+
+			files, warnings, err = fetch(context.TODO(), getStreamerFn, fakeClients, fetchMcResources)
+		})
+		When("MC filters FIPS", func() {
+			BeforeEach(func() {
+				filter = mcFipsFilter
+			})
+
+			It("Keeps the FIPS attributes intact", func() {
+				Expect(err).To(BeNil())
+				Expect(files).To(HaveLen(1))
+				Expect(string(files["mcDumpPath"])).To(Equal("[false,true]"))
+				Expect(warnings).To(HaveLen(0))
+			})
+		})
+		When("MC filters Clevis", func() {
+			BeforeEach(func() {
+				filter = mcClevisFilter
+			})
+
+			It("Keeps the Clevis attributes intact", func() {
+				Expect(err).To(BeNil())
+				Expect(files).To(HaveLen(1))
+				Expect(string(files["mcDumpPath"])).To(Equal("[true,true]"))
+				Expect(warnings).To(HaveLen(0))
+			})
 		})
 	})
 })
