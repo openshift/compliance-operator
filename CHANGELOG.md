@@ -7,6 +7,33 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Enhancements
+
+-
+
+### Fixes
+
+-
+
+### Internal Changes
+
+-
+
+### Deprecations
+
+-
+
+### Removals
+
+-
+
+### Security
+
+-
+
+
+## [0.1.53] - 2022-06-29
+
 ### Fixes
 
 - The `openshift-compliance` namespace was labeled with `pod-security.kubernetes.io/`
