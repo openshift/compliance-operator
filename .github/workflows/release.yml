@@ -12,5 +12,5 @@ jobs:
       name: compliance-operator
       registry_org: complianceascode
       tag: ${GITHUB_REF_NAME}
-      dockerfile_path: Dockerfile
+      dockerfile_path: build/Dockerfile
       vendor: 'Compliance Operator Authors'
