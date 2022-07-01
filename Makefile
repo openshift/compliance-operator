@@ -89,6 +89,10 @@ SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./
 
 MUST_GATHER_IMAGE_PATH?=$(IMAGE_REPO)/must-gather
 MUST_GATHER_IMAGE_TAG?=$(TAG)
+# Set this to the remote used for the upstream repo (for release). Use an
+# absolute reference by default since we don't know if origin is the
+# contributor's fork or if it's the upstream repository.
+GIT_REMOTE?=git@github.com:ComplianceAsCode/compliance-operator.git
 
 # Kubernetes variables
 # ====================
@@ -624,11 +628,11 @@ prepare-release: package-version-to-tag images git-release
 push-release: package-version-to-tag ## Do an official release (Requires permissions)
 	git commit -m "Release v$(TAG)"
 	git tag "v$(TAG)"
-	git push origin "v$(TAG)"
-	git push origin "release-v$(TAG)"
+	git push $(GIT_REMOTE) "v$(TAG)"
+	git push $(GIT_REMOTE) "release-v$(TAG)"
 	git checkout ocp-0.1
 	git merge "release-v$(TAG)"
-	git push origin ocp-0.1
+	git push $(GIT_REMOTE) ocp-0.1
 
 .PHONY: release-images
 release-images: package-version-to-tag push push-index undo-deploy-tag-image

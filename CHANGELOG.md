@@ -32,6 +32,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Added a template for proposing and discussing
   [enhancements](https://github.com/ComplianceAsCode/compliance-operator/tree/master/enhancements).
+- Use the upstream remote URL for the repository during the release process.
+  This makes the release process consistent for all contributors, regardless of
+  how they configure their remotes. See the corresponding
+  [issue](https://github.com/ComplianceAsCode/compliance-operator/issues/8) for
+  more information.
 
 ### Deprecations
 
