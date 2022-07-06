@@ -152,7 +152,8 @@ func AreKubeletConfigsRendered(pool *mcfgv1.MachineConfigPool, client runtimecli
 		return false, fmt.Errorf("failed to unmarshal machine config %s: %w", currentKCMCName, err), diffString
 	}
 
-	encodedKC, err := jsonpath.Get("storage.files[0].contents.source", obj)
+	// Filter to kubelet.conf file as other files (e.g. /etc/node-sizing-enabled.env) can exist.
+	encodedKC, err := jsonpath.Get(`storage.files[?(@.path=="/etc/kubernetes/kubelet.conf")].contents.source`, obj)
 	if err != nil {
 		return false, fmt.Errorf("failed to get encoded kubelet config from machine config %s: %w", currentKCMCName, err), diffString
 	}
