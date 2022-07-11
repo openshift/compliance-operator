@@ -17,7 +17,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Internal Changes
 
--
+- Added a template for proposing and discussing
+  [enhancements](https://github.com/ComplianceAsCode/compliance-operator/tree/master/enhancements).
 
 ### Deprecations
 
