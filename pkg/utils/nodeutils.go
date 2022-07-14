@@ -153,11 +153,15 @@ func AreKubeletConfigsRendered(pool *mcfgv1.MachineConfigPool, client runtimecli
 	}
 
 	// Filter to kubelet.conf file as other files (e.g. /etc/node-sizing-enabled.env) can exist.
-	encodedKC, err := jsonpath.Get(`storage.files[?(@.path=="/etc/kubernetes/kubelet.conf")].contents.source`, obj)
+	encodedKC, err := jsonpath.Get(`$.storage.files[?(@.path == "/etc/kubernetes/kubelet.conf")].contents.source`, obj)
 	if err != nil {
 		return false, fmt.Errorf("failed to get encoded kubelet config from machine config %s: %w", currentKCMCName, err), diffString
 	}
-	encodedKCStr := encodedKC.(string)
+	encodedKCSlice := encodedKC.([]interface{})
+	if len(encodedKCSlice) == 0 {
+		return false, fmt.Errorf("encoded kubeletconfig %s is missing", currentKCMCName), diffString
+	}
+	encodedKCStr := encodedKCSlice[0].(string)
 	if encodedKCStr == "" {
 		return false, fmt.Errorf("encoded kubeletconfig %s is empty", currentKCMCName), diffString
 	}
