@@ -163,7 +163,7 @@ func IsKCSubsetOfMC(kc *mcfgv1.KubeletConfig, mc *mcfgv1.MachineConfig) (bool, e
 	}
 
 	// Filter to kubelet.conf file as other files (e.g. /etc/node-sizing-enabled.env) can exist.
-	encodedKC, err := jsonpath.Get(`$.storage.files[?(@.path == "/etc/kubernetes/kubelet.conf")].contents.source`, obj)
+	encodedKC, err := jsonpath.Get(`$.storage.files[?(@.path=="/etc/kubernetes/kubelet.conf")].contents.source`, obj)
 	if err != nil {
 		return false, fmt.Errorf("failed to get encoded kubelet config from machine config %s: %w", mc.Name, err), ""
 	}
