@@ -586,16 +586,23 @@ func TestE2E(t *testing.T) {
 					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"PENDING\",result=\"\"}", scanName):                1,
 					fmt.Sprintf("compliance_operator_compliance_scan_status_total{name=\"%s\",phase=\"RUNNING\",result=\"NOT-AVAILABLE\"}", scanName):   1,
 				}
-				metricsSet[aggrString] = 1
-				err = assertEachMetric(t, namespace, metricsSet)
-				if err != nil {
-					// Aggregating may be 1 or 2... try again
-					metricsSet[aggrString] = 2
-					secondTryErr := assertEachMetric(t, namespace, metricsSet)
-					if secondTryErr != nil {
-						return secondTryErr
+
+				var metErr error
+				// Aggregating may be variable, could be registered 1 to 3 times.
+				for i := 1; i < 4; i++ {
+					metricsSet[aggrString] = i
+					err = assertEachMetric(t, namespace, metricsSet)
+					if err == nil {
+						metErr = nil
+						break
 					}
+					metErr = err
 				}
+
+				if metErr != nil {
+					return metErr
+				}
+
 				return scanHasValidPVCReference(f, namespace, scanName)
 			},
 		},

@@ -95,7 +95,6 @@ var (
 	}
 	serviceMonitorBearerTokenFile = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	serviceMonitorTLSCAFile       = "/etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt"
-	serviceMonitorTLSServerName   = "metrics.openshift-compliance.svc"
 	alertName                     = "compliance"
 )
 
@@ -321,7 +320,7 @@ func addMetrics(ctx context.Context, cfg *rest.Config, kClient *kubernetes.Clien
 		os.Exit(1)
 	}
 
-	if err := createServiceMonitor(ctx, cfg, mClient, operatorNs, metricsService); err != nil {
+	if err := handleServiceMonitor(ctx, cfg, mClient, operatorNs, metricsService); err != nil {
 		log.Error(err, "Error creating ServiceMonitor")
 		os.Exit(1)
 	}
@@ -332,10 +331,8 @@ func addMetrics(ctx context.Context, cfg *rest.Config, kClient *kubernetes.Clien
 	}
 }
 
-func ensureMetricsServiceAndSecret(ctx context.Context, kClient *kubernetes.Clientset, ns string) (*v1.Service, error) {
-	var mService *v1.Service
-	var err error
-	mService, err = kClient.CoreV1().Services(ns).Create(ctx, &v1.Service{
+func operatorMetricService(ns string) *v1.Service {
+	return &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
 				"name": "compliance-operator",
@@ -372,7 +369,13 @@ func ensureMetricsServiceAndSecret(ctx context.Context, kClient *kubernetes.Clie
 			},
 			Type: v1.ServiceTypeClusterIP,
 		},
-	}, metav1.CreateOptions{})
+	}
+}
+
+func ensureMetricsServiceAndSecret(ctx context.Context, kClient *kubernetes.Clientset, ns string) (*v1.Service, error) {
+	var mService *v1.Service
+	var err error
+	mService, err = kClient.CoreV1().Services(ns).Create(ctx, operatorMetricService(ns), metav1.CreateOptions{})
 	if err != nil && !kerr.IsAlreadyExists(err) {
 		return nil, err
 	}
@@ -540,20 +543,7 @@ func getDefaultRoles(platform PlatformType) []string {
 	return defaultRolesPerPlatform[PlatformGeneric]
 }
 
-// createServiceMonitor attempts to create a ServiceMonitor out of service, and updates it to include the controller
-// metrics paths.
-func createServiceMonitor(ctx context.Context, cfg *rest.Config, mClient *monclientv1.MonitoringV1Client,
-	namespace string, service *v1.Service) error {
-	ok, err := k8sutil.ResourceExists(discovery.NewDiscoveryClientForConfigOrDie(cfg),
-		"monitoring.coreos.com/v1", "ServiceMonitor")
-	if err != nil {
-		return err
-	}
-	if !ok {
-		log.Info("Install prometheus-operator in your cluster to create ServiceMonitor objects")
-		return nil
-	}
-
+func generateOperatorServiceMonitor(service *v1.Service, namespace string) *monitoring.ServiceMonitor {
 	serviceMonitor := metrics.GenerateServiceMonitor(service)
 	for i := range serviceMonitor.Spec.Endpoints {
 		if serviceMonitor.Spec.Endpoints[i].Port == ctrlMetrics.ControllerMetricsServiceName {
@@ -562,12 +552,17 @@ func createServiceMonitor(ctx context.Context, cfg *rest.Config, mClient *moncli
 			serviceMonitor.Spec.Endpoints[i].BearerTokenFile = serviceMonitorBearerTokenFile
 			serviceMonitor.Spec.Endpoints[i].TLSConfig = &monitoring.TLSConfig{
 				CAFile:     serviceMonitorTLSCAFile,
-				ServerName: serviceMonitorTLSServerName,
+				ServerName: "metrics." + namespace + ".svc",
 			}
 		}
 	}
+	return serviceMonitor
+}
 
-	_, err = mClient.ServiceMonitors(namespace).Create(ctx, serviceMonitor, metav1.CreateOptions{})
+// createOrUpdateServiceMonitor creates or updates the ServiceMonitor if it already exists.
+func createOrUpdateServiceMonitor(ctx context.Context, mClient *monclientv1.MonitoringV1Client,
+	namespace string, serviceMonitor *monitoring.ServiceMonitor) error {
+	_, err := mClient.ServiceMonitors(namespace).Create(ctx, serviceMonitor, metav1.CreateOptions{})
 	if err != nil && !kerr.IsAlreadyExists(err) {
 		return err
 	}
@@ -585,6 +580,25 @@ func createServiceMonitor(ctx context.Context, cfg *rest.Config, mClient *moncli
 		}
 	}
 	return nil
+}
+
+// handleServiceMonitor attempts to create a ServiceMonitor out of service, and updates it to include the controller
+// metrics paths.
+func handleServiceMonitor(ctx context.Context, cfg *rest.Config, mClient *monclientv1.MonitoringV1Client,
+	namespace string, service *v1.Service) error {
+	ok, err := k8sutil.ResourceExists(discovery.NewDiscoveryClientForConfigOrDie(cfg),
+		"monitoring.coreos.com/v1", "ServiceMonitor")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		log.Info("Install prometheus-operator in your cluster to create ServiceMonitor objects")
+		return nil
+	}
+
+	serviceMonitor := generateOperatorServiceMonitor(service, namespace)
+
+	return createOrUpdateServiceMonitor(ctx, mClient, namespace, serviceMonitor)
 }
 
 // serveCRMetrics gets the Operator/CustomResource GVKs and generates metrics based on those types.
