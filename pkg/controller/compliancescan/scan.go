@@ -71,6 +71,7 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: resultscollectorSA,
+			PriorityClassName:  scanInstance.Spec.PriorityClass,
 			InitContainers: []corev1.Container{
 				{
 					Name:  "content-container",
@@ -322,6 +323,7 @@ func (r *ReconcileComplianceScan) newPlatformScanPod(scanInstance *compv1alpha1.
 			SecurityContext: &corev1.PodSecurityContext{
 				RunAsNonRoot: &trueP,
 			},
+			PriorityClassName: scanInstance.Spec.PriorityClass,
 			InitContainers: []corev1.Container{
 				{
 					Name:  "content-container",

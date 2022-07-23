@@ -331,7 +331,6 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(h scanTypeHandler, logge
 		}
 		return common.ReturnWithRetriableError(logger, err)
 	}
-
 	// if we got here, there are no new pods to be created, move to the next phase
 	scan.Status.Phase = compv1alpha1.PhaseRunning
 	err = r.client.Status().Update(context.TODO(), scan)
@@ -398,12 +397,16 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(h scanTypeHandler, log
 
 	logger.Info("Creating an aggregator pod for scan")
 	aggregator := r.newAggregatorPod(instance, logger)
+	if priorityClassExist, why := utils.ValidatePriorityClassExist(aggregator.Spec.PriorityClassName, r.client); !priorityClassExist {
+		log.Info(why, "aggregator", aggregator.Name)
+		r.recorder.Eventf(aggregator, corev1.EventTypeWarning, "PriorityClass", why+" aggregator:"+aggregator.Name)
+		aggregator.Spec.PriorityClassName = ""
+	}
 	err = r.launchAggregatorPod(instance, aggregator, logger)
 	if err != nil {
 		logger.Error(err, "Failed to launch aggregator pod", "aggregator", aggregator)
 		return reconcile.Result{}, err
 	}
-
 	running, err := isAggregatorRunning(r, instance, logger)
 	if errors.IsNotFound(err) {
 		// Suppress loud error message by requeueing

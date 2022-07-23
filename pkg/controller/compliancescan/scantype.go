@@ -132,6 +132,11 @@ func (nh *nodeScanTypeHandler) createScanWorkload() error {
 		// ..schedule a pod..
 		nh.l.Info("Creating a pod for node", "Pod.Name", node.Name)
 		pod := newScanPodForNode(nh.scan, node, nh.l)
+		if priorityClassExist, why := utils.ValidatePriorityClassExist(nh.scan.Spec.PriorityClass, nh.r.client); !priorityClassExist {
+			nh.l.Info(why, "Scan.Name", nh.scan.Name)
+			nh.r.recorder.Eventf(nh.scan, corev1.EventTypeWarning, "PriorityClass", why+" Scan:"+nh.scan.Name)
+			pod.Spec.PriorityClassName = ""
+		}
 		if err := nh.r.launchScanPod(nh.scan, pod, nh.l); err != nil {
 			return err
 		}
@@ -309,6 +314,10 @@ func (ph *platformScanTypeHandler) validate() (bool, error) {
 func (ph *platformScanTypeHandler) createScanWorkload() error {
 	ph.l.Info("Creating a Platform scan pod")
 	pod := ph.r.newPlatformScanPod(ph.scan, ph.l)
+	if priorityClassExist, why := utils.ValidatePriorityClassExist(ph.scan.Spec.PriorityClass, ph.r.client); !priorityClassExist {
+		ph.r.recorder.Eventf(ph.scan, corev1.EventTypeWarning, "PriorityClass", why+" Scan:"+ph.scan.Name)
+		pod.Spec.PriorityClassName = ""
+	}
 	return ph.r.launchScanPod(ph.scan, pod, ph.l)
 }
 

@@ -606,6 +606,8 @@ In the `spec`:
   for scheduling. Defaults to allowing the scan to run on master nodes. For
   details on tolerations, see the
   [Kubernetes documentation on this](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/).
+* **PriorityClass**: Defines the priority class name of the scan(s).
+  [Kubernetes documentation on this](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/)
 
 Regarding the `status`:
 
