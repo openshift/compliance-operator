@@ -190,7 +190,7 @@ push-release` target.
 
 Please note, this step makes changes to the upstream repository, so it is
 imperative that you review the changes you're committing prior to this step.
-This steps also requires that you have necessary permissions on the repository.
+This step also requires that you have necessary permissions on the repository.
 
 ### Releasing Images
 
