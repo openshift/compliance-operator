@@ -13,8 +13,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixes
 
--
-
+-  Compliance Operator failed to resume `MachineConfigPool` after remediation
+   is applied, some `KubeletConfig` configuration are rendered into multiple 
+   files in `MachineConfig`, and Compliance Operator failed to counter this situation.
+   The Compliance Operator addresses this issue by only checking `/etc/kubernetes/kubelet.conf`
+   Please see the related [bug](https://bugzilla.redhat.com/show_bug.cgi?id=2102511)
+   for more information. No action is required from users to consume this fix.
 ### Internal Changes
 
 - Added a template for proposing and discussing
