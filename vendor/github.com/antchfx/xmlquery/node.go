@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"html"
 	"strings"
 )
 
@@ -71,7 +72,7 @@ func (n *Node) InnerText() string {
 
 func (n *Node) sanitizedData(preserveSpaces bool) string {
 	if preserveSpaces {
-		return strings.Trim(n.Data, "\n\t")
+		return n.Data
 	}
 	return strings.TrimSpace(n.Data)
 }
@@ -89,7 +90,7 @@ func outputXML(buf *bytes.Buffer, n *Node, preserveSpaces bool) {
 	preserveSpaces = calculatePreserveSpaces(n, preserveSpaces)
 	switch n.Type {
 	case TextNode:
-		xml.EscapeText(buf, []byte(n.sanitizedData(preserveSpaces)))
+		buf.WriteString(html.EscapeString(n.sanitizedData(preserveSpaces)))
 		return
 	case CharDataNode:
 		buf.WriteString("<![CDATA[")
@@ -118,7 +119,7 @@ func outputXML(buf *bytes.Buffer, n *Node, preserveSpaces bool) {
 			buf.WriteString(fmt.Sprintf(` %s=`, attr.Name.Local))
 		}
 		buf.WriteByte('"')
-		xml.EscapeText(buf, []byte(attr.Value))
+		buf.WriteString(html.EscapeString(attr.Value))
 		buf.WriteByte('"')
 	}
 	if n.Type == DeclarationNode {
@@ -140,12 +141,13 @@ func outputXML(buf *bytes.Buffer, n *Node, preserveSpaces bool) {
 
 // OutputXML returns the text that including tags name.
 func (n *Node) OutputXML(self bool) string {
+	preserveSpaces := calculatePreserveSpaces(n, false)
 	var buf bytes.Buffer
-	if self {
-		outputXML(&buf, n, false)
+	if self && n.Type != DocumentNode {
+		outputXML(&buf, n, preserveSpaces)
 	} else {
 		for n := n.FirstChild; n != nil; n = n.NextSibling {
-			outputXML(&buf, n, false)
+			outputXML(&buf, n, preserveSpaces)
 		}
 	}
 
