@@ -5,8 +5,7 @@ go 1.16
 require (
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/ajeddeloh/go-json v0.0.0-20200220154158-5ae607161559 // indirect
-	github.com/antchfx/xmlquery v1.3.6
-	github.com/antchfx/xpath v1.1.11 // indirect
+	github.com/antchfx/xmlquery v1.3.12
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cenkalti/backoff/v4 v4.1.1
 	github.com/clarketm/json v1.15.7
