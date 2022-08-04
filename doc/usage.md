@@ -320,3 +320,61 @@ oc run --rm -i --restart=Never --image=registry.fedoraproject.org/fedora-minimal
 rer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" https://metrics.openshift-compliance.svc:8585/metrics-co' | grep compliance
 ```
 
+## To use PriorityClass for scans
+
+When heavily using Pod Priority and Preemption[1] for automated scaling and
+the default `PriorityClass` is too low to guarantee pods to run then scans
+are not executed and reports are missing. Since the Compliance Operator
+is important for ensuring compliance, we should give administrators the
+ability to associate a `PriorityClass` with the operator. This will ensure
+the Compliance Operator is prioritized and minimizes the chance that the
+cluster will fall out of compliance because the Compliance Operator wasn’t
+running.
+
+An admin can set PriorityClass[1] in `ScanSetting`, below is an example of a
+`ScanSetting` with a PriorityClass:
+
+```yaml
+apiVersion: compliance.openshift.io/v1alpha1
+strictNodeScan: true
+metadata:
+  name: default
+  namespace: openshift-compliance
+priorityClass: compliance-high-priority
+kind: ScanSetting
+showNotApplicable: false
+rawResultStorage:
+  nodeSelector:
+    node-role.kubernetes.io/master: ''
+  pvAccessModes:
+    - ReadWriteOnce
+  rotation: 3
+  size: 1Gi
+  tolerations:
+    - effect: NoSchedule
+      key: node-role.kubernetes.io/master
+      operator: Exists
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoSchedule
+      key: node.kubernetes.io/memory-pressure
+      operator: Exists
+schedule: 0 1 * * *
+roles:
+  - master
+  - worker
+scanTolerations:
+  - operator: Exists
+```
+
+If the `PriorityClass` referenced in the ScanSetting can't be found,
+the operator will leave `PriorityClass` empty, issue a warning, and
+continue scheduling scans without a `PriorityClass`.
+
+[1]: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#priorityclass
