@@ -95,6 +95,12 @@ spec:
                         selector of the MachineConfigPool you want to apply the remediations
                         to.
                       type: object
+                    priorityClass:
+                      description: Defines the PriorityClass to use for launching
+                        scan related pods, the Name of a desired PriorityClass should
+                        be set here, this is an optional field, if PriorityClass is
+                        invalid or not found, it will be ignored.
+                      type: string
                     profile:
                       description: Is the profile in the data stream to be used. This
                         is the collection of rules that will be checked for.

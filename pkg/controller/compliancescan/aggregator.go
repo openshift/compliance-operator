@@ -45,6 +45,7 @@ func (r *ReconcileComplianceScan) newAggregatorPod(scanInstance *compv1alpha1.Co
 			NodeSelector:       r.schedulingInfo.Selector,
 			Tolerations:        r.schedulingInfo.Tolerations,
 			ServiceAccountName: aggregatorSA,
+			PriorityClassName:  scanInstance.Spec.PriorityClass,
 			SecurityContext: &corev1.PodSecurityContext{
 				RunAsNonRoot: &trueP,
 			},

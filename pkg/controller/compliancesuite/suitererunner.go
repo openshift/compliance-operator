@@ -2,9 +2,12 @@ package compliancesuite
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"github.com/openshift/compliance-operator/pkg/controller/common"
+	"github.com/openshift/compliance-operator/pkg/utils"
 	cron "github.com/robfig/cron/v3"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
@@ -12,17 +15,26 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/utils"
 )
 
 const rerunnerServiceAccount = "rerunner"
 
 func (r *ReconcileComplianceSuite) reconcileScanRerunnerCronJob(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) error {
 	rerunner := r.getRerunner(suite)
+	priorityClassName, err := r.getPriorityClassName(suite)
+	if err != nil {
+		logger.Error(err, "Cannot get priority class name, scan will not be run with set priority class")
+	}
+	// this is a validation and should warn the user
+	if priorityClassExist, why := utils.ValidatePriorityClassExist(priorityClassName, r.client); !priorityClassExist {
+		log.Info(why, "Suite", suite.Name)
+		r.recorder.Eventf(suite, corev1.EventTypeWarning, "PriorityClass", why+" Suite:"+suite.Name)
+	}
+	rerunner.Spec.JobTemplate.Spec.Template.Spec.PriorityClassName = priorityClassName
+
 	if suite.Spec.Schedule == "" {
 		return r.handleRerunnerDelete(rerunner, suite.Name, logger)
 	}
@@ -61,6 +73,26 @@ func (r *ReconcileComplianceSuite) handleCreate(suite *compv1alpha1.ComplianceSu
 		return r.client.Update(context.TODO(), cronJobCopy)
 	}
 	return nil
+}
+
+// getPriorityClassName for rerunner from suite scan
+func (r *ReconcileComplianceSuite) getPriorityClassName(suite *compv1alpha1.ComplianceSuite) (string, error) {
+	// get priorityClass from suite scan
+	scans := &compv1alpha1.ComplianceScanList{}
+	scanSuiteSelector := make(map[string]string)
+	scanSuiteSelector[compv1alpha1.SuiteLabel] = suite.Name
+	listOpts := &client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(scanSuiteSelector),
+		Namespace:     suite.Namespace,
+	}
+	err := r.client.List(context.TODO(), scans, listOpts)
+	if err != nil {
+		return "", fmt.Errorf("Error while getting scans for ComplianceSuite '%s', err: %s\n", suite.Name, err)
+	}
+	if len(scans.Items) == 0 {
+		return "", fmt.Errorf("No scans found for ComplianceSuite '%s'", suite.Name)
+	}
+	return scans.Items[0].Spec.PriorityClass, nil
 }
 
 func (r *ReconcileComplianceSuite) handleRerunnerDelete(rerunner *batchv1beta1.CronJob, suiteName string, logger logr.Logger) error {

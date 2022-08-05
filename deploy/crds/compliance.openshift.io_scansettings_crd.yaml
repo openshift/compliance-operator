@@ -52,6 +52,12 @@ spec:
               be used. External resources could be, for instance, CVE feeds. This
               is useful for disconnected installations without access to a proxy.
             type: boolean
+          priorityClass:
+            description: Defines the PriorityClass to use for launching scan related
+              pods, the Name of a desired PriorityClass should be set here, this is
+              an optional field, if PriorityClass is invalid or not found, it will
+              be ignored.
+            type: string
           rawResultStorage:
             description: Specifies settings that pertain to raw result storage.
             properties:

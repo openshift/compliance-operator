@@ -6,14 +6,17 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	configv1 "github.com/openshift/api/config/v1"
 	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	corev1 "k8s.io/api/core/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -1800,6 +1803,160 @@ func TestE2E(t *testing.T) {
 				}
 
 				return assertResultStorageHasExpectedItemsAfterRotation(t, f, 1, namespace, rotationCheckerPod.Name)
+			},
+		},
+		testExecution{
+			Name:       "TestScheduledSuitePriorityClass",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				suiteName := "test-scheduled-suite-priority-class"
+
+				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
+				selectWorkers := map[string]string{
+					"node-role.kubernetes.io/worker": "",
+				}
+
+				priorityClass := &schedulingv1.PriorityClass{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "e2e-compliance-suite-high-priority",
+					},
+					Value: 100,
+				}
+
+				// Ensure that the priority class is created
+				err := f.Client.Create(goctx.TODO(), priorityClass, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+
+				testSuite := &compv1alpha1.ComplianceSuite{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceSuiteSpec{
+						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+							AutoApplyRemediations: false,
+						},
+						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
+							{
+								Name: workerScanName,
+								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+									ContentImage: contentImagePath,
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
+									Content:      rhcosContentFile,
+									Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
+									NodeSelector: selectWorkers,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										PriorityClass: "e2e-compliance-suite-high-priority",
+										RawResultStorage: compv1alpha1.RawResultStorageSettings{
+											Rotation: 1,
+										},
+										Debug: true,
+									},
+								},
+							},
+						},
+					},
+				}
+
+				err = f.Client.Create(goctx.TODO(), testSuite, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+
+				podList := &corev1.PodList{}
+				err = f.Client.List(goctx.TODO(), podList, client.InNamespace(namespace), client.MatchingLabels(map[string]string{
+					"workload": "scanner",
+				}))
+				if err != nil {
+					return err
+				}
+				// check if the scanning pod has properly been created and has priority class set
+				for _, pod := range podList.Items {
+					if strings.Contains(pod.Name, workerScanName) {
+						if err := waitForPod(checkPodPriorityClass(t, f.KubeClient, pod.Name, namespace, "e2e-compliance-suite-high-priority")); err != nil {
+							return err
+						}
+					}
+				}
+
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
+				if err != nil {
+					return err
+				}
+				return nil
+			},
+		},
+		testExecution{
+			Name:       "TestScheduledSuiteInvalidPriorityClass",
+			IsParallel: true,
+			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
+				suiteName := "test-scheduled-suite-invalid-priority-class"
+
+				workerScanName := fmt.Sprintf("%s-workers-scan", suiteName)
+				selectWorkers := map[string]string{
+					"node-role.kubernetes.io/worker": "",
+				}
+
+				testSuite := &compv1alpha1.ComplianceSuite{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      suiteName,
+						Namespace: namespace,
+					},
+					Spec: compv1alpha1.ComplianceSuiteSpec{
+						ComplianceSuiteSettings: compv1alpha1.ComplianceSuiteSettings{
+							AutoApplyRemediations: false,
+						},
+						Scans: []compv1alpha1.ComplianceScanSpecWrapper{
+							{
+								Name: workerScanName,
+								ComplianceScanSpec: compv1alpha1.ComplianceScanSpec{
+									ContentImage: contentImagePath,
+									Profile:      "xccdf_org.ssgproject.content_profile_moderate",
+									Content:      rhcosContentFile,
+									Rule:         "xccdf_org.ssgproject.content_rule_no_netrc_files",
+									NodeSelector: selectWorkers,
+									ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
+										PriorityClass: "priority-invalid",
+										RawResultStorage: compv1alpha1.RawResultStorageSettings{
+											Rotation: 1,
+										},
+										Debug: true,
+									},
+								},
+							},
+						},
+					},
+				}
+
+				err := f.Client.Create(goctx.TODO(), testSuite, getCleanupOpts(ctx))
+				if err != nil {
+					return err
+				}
+
+				podList := &corev1.PodList{}
+				err = f.Client.List(goctx.TODO(), podList, client.InNamespace(namespace), client.MatchingLabels(map[string]string{
+					"workload": "scanner",
+				}))
+				if err != nil {
+					return err
+				}
+				// check if the scanning pod has properly been created and has priority class set
+				for _, pod := range podList.Items {
+					if strings.Contains(pod.Name, workerScanName) {
+						if err := waitForPod(checkPodPriorityClass(t, f.KubeClient, pod.Name, namespace, "")); err != nil {
+							return err
+						}
+					}
+				}
+				// Ensure that all the scans in the suite have finished and are marked as Done
+				err = waitForSuiteScansStatus(t, f, namespace, suiteName, compv1alpha1.PhaseDone, compv1alpha1.ResultCompliant)
+				if err != nil {
+					return err
+				}
+				return nil
 			},
 		},
 		testExecution{

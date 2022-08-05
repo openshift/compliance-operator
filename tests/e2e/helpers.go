@@ -21,12 +21,20 @@ import (
 
 	backoff "github.com/cenkalti/backoff/v4"
 	ocpapi "github.com/openshift/api"
+	configv1 "github.com/openshift/api/config/v1"
 	imagev1 "github.com/openshift/api/image/v1"
+	"github.com/openshift/compliance-operator/pkg/apis"
+	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	compsuitectrl "github.com/openshift/compliance-operator/pkg/controller/compliancesuite"
+	"github.com/openshift/compliance-operator/pkg/utils"
+	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,14 +46,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	configv1 "github.com/openshift/api/config/v1"
-	"github.com/openshift/compliance-operator/pkg/apis"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	compsuitectrl "github.com/openshift/compliance-operator/pkg/controller/compliancesuite"
-	"github.com/openshift/compliance-operator/pkg/utils"
-	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
 var contentImagePath string
@@ -364,6 +364,17 @@ func setupTestRequirements(t *testing.T) *framework.Context {
 			t.Fatalf("TEST SETUP: failed to add custom resource scheme to framework: %v", err)
 		}
 	}
+
+	//Schedule objects
+	scObjs := [1]runtime.Object{
+		&schedulingv1.PriorityClass{},
+	}
+	for _, obj := range scObjs {
+		if err := framework.AddToFrameworkScheme(schedulingv1.AddToScheme, obj); err != nil {
+			t.Fatalf("TEST SETUP: failed to add custom resource scheme to framework: %v", err)
+		}
+	}
+
 	return framework.NewContext(t)
 }
 
@@ -2080,6 +2091,28 @@ func createAndRemoveEtcSecurettyPod(namespace, name, nodeName string) *corev1.Po
 
 func waitForPod(podCallback wait.ConditionFunc) error {
 	return wait.PollImmediate(retryInterval, timeout, podCallback)
+}
+
+// check if pod name has priority class set to the given value.
+func checkPodPriorityClass(t *testing.T, c kubernetes.Interface, podName, namespace, priorityClass string) wait.ConditionFunc {
+	return func() (bool, error) {
+		pod, err := c.CoreV1().Pods(namespace).Get(goctx.TODO(), podName, metav1.GetOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return false, err
+		}
+
+		if apierrors.IsNotFound(err) {
+			E2ELogf(t, "Pod %s not found yet", podName)
+			return false, nil
+		}
+
+		if pod.Spec.PriorityClassName != priorityClass {
+			E2ELogf(t, "pod %s has priority class %s, expected %s", podName, pod.Spec.PriorityClassName, priorityClass)
+			return true, nil
+		}
+
+		return true, nil
+	}
 }
 
 // initContainerComplated returns a ConditionFunc that passes if all init containers have succeeded

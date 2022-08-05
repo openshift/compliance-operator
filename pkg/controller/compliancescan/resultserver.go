@@ -43,6 +43,11 @@ func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.Comp
 		return podUidErr
 	}
 	deployment := resultServer(instance, resultServerLabels, podFSGroup, podUid, logger)
+	if priorityClassExist, why := utils.ValidatePriorityClassExist(deployment.Spec.Template.Spec.PriorityClassName, r.client); !priorityClassExist {
+		log.Info(why, "resultServer", deployment.Name)
+		r.recorder.Eventf(deployment, corev1.EventTypeWarning, "PriorityClass", why+" resultServer:"+deployment.Name)
+		deployment.Spec.Template.Spec.PriorityClassName = ""
+	}
 	err := r.client.Create(ctx, deployment)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logger.Error(err, "Cannot create deployment", "deployment", deployment)
@@ -186,6 +191,7 @@ func resultServer(scanInstance *compv1alpha1.ComplianceScan, labels map[string]s
 					NodeSelector:       scanInstance.Spec.RawResultStorage.NodeSelector,
 					Tolerations:        scanInstance.Spec.RawResultStorage.Tolerations,
 					ServiceAccountName: resultserverSA,
+					PriorityClassName:  scanInstance.Spec.PriorityClass,
 					SecurityContext: &corev1.PodSecurityContext{
 						FSGroup:      &podFSGroup,
 						RunAsNonRoot: &trueP,

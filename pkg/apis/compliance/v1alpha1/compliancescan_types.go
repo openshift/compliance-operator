@@ -193,6 +193,11 @@ type ComplianceScanSettings struct {
 	// Determines whether to hide or show results that are not applicable.
 	// +kubebuilder:default=false
 	ShowNotApplicable bool `json:"showNotApplicable,omitempty"`
+
+	// Defines the PriorityClass to use for launching scan related pods,
+	// the Name of a desired PriorityClass should be set here, this is an
+	// optional field, if PriorityClass is invalid or not found, it will be ignored.
+	PriorityClass string `json:"priorityClass,omitempty"`
 }
 
 // ComplianceScanSpec defines the desired state of ComplianceScan
