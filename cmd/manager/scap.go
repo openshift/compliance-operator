@@ -454,18 +454,21 @@ func filterMcList(mcListIn *mcfgv1.MachineConfigList) (*mcfgv1.MachineConfigList
 	mcfgListNoFiles.ListMeta = mcListIn.ListMeta
 
 	for i := 0; i < len(mcListIn.Items); i++ {
-		mcCopy := mcListIn.Items[i]
-		ign, err := mcfgcommon.ParseAndConvertConfig(mcCopy.Spec.Config.Raw)
-		if err != nil {
-			return nil, fmt.Errorf("cannot parse MC %s: %w", mcCopy.Name, err)
+		mc := mcListIn.Items[i]
+		if len(mc.Spec.Config.Raw) > 0 {
+			// if Ignition exists, filter out all the potentially large files
+			ign, err := mcfgcommon.ParseAndConvertConfig(mc.Spec.Config.Raw)
+			if err != nil {
+				return nil, fmt.Errorf("cannot parse MC %s: %w", mc.Name, err)
+			}
+			ign.Storage.Files = nil // just get rid of the files the easy way
+			rawOutIgn, err := json.Marshal(ign)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal Ignition object back to a a raw object: %w", err)
+			}
+			mc.Spec.Config.Raw = rawOutIgn
 		}
-		ign.Storage.Files = nil // just get rid of the files the easy way
-		rawOutIgn, err := json.Marshal(ign)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal Ignition object back to a a raw object: %w", err)
-		}
-		mcCopy.Spec.Config.Raw = rawOutIgn
-		mcfgListNoFiles.Items = append(mcfgListNoFiles.Items, mcCopy)
+		mcfgListNoFiles.Items = append(mcfgListNoFiles.Items, mc)
 	}
 
 	return &mcfgListNoFiles, nil
