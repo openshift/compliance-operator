@@ -324,6 +324,16 @@ var _ = Describe("Testing fetching", func() {
 
 			mcList := mcfgv1.MachineConfigList{Items: []mcfgv1.MachineConfig{
 				{
+					// regression test for RHBZ #2117268
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "99-no-ign-mc",
+						Namespace: common.GetComplianceOperatorNamespace(),
+					},
+					Spec: mcfgv1.MachineConfigSpec{
+						KernelArguments: []string{"audit=1"},
+					},
+				},
+				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "99-worker-fips",
 						Namespace: common.GetComplianceOperatorNamespace(),
