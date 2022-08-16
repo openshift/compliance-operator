@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -66,4 +67,24 @@ func GetComplianceOperatorNamespace() string {
 // currently running with.
 func GetComplianceOperatorName() string {
 	return complianceOperatorName
+}
+
+// GetWatchNamespace returns the Namespace the operator should be watching for changes. Eventually the watch namespace
+// will not be used when OLM begins to support only the AllNamespaces install type. To support AllNamespaces initially,
+// GetWatchNamespace will return the operator namespace if WATCH_NAMESPACE is empty.
+func GetWatchNamespace() (string, error) {
+	// WatchNamespaceEnvVar is the constant for env variable WATCH_NAMESPACE
+	// which specifies the Namespace to watch.
+	// An empty value means the operator is running with cluster scope.
+	var watchNamespaceEnvVar = "WATCH_NAMESPACE"
+
+	ns, found := os.LookupEnv(watchNamespaceEnvVar)
+	if !found {
+		return "", fmt.Errorf("%s must be set", watchNamespaceEnvVar)
+	}
+
+	if ns == "" {
+		ns = GetComplianceOperatorNamespace()
+	}
+	return ns, nil
 }

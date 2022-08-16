@@ -28,7 +28,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Deprecations
 
--
+- Specifying "Install into all namespaces in the cluster" or otherwise setting
+  the `WATCH_NAMESPACES` environment variable to `""` has no effect anymore. This was
+  done to improve operator's memory usage as reported in
+  [an upstream issue](https://github.com/ComplianceAsCode/compliance-operator/issues/40)
+  All Compliance Operator's CRs must be installed in operator's own namespace
+  (typically `openshift-compliance`) in order for the operator to pick them up
+  anyway.
 
 ### Removals
 
