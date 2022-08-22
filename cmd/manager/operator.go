@@ -149,7 +149,7 @@ func RunOperator(cmd *cobra.Command, args []string) {
 
 	printVersion()
 
-	namespace, err := k8sutil.GetWatchNamespace()
+	namespace, err := common.GetWatchNamespace()
 	if err != nil {
 		log.Error(err, "Failed to get watch namespace")
 		os.Exit(1)
