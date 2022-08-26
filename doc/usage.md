@@ -378,3 +378,29 @@ the operator will leave `PriorityClass` empty, issue a warning, and
 continue scheduling scans without a `PriorityClass`.
 
 [1]: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#priorityclass
+
+## Increasing operator's memory or CPU limits
+
+In some cases, the compliance-operator might require more memory than the default
+limits allow. If the operator had been installed through OLM (which is the case when
+the operator is installed through the OCP Web Console), the best way is to set
+custom limits in the [Subscription object](https://github.com/operator-framework/operator-lifecycle-manager/blob/master/doc/design/subscription-config.md#resources).
+
+For example, in order to increase the operator's memory limits to 500Mi, create
+the following patch file:
+
+```yaml
+spec:
+  config:
+    resources:
+      limits:
+        memory: 500Mi
+```
+
+and apply it:
+```shell
+$ oc patch sub compliance-operator -nopenshift-compliance --patch-file co-memlimit-patch.yaml --type=merge
+```
+
+Please note that this only sets the limit for the compliance-operator
+deployment, not the pods actually performing the scan.
