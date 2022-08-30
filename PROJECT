@@ -1,0 +1,64 @@
+domain: openshift.io
+layout:
+- go.kubebuilder.io/v3
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
+projectName: compliance-operator
+repo: github.com/ComplianceAsCode/compliance-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
+  group: compliance
+  kind: ComplianceScan
+  path: github.com/ComplianceAsCode/compliance-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
+  group: compliance
+  kind: ComplianceRemediation
+  path: github.com/ComplianceAsCode/compliance-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
+  group: compliance
+  kind: ComplianceSuite
+  path: github.com/ComplianceAsCode/compliance-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
+  group: compliance
+  kind: ProfileBundle
+  path: github.com/ComplianceAsCode/compliance-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
+  group: compliance
+  kind: ScanSettingBinding
+  path: github.com/ComplianceAsCode/compliance-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
+  group: compliance
+  kind: TailoredProfile
+  path: github.com/ComplianceAsCode/compliance-operator/api/v1alpha1
+  version: v1alpha1
+version: "3"

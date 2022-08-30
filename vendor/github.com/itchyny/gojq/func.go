@@ -72,7 +72,9 @@ func init() {
 		"_tobase64d":     argFunc0(funcToBase64d),
 		"_index":         argFunc2(funcIndex),
 		"_slice":         argFunc3(funcSlice),
-		"_break":         argFunc0(funcBreak),
+		"_indices":       argFunc1(funcIndices),
+		"_lindex":        argFunc1(funcLindex),
+		"_rindex":        argFunc1(funcRindex),
 		"_plus":          argFunc0(funcOpPlus),
 		"_negate":        argFunc0(funcOpNegate),
 		"_add":           argFunc2(funcOpAdd),
@@ -87,11 +89,13 @@ func init() {
 		"_less":          argFunc2(funcOpLt),
 		"_greatereq":     argFunc2(funcOpGe),
 		"_lesseq":        argFunc2(funcOpLe),
+		"_range":         {argcount3, true, funcRange},
 		"_min_by":        argFunc1(funcMinBy),
 		"_max_by":        argFunc1(funcMaxBy),
 		"_sort_by":       argFunc1(funcSortBy),
 		"_group_by":      argFunc1(funcGroupBy),
 		"_unique_by":     argFunc1(funcUniqueBy),
+		"_join":          argFunc1(funcJoin),
 		"sin":            mathFunc("sin", math.Sin),
 		"cos":            mathFunc("cos", math.Cos),
 		"tan":            mathFunc("tan", math.Tan),
@@ -152,7 +156,7 @@ func init() {
 		"yn":             mathFunc2("yn", funcYn),
 		"pow":            mathFunc2("pow", math.Pow),
 		"pow10":          mathFunc("pow10", funcExp10),
-		"fma":            mathFunc3("fma", funcFma),
+		"fma":            mathFunc3("fma", math.FMA),
 		"infinite":       argFunc0(funcInfinite),
 		"isfinite":       argFunc0(funcIsfinite),
 		"isinfinite":     argFunc0(funcIsinfinite),
@@ -162,6 +166,7 @@ func init() {
 		"setpath":        argFunc2(funcSetpath),
 		"delpaths":       argFunc1(funcDelpaths),
 		"getpath":        argFunc1(funcGetpath),
+		"transpose":      argFunc0(funcTranspose),
 		"bsearch":        argFunc1(funcBsearch),
 		"gmtime":         argFunc0(funcGmtime),
 		"localtime":      argFunc0(funcLocaltime),
@@ -186,7 +191,7 @@ func argFunc0(fn func(interface{}) interface{}) function {
 	}
 }
 
-func argFunc1(fn func(interface{}, interface{}) interface{}) function {
+func argFunc1(fn func(_, _ interface{}) interface{}) function {
 	return function{
 		argcount1, false, func(v interface{}, args []interface{}) interface{} {
 			return fn(v, args[0])
@@ -194,7 +199,7 @@ func argFunc1(fn func(interface{}, interface{}) interface{}) function {
 	}
 }
 
-func argFunc2(fn func(interface{}, interface{}, interface{}) interface{}) function {
+func argFunc2(fn func(_, _, _ interface{}) interface{}) function {
 	return function{
 		argcount2, false, func(v interface{}, args []interface{}) interface{} {
 			return fn(v, args[0], args[1])
@@ -202,7 +207,7 @@ func argFunc2(fn func(interface{}, interface{}, interface{}) interface{}) functi
 	}
 }
 
-func argFunc3(fn func(interface{}, interface{}, interface{}, interface{}) interface{}) function {
+func argFunc3(fn func(_, _, _, _ interface{}) interface{}) function {
 	return function{
 		argcount3, false, func(v interface{}, args []interface{}) interface{} {
 			return fn(v, args[0], args[1], args[2])
@@ -210,7 +215,7 @@ func argFunc3(fn func(interface{}, interface{}, interface{}, interface{}) interf
 	}
 }
 
-func mathFunc(name string, f func(x float64) float64) function {
+func mathFunc(name string, f func(float64) float64) function {
 	return argFunc0(func(v interface{}) interface{} {
 		x, ok := toFloat(v)
 		if !ok {
@@ -220,7 +225,7 @@ func mathFunc(name string, f func(x float64) float64) function {
 	})
 }
 
-func mathFunc2(name string, g func(x, y float64) float64) function {
+func mathFunc2(name string, f func(_, _ float64) float64) function {
 	return argFunc2(func(_, x, y interface{}) interface{} {
 		l, ok := toFloat(x)
 		if !ok {
@@ -230,11 +235,11 @@ func mathFunc2(name string, g func(x, y float64) float64) function {
 		if !ok {
 			return &funcTypeError{name, y}
 		}
-		return g(l, r)
+		return f(l, r)
 	})
 }
 
-func mathFunc3(name string, g func(x, y, z float64) float64) function {
+func mathFunc3(name string, f func(_, _, _ float64) float64) function {
 	return argFunc3(func(_, a, b, c interface{}) interface{} {
 		x, ok := toFloat(a)
 		if !ok {
@@ -248,7 +253,7 @@ func mathFunc3(name string, g func(x, y, z float64) float64) function {
 		if !ok {
 			return &funcTypeError{name, c}
 		}
-		return g(x, y, z)
+		return f(x, y, z)
 	})
 }
 
@@ -268,6 +273,9 @@ func funcLength(v interface{}) interface{} {
 	case float64:
 		return math.Abs(v)
 	case *big.Int:
+		if v.Sign() >= 0 {
+			return v
+		}
 		return new(big.Int).Abs(v)
 	case nil:
 		return 0
@@ -326,6 +334,8 @@ func funcHas(v, x interface{}) interface{} {
 		default:
 			return &hasKeyTypeError{v, x}
 		}
+	case nil:
+		return false
 	default:
 		return &hasKeyTypeError{v, x}
 	}
@@ -396,7 +406,7 @@ func funcToNumber(v interface{}) interface{} {
 		if !newLexer(v).validNumber() {
 			return fmt.Errorf("invalid number: %q", v)
 		}
-		return normalizeNumbers(json.Number(v))
+		return normalizeNumber(json.Number(v))
 	default:
 		return &funcTypeError{"tonumber", v}
 	}
@@ -506,6 +516,19 @@ func funcImplode(v interface{}) interface{} {
 	}
 }
 
+func implode(v []interface{}) interface{} {
+	var sb strings.Builder
+	sb.Grow(len(v))
+	for _, r := range v {
+		if r, ok := toInt(r); ok && 0 <= r && r <= utf8.MaxRune {
+			sb.WriteRune(rune(r))
+		} else {
+			return &funcTypeError{"implode", v}
+		}
+	}
+	return sb.String()
+}
+
 func funcSplit(v interface{}, args []interface{}) interface{} {
 	s, ok := v.(string)
 	if !ok {
@@ -540,19 +563,6 @@ func funcSplit(v interface{}, args []interface{}) interface{} {
 	return xs
 }
 
-func implode(v []interface{}) interface{} {
-	var sb strings.Builder
-	sb.Grow(len(v))
-	for _, r := range v {
-		if r, ok := toInt(r); ok && 0 <= r && r <= utf8.MaxRune {
-			sb.WriteRune(rune(r))
-		} else {
-			return &funcTypeError{"implode", v}
-		}
-	}
-	return sb.String()
-}
-
 func funcToJSON(v interface{}) interface{} {
 	return jsonMarshal(v)
 }
@@ -585,6 +595,32 @@ func funcFormat(v, x interface{}) interface{} {
 	}
 }
 
+var htmlEscaper = strings.NewReplacer(
+	`<`, "&lt;",
+	`>`, "&gt;",
+	`&`, "&amp;",
+	`'`, "&apos;",
+	`"`, "&quot;",
+)
+
+func funcToHTML(v interface{}) interface{} {
+	switch x := funcToString(v).(type) {
+	case string:
+		return htmlEscaper.Replace(x)
+	default:
+		return x
+	}
+}
+
+func funcToURI(v interface{}) interface{} {
+	switch x := funcToString(v).(type) {
+	case string:
+		return url.QueryEscape(x)
+	default:
+		return x
+	}
+}
+
 func funcToCSV(v interface{}) interface{} {
 	return funcToCSVTSV("csv", v, ",", func(s string) string {
 		return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
@@ -602,32 +638,6 @@ func funcToTSV(v interface{}) interface{} {
 	return funcToCSVTSV("tsv", v, "\t", func(s string) string {
 		return tsvEscaper.Replace(s)
 	})
-}
-
-func funcToSh(v interface{}) interface{} {
-	var xs []interface{}
-	if w, ok := v.([]interface{}); ok {
-		xs = w
-	} else {
-		xs = []interface{}{v}
-	}
-	var s strings.Builder
-	for i, x := range xs {
-		if i > 0 {
-			s.WriteByte(' ')
-		}
-		switch x := x.(type) {
-		case map[string]interface{}, []interface{}:
-			return &formatShError{x}
-		case string:
-			s.WriteByte('\'')
-			s.WriteString(strings.ReplaceAll(x, "'", `'\''`))
-			s.WriteByte('\'')
-		default:
-			s.WriteString(jsonMarshal(x))
-		}
-	}
-	return s.String()
 }
 
 func funcToCSVTSV(typ string, v interface{}, sep string, escape func(string) string) interface{} {
@@ -661,30 +671,30 @@ func toCSVTSV(typ string, v interface{}, escape func(string) string) (string, er
 	}
 }
 
-var htmlEscaper = strings.NewReplacer(
-	`<`, "&lt;",
-	`>`, "&gt;",
-	`&`, "&amp;",
-	`'`, "&apos;",
-	`"`, "&quot;",
-)
-
-func funcToHTML(v interface{}) interface{} {
-	switch x := funcToString(v).(type) {
-	case string:
-		return htmlEscaper.Replace(x)
-	default:
-		return x
+func funcToSh(v interface{}) interface{} {
+	var xs []interface{}
+	if w, ok := v.([]interface{}); ok {
+		xs = w
+	} else {
+		xs = []interface{}{v}
 	}
-}
-
-func funcToURI(v interface{}) interface{} {
-	switch x := funcToString(v).(type) {
-	case string:
-		return url.QueryEscape(x)
-	default:
-		return x
+	var s strings.Builder
+	for i, x := range xs {
+		if i > 0 {
+			s.WriteByte(' ')
+		}
+		switch x := x.(type) {
+		case map[string]interface{}, []interface{}:
+			return &formatShError{x}
+		case string:
+			s.WriteByte('\'')
+			s.WriteString(strings.ReplaceAll(x, "'", `'\''`))
+			s.WriteByte('\'')
+		default:
+			s.WriteString(jsonMarshal(x))
+		}
 	}
+	return s.String()
 }
 
 func funcToBase64(v interface{}) interface{} {
@@ -699,7 +709,10 @@ func funcToBase64(v interface{}) interface{} {
 func funcToBase64d(v interface{}) interface{} {
 	switch x := funcToString(v).(type) {
 	case string:
-		y, err := base64.StdEncoding.DecodeString(x)
+		if i := strings.IndexRune(x, base64.StdPadding); i >= 0 {
+			x = x[:i]
+		}
+		y, err := base64.RawStdEncoding.DecodeString(x)
 		if err != nil {
 			return err
 		}
@@ -746,28 +759,13 @@ func funcIndex(_, v, x interface{}) interface{} {
 		case nil:
 			return nil
 		case []interface{}:
-			var xs []interface{}
-			if len(x) == 0 {
-				return xs
-			}
-			for i := 0; i < len(v) && i < len(v)-len(x)+1; i++ {
-				var neq bool
-				for j, y := range x {
-					if neq = compare(v[i+j], y) != 0; neq {
-						break
-					}
-				}
-				if !neq {
-					xs = append(xs, i)
-				}
-			}
-			return xs
+			return indices(v, x)
 		default:
 			return &expectedArrayError{v}
 		}
 	case map[string]interface{}:
 		if v == nil {
-			return v
+			return nil
 		}
 		start, ok := x["start"]
 		if !ok {
@@ -781,6 +779,25 @@ func funcIndex(_, v, x interface{}) interface{} {
 	default:
 		return &objectKeyNotStringError{x}
 	}
+}
+
+func indices(vs, xs []interface{}) interface{} {
+	var rs []interface{}
+	if len(xs) == 0 {
+		return rs
+	}
+	for i := 0; i < len(vs) && i < len(vs)-len(xs)+1; i++ {
+		var neq bool
+		for j, y := range xs {
+			if neq = compare(vs[i+j], y) != 0; neq {
+				break
+			}
+		}
+		if !neq {
+			rs = append(rs, i)
+		}
+	}
+	return rs
 }
 
 func funcSlice(_, v, end, start interface{}) (r interface{}) {
@@ -872,11 +889,97 @@ func toIndex(a []interface{}, i int) int {
 	}
 }
 
-func funcBreak(v interface{}) interface{} {
-	if v, ok := v.(string); ok {
-		return &breakError{v}
+func funcIndices(v, x interface{}) interface{} {
+	return indexFunc(v, x, indices)
+}
+
+func funcLindex(v, x interface{}) interface{} {
+	return indexFunc(v, x, func(vs, xs []interface{}) interface{} {
+		if len(xs) == 0 {
+			return nil
+		}
+		for i := 0; i < len(vs) && i < len(vs)-len(xs)+1; i++ {
+			var neq bool
+			for j, y := range xs {
+				if neq = compare(vs[i+j], y) != 0; neq {
+					break
+				}
+			}
+			if !neq {
+				return i
+			}
+		}
+		return nil
+	})
+}
+
+func funcRindex(v, x interface{}) interface{} {
+	return indexFunc(v, x, func(vs, xs []interface{}) interface{} {
+		if len(xs) == 0 {
+			return nil
+		}
+		i := len(vs) - 1
+		if j := len(vs) - len(xs); j < i {
+			i = j
+		}
+		for ; i >= 0; i-- {
+			var neq bool
+			for j, y := range xs {
+				if neq = compare(vs[i+j], y) != 0; neq {
+					break
+				}
+			}
+			if !neq {
+				return i
+			}
+		}
+		return nil
+	})
+}
+
+func indexFunc(v, x interface{}, f func(_, _ []interface{}) interface{}) interface{} {
+	switch v := v.(type) {
+	case nil:
+		return nil
+	case []interface{}:
+		switch x := x.(type) {
+		case []interface{}:
+			return f(v, x)
+		default:
+			return f(v, []interface{}{x})
+		}
+	case string:
+		if x, ok := x.(string); ok {
+			return f(explode(v), explode(x))
+		}
+		return &expectedStringError{x}
+	default:
+		return &expectedArrayError{v}
 	}
-	return &funcTypeError{"_break", v}
+}
+
+type rangeIter struct {
+	value, end, step interface{}
+}
+
+func (iter *rangeIter) Next() (interface{}, bool) {
+	if compare(iter.step, 0)*compare(iter.value, iter.end) >= 0 {
+		return nil, false
+	}
+	v := iter.value
+	iter.value = funcOpAdd(nil, v, iter.step)
+	return v, true
+}
+
+func funcRange(_ interface{}, xs []interface{}) interface{} {
+	for _, x := range xs {
+		switch x.(type) {
+		case int, float64, *big.Int:
+		default:
+			return &funcTypeError{"range", x}
+		}
+	}
+	return &rangeIter{xs[0], xs[1], xs[2]}
 }
 
 func funcMinBy(v, x interface{}) interface{} {
@@ -889,7 +992,7 @@ func funcMinBy(v, x interface{}) interface{} {
 		return &expectedArrayError{x}
 	}
 	if len(vs) != len(xs) {
-		panic("length mismatch in min_by")
+		return &lengthMismatchError{"min_by", vs, xs}
 	}
 	return funcMinMaxBy(vs, xs, true)
 }
@@ -904,7 +1007,7 @@ func funcMaxBy(v, x interface{}) interface{} {
 		return &expectedArrayError{x}
 	}
 	if len(vs) != len(xs) {
-		panic("length mismatch in max_by")
+		return &lengthMismatchError{"max_by", vs, xs}
 	}
 	return funcMinMaxBy(vs, xs, false)
 }
@@ -927,7 +1030,7 @@ type sortItem struct {
 }
 
 func funcSortBy(v, x interface{}) interface{} {
-	items, err := sortItems(v, x)
+	items, err := sortItems("sort_by", v, x)
 	if err != nil {
 		return err
 	}
@@ -939,7 +1042,7 @@ func funcSortBy(v, x interface{}) interface{} {
 }
 
 func funcGroupBy(v, x interface{}) interface{} {
-	items, err := sortItems(v, x)
+	items, err := sortItems("group_by", v, x)
 	if err != nil {
 		return err
 	}
@@ -956,7 +1059,7 @@ func funcGroupBy(v, x interface{}) interface{} {
 }
 
 func funcUniqueBy(v, x interface{}) interface{} {
-	items, err := sortItems(v, x)
+	items, err := sortItems("unique_by", v, x)
 	if err != nil {
 		return err
 	}
@@ -970,7 +1073,40 @@ func funcUniqueBy(v, x interface{}) interface{} {
 	return rs
 }
 
-func sortItems(v, x interface{}) ([]*sortItem, error) {
+func funcJoin(v, x interface{}) interface{} {
+	vs, ok := v.([]interface{})
+	if !ok {
+		return &expectedArrayError{v}
+	}
+	if len(vs) == 0 {
+		return ""
+	}
+	sep, ok := x.(string)
+	if len(vs) > 1 && !ok {
+		return &funcTypeError{"join", x}
+	}
+	ss := make([]string, len(vs))
+	for i, e := range vs {
+		switch e := e.(type) {
+		case nil:
+		case string:
+			ss[i] = e
+		case bool:
+			if e {
+				ss[i] = "true"
+			} else {
+				ss[i] = "false"
+			}
+		case int, float64, *big.Int:
+			ss[i] = jsonMarshal(e)
+		default:
+			return &unaryTypeError{"join", e}
+		}
+	}
+	return strings.Join(ss, sep)
+}
+
+func sortItems(name string, v, x interface{}) ([]*sortItem, error) {
 	vs, ok := v.([]interface{})
 	if !ok {
 		return nil, &expectedArrayError{v}
@@ -980,7 +1116,7 @@ func sortItems(v, x interface{}) ([]*sortItem, error) {
 		return nil, &expectedArrayError{x}
 	}
 	if len(vs) != len(xs) {
-		panic("length mismatch")
+		return nil, &lengthMismatchError{name, vs, xs}
 	}
 	items := make([]*sortItem, len(vs))
 	for i, v := range vs {
@@ -1003,11 +1139,6 @@ func funcExp10(v float64) float64 {
 	return math.Pow(10, v)
 }
 
-func funcLgamma(v float64) float64 {
-	v, _ = math.Lgamma(v)
-	return v
-}
-
 func funcFrexp(v interface{}) interface{} {
 	x, ok := toFloat(v)
 	if !ok {
@@ -1024,6 +1155,11 @@ func funcModf(v interface{}) interface{} {
 	}
 	i, f := math.Modf(x)
 	return []interface{}{f, i}
+}
+
+func funcLgamma(v float64) float64 {
+	v, _ = math.Lgamma(v)
+	return v
 }
 
 func funcDrem(l, r float64) float64 {
@@ -1052,10 +1188,6 @@ func funcScalbln(l, r float64) float64 {
 
 func funcYn(l, r float64) float64 {
 	return math.Yn(int(l), r)
-}
-
-func funcFma(x, y, z float64) float64 {
-	return x*y + z
 }
 
 func funcInfinite(interface{}) interface{} {
@@ -1156,6 +1288,8 @@ func updatePaths(v interface{}, path []interface{}, w interface{}, delpaths bool
 			}
 			vs[x] = u
 			return vs, nil
+		case struct{}:
+			return v, nil
 		default:
 			return nil, &expectedObjectError{v}
 		}
@@ -1202,6 +1336,8 @@ func updatePaths(v interface{}, path []interface{}, w interface{}, delpaths bool
 			copy(vs, uu)
 			vs[y] = u
 			return vs, nil
+		case struct{}:
+			return v, nil
 		default:
 			return nil, &expectedArrayError{v}
 		}
@@ -1285,6 +1421,8 @@ func updatePaths(v interface{}, path []interface{}, w interface{}, delpaths bool
 			default:
 				return nil, &expectedArrayError{v}
 			}
+		case struct{}:
+			return v, nil
 		default:
 			return nil, &expectedArrayError{v}
 		}
@@ -1318,6 +1456,39 @@ func funcGetpath(v, p interface{}) interface{} {
 		}
 	}
 	return v
+}
+
+func funcTranspose(v interface{}) interface{} {
+	vss, ok := v.([]interface{})
+	if !ok {
+		return &funcTypeError{"transpose", v}
+	}
+	if len(vss) == 0 {
+		return []interface{}{}
+	}
+	var l int
+	for _, vs := range vss {
+		vs, ok := vs.([]interface{})
+		if !ok {
+			return &funcTypeError{"transpose", v}
+		}
+		if k := len(vs); l < k {
+			l = k
+		}
+	}
+	wss := make([][]interface{}, l)
+	xs := make([]interface{}, l)
+	for i, k := 0, len(vss); i < l; i++ {
+		s := make([]interface{}, k)
+		wss[i] = s
+		xs[i] = s
+	}
+	for i, vs := range vss {
+		for j, v := range vs.([]interface{}) {
+			wss[j][i] = v
+		}
+	}
+	return xs
 }
 
 func funcBsearch(v, t interface{}) interface{} {
@@ -1538,6 +1709,11 @@ func funcMatch(v, re, fs, testing interface{}) interface{} {
 }
 
 func compileRegexp(re, flags string) (*regexp.Regexp, error) {
+	if strings.IndexFunc(flags, func(r rune) bool {
+		return r != 'g' && r != 'i' && r != 'm'
+	}) >= 0 {
+		return nil, fmt.Errorf("unsupported regular expression flag: %q", flags)
+	}
 	re = strings.ReplaceAll(re, "(?<", "(?P<")
 	if strings.ContainsRune(flags, 'i') {
 		re = "(?i)" + re

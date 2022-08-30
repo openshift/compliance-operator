@@ -12,6 +12,9 @@ import (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ImagePrunerList is a slice of ImagePruner objects.
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 type ImagePrunerList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
@@ -24,6 +27,9 @@ type ImagePrunerList struct {
 
 // ImagePruner is the configuration object for an image registry pruner
 // managed by the registry operator.
+//
+// Compatibility level 1: Stable within a major release for a minimum of 12 months or 3 minor releases (whichever is longer).
+// +openshift:compatibility-gen:level=1
 type ImagePruner struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
@@ -80,6 +86,13 @@ type ImagePrunerSpec struct {
 	// errors while parsing image references.
 	// +optional
 	IgnoreInvalidImageReferences bool `json:"ignoreInvalidImageReferences,omitempty"`
+	// logLevel sets the level of log output for the pruner job.
+	//
+	// Valid values are: "Normal", "Debug", "Trace", "TraceAll".
+	// Defaults to "Normal".
+	// +optional
+	// +kubebuilder:default=Normal
+	LogLevel operatorv1.LogLevel `json:"logLevel,omitempty"`
 }
 
 // ImagePrunerStatus reports image pruner operational status.

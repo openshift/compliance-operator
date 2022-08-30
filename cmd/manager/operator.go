@@ -1,63 +1,71 @@
-package main
+package manager
 
 import (
 	"context"
 	"errors"
 	"flag"
 	"fmt"
+	log "github.com/sirupsen/logrus"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"os"
-	"runtime"
+	"reflect"
+	goruntime "runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"strings"
 
-	monitoring "github.com/coreos/prometheus-operator/pkg/apis/monitoring/v1"
-	monclientv1 "github.com/coreos/prometheus-operator/pkg/client/versioned/typed/monitoring/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+
 	ocpapi "github.com/openshift/api"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
-	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"
-	"github.com/operator-framework/operator-sdk/pkg/leader"
-	"github.com/operator-framework/operator-sdk/pkg/log/zap"
-	"github.com/operator-framework/operator-sdk/pkg/metrics"
-	sdkVersion "github.com/operator-framework/operator-sdk/version"
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	monclientv1 "github.com/prometheus-operator/prometheus-operator/pkg/client/versioned/typed/monitoring/v1"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	kerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 
-	"github.com/openshift/compliance-operator/pkg/apis"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	ctrlMetrics "github.com/openshift/compliance-operator/pkg/controller/metrics"
-	"github.com/openshift/compliance-operator/pkg/utils"
-	"github.com/openshift/compliance-operator/version"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/apis"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	ctrlMetrics "github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
+	"github.com/ComplianceAsCode/compliance-operator/version"
 )
 
-var operatorCmd = &cobra.Command{
+var OperatorCmd = &cobra.Command{
 	Use:   "operator",
 	Short: "The compliance-operator command",
 	Long:  `An operator that issues compliance checks and their lifecycle.`,
 	Run:   RunOperator,
 }
 
+var (
+	operatorScheme = runtime.NewScheme()
+)
+
 func init() {
-	rootCmd.AddCommand(operatorCmd)
-	defineOperatorFlags(operatorCmd)
+	defineOperatorFlags(OperatorCmd)
+	utilruntime.Must(clientgoscheme.AddToScheme(operatorScheme))
+
+	utilruntime.Must(compv1alpha1.SchemeBuilder.AddToScheme(operatorScheme))
+	//+kubebuilder:scaffold:scheme
 }
 
 type PlatformType string
@@ -71,10 +79,13 @@ const (
 
 // Change below variables to serve metrics on different host or port.
 var (
+	setupLog                   = logf.Log.WithName("setup")
+	metricsAddr                string
+	enableLeaderElection       bool
+	probeAddr                  string
 	metricsHost                      = "0.0.0.0"
 	metricsServiceName               = "metrics"
 	metricsPort                int32 = 8383
-	operatorMetricsPort        int32 = 8686
 	defaultProductsPerPlatform       = map[PlatformType][]string{
 		PlatformOpenShift: {
 			"rhcos4",
@@ -111,11 +122,15 @@ func defineOperatorFlags(cmd *cobra.Command) {
 	cmd.Flags().String("platform", "OpenShift",
 		"Specifies the Platform the Compliance Operator is running on. "+
 			"This will affect the defaults created.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+		"Enable leader election for controller manager. "+
+			"Enabling this will ensure there is only one active controller manager.")
 
 	// Add the zap logger flag set to the CLI. The flag set must
 	// be added before calling pflag.Parse().
 	flags := cmd.Flags()
-	flags.AddFlagSet(zap.FlagSet())
 
 	// Add flags registered by imported packages (e.g. glog and
 	// controller-runtime)
@@ -124,44 +139,33 @@ func defineOperatorFlags(cmd *cobra.Command) {
 }
 
 func printVersion() {
-	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
-	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
-	log.Info(fmt.Sprintf("Version of operator-sdk: %v", sdkVersion.Version))
-	log.Info(fmt.Sprintf("Compliance Operator Version: %v", version.Version))
+	setupLog.Info(fmt.Sprintf("Go Version: %s", goruntime.Version()))
+	setupLog.Info(fmt.Sprintf("Go OS/Arch: %s/%s", goruntime.GOOS, goruntime.GOARCH))
+	setupLog.Info(fmt.Sprintf("Compliance Operator Version: %v", version.Version))
 }
 
 func RunOperator(cmd *cobra.Command, args []string) {
 	flags := cmd.Flags()
-	if err := flags.Parse(zap.FlagSet().Args()); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse zap flagset: %v", zap.FlagSet().Args())
-		os.Exit(1)
-	}
+	flags.AddGoFlagSet(flag.CommandLine)
+	flags.Parse(args)
 
-	// Use a zap logr.Logger implementation. If none of the zap
-	// flags are configured (or if the zap flag set is not being
-	// used), this defaults to a production zap logger.
-	//
-	// The logger instantiated here can be changed to any logger
-	// implementing the logr.Logger interface. This logger will
-	// be propagated through the whole operator, generating
-	// uniform and structured logs.
-	logf.SetLogger(zap.Logger())
+	logf.SetLogger(zap.New())
 
 	printVersion()
 
 	namespace, err := common.GetWatchNamespace()
 	if err != nil {
-		log.Error(err, "Failed to get watch namespace")
+		setupLog.Error(err, "Failed to get watch namespace")
 		os.Exit(1)
 	}
 	if namespace != "" {
-		log.Info("Watching", "namespace", namespace)
+		setupLog.Info("Watching", "namespace", namespace)
 		// Force watch of compliance-operator-namespace so it gets added to the cache
 		if !strings.Contains(namespace, common.GetComplianceOperatorNamespace()) {
 			namespace = namespace + "," + common.GetComplianceOperatorNamespace()
 		}
 	} else {
-		log.Info("Watching all namespaces")
+		setupLog.Info("Watching all namespaces")
 	}
 	options := manager.Options{
 		Namespace:          namespace,
@@ -187,73 +191,80 @@ func RunOperator(cmd *cobra.Command, args []string) {
 	// Get a config to talk to the apiserver
 	cfg, err := config.GetConfig()
 	if err != nil {
-		log.Error(err, "")
+		setupLog.Error(err, "")
 		os.Exit(1)
 	}
 
 	ctx := context.TODO()
-	// Become the leader before proceeding
-	err = leader.Become(ctx, "compliance-operator-lock")
-	if err != nil {
-		log.Error(err, "")
-		os.Exit(1)
-	}
-
 	kubeClient := kubernetes.NewForConfigOrDie(cfg)
 	monitoringClient := monclientv1.NewForConfigOrDie(cfg)
 
-	// Create a new Cmd to provide shared dependencies and start components
-	mgr, err := manager.New(cfg, options)
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:                 operatorScheme,
+		MetricsBindAddress:     metricsAddr,
+		Port:                   9443,
+		HealthProbeBindAddress: probeAddr,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "81473831.openshift.io", // operator-sdk generated this for us
+	})
 	if err != nil {
-		log.Error(err, "")
+		setupLog.Error(err, "unable to create manager")
 		os.Exit(1)
 	}
 
-	log.Info("Registering Components.")
+	setupLog.Info("Registering Components.")
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
 
 	mgrscheme := mgr.GetScheme()
 	// Setup Scheme for all resources
 	if err := apis.AddToScheme(mgrscheme); err != nil {
-		log.Error(err, "")
+		setupLog.Error(err, "")
 		os.Exit(1)
 	}
 	if err := mcfgapi.Install(mgrscheme); err != nil {
-		log.Error(err, "")
+		setupLog.Error(err, "")
 		os.Exit(1)
 	}
 
 	if err := ocpapi.Install(mgrscheme); err != nil {
-		log.Info("Couldn't install OCP API. This is not fatal though.")
-		log.Error(err, "")
+		setupLog.Info("Couldn't install OCP API. This is not fatal though.")
+		setupLog.Error(err, "")
 	}
 
 	// Index the ID field of Checks
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &compv1alpha1.ComplianceCheckResult{}, compv1alpha1.ComplianceRemediationDependencyField, func(rawObj k8sruntime.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &compv1alpha1.ComplianceCheckResult{}, compv1alpha1.ComplianceRemediationDependencyField, func(rawObj client.Object) []string {
 		check, ok := rawObj.(*compv1alpha1.ComplianceCheckResult)
 		if !ok {
 			return []string{}
 		}
 		return []string{check.ID}
 	}); err != nil {
-		log.Error(err, "Error indexing the ID field of ComplianceCheckResult")
+		setupLog.Error(err, "Error indexing the ID field of ComplianceCheckResult")
 		os.Exit(1)
 	}
 
 	met := ctrlMetrics.New()
 	if err := met.Register(); err != nil {
-		log.Error(err, "Error registering metrics")
+		setupLog.Error(err, "Error registering metrics")
 		os.Exit(1)
 	}
 
 	si, getSIErr := getSchedulingInfo(ctx, mgr.GetAPIReader())
 	if getSIErr != nil {
-		log.Error(getSIErr, "Getting control plane scheduling info")
+		setupLog.Error(getSIErr, "Getting control plane scheduling info")
 		os.Exit(1)
 	}
 
 	// Setup all Controllers
 	if err := controller.AddToManager(mgr, met, si); err != nil {
-		log.Error(err, "")
+		setupLog.Error(err, "")
 		os.Exit(1)
 	}
 	pflag, _ := flags.GetString("platform")
@@ -267,20 +278,20 @@ func RunOperator(cmd *cobra.Command, args []string) {
 	}
 
 	if err := ensureDefaultProfileBundles(ctx, mgr.GetClient(), namespaceList, platform); err != nil {
-		log.Error(err, "Error creating default ProfileBundles.")
+		setupLog.Error(err, "Error creating default ProfileBundles.")
 		os.Exit(1)
 	}
 
 	if err := ensureDefaultScanSettings(ctx, mgr.GetClient(), namespaceList, platform, si); err != nil {
-		log.Error(err, "Error creating default ScanSettings.")
+		setupLog.Error(err, "Error creating default ScanSettings.")
 		os.Exit(1)
 	}
 
-	log.Info("Starting the Cmd.")
+	setupLog.Info("Starting the Cmd.")
 
 	// Start the Cmd
-	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
-		log.Error(err, "Manager exited non-zero")
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		setupLog.Error(err, "Manager exited non-zero")
 		os.Exit(1)
 	}
 }
@@ -301,22 +312,12 @@ func getValidPlatform(p string) PlatformType {
 func addMetrics(ctx context.Context, cfg *rest.Config, kClient *kubernetes.Clientset,
 	mClient *monclientv1.MonitoringV1Client) {
 	// Get the namespace the operator is currently deployed in.
-	operatorNs, err := k8sutil.GetOperatorNamespace()
-	if err != nil {
-		if errors.Is(err, k8sutil.ErrRunLocal) {
-			log.Info("Skipping CR metrics server creation; not running in a cluster.")
-			return
-		}
-	}
-
-	if err := serveCRMetrics(cfg, operatorNs); err != nil {
-		log.Info("Could not generate and serve custom resource metrics", "error", err.Error())
-	}
+	operatorNs := common.GetComplianceOperatorNamespace()
 
 	// Create the metrics service and make sure the service-secret is available
 	metricsService, err := ensureMetricsServiceAndSecret(ctx, kClient, operatorNs)
 	if err != nil {
-		log.Error(err, "Error creating metrics service/secret")
+		setupLog.Error(err, "Error creating metrics service/secret")
 		os.Exit(1)
 	}
 
@@ -326,7 +327,7 @@ func addMetrics(ctx context.Context, cfg *rest.Config, kClient *kubernetes.Clien
 	}
 
 	if err := createNonComplianceAlert(ctx, mClient, operatorNs); err != nil {
-		log.Error(err, "Error creating PrometheusRule")
+		setupLog.Error(err, "Error creating PrometheusRule")
 		os.Exit(1)
 	}
 }
@@ -340,27 +341,21 @@ func operatorMetricService(ns string) *v1.Service {
 			Annotations: map[string]string{
 				"service.beta.openshift.io/serving-cert-secret-name": "compliance-operator-serving-cert",
 			},
-			Name:      "metrics",
+			Name:      metricsServiceName,
 			Namespace: ns,
 		},
 		Spec: v1.ServiceSpec{
 			Ports: []v1.ServicePort{
 				{
-					Name:       "http-metrics",
-					Port:       8383,
-					TargetPort: intstr.FromInt(8383),
+					Name:       metricsServiceName,
+					Port:       metricsPort,
+					TargetPort: intstr.FromInt(int(metricsPort)),
 					Protocol:   v1.ProtocolTCP,
 				},
 				{
-					Name:       "cr-metrics",
-					Port:       8686,
-					TargetPort: intstr.FromInt(8686),
-					Protocol:   v1.ProtocolTCP,
-				},
-				{
-					Name:       "metrics-co",
-					Port:       8585,
-					TargetPort: intstr.FromInt(8585),
+					Name:       ctrlMetrics.ControllerMetricsServiceName,
+					Port:       ctrlMetrics.ControllerMetricsPort,
+					TargetPort: intstr.FromInt(ctrlMetrics.ControllerMetricsPort),
 					Protocol:   v1.ProtocolTCP,
 				},
 			},
@@ -373,17 +368,32 @@ func operatorMetricService(ns string) *v1.Service {
 }
 
 func ensureMetricsServiceAndSecret(ctx context.Context, kClient *kubernetes.Clientset, ns string) (*v1.Service, error) {
-	var mService *v1.Service
+	var returnService *v1.Service
 	var err error
-	mService, err = kClient.CoreV1().Services(ns).Create(ctx, operatorMetricService(ns), metav1.CreateOptions{})
+	newService := operatorMetricService(ns)
+	createdService, err := kClient.CoreV1().Services(ns).Create(ctx, newService, metav1.CreateOptions{})
 	if err != nil && !kerr.IsAlreadyExists(err) {
 		return nil, err
 	}
 	if kerr.IsAlreadyExists(err) {
-		mService, err = kClient.CoreV1().Services(ns).Get(ctx, "metrics", metav1.GetOptions{})
-		if err != nil {
-			return nil, err
+		curService, getErr := kClient.CoreV1().Services(ns).Get(ctx, newService.Name, metav1.GetOptions{})
+		if getErr != nil {
+			return nil, getErr
 		}
+		returnService = curService
+
+		// Needs update?
+		if !reflect.DeepEqual(curService.Spec, newService.Spec) {
+			serviceCopy := curService.DeepCopy()
+			serviceCopy.Spec = newService.Spec
+			updatedService, updateErr := kClient.CoreV1().Services(ns).Update(ctx, serviceCopy, metav1.UpdateOptions{})
+			if updateErr != nil {
+				return nil, updateErr
+			}
+			returnService = updatedService
+		}
+	} else {
+		returnService = createdService
 	}
 
 	// Ensure the serving-cert secret for metrics is available, we have to exit and restart if not
@@ -395,7 +405,7 @@ func ensureMetricsServiceAndSecret(ctx context.Context, kClient *kubernetes.Clie
 		}
 	}
 
-	return mService, nil
+	return returnService, nil
 }
 
 func getSchedulingInfo(ctx context.Context, cli client.Reader) (utils.CtlplaneSchedulingInfo, error) {
@@ -404,7 +414,7 @@ func getSchedulingInfo(ctx context.Context, cli client.Reader) (utils.CtlplaneSc
 		Namespace: common.GetComplianceOperatorNamespace(),
 	}
 	pod := corev1.Pod{}
-	log.Info("Deriving scheduling info from pod",
+	setupLog.Info("Deriving scheduling info from pod",
 		"Pod.Name", key.Name, "Pod.Namespace", key.Namespace)
 	if err := cli.Get(ctx, key, &pod); err != nil {
 		return utils.CtlplaneSchedulingInfo{}, err
@@ -435,7 +445,7 @@ func ensureDefaultProfileBundles(
 	var lastErr error
 	defaultProducts, isSupported := defaultProductsPerPlatform[platform]
 	if !isSupported {
-		log.Info("No ProfileBundle defaults for unknown product." +
+		setupLog.Info("No ProfileBundle defaults for unknown product." +
 			" Skipping defaults creation.")
 		return nil
 	}
@@ -451,7 +461,7 @@ func ensureDefaultProfileBundles(
 					ContentFile:  fmt.Sprintf("ssg-%s-ds.xml", prod),
 				},
 			}
-			log.Info("Ensuring ProfileBundle is available",
+			setupLog.Info("Ensuring ProfileBundle is available",
 				"ProfileBundle.Name", pb.GetName(),
 				"ProfileBundle.Namespace", pb.GetNamespace())
 			if err := ensureSupportedProfileBundle(ctx, crclient, pb); err != nil {
@@ -498,7 +508,7 @@ func ensureDefaultScanSettings(
 			},
 			Roles: roles,
 		}
-		log.Info("Ensuring ScanSetting is available",
+		setupLog.Info("Ensuring ScanSetting is available",
 			"ScanSetting.Name", d.GetName(),
 			"ScanSetting.Namespace", d.GetNamespace())
 		derr := crclient.Create(ctx, d)
@@ -524,7 +534,7 @@ func ensureDefaultScanSettings(
 			},
 			Roles: roles,
 		}
-		log.Info("Ensuring ScanSetting is available",
+		setupLog.Info("Ensuring ScanSetting is available",
 			"ScanSetting.Name", d.GetName(),
 			"ScanSetting.Namespace", d.GetNamespace())
 		aerr := crclient.Create(ctx, a)
@@ -544,15 +554,17 @@ func getDefaultRoles(platform PlatformType) []string {
 }
 
 func generateOperatorServiceMonitor(service *v1.Service, namespace string) *monitoring.ServiceMonitor {
-	serviceMonitor := metrics.GenerateServiceMonitor(service)
+	serviceMonitor := GenerateServiceMonitor(service)
 	for i := range serviceMonitor.Spec.Endpoints {
 		if serviceMonitor.Spec.Endpoints[i].Port == ctrlMetrics.ControllerMetricsServiceName {
 			serviceMonitor.Spec.Endpoints[i].Path = ctrlMetrics.HandlerPath
 			serviceMonitor.Spec.Endpoints[i].Scheme = "https"
 			serviceMonitor.Spec.Endpoints[i].BearerTokenFile = serviceMonitorBearerTokenFile
 			serviceMonitor.Spec.Endpoints[i].TLSConfig = &monitoring.TLSConfig{
-				CAFile:     serviceMonitorTLSCAFile,
-				ServerName: "metrics." + namespace + ".svc",
+				SafeTLSConfig: monitoring.SafeTLSConfig{
+					ServerName: "metrics." + namespace + ".svc",
+				},
+				CAFile: serviceMonitorTLSCAFile,
 			}
 		}
 	}
@@ -586,7 +598,7 @@ func createOrUpdateServiceMonitor(ctx context.Context, mClient *monclientv1.Moni
 // metrics paths.
 func handleServiceMonitor(ctx context.Context, cfg *rest.Config, mClient *monclientv1.MonitoringV1Client,
 	namespace string, service *v1.Service) error {
-	ok, err := k8sutil.ResourceExists(discovery.NewDiscoveryClientForConfigOrDie(cfg),
+	ok, err := ResourceExists(discovery.NewDiscoveryClientForConfigOrDie(cfg),
 		"monitoring.coreos.com/v1", "ServiceMonitor")
 	if err != nil {
 		return err
@@ -599,32 +611,6 @@ func handleServiceMonitor(ctx context.Context, cfg *rest.Config, mClient *moncli
 	serviceMonitor := generateOperatorServiceMonitor(service, namespace)
 
 	return createOrUpdateServiceMonitor(ctx, mClient, namespace, serviceMonitor)
-}
-
-// serveCRMetrics gets the Operator/CustomResource GVKs and generates metrics based on those types.
-// It serves those metrics on "http://metricsHost:operatorMetricsPort".
-func serveCRMetrics(cfg *rest.Config, operatorNs string) error {
-	// The function below returns a list of filtered operator/CR specific GVKs. For more control, override the GVK list below
-	// with your own custom logic. Note that if you are adding third party API schemas, probably you will need to
-	// customize this implementation to avoid permissions issues.
-	filteredGVK, err := k8sutil.GetGVKsFromAddToScheme(apis.AddToScheme)
-	if err != nil {
-		return err
-	}
-
-	// The metrics will be generated from the namespaces which are returned here.
-	// NOTE that passing nil or an empty list of namespaces in GenerateAndServeCRMetrics will result in an error.
-	ns, err := kubemetrics.GetNamespacesForMetrics(operatorNs)
-	if err != nil {
-		return err
-	}
-
-	// Generate and serve custom resource specific metrics.
-	err = kubemetrics.GenerateAndServeCRMetrics(cfg, ns, filteredGVK, metricsHost, operatorMetricsPort)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // createNonComplianceAlert tries to create the default PrometheusRule. Returns nil.
@@ -658,7 +644,7 @@ func createNonComplianceAlert(ctx context.Context, client *monclientv1.Monitorin
 		},
 	}, metav1.CreateOptions{})
 	if createErr != nil && !kerr.IsAlreadyExists(createErr) {
-		log.Info("could not create prometheus rule for alert", createErr)
+		setupLog.Info("could not create prometheus rule for alert", createErr)
 	}
 	return nil
 }

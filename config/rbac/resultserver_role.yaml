@@ -1,0 +1,22 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: resultserver
+rules:
+  - apiGroups:
+      - security.openshift.io
+    resourceNames:
+      - restricted
+    resources:
+      - securitycontextconstraints
+    verbs:
+      - use
+  - apiGroups:
+      - scheduling.k8s.io
+    resources:
+      - priorityclasses
+    verbs:
+      - get
+      - list
+      - watch

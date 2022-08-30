@@ -1,4 +1,48 @@
 # Changelog
+## [v0.12.7](https://github.com/itchyny/gojq/compare/v0.12.6..v0.12.7) (2022-03-01)
+* fix precedence of try expression against operators (`try 0 * error(0)`)
+* fix iterator suffix with optional operator (`0 | .x[]?`)
+* fix stream option with slurp option or `input`, `inputs` functions
+* fix the command flag parser to support equal sign in short options with argument
+* fix string conversion of query including empty strings in module and import metadata
+* improve performance of `isempty` function
+
+## [v0.12.6](https://github.com/itchyny/gojq/compare/v0.12.5..v0.12.6) (2021-12-01)
+* implement options for consuming remaining arguments (`--args`, `--jsonargs`, `$ARGS.positional`)
+* fix `delpaths` function with overlapped paths
+* fix `--exit-status` flag with `halt`, `halt_error` functions
+* fix `input_filename` function with null input option
+* fix path value validation for `nan`
+* fix crash on branch optimization (`if 0 then . else 0|0 end`)
+* add validation on regular expression flags to reject unsupported ones
+* improve performance of `range`, `join`, `flatten` functions
+* improve constant value optimization for object with quoted keys
+* remove dependency on forked `go-flags` package
+
+## [v0.12.5](https://github.com/itchyny/gojq/compare/v0.12.4..v0.12.5) (2021-09-01)
+* implement `input_filename` function for the command
+* fix priority bug of declared functions and arguments (`def g: 1; def f(g): g; f(2)`)
+* fix label handling to catch the correct break error (`first((0, 0) | first(0))`)
+* fix `null|error` and `error(null)` to behave like `empty` (`null | [0, error, error(null), 1]`)
+* fix integer division to keep precision when divisible (`1 / 1 * 1000000000000000000000`)
+* fix modulo operator on negative number and large number (`(-1) % 10000000000`)
+* fix combination of slurp (`--slurp`) and raw input option (`--raw-input`) to keep newlines
+* change the default module paths to `~/.jq`, `$ORIGIN/../lib/gojq`, `$ORIGIN/lib`
+  where `$ORIGIN` is the directory where the executable is located in
+* improve command argument parser to recognize query with leading hyphen,
+  allow hyphen for standard input, and force posix style on Windows
+* improve `@base64d` to allow input without padding characters
+* improve `fromdate`, `fromdateiso8601` to parse date time strings with timezone offset
+* improve `halt_error` to print error values without prefix
+* improve `sub`, `gsub` to allow the replacement string emitting multiple values
+* improve encoding `\b` and `\f` in strings
+* improve module loader for search path in query, and absolute path
+* improve query lexer to support string literal including newlines
+* improve performance of `index`, `rindex`, `indices`, `transpose`, and `walk` functions
+* improve performance of value preview in errors and debug mode
+* improve runtime performance including tail call optimization
+* switch Docker base image to `distroless/static:debug`
+
 ## [v0.12.4](https://github.com/itchyny/gojq/compare/v0.12.3..v0.12.4) (2021-06-01)
 * fix numeric conversion of large floating-point numbers in modulo operator
 * implement a compiler option for adding custom iterator functions

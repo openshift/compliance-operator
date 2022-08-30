@@ -1,7 +1,7 @@
 package apis
 
 import (
-	"github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 func init() {

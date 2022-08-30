@@ -9,9 +9,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 )
 
 const (
@@ -159,38 +159,38 @@ exit 0
 func createConfigMaps(r *ReconcileComplianceScan, scriptCmName, envCmName, platformEnvCmName string, scan *compv1alpha1.ComplianceScan) error {
 	cm := &corev1.ConfigMap{}
 
-	if err := r.client.Get(context.TODO(), types.NamespacedName{
+	if err := r.Client.Get(context.TODO(), types.NamespacedName{
 		Name:      scriptCmName,
 		Namespace: common.GetComplianceOperatorNamespace(),
 	}, cm); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
-		if err := r.client.Create(context.TODO(), defaultOpenScapScriptCm(scriptCmName, scan)); err != nil {
+		if err := r.Client.Create(context.TODO(), defaultOpenScapScriptCm(scriptCmName, scan)); err != nil {
 			return err
 		}
 	}
 
-	if err := r.client.Get(context.TODO(), types.NamespacedName{
+	if err := r.Client.Get(context.TODO(), types.NamespacedName{
 		Name:      envCmName,
 		Namespace: common.GetComplianceOperatorNamespace(),
 	}, cm); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
-		if err := r.client.Create(context.TODO(), defaultOpenScapEnvCm(envCmName, scan)); err != nil {
+		if err := r.Client.Create(context.TODO(), defaultOpenScapEnvCm(envCmName, scan)); err != nil {
 			return err
 		}
 	}
 
-	if err := r.client.Get(context.TODO(), types.NamespacedName{
+	if err := r.Client.Get(context.TODO(), types.NamespacedName{
 		Name:      platformEnvCmName,
 		Namespace: common.GetComplianceOperatorNamespace(),
 	}, cm); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
-		if err := r.client.Create(context.TODO(), platformOpenScapEnvCm(platformEnvCmName, scan)); err != nil {
+		if err := r.Client.Create(context.TODO(), platformOpenScapEnvCm(platformEnvCmName, scan)); err != nil {
 			return err
 		}
 	}

@@ -1,0 +1,24 @@
+# permissions for end users to edit complianceremediations.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: complianceremediation-editor-role
+rules:
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - complianceremediations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - complianceremediations/status
+  verbs:
+  - get

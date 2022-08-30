@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package main
+package manager
 
 import (
 	"bufio"
@@ -33,7 +33,6 @@ import (
 	backoff "github.com/cenkalti/backoff/v4"
 	"github.com/dsnet/compress/bzip2"
 	ocpcfgv1 "github.com/openshift/api/config/v1"
-	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -50,12 +49,13 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
-	"github.com/openshift/compliance-operator/pkg/xccdf"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/xccdf"
 )
 
 const (
@@ -65,7 +65,7 @@ const (
 	tailoredProfileSuffix          = "-tp"
 )
 
-var aggregatorCmd = &cobra.Command{
+var AggregatorCmd = &cobra.Command{
 	Use:   "aggregator",
 	Short: "Aggregate configMaps complianceRemediations",
 	Long:  "A tool to aggregate configMaps with scan results to complianceRemediation types",
@@ -73,8 +73,7 @@ var aggregatorCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(aggregatorCmd)
-	defineAggregatorFlags(aggregatorCmd)
+	defineAggregatorFlags(AggregatorCmd)
 }
 
 type aggregatorConfig struct {
@@ -114,7 +113,6 @@ func defineAggregatorFlags(cmd *cobra.Command) {
 	cmd.Flags().String("namespace", "openshift-compliance", "Running pod namespace.")
 
 	flags := cmd.Flags()
-	flags.AddFlagSet(zap.FlagSet())
 
 	// Add flags registered by imported packages (e.g. glog and
 	// controller-runtime)
@@ -127,7 +125,7 @@ func parseAggregatorConfig(cmd *cobra.Command) *aggregatorConfig {
 	conf.ScanName = getValidStringArg(cmd, "scan")
 	conf.Namespace = getValidStringArg(cmd, "namespace")
 
-	logf.SetLogger(zap.Logger())
+	logf.SetLogger(zap.New())
 
 	return &conf
 }
@@ -145,16 +143,16 @@ func getScanConfigMaps(crClient aggregatorCrClient, scan, namespace string) ([]v
 
 	err = crClient.getClient().List(context.TODO(), cMapList, inNs, withLabel)
 	if err != nil {
-		log.Error(err, "Error waiting for CMs of scan", "ComplianceScan.Name", scan)
+		cmdLog.Error(err, "Error waiting for CMs of scan", "ComplianceScan.Name", scan)
 		return nil, err
 	}
 
 	if len(cMapList.Items) == 0 {
-		log.Info("Scan has no results", "ComplianceScan.Name", scan)
+		cmdLog.Info("Scan has no results", "ComplianceScan.Name", scan)
 		return make([]v1.ConfigMap, 0), nil
 	}
 
-	log.Info("Scan has results", "ComplianceScan.Name", scan, "results-length", len(cMapList.Items))
+	cmdLog.Info("Scan has results", "ComplianceScan.Name", scan, "results-length", len(cMapList.Items))
 	return cMapList.Items, nil
 }
 
@@ -178,7 +176,7 @@ func parseResultRemediations(client runtimeclient.Client, scheme *runtime.Scheme
 
 	_, ok := cm.Annotations[configMapRemediationsProcessed]
 	if ok {
-		log.Info("ConfigMap already processed", "ConfigMap.Name", cm.Name)
+		cmdLog.Info("ConfigMap already processed", "ConfigMap.Name", cm.Name)
 		return nil, "", nil
 	}
 
@@ -189,7 +187,7 @@ func parseResultRemediations(client runtimeclient.Client, scheme *runtime.Scheme
 
 	_, ok = cm.Annotations[configMapCompressed]
 	if ok {
-		log.Info("Results are compressed\n")
+		cmdLog.Info("Results are compressed\n")
 		scanResult, err := readCompressedData(cmScanResult)
 		if err != nil {
 			return nil, "", err
@@ -218,7 +216,7 @@ func parseResultRemediations(client runtimeclient.Client, scheme *runtime.Scheme
 		tp := &compv1alpha1.TailoredProfile{}
 		err = client.Get(context.TODO(), types.NamespacedName{Name: tailoredProfileName, Namespace: namespace}, tp)
 		if err != nil {
-			log.Info("GettingTailoredProfile", "TailoredProfile.Name", tailoredProfileName, "error", err.Error())
+			cmdLog.Info("GettingTailoredProfile", "TailoredProfile.Name", tailoredProfileName, "error", err.Error())
 		}
 		manualRules = xccdf.GetManualRules(tp)
 	}
@@ -303,7 +301,7 @@ func createOrUpdateOneResult(crClient aggregatorCrClient, owner metav1.Object, l
 	kind := res.GetObjectKind()
 
 	if err := controllerutil.SetControllerReference(owner, res, crClient.getScheme()); err != nil {
-		log.Error(err, "Failed to set ownership", "kind", kind.GroupVersionKind().Kind)
+		cmdLog.Error(err, "Failed to set ownership", "kind", kind.GroupVersionKind().Kind)
 		return err
 	}
 
@@ -317,20 +315,20 @@ func createOrUpdateOneResult(crClient aggregatorCrClient, owner metav1.Object, l
 	err := backoff.Retry(func() error {
 		var err error
 		if !exists {
-			log.Info("Creating object", "kind", kind, "name", name)
+			cmdLog.Info("Creating object", "kind", kind, "name", name)
 			err = crClient.getClient().Create(context.TODO(), res)
 		} else {
-			log.Info("Updating object", "kind", kind, "name", name)
+			cmdLog.Info("Updating object", "kind", kind, "name", name)
 			err = crClient.getClient().Update(context.TODO(), res)
 		}
 		if err != nil && !errors.IsAlreadyExists(err) {
-			log.Error(err, "Retrying with a backoff because of an error while creating or updating object")
+			cmdLog.Error(err, "Retrying with a backoff because of an error while creating or updating object")
 			return err
 		}
 		return nil
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 	if err != nil {
-		log.Error(err, "Failed to create an object", "kind", kind.GroupVersionKind().Kind)
+		cmdLog.Error(err, "Failed to create an object", "kind", kind.GroupVersionKind().Kind)
 		return err
 	}
 	return nil
@@ -427,7 +425,7 @@ func getOpenShiftVersion(
 		},
 		backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries),
 		func(err error, in time.Duration) {
-			log.Info(fmt.Sprintf("Errored while getting OCP version: %s. Retrying in %s", err, in))
+			cmdLog.Info(fmt.Sprintf("Errored while getting OCP version: %s. Retrying in %s", err, in))
 		})
 
 	if vGetErr != nil {
@@ -538,15 +536,15 @@ func getCheckResultAnnotations(cr *compv1alpha1.ComplianceCheckResult, resultAnn
 }
 
 func createResults(crClient aggregatorCrClient, scan *compv1alpha1.ComplianceScan, consistentResults []*utils.ParseResultContextItem) error {
-	log.Info("Will create result objects", "objects", len(consistentResults))
+	cmdLog.Info("Will create result objects", "objects", len(consistentResults))
 	if len(consistentResults) == 0 {
-		log.Info("Nothing to create")
+		cmdLog.Info("Nothing to create")
 		return nil
 	}
 
 	for _, pr := range consistentResults {
 		if pr == nil || pr.CheckResult == nil {
-			log.Info("nil result or result.check, this shouldn't happen")
+			cmdLog.Info("nil result or result.check, this shouldn't happen")
 			continue
 		}
 
@@ -557,7 +555,7 @@ func createResults(crClient aggregatorCrClient, scan *compv1alpha1.ComplianceSca
 		foundCheckResult := &compv1alpha1.ComplianceCheckResult{}
 		// Copy type metadata so dynamic client copies data correctly
 		foundCheckResult.TypeMeta = pr.CheckResult.TypeMeta
-		log.Info("Getting ComplianceCheckResult", "ComplianceCheckResult.Name", crkey.Name,
+		cmdLog.Info("Getting ComplianceCheckResult", "ComplianceCheckResult.Name", crkey.Name,
 			"ComplianceCheckResult.Namespace", crkey.Namespace)
 		checkResultExists := getObjectIfFound(crClient, crkey, foundCheckResult)
 		if checkResultExists {
@@ -598,13 +596,13 @@ func handleRemediation(crClient aggregatorCrClient, rem *compv1alpha1.Compliance
 	remTargetObj := rem.Spec.Current.Object
 	// Skipping is harmless
 	if skip, why := shouldSkipRemediation(scan, rem, crClient); skip {
-		log.Info(why, "Remediation", crkey.Name)
+		cmdLog.Info(why, "Remediation", crkey.Name)
 		return nil
 	}
 
 	// this is a validation and should warn the user
 	if canCreate, why := canCreateRemediationObject(scan, remTargetObj); !canCreate {
-		log.Info(why, "Remediation", crkey.Name)
+		cmdLog.Info(why, "Remediation", crkey.Name)
 		crClient.getRecorder().Event(scan, v1.EventTypeWarning, "CannotRemediate", why+" Remediation:"+crkey.Name)
 		return nil
 	}
@@ -619,7 +617,7 @@ func handleRemediation(crClient aggregatorCrClient, rem *compv1alpha1.Compliance
 	foundRemediation := &compv1alpha1.ComplianceRemediation{}
 	// Copy type metadata so dynamic client copies data correctly
 	foundRemediation.TypeMeta = rem.TypeMeta
-	log.Info("Getting ComplianceRemediation", "ComplianceRemediation.Name", crkey.Name,
+	cmdLog.Info("Getting ComplianceRemediation", "ComplianceRemediation.Name", crkey.Name,
 		"ComplianceRemediation.Namespace", crkey.Namespace)
 	remExists := getObjectIfFound(crClient, remkey, foundRemediation)
 	if remExists {
@@ -629,7 +627,7 @@ func handleRemediation(crClient aggregatorCrClient, rem *compv1alpha1.Compliance
 		if foundRemediation.Status.ApplicationState == compv1alpha1.RemediationApplied ||
 			foundRemediation.Status.ApplicationState == compv1alpha1.RemediationOutdated {
 			if !foundRemediation.RemediationPayloadDiffers(rem) {
-				log.Info("Not updating passing remediation that was the same between runs", "ComplianceRemediation.Name", foundRemediation.Name)
+				cmdLog.Info("Not updating passing remediation that was the same between runs", "ComplianceRemediation.Name", foundRemediation.Name)
 				return nil
 			}
 
@@ -676,7 +674,7 @@ func updateRemediationStatus(crClient aggregatorCrClient, parsedRemediation *com
 	remkey := getObjKey(parsedRemediation.GetName(), parsedRemediation.GetNamespace())
 	foundRemediation := &compv1alpha1.ComplianceRemediation{}
 	// Copy type metadata so dynamic client copies data correctly
-	log.Info("Updating remediation status", "ComplianceRemediation.Name", remkey.Name,
+	cmdLog.Info("Updating remediation status", "ComplianceRemediation.Name", remkey.Name,
 		"ComplianceRemediation.Namespace", remkey.Namespace)
 
 	return backoff.Retry(func() error {
@@ -699,14 +697,14 @@ func getObjKey(name, ns string) types.NamespacedName {
 }
 
 // Returns whether or not an object exists, and updates the data in the obj.
-func getObjectIfFound(crClient aggregatorCrClient, key types.NamespacedName, obj runtime.Object) bool {
+func getObjectIfFound(crClient aggregatorCrClient, key types.NamespacedName, obj runtimeclient.Object) bool {
 	var found bool
 	err := backoff.Retry(func() error {
 		err := crClient.getClient().Get(context.TODO(), key, obj)
 		if errors.IsNotFound(err) {
 			return nil
 		} else if err != nil {
-			log.Error(err, "Retrying with a backoff because of an error while getting object")
+			cmdLog.Error(err, "Retrying with a backoff because of an error while getting object")
 			return err
 		}
 		found = true
@@ -714,7 +712,7 @@ func getObjectIfFound(crClient aggregatorCrClient, key types.NamespacedName, obj
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 
 	if err != nil {
-		log.Error(err, "Couldn't get object", "Name", key.Name, "Namespace", key.Namespace)
+		cmdLog.Error(err, "Couldn't get object", "Name", key.Name, "Namespace", key.Namespace)
 	}
 	return found
 }
@@ -724,19 +722,19 @@ func aggregator(cmd *cobra.Command, args []string) {
 
 	cfg, err := config.GetConfig()
 	if err != nil {
-		log.Error(err, "")
+		cmdLog.Error(err, "")
 		os.Exit(1)
 	}
 
 	crclient, err := createAggregatorCrClient(cfg)
 	if err != nil {
-		log.Error(err, "Cannot create kube client for compliance-operator types")
+		cmdLog.Error(err, "Cannot create kube client for compliance-operator types")
 		os.Exit(1)
 	}
 
 	err = crclient.useEventRecorder("aggregator", cfg)
 	if err != nil {
-		log.Error(err, "Cannot create event recorder")
+		cmdLog.Error(err, "Cannot create event recorder")
 		os.Exit(1)
 	}
 
@@ -746,7 +744,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 		Name:      aggregatorConf.ScanName,
 	}, scan)
 	if err != nil {
-		log.Error(err, "Cannot retrieve the scan instance",
+		cmdLog.Error(err, "Cannot retrieve the scan instance",
 			"ComplianceScan.Name", aggregatorConf.ScanName,
 			"ComplianceScan.Namespace", aggregatorConf.Namespace,
 		)
@@ -756,13 +754,13 @@ func aggregator(cmd *cobra.Command, args []string) {
 	// Find all the configmaps for a scan
 	configMaps, err := getScanConfigMaps(crclient, aggregatorConf.ScanName, common.GetComplianceOperatorNamespace())
 	if err != nil {
-		log.Error(err, "getScanConfigMaps failed")
+		cmdLog.Error(err, "getScanConfigMaps failed")
 		os.Exit(1)
 	}
 
 	contentFile, err := readContent(aggregatorConf.Content)
 	if err != nil {
-		log.Error(err, "Cannot read the content")
+		cmdLog.Error(err, "Cannot read the content")
 		os.Exit(1)
 	}
 	// #nosec
@@ -770,7 +768,7 @@ func aggregator(cmd *cobra.Command, args []string) {
 	bufContentFile := bufio.NewReader(contentFile)
 	contentDom, err := utils.ParseContent(bufContentFile)
 	if err != nil {
-		log.Error(err, "Cannot parse the content")
+		cmdLog.Error(err, "Cannot parse the content")
 		os.Exit(1)
 	}
 
@@ -779,16 +777,16 @@ func aggregator(cmd *cobra.Command, args []string) {
 	// For each configmap, create a list of remediations
 	for i := range configMaps {
 		cm := &configMaps[i]
-		log.Info("processing ConfigMap", "ConfigMap.Name", cm.Name)
+		cmdLog.Info("processing ConfigMap", "ConfigMap.Name", cm.Name)
 
 		cmParsedResults, source, err := parseResultRemediations(crclient.getClient(), crclient.getScheme(), aggregatorConf.ScanName, aggregatorConf.Namespace, contentDom, cm)
 		if err != nil {
-			log.Error(err, "Cannot parse ConfigMap into remediations", "ConfigMap.Name", cm.Name)
+			cmdLog.Error(err, "Cannot parse ConfigMap into remediations", "ConfigMap.Name", cm.Name)
 		} else if cmParsedResults == nil {
-			log.Info("Either no parsed results found in result or result already processed")
+			cmdLog.Info("Either no parsed results found in result or result already processed")
 			continue
 		}
-		log.Info("ConfigMap contained parsed results", "ConfigMap.Name", cm.Name, "results", len(cmParsedResults))
+		cmdLog.Info("ConfigMap contained parsed results", "ConfigMap.Name", cm.Name, "results", len(cmParsedResults))
 
 		prCtx.AddResults(source, cmParsedResults)
 		// If the CM was processed, annotate it with the result
@@ -801,18 +799,18 @@ func aggregator(cmd *cobra.Command, args []string) {
 	// At this point either scanRemediations is nil or contains a list
 	// of remediations for this scan
 	// Create the remediations
-	log.Info("Creating result objects")
+	cmdLog.Info("Creating result objects")
 	if err := createResults(crclient, scan, consistentParsedResults); err != nil {
-		log.Error(err, "Could not create remediation objects")
+		cmdLog.Error(err, "Could not create remediation objects")
 		os.Exit(1)
 	}
 
 	// Annotate configMaps, so we don't need to re-parse them
-	log.Info("Annotating ConfigMaps")
+	cmdLog.Info("Annotating ConfigMaps")
 	for idx := range configMaps {
 		err = markConfigMapAsProcessed(crclient, &configMaps[idx])
 		if err != nil {
-			log.Error(err, "Cannot annotate the ConfigMap")
+			cmdLog.Error(err, "Cannot annotate the ConfigMap")
 			os.Exit(1)
 		}
 	}

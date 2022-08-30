@@ -153,7 +153,6 @@ type RawResultStorageSettings struct {
 }
 
 // ComplianceScanSettings groups together settings of a ComplianceScan
-// +k8s:openapi-gen=true
 type ComplianceScanSettings struct {
 	// Enable debug logging of workloads and OpenSCAP
 	Debug bool `json:"debug,omitempty"`
@@ -201,7 +200,6 @@ type ComplianceScanSettings struct {
 }
 
 // ComplianceScanSpec defines the desired state of ComplianceScan
-// +k8s:openapi-gen=true
 type ComplianceScanSpec struct {
 	// The type of Compliance scan.
 	// +kubebuilder:default=Node
@@ -234,7 +232,6 @@ type ComplianceScanSpec struct {
 }
 
 // ComplianceScanStatus defines the observed state of ComplianceScan
-// +k8s:openapi-gen=true
 type ComplianceScanStatus struct {
 	// Is the phase where the scan is at. Normally, one must wait for the scan
 	// to reach the phase DONE.
@@ -276,12 +273,11 @@ type StorageReference struct {
 	APIVersion string `json:"apiVersion,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ComplianceScan represents a scan with a certain configuration that will be
 // applied to objects of a certain entity in the host. These could be nodes
 // that apply to a certain nodeSelector, or the cluster itself.
-// +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=compliancescans,scope=Namespaced,shortName=scans;scan
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=`.status.phase`
@@ -353,7 +349,7 @@ func (cs *ComplianceScan) IsStrictNodeScan() bool {
 	return *cs.Spec.StrictNodeScan
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ComplianceScanList contains a list of ComplianceScan
 type ComplianceScanList struct {

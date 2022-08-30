@@ -16,8 +16,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/utils"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 )
 
 const (
@@ -73,9 +73,9 @@ func serverCertSecret(instance *compv1alpha1.ComplianceScan, ca, caKey []byte, n
 	return certSecret(getServerCertSecretName(instance), namespace, cert, key, ca), nil
 }
 
-// Issue a client cert using the instance Root CA (it needs to be created prior to calling this function).
+// Issue a Client cert using the instance Root CA (it needs to be created prior to calling this function).
 func makeClientCertSecret(c client.Client, instance *compv1alpha1.ComplianceScan, namespace string) (*v1.Secret, error) {
-	// Creating the client cert, first fetch the root CA.
+	// Creating the Client cert, first fetch the root CA.
 	caSecret := &corev1.Secret{}
 	err := c.Get(context.TODO(), types.NamespacedName{Name: RootCAPrefix + instance.Name, Namespace: namespace}, caSecret)
 	if err != nil {
@@ -85,7 +85,7 @@ func makeClientCertSecret(c client.Client, instance *compv1alpha1.ComplianceScan
 	return clientCertSecret(instance, caSecret.Data[corev1.TLSCertKey], caSecret.Data[corev1.TLSPrivateKeyKey], namespace)
 }
 
-// Issue a client cert (signed by caKey) for instance and return in a secret. Separated from makeClientCertSecret() to help with testing.
+// Issue a Client cert (signed by caKey) for instance and return in a secret. Separated from makeClientCertSecret() to help with testing.
 func clientCertSecret(instance *compv1alpha1.ComplianceScan, ca, caKey []byte, namespace string) (*v1.Secret, error) {
 	cert, key, err := utils.NewClientCert(ca, caKey, instance.Name+ClientCertInstanceSuffix, CertValidityDays)
 	if err != nil {

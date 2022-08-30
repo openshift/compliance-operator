@@ -45,7 +45,7 @@ type VariablePayload struct {
 	Selections []ValueSelection `json:"selections,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // Variable describes a tunable in the XCCDF profile
 // +kubebuilder:resource:path=variables,scope=Namespaced,shortName=var
@@ -83,7 +83,7 @@ func (v *Variable) validateType(val string) error {
 	return err
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // VariableList contains a list of Variable
 type VariableList struct {

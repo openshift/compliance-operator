@@ -67,7 +67,7 @@ const (
 	CheckResultSeverityHigh    ComplianceCheckResultSeverity = "high"
 )
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ComplianceCheckResult represent a result of a single compliance "test"
 // +kubebuilder:resource:path=compliancecheckresults,scope=Namespaced,shortName=ccr;checkresults;checkresult
@@ -95,7 +95,7 @@ type ComplianceCheckResult struct {
 	ValuesUsed []string `json:"valuesUsed,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ComplianceCheckResultList contains a list of ComplianceCheckResult
 type ComplianceCheckResultList struct {

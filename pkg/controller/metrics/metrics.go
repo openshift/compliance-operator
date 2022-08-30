@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 const (
@@ -33,6 +34,7 @@ const (
 
 	HandlerPath                  = "/metrics-co"
 	ControllerMetricsServiceName = "metrics-co"
+	ControllerMetricsPort        = 8585
 	MetricsAddrListen            = ":8585"
 )
 
@@ -132,7 +134,7 @@ func (m *Metrics) Register() error {
 	return nil
 }
 
-func (m *Metrics) Start(s <-chan struct{}) error {
+func (m *Metrics) Start(ctx context.Context) error {
 	m.log.Info("Starting to serve controller metrics")
 	http.Handle(HandlerPath, promhttp.Handler())
 
@@ -150,7 +152,6 @@ func (m *Metrics) Start(s <-chan struct{}) error {
 		// unhandled on purpose, we don't want to exit the operator.
 		m.log.Error(err, "Metrics service failed")
 	}
-	<-s
 	return nil
 }
 

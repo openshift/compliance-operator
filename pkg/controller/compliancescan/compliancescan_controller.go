@@ -5,6 +5,7 @@ import (
 	goerrors "errors"
 	"fmt"
 	"math"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -17,15 +18,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
-	"github.com/openshift/compliance-operator/pkg/utils"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 )
 
 var log = logf.Log.WithName("scanctrl")
@@ -51,6 +52,12 @@ const (
 	requeueAfterDefault = 10 * time.Second
 )
 
+func (r *ReconcileComplianceScan) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&compv1alpha1.ComplianceScan{}).
+		Complete(r)
+}
+
 // Add creates a new ComplianceScan Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager, met *metrics.Metrics, si utils.CtlplaneSchedulingInfo) error {
@@ -60,10 +67,10 @@ func Add(mgr manager.Manager, met *metrics.Metrics, si utils.CtlplaneSchedulingI
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager, met *metrics.Metrics, si utils.CtlplaneSchedulingInfo) reconcile.Reconciler {
 	return &ReconcileComplianceScan{
-		client:         mgr.GetClient(),
-		scheme:         mgr.GetScheme(),
-		recorder:       mgr.GetEventRecorderFor("scanctrl"),
-		metrics:        met,
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		Recorder:       mgr.GetEventRecorderFor("scanctrl"),
+		Metrics:        met,
 		schedulingInfo: si,
 	}
 }
@@ -90,29 +97,47 @@ var _ reconcile.Reconciler = &ReconcileComplianceScan{}
 
 // ReconcileComplianceScan reconciles a ComplianceScan object
 type ReconcileComplianceScan struct {
-	// This client, initialized using mgr.Client() above, is a split client
+	// This Client, initialized using mgr.Client() above, is a split Client
 	// that reads objects from the cache and writes to the apiserver
-	client   client.Client
-	scheme   *runtime.Scheme
-	recorder record.EventRecorder
-	metrics  *metrics.Metrics
+	Client   client.Client
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
+	Metrics  *metrics.Metrics
 	// helps us schedule platform scans on the nodes labeled for the
 	// compliance operator's control plane
 	schedulingInfo utils.CtlplaneSchedulingInfo
 }
+
+// Permissions for all controllers (this means the `compliance-operator` roles and SA). When a controller needs permissions,
+// add them here and NOT in config/rbac, and controller-gen will update the files based on this.
+//
+//+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,persistentvolumes,verbs=watch,create,get,list,delete
+//+kubebuilder:rbac:groups="",resources=pods,configmaps,events,verbs=create,get,list,watch,patch,update,delete,deletecollection
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=create,get,list,update,watch,delete
+//+kubebuilder:rbac:groups=apps,resources=replicasets,deployments,verbs=get,list,watch,create,update,delete
+//+kubebuilder:rbac:groups=compliance.openshift.io,resources=compliancescans,verbs=create,watch,patch,get,list
+//+kubebuilder:rbac:groups=compliance.openshift.io,resources=*,verbs=*
+//+kubebuilder:rbac:groups=apps,resourceNames=compliance-operator,resources=deployments/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=services,services/finalizers,verbs=create,get,update,delete
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get,create,update
+//+kubebuilder:rbac:groups=apps,resourceNames=compliance-operator,resources=deployments/finalizers,verbs=update
+//+kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get,list,watch,create,delete,update
+//+kubebuilder:rbac:groups=batch,resources=jobs,verbs=deletecollection
+//+kubebuilder:rbac:groups=image.openshift.io,resources=imagestreamtags,verbs=get,list,watch
+//+kubebuilder:rbac:groups=scheduling.k8s.io,resources=priorityclasses,verbs=get,list,watch
 
 // Reconcile reads that state of the cluster for a ComplianceScan object and makes changes based on the state read
 // and what is in the ComplianceScan.Spec
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *ReconcileComplianceScan) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling ComplianceScan")
 
 	// Fetch the ComplianceScan instance
 	instance := &compv1alpha1.ComplianceScan{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
+	err := r.Client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -131,7 +156,7 @@ func (r *ReconcileComplianceScan) Reconcile(request reconcile.Request) (reconcil
 		// registering our finalizer.
 		if !common.ContainsFinalizer(instance.ObjectMeta.Finalizers, compv1alpha1.ScanFinalizer) {
 			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, compv1alpha1.ScanFinalizer)
-			if err := r.client.Update(context.TODO(), instance); err != nil {
+			if err := r.Client.Update(context.TODO(), instance); err != nil {
 				return reconcile.Result{}, err
 			}
 		}
@@ -185,11 +210,11 @@ func (r *ReconcileComplianceScan) validate(instance *compv1alpha1.ComplianceScan
 	if instance.Status.Phase == "" {
 		instanceCopy := instance.DeepCopy()
 		instanceCopy.Status.Phase = compv1alpha1.PhasePending
-		updateErr := r.client.Status().Update(context.TODO(), instanceCopy)
+		updateErr := r.Client.Status().Update(context.TODO(), instanceCopy)
 		if updateErr != nil {
 			return false, updateErr
 		}
-		r.metrics.IncComplianceScanStatus(instanceCopy.Name, instanceCopy.Status)
+		r.Metrics.IncComplianceScanStatus(instanceCopy.Name, instanceCopy.Status)
 		return false, nil
 	}
 
@@ -197,23 +222,23 @@ func (r *ReconcileComplianceScan) validate(instance *compv1alpha1.ComplianceScan
 	if instance.Spec.ScanType == "" {
 		instanceCopy := instance.DeepCopy()
 		instanceCopy.Spec.ScanType = compv1alpha1.ScanTypeNode
-		err := r.client.Update(context.TODO(), instanceCopy)
+		err := r.Client.Update(context.TODO(), instanceCopy)
 		return false, err
 	}
 
 	// validate scan type
 	if _, err := instance.GetScanTypeIfValid(); err != nil {
-		r.recorder.Event(instance, corev1.EventTypeWarning, "InvalidScanType",
+		r.Recorder.Event(instance, corev1.EventTypeWarning, "InvalidScanType",
 			"The scan type was invalid")
 		instanceCopy := instance.DeepCopy()
 		instanceCopy.Status.Result = compv1alpha1.ResultError
 		instanceCopy.Status.ErrorMessage = fmt.Sprintf("Scan type '%s' is not valid", instance.Spec.ScanType)
 		instanceCopy.Status.Phase = compv1alpha1.PhaseDone
-		updateErr := r.client.Status().Update(context.TODO(), instanceCopy)
+		updateErr := r.Client.Status().Update(context.TODO(), instanceCopy)
 		if updateErr != nil {
 			return false, updateErr
 		}
-		r.metrics.IncComplianceScanStatus(instanceCopy.Name, instanceCopy.Status)
+		r.Metrics.IncComplianceScanStatus(instanceCopy.Name, instanceCopy.Status)
 		return false, nil
 	}
 
@@ -221,14 +246,14 @@ func (r *ReconcileComplianceScan) validate(instance *compv1alpha1.ComplianceScan
 	if instance.Spec.RawResultStorage.Size == "" {
 		instanceCopy := instance.DeepCopy()
 		instanceCopy.Spec.RawResultStorage.Size = compv1alpha1.DefaultRawStorageSize
-		err := r.client.Update(context.TODO(), instanceCopy)
+		err := r.Client.Update(context.TODO(), instanceCopy)
 		return false, err
 	}
 
 	if len(instance.Spec.RawResultStorage.PVAccessModes) == 0 {
 		instanceCopy := instance.DeepCopy()
 		instanceCopy.Spec.RawResultStorage.PVAccessModes = defaultAccessMode
-		err := r.client.Update(context.TODO(), instanceCopy)
+		err := r.Client.Update(context.TODO(), instanceCopy)
 		return false, err
 	}
 
@@ -238,11 +263,11 @@ func (r *ReconcileComplianceScan) validate(instance *compv1alpha1.ComplianceScan
 		instanceCopy.Status.ErrorMessage = fmt.Sprintf("Error parsing RawResultsStorageSize: %s", err)
 		instanceCopy.Status.Result = compv1alpha1.ResultError
 		instanceCopy.Status.Phase = compv1alpha1.PhaseDone
-		err := r.client.Status().Update(context.TODO(), instanceCopy)
+		err := r.Client.Status().Update(context.TODO(), instanceCopy)
 		if err != nil {
 			return false, err
 		}
-		r.metrics.IncComplianceScanStatus(instanceCopy.Name, instanceCopy.Status)
+		r.Metrics.IncComplianceScanStatus(instanceCopy.Name, instanceCopy.Status)
 		return false, nil
 	}
 
@@ -256,14 +281,14 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 	if instance.NeedsRescan() {
 		instanceCopy := instance.DeepCopy()
 		delete(instanceCopy.Annotations, compv1alpha1.ComplianceScanRescanAnnotation)
-		err := r.client.Update(context.TODO(), instanceCopy)
+		err := r.Client.Update(context.TODO(), instanceCopy)
 		return reconcile.Result{}, err
 	}
 
 	// Update the scan instance, the next phase is running
 	instance.Status.Phase = compv1alpha1.PhaseLaunching
 	instance.Status.Result = compv1alpha1.ResultNotAvailable
-	err := r.client.Status().Update(context.TODO(), instance)
+	err := r.Client.Status().Update(context.TODO(), instance)
 	if err != nil {
 		logger.Error(err, "Cannot update the status")
 		return reconcile.Result{}, err
@@ -272,7 +297,7 @@ func (r *ReconcileComplianceScan) phasePendingHandler(instance *compv1alpha1.Com
 	// TODO: It might be better to store the list of eligible nodes in the CR so that if someone edits the CR or
 	// adds/removes nodes while the scan is running, we just work on the same set?
 
-	r.metrics.IncComplianceScanStatus(instance.Name, instance.Status)
+	r.Metrics.IncComplianceScanStatus(instance.Name, instance.Status)
 	return reconcile.Result{}, nil
 }
 
@@ -299,7 +324,7 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(h scanTypeHandler, logge
 	}
 
 	if err = r.handleResultClientSecret(scan, logger); err != nil {
-		logger.Error(err, "Cannot create result client cert secret")
+		logger.Error(err, "Cannot create result Client cert secret")
 		return reconcile.Result{}, err
 	}
 
@@ -323,22 +348,22 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(h scanTypeHandler, logge
 			scanCopy.Status.ErrorMessage = err.Error()
 			scanCopy.Status.Result = compv1alpha1.ResultError
 			scanCopy.Status.Phase = compv1alpha1.PhaseDone
-			if updateerr := r.client.Status().Update(context.TODO(), scanCopy); updateerr != nil {
+			if updateerr := r.Client.Status().Update(context.TODO(), scanCopy); updateerr != nil {
 				logger.Error(updateerr, "Failed to update a scan")
 				return reconcile.Result{}, updateerr
 			}
-			r.metrics.IncComplianceScanStatus(scanCopy.Name, scanCopy.Status)
+			r.Metrics.IncComplianceScanStatus(scanCopy.Name, scanCopy.Status)
 		}
 		return common.ReturnWithRetriableError(logger, err)
 	}
 	// if we got here, there are no new pods to be created, move to the next phase
 	scan.Status.Phase = compv1alpha1.PhaseRunning
-	err = r.client.Status().Update(context.TODO(), scan)
+	err = r.Client.Status().Update(context.TODO(), scan)
 	if err != nil {
 		// metric status update error
 		return reconcile.Result{}, err
 	}
-	r.metrics.IncComplianceScanStatus(scan.Name, scan.Status)
+	r.Metrics.IncComplianceScanStatus(scan.Name, scan.Status)
 	return reconcile.Result{}, nil
 }
 
@@ -358,12 +383,12 @@ func (r *ReconcileComplianceScan) phaseRunningHandler(h scanTypeHandler, logger 
 	scan := h.getScan()
 	// if we got here, there are no pods running, move to the Aggregating phase
 	scan.Status.Phase = compv1alpha1.PhaseAggregating
-	err = r.client.Status().Update(context.TODO(), scan)
+	err = r.Client.Status().Update(context.TODO(), scan)
 	if err != nil {
 		// metric status update error
 		return reconcile.Result{}, err
 	}
-	r.metrics.IncComplianceScanStatus(scan.Name, scan.Status)
+	r.Metrics.IncComplianceScanStatus(scan.Name, scan.Status)
 	return reconcile.Result{}, nil
 }
 
@@ -391,15 +416,15 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(h scanTypeHandler, log
 			// metric status update error
 			return reconcile.Result{}, err
 		}
-		r.metrics.IncComplianceScanStatus(instance.Name, instance.Status)
+		r.Metrics.IncComplianceScanStatus(instance.Name, instance.Status)
 		return reconcile.Result{}, nil
 	}
 
 	logger.Info("Creating an aggregator pod for scan")
 	aggregator := r.newAggregatorPod(instance, logger)
-	if priorityClassExist, why := utils.ValidatePriorityClassExist(aggregator.Spec.PriorityClassName, r.client); !priorityClassExist {
+	if priorityClassExist, why := utils.ValidatePriorityClassExist(aggregator.Spec.PriorityClassName, r.Client); !priorityClassExist {
 		log.Info(why, "aggregator", aggregator.Name)
-		r.recorder.Eventf(aggregator, corev1.EventTypeWarning, "PriorityClass", why+" aggregator:"+aggregator.Name)
+		r.Recorder.Eventf(aggregator, corev1.EventTypeWarning, "PriorityClass", why+" aggregator:"+aggregator.Name)
 		aggregator.Spec.PriorityClassName = ""
 	}
 	err = r.launchAggregatorPod(instance, aggregator, logger)
@@ -419,12 +444,12 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(h scanTypeHandler, log
 	if running {
 		logger.Info("Remaining in the aggregating phase")
 		instance.Status.Phase = compv1alpha1.PhaseAggregating
-		err = r.client.Status().Update(context.TODO(), instance)
+		err = r.Client.Status().Update(context.TODO(), instance)
 		if err != nil {
 			logger.Error(err, "Cannot update the status, requeueing")
 			return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
 		}
-		r.metrics.IncComplianceScanStatus(instance.Name, instance.Status)
+		r.Metrics.IncComplianceScanStatus(instance.Name, instance.Status)
 		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfterDefault}, nil
 	}
 
@@ -449,7 +474,7 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(h scanTypeHandler, log
 		// metric status update error
 		return reconcile.Result{}, err
 	}
-	r.metrics.IncComplianceScanStatus(instance.Name, instance.Status)
+	r.Metrics.IncComplianceScanStatus(instance.Name, instance.Status)
 	return reconcile.Result{}, nil
 }
 
@@ -490,7 +515,7 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(h scanTypeHandler, instance *
 		}
 
 		if err = r.deleteResultClientSecret(instance, logger); err != nil {
-			logger.Error(err, "Cannot delete result client cert secret")
+			logger.Error(err, "Cannot delete result Client cert secret")
 			return reconcile.Result{}, err
 		}
 
@@ -520,12 +545,12 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(h scanTypeHandler, instance *
 			} else {
 				instanceCopy.Status.CurrentIndex = instance.Status.CurrentIndex + 1
 			}
-			err = r.client.Status().Update(context.TODO(), instanceCopy)
+			err = r.Client.Status().Update(context.TODO(), instanceCopy)
 			if err != nil {
 				// metric status update error
 				return reconcile.Result{}, err
 			}
-			r.metrics.IncComplianceScanStatus(instanceCopy.Name, instanceCopy.Status)
+			r.Metrics.IncComplianceScanStatus(instanceCopy.Name, instanceCopy.Status)
 			return reconcile.Result{}, nil
 		}
 	} else {
@@ -575,7 +600,7 @@ func (r *ReconcileComplianceScan) scanDeleteHandler(instance *compv1alpha1.Compl
 
 		// remove our finalizer from the list and update it.
 		scanToBeDeleted.ObjectMeta.Finalizers = common.RemoveFinalizer(scanToBeDeleted.ObjectMeta.Finalizers, compv1alpha1.ScanFinalizer)
-		if err := r.client.Update(context.TODO(), scanToBeDeleted); err != nil {
+		if err := r.Client.Update(context.TODO(), scanToBeDeleted); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
@@ -585,11 +610,11 @@ func (r *ReconcileComplianceScan) scanDeleteHandler(instance *compv1alpha1.Compl
 }
 
 func (r *ReconcileComplianceScan) updateStatusWithEvent(scan *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	err := r.client.Status().Update(context.TODO(), scan)
+	err := r.Client.Status().Update(context.TODO(), scan)
 	if err != nil {
 		return err
 	}
-	if r.recorder != nil {
+	if r.Recorder != nil {
 		r.generateResultEventForScan(scan, logger)
 	}
 	return nil
@@ -599,28 +624,28 @@ func (r *ReconcileComplianceScan) generateResultEventForScan(scan *compv1alpha1.
 	logger.Info("Generating result event for scan")
 
 	// Event for Suite
-	r.recorder.Eventf(
+	r.Recorder.Eventf(
 		scan, corev1.EventTypeNormal, "ResultAvailable",
 		"ComplianceScan's result is: %s", scan.Status.Result,
 	)
 
 	if scan.Status.Result == compv1alpha1.ResultNotApplicable {
-		r.recorder.Eventf(
+		r.Recorder.Eventf(
 			scan, corev1.EventTypeWarning, "ScanNotApplicable",
 			"The scan result is not applicable, please check if you're using the correct platform or if the nodeSelector matches nodes.")
 	} else if scan.Status.Result == compv1alpha1.ResultInconsistent {
-		r.recorder.Eventf(
+		r.Recorder.Eventf(
 			scan, corev1.EventTypeNormal, "ScanNotConsistent",
 			"The scan result is not consistent, please check for scan results labeled with %s",
 			compv1alpha1.ComplianceCheckInconsistentLabel)
 	}
 
-	err, haveOutdatedRems := utils.HaveOutdatedRemediations(r.client)
+	err, haveOutdatedRems := utils.HaveOutdatedRemediations(r.Client)
 	if err != nil {
 		logger.Info("Could not check if there exist any obsolete remediations", "Scan.Name", scan.Name)
 	}
 	if haveOutdatedRems {
-		r.recorder.Eventf(
+		r.Recorder.Eventf(
 			scan, corev1.EventTypeNormal, "HaveOutdatedRemediations",
 			"The scan produced outdated remediations, please check for complianceremediation objects labeled with %s",
 			compv1alpha1.OutdatedRemediationLabel)
@@ -633,7 +658,7 @@ func (r *ReconcileComplianceScan) deleteScriptConfigMaps(instance *compv1alpha1.
 		compv1alpha1.ComplianceScanLabel: instance.Name,
 		compv1alpha1.ScriptLabel:         "",
 	}
-	err := r.client.DeleteAllOf(context.Background(), &corev1.ConfigMap{}, inNs, withLabel)
+	err := r.Client.DeleteAllOf(context.Background(), &corev1.ConfigMap{}, inNs, withLabel)
 	if err != nil {
 		return err
 	}
@@ -643,7 +668,7 @@ func (r *ReconcileComplianceScan) deleteScriptConfigMaps(instance *compv1alpha1.
 func (r *ReconcileComplianceScan) deleteResultConfigMaps(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	inNs := client.InNamespace(common.GetComplianceOperatorNamespace())
 	withLabel := client.MatchingLabels{compv1alpha1.ComplianceScanLabel: instance.Name}
-	err := r.client.DeleteAllOf(context.Background(), &corev1.ConfigMap{}, inNs, withLabel)
+	err := r.Client.DeleteAllOf(context.Background(), &corev1.ConfigMap{}, inNs, withLabel)
 	if err != nil {
 		return err
 	}
@@ -667,7 +692,7 @@ func isPlatformScanPodRunning(r *ReconcileComplianceScan, scanInstance *compv1al
 func isPodRunning(r *ReconcileComplianceScan, podName, namespace string, logger logr.Logger) (bool, error) {
 	podlogger := logger.WithValues("Pod.Name", podName)
 	foundPod := &corev1.Pod{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: namespace}, foundPod)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: namespace}, foundPod)
 	if err != nil {
 		podlogger.Error(err, "Cannot retrieve pod")
 		return false, err
@@ -708,7 +733,7 @@ func getPlatformScanCM(r *ReconcileComplianceScan, instance *compv1alpha1.Compli
 	}
 
 	foundCM := &corev1.ConfigMap{}
-	err := r.client.Get(context.TODO(), targetCM, foundCM)
+	err := r.Client.Get(context.TODO(), targetCM, foundCM)
 	return foundCM, err
 }
 
@@ -719,7 +744,7 @@ func getNodeScanCM(r *ReconcileComplianceScan, instance *compv1alpha1.Compliance
 	}
 
 	foundCM := &corev1.ConfigMap{}
-	err := r.client.Get(context.TODO(), targetCM, foundCM)
+	err := r.Client.Get(context.TODO(), targetCM, foundCM)
 	return foundCM, err
 }
 
@@ -743,7 +768,7 @@ func gatherResults(r *ReconcileComplianceScan, h scanTypeHandler) (compv1alpha1.
 		compv1alpha1.ComplianceCheckInconsistentLabel: "",
 		compv1alpha1.ComplianceScanLabel:              instance.Name,
 	}
-	if err := r.client.List(context.TODO(), &checkList, &checkListOpts); err != nil {
+	if err := r.Client.List(context.TODO(), &checkList, &checkListOpts); err != nil {
 		isReady = false
 	}
 	if len(checkList.Items) > 0 {

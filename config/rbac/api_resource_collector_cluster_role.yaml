@@ -1,0 +1,839 @@
+# This is basically a copy of cluster-reader. But we needed to include it
+# because the OLM doesn't support adding labels to roles nor specifying
+# roleRefs
+# See: https://github.com/operator-framework/operator-lifecycle-manager/issues/732
+# As an addition, this role is also able to read the kubeadmin secret
+# with the main intent to check that it's been removed.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: api-resource-collector
+rules:
+  - apiGroups:
+      - operator.openshift.io
+    resources:
+      - ingresscontrollers
+      - kubeapiservers
+      - openshiftapiservers
+      - networks
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - config.openshift.io
+    resources:
+      - operatorhubs
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - metrics.k8s.io
+    resources:
+      - pods
+      - nodes
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - componentstatuses
+      - nodes
+      - nodes/status
+      - persistentvolumeclaims/status
+      - persistentvolumes
+      - persistentvolumes/status
+      - pods/binding
+      - pods/eviction
+      - podtemplates
+      - securitycontextconstraints
+      - services/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - controllerrevisions
+      - daemonsets/status
+      - deployments/status
+      - replicasets/status
+      - statefulsets/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+      - customresourcedefinitions/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apiregistration.k8s.io
+    resources:
+      - apiservices
+      - apiservices/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - autoscaling
+    resources:
+      - horizontalpodautoscalers/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - batch
+    resources:
+      - cronjobs/status
+      - jobs/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - extensions
+    resources:
+      - daemonsets/status
+      - deployments/status
+      - horizontalpodautoscalers
+      - horizontalpodautoscalers/status
+      - ingresses/status
+      - jobs
+      - jobs/status
+      - podsecuritypolicies
+      - replicasets/status
+      - replicationcontrollers
+      - storageclasses
+      - thirdpartyresources
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - events.k8s.io
+    resources:
+      - events
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingresses/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - node.k8s.io
+    resources:
+      - runtimeclasses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets/status
+      - podsecuritypolicies
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - clusterrolebindings
+      - clusterroles
+      - rolebindings
+      - roles
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - settings.k8s.io
+    resources:
+      - podpresets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - storage.k8s.io
+    resources:
+      - csidrivers
+      - csinodes
+      - storageclasses
+      - volumeattachments
+      - volumeattachments/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - scheduling.k8s.io
+    resources:
+      - priorityclasses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - certificates.k8s.io
+    resources:
+      - certificatesigningrequests
+      - certificatesigningrequests/approval
+      - certificatesigningrequests/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - authorization.openshift.io
+    resources:
+      - clusterrolebindings
+      - clusterroles
+      - rolebindingrestrictions
+      - rolebindings
+      - roles
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - build.openshift.io
+    resources:
+      - builds/details
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - image.openshift.io
+    resources:
+      - images
+      - imagesignatures
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - image.openshift.io
+    resources:
+      - imagestreams/layers
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+      - oauth.openshift.io
+    resources:
+      - oauthclientauthorizations
+      - oauthclients
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - project.openshift.io
+    resources:
+      - projects
+    verbs:
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - project.openshift.io
+    resources:
+      - projectrequests
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - quota.openshift.io
+    resources:
+      - clusterresourcequotas
+      - clusterresourcequotas/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - network.openshift.io
+    resources:
+      - clusternetworks
+      - egressnetworkpolicies
+      - hostsubnets
+      - netnamespaces
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - security.openshift.io
+    resources:
+      - securitycontextconstraints
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - security.openshift.io
+    resources:
+      - rangeallocations
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - template.openshift.io
+    resources:
+      - brokertemplateinstances
+      - templateinstances/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - user.openshift.io
+    resources:
+      - groups
+      - identities
+      - useridentitymappings
+      - users
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - authorization.openshift.io
+    resources:
+      - localresourceaccessreviews
+      - localsubjectaccessreviews
+      - resourceaccessreviews
+      - selfsubjectrulesreviews
+      - subjectaccessreviews
+      - subjectrulesreviews
+    verbs:
+      - create
+  - apiGroups:
+      - authorization.k8s.io
+    resources:
+      - localsubjectaccessreviews
+      - selfsubjectaccessreviews
+      - selfsubjectrulesreviews
+      - subjectaccessreviews
+    verbs:
+      - create
+  - apiGroups:
+      - authentication.k8s.io
+    resources:
+      - tokenreviews
+    verbs:
+      - create
+  - apiGroups:
+      - ""
+      - security.openshift.io
+    resources:
+      - podsecuritypolicyreviews
+      - podsecuritypolicyselfsubjectreviews
+      - podsecuritypolicysubjectreviews
+    verbs:
+      - create
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/metrics
+      - nodes/spec
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/stats
+    verbs:
+      - create
+      - get
+  - nonResourceURLs:
+      - '*'
+    verbs:
+      - get
+  - apiGroups:
+      - cloudcredential.openshift.io
+    resources:
+      - credentialsrequests
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - config.openshift.io
+    resources:
+      - apiservers
+      - authentications
+      - builds
+      - clusteroperators
+      - clusterversions
+      - consoles
+      - dnses
+      - featuregates
+      - images
+      - infrastructures
+      - ingresses
+      - networks
+      - oauths
+      - projects
+      - proxies
+      - schedulers
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - samples.operator.openshift.io
+    resources:
+      - configs
+      - configs/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - machineconfiguration.openshift.io
+    resources:
+      - containerruntimeconfigs
+      - controllerconfigs
+      - kubeletconfigs
+      - machineconfigpools
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - operators.coreos.com
+    resources:
+      - clusterserviceversions
+      - catalogsources
+      - installplans
+      - subscriptions
+      - operatorgroups
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - packages.operators.coreos.com
+    resources:
+      - packagemanifests
+      - packagemanifests/icon
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - packages.operators.coreos.com
+    resources:
+      - packagemanifests
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - image.openshift.io
+    resources:
+      - imagestreamimages
+      - imagestreammappings
+      - imagestreams
+      - imagestreamtags
+      - imagetags
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+      - project.openshift.io
+    resources:
+      - projects
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - endpoints
+      - persistentvolumeclaims
+      - persistentvolumeclaims/status
+      - pods
+      - replicationcontrollers
+      - replicationcontrollers/scale
+      - serviceaccounts
+      - services
+      - services/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - bindings
+      - events
+      - limitranges
+      - namespaces/status
+      - pods/log
+      - pods/status
+      - replicationcontrollers/status
+      - resourcequotas
+      - resourcequotas/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - controllerrevisions
+      - daemonsets
+      - daemonsets/status
+      - deployments
+      - deployments/scale
+      - deployments/status
+      - replicasets
+      - replicasets/scale
+      - replicasets/status
+      - statefulsets
+      - statefulsets/scale
+      - statefulsets/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - autoscaling
+    resources:
+      - horizontalpodautoscalers
+      - horizontalpodautoscalers/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - batch
+    resources:
+      - cronjobs
+      - cronjobs/status
+      - jobs
+      - jobs/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - extensions
+    resources:
+      - daemonsets
+      - daemonsets/status
+      - deployments
+      - deployments/scale
+      - deployments/status
+      - ingresses
+      - ingresses/status
+      - networkpolicies
+      - replicasets
+      - replicasets/scale
+      - replicasets/status
+      - replicationcontrollers/scale
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
+      - poddisruptionbudgets/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingresses
+      - ingresses/status
+      - networkpolicies
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - build.openshift.io
+    resources:
+      - buildconfigs
+      - buildconfigs/webhooks
+      - builds
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - build.openshift.io
+    resources:
+      - builds/log
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - build.openshift.io
+    resources:
+      - jenkins
+    verbs:
+      - view
+  - apiGroups:
+      - ""
+      - apps.openshift.io
+    resources:
+      - deploymentconfigs
+      - deploymentconfigs/scale
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - apps.openshift.io
+    resources:
+      - deploymentconfigs/log
+      - deploymentconfigs/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - image.openshift.io
+    resources:
+      - imagestreams/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - quota.openshift.io
+    resources:
+      - appliedclusterresourcequotas
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - route.openshift.io
+    resources:
+      - routes
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - route.openshift.io
+    resources:
+      - routes/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - template.openshift.io
+    resources:
+      - processedtemplates
+      - templateconfigs
+      - templateinstances
+      - templates
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+      - build.openshift.io
+    resources:
+      - buildlogs
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - resourcequotausages
+    verbs:
+      - get
+      - list
+      - watch
+  # Necessary for the reading resources for CIS benchmark
+  - apiGroups:
+      - logging.openshift.io
+    resources:
+      - clusterlogforwarders
+    resourceNames:
+      - instance
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - logging.openshift.io
+    resources:
+      - clusterloggings
+    resourceNames:
+      - instance
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - flowcontrol.apiserver.k8s.io
+    resources:
+      - flowschemas
+    resourceNames:
+      - catch-all
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - operator.openshift.io
+    resources:
+      - kubeapiservers
+    resourceNames:
+      - cluster
+    verbs:
+      - get
+      - list
+      - watch
+  # Necessary for the reading resources for moderate benchmark
+  - apiGroups:
+      - compliance.openshift.io
+    resources:
+      - compliancesuites
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - machineconfiguration.openshift.io
+    resources:
+      - machineconfigs
+      - kubeletconfigs
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - fileintegrity.openshift.io
+    resources:
+      - fileintegrities
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - monitoring.coreos.com
+    resources:
+      - prometheusrules
+    verbs:
+      - get
+      - watch
+      - list
+  # Necessary for checking that the kubeadmin secret has been removed
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    resourceNames:
+      - kubeadmin
+    verbs:
+      - get
+  # Necessary to check EBS encryption for PCIDSS requirements
+  - apiGroups:
+      - machine.openshift.io
+    resources:
+      - machinesets
+    verbs:
+      - get
+      - list
+  # Necessary to check GitOps operator present for high requirements
+  - apiGroups:
+      - pipelines.openshift.io
+    resources:
+      - gitopsservices
+    verbs:
+      - get
+      - list
+      - watch

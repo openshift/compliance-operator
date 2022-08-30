@@ -1,0 +1,49 @@
+resources:
+# All RBAC will be applied under this service account in
+# the deployment namespace. You may comment out this resource
+# if your manager will use a service account that exists at
+# runtime. Be sure to update RoleBinding and ClusterRoleBinding
+# subjects if changing service account names.
+- operator_service_account.yaml
+- operator_cluster_role.yaml
+- operator_cluster_role_binding.yaml
+- operator_role.yaml
+- operator_role_binding.yaml
+- api_resource_collector_service_account.yaml
+- api_resource_collector_role.yaml
+- api_resource_collector_role_binding.yaml
+- api_resource_collector_cluster_role.yaml
+- api_resource_collector_cluster_role_binding.yaml
+- profileparser_service_account.yaml
+- profileparser_role.yaml
+- profileparser_role_binding.yaml
+- remediation_aggregator_service_account.yaml
+- remediation_aggregator_role.yaml
+- remediation_aggregator_role_binding.yaml
+- remediation_aggregator_cluster_role.yaml
+- remediation_aggregator_cluster_role_binding.yaml
+- rerunner_service_account.yaml
+- rerunner_role.yaml
+- rerunner_role_binding.yaml
+- resultscollector_service_account.yaml
+- resultscollector_role.yaml
+- resultscollector_role_binding.yaml
+- resultserver_service_account.yaml
+- resultserver_role.yaml
+- resultserver_role_binding.yaml
+- leader_election_role.yaml
+- leader_election_role_binding.yaml
+- complianceremediation_editor_role.yaml
+- complianceremediation_viewer_role.yaml
+- compliancescan_editor_role.yaml
+- compliancescan_viewer_role.yaml
+- compliancesuite_editor_role.yaml
+- compliancesuite_viewer_role.yaml
+- profilebundle_editor_role.yaml
+- profilebundle_viewer_role.yaml
+- scansettingbinding_editor_role.yaml
+- scansettingbinding_viewer_role.yaml
+- tailoredprofile_editor_role.yaml
+- tailoredprofile_viewer_role.yaml
+- metrics_cluster_role.yaml
+- metrics_role_binding.yaml

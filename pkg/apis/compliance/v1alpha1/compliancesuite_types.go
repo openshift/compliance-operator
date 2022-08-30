@@ -3,7 +3,6 @@ package v1alpha1
 import (
 	"reflect"
 
-	conditions "github.com/operator-framework/operator-sdk/pkg/status"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -104,10 +103,10 @@ type ComplianceSuiteStatus struct {
 	Result       ComplianceScanStatusResult    `json:"result,omitempty"`
 	ErrorMessage string                        `json:"errorMessage,omitempty"`
 	// +optional
-	Conditions conditions.Conditions `json:"conditions,omitempty"`
+	Conditions Conditions `json:"conditions,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ComplianceSuite represents a set of scans that will be applied to the
 // cluster. These should help deployers achieve a certain compliance target.
@@ -126,7 +125,7 @@ type ComplianceSuite struct {
 	Status ComplianceSuiteStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // ComplianceSuiteList contains a list of ComplianceSuite
 type ComplianceSuiteList struct {
@@ -231,7 +230,7 @@ func (s *ComplianceSuite) RemoveOutdatedAnnotationSet() bool {
 }
 
 func (s *ComplianceSuiteStatus) SetConditionPending() {
-	s.Conditions.SetCondition(conditions.Condition{
+	s.Conditions.SetCondition(Condition{
 		Type:    "Ready",
 		Status:  corev1.ConditionFalse,
 		Reason:  "Pending",
@@ -241,7 +240,7 @@ func (s *ComplianceSuiteStatus) SetConditionPending() {
 }
 
 func (s *ComplianceSuiteStatus) SetConditionInvalid() {
-	s.Conditions.SetCondition(conditions.Condition{
+	s.Conditions.SetCondition(Condition{
 		Type:    "Ready",
 		Status:  corev1.ConditionFalse,
 		Reason:  "Invalid",
@@ -251,13 +250,13 @@ func (s *ComplianceSuiteStatus) SetConditionInvalid() {
 }
 
 func (s *ComplianceSuiteStatus) SetConditionsProcessing() {
-	s.Conditions.SetCondition(conditions.Condition{
+	s.Conditions.SetCondition(Condition{
 		Type:    "Ready",
 		Status:  corev1.ConditionFalse,
 		Reason:  "Processing",
 		Message: "Compliance suite doesn't have results yet",
 	})
-	s.Conditions.SetCondition(conditions.Condition{
+	s.Conditions.SetCondition(Condition{
 		Type:    "Processing",
 		Status:  corev1.ConditionTrue,
 		Reason:  "Running",
@@ -266,13 +265,13 @@ func (s *ComplianceSuiteStatus) SetConditionsProcessing() {
 }
 
 func (s *ComplianceSuiteStatus) SetConditionReady() {
-	s.Conditions.SetCondition(conditions.Condition{
+	s.Conditions.SetCondition(Condition{
 		Type:    "Ready",
 		Status:  corev1.ConditionTrue,
 		Reason:  "Done",
 		Message: "Compliance suite run is done and has results",
 	})
-	s.Conditions.SetCondition(conditions.Condition{
+	s.Conditions.SetCondition(Condition{
 		Type:    "Processing",
 		Status:  corev1.ConditionFalse,
 		Reason:  "NotRunning",

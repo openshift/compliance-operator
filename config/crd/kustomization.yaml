@@ -1,0 +1,19 @@
+# This kustomization.yaml is not intended to be run by itself,
+# since it depends on service name and namespace that are out of this kustomize package.
+# It should be run by config/default
+resources:
+- bases/compliance.openshift.io_compliancecheckresults.yaml
+- bases/compliance.openshift.io_complianceremediations.yaml
+- bases/compliance.openshift.io_compliancescans.yaml
+- bases/compliance.openshift.io_compliancesuites.yaml
+- bases/compliance.openshift.io_profilebundles.yaml
+- bases/compliance.openshift.io_profiles.yaml
+- bases/compliance.openshift.io_rules.yaml
+- bases/compliance.openshift.io_scansettingbindings.yaml
+- bases/compliance.openshift.io_scansettings.yaml
+- bases/compliance.openshift.io_tailoredprofiles.yaml
+- bases/compliance.openshift.io_variables.yaml
+#+kubebuilder:scaffold:crdkustomizeresource
+
+configurations:
+- kustomizeconfig.yaml

@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package main
+package manager
 
 import (
 	"bufio"
@@ -36,9 +36,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 	"github.com/antchfx/xmlquery"
 	"github.com/itchyny/gojq"
-	"github.com/openshift/compliance-operator/pkg/utils"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/kubernetes"

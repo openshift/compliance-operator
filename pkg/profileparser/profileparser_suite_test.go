@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	compapis "github.com/openshift/compliance-operator/pkg/apis"
-	cmpv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	compapis "github.com/ComplianceAsCode/compliance-operator/pkg/apis"
+	cmpv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 

@@ -2,6 +2,7 @@
 *.prof
 build/_output
 build/_test
+build/_tools
 _output
 # Created by https://www.gitignore.io/api/go,vim,emacs,visualstudiocode
 ### Emacs ###

@@ -1,0 +1,20 @@
+# permissions for end users to view compliancescans.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: compliancescan-viewer-role
+rules:
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - compliancescans
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - compliancescans/status
+  verbs:
+  - get

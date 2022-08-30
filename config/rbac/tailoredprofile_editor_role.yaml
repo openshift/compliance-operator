@@ -1,0 +1,24 @@
+# permissions for end users to edit tailoredprofiles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tailoredprofile-editor-role
+rules:
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - tailoredprofiles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - tailoredprofiles/status
+  verbs:
+  - get

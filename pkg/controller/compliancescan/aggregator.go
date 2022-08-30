@@ -10,9 +10,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 )
 
 const aggregatorSA = "remediation-aggregator"
@@ -115,7 +115,7 @@ func (r *ReconcileComplianceScan) newAggregatorPod(scanInstance *compv1alpha1.Co
 
 func (r *ReconcileComplianceScan) launchAggregatorPod(scanInstance *compv1alpha1.ComplianceScan, pod *corev1.Pod, logger logr.Logger) error {
 	// Make use of optimistic concurrency and just try creating the pod
-	err := r.client.Create(context.TODO(), pod)
+	err := r.Client.Create(context.TODO(), pod)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logger.Error(err, "Cannot launch pod", "pod", pod)
 		return err
@@ -128,7 +128,7 @@ func (r *ReconcileComplianceScan) launchAggregatorPod(scanInstance *compv1alpha1
 func (r *ReconcileComplianceScan) deleteAggregator(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
 	logger.Info("Deleting aggregator pod")
 	aggregator := r.newAggregatorPod(instance, logger)
-	err := r.client.Delete(context.TODO(), aggregator)
+	err := r.Client.Delete(context.TODO(), aggregator)
 	if err != nil && !errors.IsNotFound(err) {
 		logger.Error(err, "Cannot delete aggregator pod", "pod", aggregator)
 		return err

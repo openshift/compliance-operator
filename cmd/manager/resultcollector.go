@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package main
+package manager
 
 import (
 	"bufio"
@@ -37,19 +37,19 @@ import (
 	backoff "github.com/cenkalti/backoff/v4"
 	"github.com/dsnet/compress/bzip2"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
-	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 )
 
-var resultcollectorCmd = &cobra.Command{
+var ResultcollectorCmd = &cobra.Command{
 	Use:   "resultscollector",
 	Short: "A tool to do an OpenSCAP scan from a pod.",
 	Long:  "A tool to do an OpenSCAP scan from a pod.",
@@ -61,8 +61,7 @@ var (
 )
 
 func init() {
-	rootCmd.AddCommand(resultcollectorCmd)
-	defineResultcollectorFlags(resultcollectorCmd)
+	defineResultcollectorFlags(ResultcollectorCmd)
 }
 
 type scapresultsConfig struct {
@@ -99,7 +98,6 @@ func defineResultcollectorFlags(cmd *cobra.Command) {
 	cmd.Flags().String("tls-ca", "", "The path to the CA certificate.")
 
 	flags := cmd.Flags()
-	flags.AddFlagSet(zap.FlagSet())
 
 	// Add flags registered by imported packages (e.g. glog and
 	// controller-runtime)
@@ -129,7 +127,7 @@ func parseConfig(cmd *cobra.Command) *scapresultsConfig {
 	// platform scans have no node name
 	conf.NodeName, _ = cmd.Flags().GetString("node-name")
 
-	logf.SetLogger(zap.Logger())
+	logf.SetLogger(zap.New())
 
 	return &conf
 }
@@ -139,7 +137,7 @@ func getOpenSCAPScanInstance(name, namespace string, client *complianceCrClient)
 	scan := &compv1alpha1.ComplianceScan{}
 	err := client.client.Get(context.TODO(), key, scan)
 	if err != nil {
-		log.Error(err, "Error getting scan instance", "ComplianceScan.Name", scan.Name, "ComplianceScan.Namespace", scan.Namespace)
+		cmdLog.Error(err, "Error getting scan instance", "ComplianceScan.Name", scan.Name, "ComplianceScan.Namespace", scan.Namespace)
 		return nil, err
 	}
 
@@ -164,7 +162,7 @@ func resultsFileReady(fname string, fFound chan *os.File) (bool, error) {
 			return false, file.Close()
 		}
 	} else if !os.IsNotExist(err) {
-		log.Error(err, "Couldn't open results file")
+		cmdLog.Error(err, "Couldn't open results file")
 		// We mark this as "ready" as there's nothing else to do.
 		// This will stop the go-routine
 		return true, fmt.Errorf("couldn't open result file: %w", err)
@@ -195,15 +193,15 @@ func waitForResultsFile(filename string, timeout int64) (*os.File, error) {
 
 	select {
 	case file := <-readFileTimeoutChan:
-		log.Info("Results file found, will upload it.", "resuts-file", filename)
+		cmdLog.Info("Results file found, will upload it.", "resuts-file", filename)
 		close(readFileTimeoutChan)
 		return file, nil
 	case err := <-errs:
 		outErr := fmt.Errorf("error reading result file: %w", err)
-		log.Error(outErr, "Timeout. Aborting.")
+		cmdLog.Error(outErr, "Timeout. Aborting.")
 		return nil, outErr
 	case <-time.After(time.Duration(timeout) * time.Second):
-		log.Error(timeoutErr, "Timeout. Aborting.")
+		cmdLog.Error(timeoutErr, "Timeout. Aborting.")
 		return nil, timeoutErr
 	}
 }
@@ -265,13 +263,13 @@ func readResultsFile(filename string, timeout int64) (*resultFileContents, error
 			return nil
 		}
 		rfContents.contents, err = compressResults(rfContents.contents)
-		log.Info("File needs compression", "results-file", filename)
+		cmdLog.Info("File needs compression", "results-file", filename)
 		if err != nil {
-			log.Error(err, "Error: Compression failed")
+			cmdLog.Error(err, "Error: Compression failed")
 			return nil, err
 		}
 		rfContents.compressed = true
-		log.Info("Compressed results")
+		cmdLog.Info("Compressed results")
 	} else {
 		rfContents.close = func() error {
 			return contentsfile.Close()
@@ -301,10 +299,10 @@ func readWarningsFile(filename string) string {
 func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scapresultsConfig) error {
 	return backoff.Retry(func() error {
 		url := scapresultsconf.ResultServerURI
-		log.Info("Trying to upload to resultserver", "url", url)
+		cmdLog.Info("Trying to upload to resultserver", "url", url)
 		transport, err := getMutualHttpsTransport(scapresultsconf)
 		if err != nil {
-			log.Error(err, "Failed to get https transport")
+			cmdLog.Error(err, "Failed to get https transport")
 			return err
 		}
 		client := &http.Client{Transport: transport}
@@ -316,16 +314,16 @@ func uploadToResultServer(arfContents *resultFileContents, scapresultsconf *scap
 		}
 		resp, err := client.Do(req)
 		if err != nil {
-			log.Error(err, "Failed to upload results to server")
+			cmdLog.Error(err, "Failed to upload results to server")
 			return err
 		}
 		defer resp.Body.Close()
 		bytesresp, err := httputil.DumpResponse(resp, true)
 		if err != nil {
-			log.Error(err, "Failed to parse response")
+			cmdLog.Error(err, "Failed to parse response")
 			return err
 		}
-		log.Info(string(bytesresp))
+		cmdLog.Info(string(bytesresp))
 		return nil
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries))
 }
@@ -335,7 +333,7 @@ func uploadResultConfigMap(xccdfContents *resultFileContents, exitcode string,
 	warnings := readWarningsFile(scapresultsconf.WarningsOutputFile)
 
 	return backoff.Retry(func() error {
-		log.Info("Trying to upload results ConfigMap")
+		cmdLog.Info("Trying to upload results ConfigMap")
 		openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, client)
 		if err != nil {
 			return err
@@ -356,7 +354,7 @@ func uploadErrorConfigMap(errorMsg *resultFileContents, exitcode string,
 	warnings := readWarningsFile(scapresultsconf.WarningsOutputFile)
 
 	return backoff.Retry(func() error {
-		log.Info("Trying to upload error ConfigMap")
+		cmdLog.Info("Trying to upload error ConfigMap")
 		openscapScan, err := getOpenSCAPScanInstance(scapresultsconf.ScanName, scapresultsconf.Namespace, client)
 		if err != nil {
 			return err
@@ -375,14 +373,14 @@ func uploadErrorConfigMap(errorMsg *resultFileContents, exitcode string,
 func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConfig, client *complianceCrClient) {
 	arfContents, err := readResultsFile(scapresultsconf.ArfFile, scapresultsconf.Timeout)
 	if err != nil {
-		log.Error(err, "Failed to read ARF file")
+		cmdLog.Error(err, "Failed to read ARF file")
 		os.Exit(1)
 	}
 	defer arfContents.close()
 
 	xccdfContents, err := readResultsFile(scapresultsconf.XccdfFile, scapresultsconf.Timeout)
 	if err != nil {
-		log.Error(err, "Failed to read XCCDF file")
+		cmdLog.Error(err, "Failed to read XCCDF file")
 		os.Exit(1)
 	}
 	defer xccdfContents.close()
@@ -392,20 +390,20 @@ func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConf
 	go func() {
 		serverUploadErr := uploadToResultServer(arfContents, scapresultsconf)
 		if serverUploadErr != nil {
-			log.Error(serverUploadErr, "Failed to upload results to server")
+			cmdLog.Error(serverUploadErr, "Failed to upload results to server")
 			os.Exit(1)
 		}
-		log.Info("Uploaded to resultserver")
+		cmdLog.Info("Uploaded to resultserver")
 		wg.Done()
 	}()
 
 	go func() {
 		cmUploadErr := uploadResultConfigMap(xccdfContents, exitcode, scapresultsconf, client)
 		if cmUploadErr != nil {
-			log.Error(cmUploadErr, "Failed to upload ConfigMap")
+			cmdLog.Error(cmUploadErr, "Failed to upload ConfigMap")
 			os.Exit(1)
 		}
-		log.Info("Uploaded ConfigMap")
+		cmdLog.Info("Uploaded ConfigMap")
 		wg.Done()
 	}()
 	wg.Wait()
@@ -414,23 +412,23 @@ func handleCompleteSCAPResults(exitcode string, scapresultsconf *scapresultsConf
 func handleErrorInOscapRun(exitcode string, scapresultsconf *scapresultsConfig, client *complianceCrClient) {
 	errorMsg, err := readResultsFile(scapresultsconf.CmdOutputFile, scapresultsconf.Timeout)
 	if err != nil {
-		log.Error(err, "Failed to read error message output from oscap run")
+		cmdLog.Error(err, "Failed to read error message output from oscap run")
 		os.Exit(1)
 	}
 	defer errorMsg.close()
 
 	err = uploadErrorConfigMap(errorMsg, exitcode, scapresultsconf, client)
 	if err != nil {
-		log.Error(err, "Failed to upload error ConfigMap")
+		cmdLog.Error(err, "Failed to upload error ConfigMap")
 		os.Exit(1)
 	}
-	log.Info("Uploaded ConfigMap")
+	cmdLog.Info("Uploaded ConfigMap")
 }
 
 func getOscapExitCode(scapresultsconf *scapresultsConfig) string {
 	exitcodeContent, err := readResultsFile(scapresultsconf.ExitCodeFile, scapresultsconf.Timeout)
 	if err != nil {
-		log.Error(err, "Failed to read oscap error code")
+		cmdLog.Error(err, "Failed to read oscap error code")
 		os.Exit(1)
 	}
 	defer exitcodeContent.close()
@@ -476,18 +474,18 @@ func resultCollectorMain(cmd *cobra.Command, args []string) {
 
 	cfg, err := config.GetConfig()
 	if err != nil {
-		log.Error(err, "")
+		cmdLog.Error(err, "")
 		os.Exit(1)
 	}
 
 	crclient, err := createCrClient(cfg)
 	if err != nil {
-		log.Error(err, "Cannot create kube client for our types\n")
+		cmdLog.Error(err, "Cannot create kube client for our types\n")
 		os.Exit(1)
 	}
 
 	exitcode := getOscapExitCode(scapresultsconf)
-	log.Info("Got exit-code from file", "exit-code", exitcode)
+	cmdLog.Info("Got exit-code from file", "exit-code", exitcode)
 
 	if exitCodeIsError(exitcode) {
 		handleErrorInOscapRun(exitcode, scapresultsconf, crclient)

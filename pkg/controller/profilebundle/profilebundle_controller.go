@@ -2,19 +2,20 @@ package profilebundle
 
 import (
 	"context"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"time"
 
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics"
 
 	// #nosec G505
 
 	"fmt"
 	"path"
 
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 	"github.com/go-logr/logr"
 	ocpimg "github.com/openshift/api/image/v1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
 	"github.com/openshift/library-go/pkg/image/reference"
 	ocptrigger "github.com/openshift/library-go/pkg/image/trigger"
 	appsv1 "k8s.io/api/apps/v1"
@@ -33,12 +34,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	compliancev1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	compliancev1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
 )
 
 var log = logf.Log.WithName("profilebundlectrl")
 
 var oneReplica int32 = 1
+
+func (r *ReconcileProfileBundle) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&compliancev1alpha1.ProfileBundle{}).
+		Complete(r)
+}
 
 // Add creates a new ProfileBundle Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -49,10 +56,10 @@ func Add(mgr manager.Manager, met *metrics.Metrics, si utils.CtlplaneSchedulingI
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager, met *metrics.Metrics, si utils.CtlplaneSchedulingInfo) reconcile.Reconciler {
 	return &ReconcileProfileBundle{
-		client:         mgr.GetClient(),
-		scheme:         mgr.GetScheme(),
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
 		reader:         mgr.GetAPIReader(),
-		metrics:        met,
+		Metrics:        met,
 		schedulingInfo: si,
 	}
 }
@@ -81,11 +88,11 @@ var _ reconcile.Reconciler = &ReconcileProfileBundle{}
 type ReconcileProfileBundle struct {
 	// Accesses the API server directly
 	reader client.Reader
-	// This client, initialized using mgr.Client() above, is a split client
+	// This Client, initialized using mgr.Client() above, is a split Client
 	// that reads objects from the cache and writes to the apiserver
-	client  client.Client
-	scheme  *runtime.Scheme
-	metrics *metrics.Metrics
+	Client  client.Client
+	Scheme  *runtime.Scheme
+	Metrics *metrics.Metrics
 	// helps us schedule platform scans on the nodes labeled for the
 	// compliance operator's control plane
 	schedulingInfo utils.CtlplaneSchedulingInfo
@@ -95,13 +102,13 @@ type ReconcileProfileBundle struct {
 // and what is in the ProfileBundle.Spec
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *ReconcileProfileBundle) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling ProfileBundle")
 
 	// Fetch the ProfileBundle instance
 	instance := &compliancev1alpha1.ProfileBundle{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
+	err := r.Client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -121,7 +128,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		if !common.ContainsFinalizer(instance.ObjectMeta.Finalizers, compliancev1alpha1.ProfileBundleFinalizer) {
 			pb := instance.DeepCopy()
 			pb.ObjectMeta.Finalizers = append(pb.ObjectMeta.Finalizers, compliancev1alpha1.ProfileBundleFinalizer)
-			if err := r.client.Update(context.TODO(), pb); err != nil {
+			if err := r.Client.Update(context.TODO(), pb); err != nil {
 				return reconcile.Result{}, err
 			}
 			return reconcile.Result{}, nil
@@ -136,7 +143,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		pb := instance.DeepCopy()
 		pb.Status.DataStreamStatus = compliancev1alpha1.DataStreamPending
 		pb.Status.SetConditionPending()
-		err = r.client.Status().Update(context.TODO(), pb)
+		err = r.Client.Status().Update(context.TODO(), pb)
 		if err != nil {
 			reqLogger.Error(err, "Couldn't update ProfileBundle status")
 			return reconcile.Result{}, err
@@ -161,7 +168,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		pbCopy.Status.DataStreamStatus = compliancev1alpha1.DataStreamInvalid
 		pbCopy.Status.ErrorMessage = err.Error()
 		pbCopy.Status.SetConditionInvalid()
-		err = r.client.Status().Update(context.TODO(), pbCopy)
+		err = r.Client.Status().Update(context.TODO(), pbCopy)
 		if err != nil {
 			reqLogger.Error(err, "Couldn't update ProfileBundle status")
 			return reconcile.Result{}, err
@@ -182,11 +189,11 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 	depl := r.newWorkloadForBundle(instance, effectiveImage)
 
 	found := &appsv1.Deployment{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: depl.Name, Namespace: depl.Namespace}, found)
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: depl.Name, Namespace: depl.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
 		reqLogger.Info("Creating a new Workload", "Deployment.Namespace", depl.Namespace, "Deployment.Name", depl.Name)
 		depl.Annotations = annotations
-		err = r.client.Create(context.TODO(), depl)
+		err = r.Client.Create(context.TODO(), depl)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -201,7 +208,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		pbCopy.Status.DataStreamStatus = compliancev1alpha1.DataStreamPending
 		pbCopy.Status.ErrorMessage = ""
 		pbCopy.Status.SetConditionPending()
-		err = r.client.Status().Update(context.TODO(), pbCopy)
+		err = r.Client.Status().Update(context.TODO(), pbCopy)
 		if err != nil {
 			reqLogger.Error(err, "Couldn't update ProfileBundle status")
 			return reconcile.Result{}, err
@@ -215,7 +222,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 			updatedDepl.Annotations[key] = val
 		}
 		reqLogger.Info("Updating Workload", "Deployment.Namespace", depl.Namespace, "Deployment.Name", depl.Name)
-		err = r.client.Update(context.TODO(), updatedDepl)
+		err = r.Client.Update(context.TODO(), updatedDepl)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -225,7 +232,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 
 	labels := getWorkloadLabels(instance)
 	foundPods := &corev1.PodList{}
-	err = r.client.List(context.TODO(), foundPods, client.MatchingLabels(labels))
+	err = r.Client.List(context.TODO(), foundPods, client.MatchingLabels(labels))
 
 	if len(foundPods.Items) == 0 {
 		reqLogger.Info("Pod not scheduled yet. Waiting for Deployment to do it.",
@@ -244,7 +251,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		pbCopy.Status.DataStreamStatus = compliancev1alpha1.DataStreamInvalid
 		pbCopy.Status.ErrorMessage = "The init container failed to start. Verify Status.ContentImage."
 		pbCopy.Status.SetConditionInvalid()
-		err = r.client.Status().Update(context.TODO(), pbCopy)
+		err = r.Client.Status().Update(context.TODO(), pbCopy)
 		if err != nil {
 			reqLogger.Error(err, "Couldn't update ProfileBundle status")
 			return reconcile.Result{}, err
@@ -262,7 +269,7 @@ func (r *ReconcileProfileBundle) Reconcile(request reconcile.Request) (reconcile
 		reqLogger.Info("Updating Profile Bundle condition to valid")
 		pbCopy := instance.DeepCopy()
 		pbCopy.Status.SetConditionReady()
-		err = r.client.Status().Update(context.TODO(), pbCopy)
+		err = r.Client.Status().Update(context.TODO(), pbCopy)
 		if err != nil {
 			reqLogger.Error(err, "Couldn't update ProfileBundle status")
 			return reconcile.Result{}, err
@@ -275,7 +282,7 @@ func (r *ReconcileProfileBundle) profileBundleDeleteHandler(pb *compliancev1alph
 	logger.Info("The ProfileBundle is being deleted")
 	pod := r.newWorkloadForBundle(pb, "")
 	logger.Info("Deleting profileparser workload", "Pod.Name", pod.Name)
-	err := r.client.Delete(context.TODO(), pod)
+	err := r.Client.Delete(context.TODO(), pod)
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
@@ -283,7 +290,7 @@ func (r *ReconcileProfileBundle) profileBundleDeleteHandler(pb *compliancev1alph
 	pbCopy := pb.DeepCopy()
 	// remove our finalizer from the list and update it.
 	pbCopy.ObjectMeta.Finalizers = common.RemoveFinalizer(pbCopy.ObjectMeta.Finalizers, compliancev1alpha1.ProfileBundleFinalizer)
-	if err := r.client.Update(context.TODO(), pbCopy); err != nil {
+	if err := r.Client.Update(context.TODO(), pbCopy); err != nil {
 		return err
 	}
 	return nil
@@ -328,14 +335,14 @@ func (r *ReconcileProfileBundle) pointsToISTag(contentImageRef string) (bool, st
 }
 
 // This is temporary code that handles updates from version
-// that didn't include https://github.com/openshift/compliance-operator/pull/467
+// that didn't include https://github.com/ComplianceAsCode/compliance-operator/pull/467
 func (r *ReconcileProfileBundle) deleteNonNamespacedWorkload(pb *compliancev1alpha1.ProfileBundle, logger logr.Logger) error {
 	oldDeployName := types.NamespacedName{
 		Name:      pb.Name + "-pp",
 		Namespace: common.GetComplianceOperatorNamespace(),
 	}
 	nonNamespacedFound := &appsv1.Deployment{}
-	err := r.client.Get(context.TODO(), oldDeployName, nonNamespacedFound)
+	err := r.Client.Get(context.TODO(), oldDeployName, nonNamespacedFound)
 	if errors.IsNotFound(err) {
 		// no such old deployment exists
 		return nil
@@ -351,7 +358,7 @@ func (r *ReconcileProfileBundle) deleteNonNamespacedWorkload(pb *compliancev1alp
 	}
 
 	logger.Info("Deleting old deployment", "oldDeployNamespacedName", oldDeployName)
-	err = r.client.Delete(context.TODO(), nonNamespacedFound)
+	err = r.Client.Delete(context.TODO(), nonNamespacedFound)
 	if errors.IsNotFound(err) {
 		err = nil
 	}

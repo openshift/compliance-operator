@@ -3,9 +3,9 @@ package compliancescan
 import (
 	"context"
 
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
 	"github.com/go-logr/logr"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -27,14 +27,14 @@ func (r *ReconcileComplianceScan) handleRawResultsForScan(instance *compv1alpha1
 	// Create PVC
 	pvc := getPVCForScan(instance)
 	logger.Info("Creating PVC for scan", "PersistentVolumeClaim.Name", pvc.Name, "PersistentVolumeClaim.Namespace", pvc.Namespace)
-	if err := r.client.Create(context.TODO(), pvc); err != nil && !errors.IsAlreadyExists(err) {
+	if err := r.Client.Create(context.TODO(), pvc); err != nil && !errors.IsAlreadyExists(err) {
 		// Handle resource limit issues
 		if errors.IsForbidden(err) {
 			scanCopy := instance.DeepCopy()
 			scanCopy.Status.Phase = compv1alpha1.PhaseDone
 			scanCopy.Status.Result = compv1alpha1.ResultError
 			scanCopy.Status.ErrorMessage = rawStorageAllocationErrorPrefix + err.Error()
-			return false, r.client.Status().Update(context.TODO(), scanCopy)
+			return false, r.Client.Status().Update(context.TODO(), scanCopy)
 		}
 		return false, err
 	}
@@ -45,14 +45,14 @@ func (r *ReconcileComplianceScan) handleRawResultsForScan(instance *compv1alpha1
 		scanCopy.Status.ResultsStorage.Name = pvc.Name
 		scanCopy.Status.ResultsStorage.Namespace = pvc.Namespace
 		logger.Info("Updating scan status with raw result reference")
-		return false, r.client.Status().Update(context.TODO(), scanCopy)
+		return false, r.Client.Status().Update(context.TODO(), scanCopy)
 	}
 	return true, nil
 }
 
 func (r *ReconcileComplianceScan) deleteRawResultsForScan(instance *compv1alpha1.ComplianceScan) error {
 	pvc := getPVCForScan(instance)
-	if err := r.client.Delete(context.TODO(), pvc); err != nil && !errors.IsNotFound(err) {
+	if err := r.Client.Delete(context.TODO(), pvc); err != nil && !errors.IsNotFound(err) {
 		return err
 	}
 	return nil

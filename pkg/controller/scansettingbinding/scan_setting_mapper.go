@@ -2,10 +2,9 @@ package scansettingbinding
 
 import (
 	"context"
-	"github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -13,7 +12,7 @@ type scanSettingMapper struct {
 	client.Client
 }
 
-func (s *scanSettingMapper) Map(obj handler.MapObject) []reconcile.Request {
+func (s *scanSettingMapper) Map(obj client.Object) []reconcile.Request {
 	var requests []reconcile.Request
 
 	ssbList := v1alpha1.ScanSettingBindingList{}
@@ -27,7 +26,7 @@ func (s *scanSettingMapper) Map(obj handler.MapObject) []reconcile.Request {
 			continue
 		}
 
-		if ssb.SettingsRef.Name != obj.Meta.GetName() {
+		if ssb.SettingsRef.Name != obj.GetName() {
 			continue
 		}
 

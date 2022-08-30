@@ -3,7 +3,7 @@ package e2e
 import (
 	"testing"
 
-	framework "github.com/operator-framework/operator-sdk/pkg/test"
+	"github.com/ComplianceAsCode/compliance-operator/tests/e2e/framework"
 )
 
 func TestMain(m *testing.M) {

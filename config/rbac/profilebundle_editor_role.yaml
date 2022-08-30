@@ -1,0 +1,24 @@
+# permissions for end users to edit profilebundles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: profilebundle-editor-role
+rules:
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - profilebundles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - compliance.openshift.io
+  resources:
+  - profilebundles/status
+  verbs:
+  - get

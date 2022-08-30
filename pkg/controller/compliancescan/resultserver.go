@@ -14,9 +14,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 )
 
 const resultserverSA = "resultserver"
@@ -43,12 +43,12 @@ func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.Comp
 		return podUidErr
 	}
 	deployment := resultServer(instance, resultServerLabels, podFSGroup, podUid, logger)
-	if priorityClassExist, why := utils.ValidatePriorityClassExist(deployment.Spec.Template.Spec.PriorityClassName, r.client); !priorityClassExist {
+	if priorityClassExist, why := utils.ValidatePriorityClassExist(deployment.Spec.Template.Spec.PriorityClassName, r.Client); !priorityClassExist {
 		log.Info(why, "resultServer", deployment.Name)
-		r.recorder.Eventf(deployment, corev1.EventTypeWarning, "PriorityClass", why+" resultServer:"+deployment.Name)
+		r.Recorder.Eventf(deployment, corev1.EventTypeWarning, "PriorityClass", why+" resultServer:"+deployment.Name)
 		deployment.Spec.Template.Spec.PriorityClassName = ""
 	}
-	err := r.client.Create(ctx, deployment)
+	err := r.Client.Create(ctx, deployment)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logger.Error(err, "Cannot create deployment", "deployment", deployment)
 		return err
@@ -56,7 +56,7 @@ func (r *ReconcileComplianceScan) createResultServer(instance *compv1alpha1.Comp
 	logger.Info("ResultServer Deployment launched", "Deployment.Name", deployment.Name)
 
 	service := resultServerService(instance, resultServerLabels)
-	err = r.client.Create(ctx, service)
+	err = r.Client.Create(ctx, service)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		logger.Error(err, "Cannot create service", "service", service)
 		return err
@@ -79,7 +79,7 @@ func (r *ReconcileComplianceScan) scaleDownResultServer(instance *compv1alpha1.C
 	rslog.Info("Scaling down result server")
 
 	found := &appsv1.Deployment{}
-	err := r.client.Get(ctx, key, found)
+	err := r.Client.Get(ctx, key, found)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			rslog.Info("result server doesn't exist. " +
@@ -95,7 +95,7 @@ func (r *ReconcileComplianceScan) scaleDownResultServer(instance *compv1alpha1.C
 	rs := found.DeepCopy()
 	rs.Spec.Replicas = &zeroRepls
 	rslog.Info("Updating result server for scale-down")
-	return r.client.Update(ctx, rs)
+	return r.Client.Update(ctx, rs)
 }
 
 func (r *ReconcileComplianceScan) deleteResultServer(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
@@ -105,7 +105,7 @@ func (r *ReconcileComplianceScan) deleteResultServer(instance *compv1alpha1.Comp
 
 	deployment := resultServer(instance, resultServerLabels, 0, 0, logger)
 
-	err := r.client.Delete(context.TODO(), deployment)
+	err := r.Client.Delete(context.TODO(), deployment)
 	if err != nil && !errors.IsNotFound(err) {
 		logger.Error(err, "Cannot delete deployment", "deployment", deployment)
 		return err
@@ -114,7 +114,7 @@ func (r *ReconcileComplianceScan) deleteResultServer(instance *compv1alpha1.Comp
 	logger.Info("Deleting scan result server service")
 
 	service := resultServerService(instance, resultServerLabels)
-	err = r.client.Delete(context.TODO(), service)
+	err = r.Client.Delete(context.TODO(), service)
 	if err != nil && !errors.IsNotFound(err) {
 		logger.Error(err, "Cannot delete service", "service", service)
 		return err
@@ -147,7 +147,7 @@ func (r *ReconcileComplianceScan) getRangeFromNSorDefault(
 		Name: common.GetComplianceOperatorNamespace(),
 	}
 	ns := corev1.Namespace{}
-	if geterr := r.client.Get(ctx, key, &ns); geterr != nil {
+	if geterr := r.Client.Get(ctx, key, &ns); geterr != nil {
 		return 0, geterr
 	}
 	anns := ns.GetAnnotations()

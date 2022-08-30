@@ -1,0 +1,30 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: profileparser
+rules:
+  - apiGroups:
+      - compliance.openshift.io
+    resources:
+      - profilebundles
+      - profilebundles/status
+      - profilebundles/finalizers
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+  - apiGroups:
+      - compliance.openshift.io
+    resources:
+      - profiles
+      - rules
+      - variables
+    verbs:
+      - get
+      - watch
+      - list
+      - create
+      - update
+      - delete

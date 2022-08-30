@@ -23,14 +23,6 @@ import (
 	ocpapi "github.com/openshift/api"
 	configv1 "github.com/openshift/api/config/v1"
 	imagev1 "github.com/openshift/api/image/v1"
-	"github.com/openshift/compliance-operator/pkg/apis"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	compsuitectrl "github.com/openshift/compliance-operator/pkg/controller/compliancesuite"
-	"github.com/openshift/compliance-operator/pkg/utils"
-	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	framework "github.com/operator-framework/operator-sdk/pkg/test"
-	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -40,12 +32,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/ComplianceAsCode/compliance-operator/pkg/apis"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	compsuitectrl "github.com/ComplianceAsCode/compliance-operator/pkg/controller/compliancesuite"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
+	"github.com/ComplianceAsCode/compliance-operator/tests/e2e/e2eutil"
+	"github.com/ComplianceAsCode/compliance-operator/tests/e2e/framework"
+	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
 var contentImagePath string
@@ -62,7 +62,7 @@ var (
 )
 
 type ObjectResouceVersioner interface {
-	runtime.Object
+	client.Object
 	metav1.Common
 }
 
@@ -320,10 +320,11 @@ func executeTests(t *testing.T, tests ...testExecution) {
 // NOTE: Whenever we add new types to the operator, we need to register them here for the e2e tests.
 func setupTestRequirements(t *testing.T) *framework.Context {
 	// compliance-operator objects
-	coObjs := [3]runtime.Object{&compv1alpha1.ComplianceScanList{},
+	coObjs := [3]client.ObjectList{&compv1alpha1.ComplianceScanList{},
 		&compv1alpha1.ComplianceRemediationList{},
 		&compv1alpha1.ComplianceSuiteList{},
 	}
+
 	for _, obj := range coObjs {
 		err := framework.AddToFrameworkScheme(apis.AddToScheme, obj)
 		if err != nil {
@@ -332,8 +333,8 @@ func setupTestRequirements(t *testing.T) *framework.Context {
 	}
 
 	// Additional testing objects
-	testObjs := [1]runtime.Object{
-		&configv1.OAuth{},
+	testObjs := [1]client.ObjectList{
+		&configv1.OAuthList{},
 	}
 	for _, obj := range testObjs {
 		err := framework.AddToFrameworkScheme(configv1.Install, obj)
@@ -343,7 +344,7 @@ func setupTestRequirements(t *testing.T) *framework.Context {
 	}
 
 	// MCO objects
-	mcoObjs := [2]runtime.Object{
+	mcoObjs := [2]client.ObjectList{
 		&mcfgv1.MachineConfigPoolList{},
 		&mcfgv1.MachineConfigList{},
 	}
@@ -355,7 +356,7 @@ func setupTestRequirements(t *testing.T) *framework.Context {
 	}
 
 	// OpenShift objects
-	ocpObjs := [2]runtime.Object{
+	ocpObjs := [2]client.ObjectList{
 		&imagev1.ImageStreamList{},
 		&imagev1.ImageStreamTagList{},
 	}
@@ -366,8 +367,8 @@ func setupTestRequirements(t *testing.T) *framework.Context {
 	}
 
 	//Schedule objects
-	scObjs := [1]runtime.Object{
-		&schedulingv1.PriorityClass{},
+	scObjs := [1]client.ObjectList{
+		&schedulingv1.PriorityClassList{},
 	}
 	for _, obj := range scObjs {
 		if err := framework.AddToFrameworkScheme(schedulingv1.AddToScheme, obj); err != nil {
@@ -625,7 +626,7 @@ func waitForRemediationState(t *testing.T, f *framework.Framework, namespace, na
 	return nil
 }
 
-func waitForObjectToExist(t *testing.T, f *framework.Framework, name, namespace string, obj runtime.Object) error {
+func waitForObjectToExist(t *testing.T, f *framework.Framework, name, namespace string, obj client.Object) error {
 	var lastErr error
 	// retry and ignore errors until timeout
 	timeouterr := wait.Poll(retryInterval, timeout, func() (bool, error) {
@@ -2058,7 +2059,7 @@ func privCommandTuplePodOnHost(namespace, name, nodeName, commandPre string, com
 						RunAsUser:  &runAs,
 					},
 					Lifecycle: &corev1.Lifecycle{
-						PreStop: &corev1.Handler{
+						PreStop: &corev1.LifecycleHandler{
 							Exec: &corev1.ExecAction{Command: commandPost},
 						},
 					},

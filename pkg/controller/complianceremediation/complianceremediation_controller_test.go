@@ -4,15 +4,15 @@ import (
 	"context"
 	"strings"
 
+	"github.com/ComplianceAsCode/compliance-operator/pkg/apis"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/metrics/metricsfakes"
 	"github.com/clarketm/json"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/openshift/compliance-operator/pkg/apis"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics"
-	"github.com/openshift/compliance-operator/pkg/controller/metrics/metricsfakes"
 	mcfgapi "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"go.uber.org/zap"
@@ -120,7 +120,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 		err = mockMetrics.Register()
 		Expect(err).To(BeNil())
 
-		reconciler = &ReconcileComplianceRemediation{client: client, scheme: cscheme, metrics: mockMetrics}
+		reconciler = &ReconcileComplianceRemediation{Client: client, Scheme: cscheme, Metrics: mockMetrics}
 		zaplog, _ := zap.NewDevelopment()
 		logger = zapr.NewLogger(zaplog)
 	})
@@ -128,7 +128,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 	Context("applying remediations", func() {
 		BeforeEach(func() {
 			remediationinstance.Spec.Apply = true
-			reconciler.client.Update(context.TODO(), remediationinstance)
+			reconciler.Client.Update(context.TODO(), remediationinstance)
 		})
 
 		Context("with a nil object", itShouldNotReconcile)
@@ -153,7 +153,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
 					Object: unstructuredCM,
 				}
-				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				err = reconciler.Client.Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -164,7 +164,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				Expect(err).To(BeNil())
 				By("the remediation should be applied")
 				foundCM := &corev1.ConfigMap{}
-				err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
+				err = reconciler.Client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(foundCM.GetName()).To(Equal("my-cm"))
 				Expect(foundCM.Data["key"]).To(Equal("val"))
@@ -189,7 +189,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
 					Object: unstructuredMC,
 				}
-				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				err = reconciler.Client.Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -202,7 +202,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				By("the remediation should be applied")
 				foundMC := &mcfgv1.MachineConfig{}
 				mcKey := types.NamespacedName{Name: remediationinstance.GetMcName()}
-				err = reconciler.client.Get(context.TODO(), mcKey, foundMC)
+				err = reconciler.Client.Get(context.TODO(), mcKey, foundMC)
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -229,7 +229,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
 					Object: unstructuredKC,
 				}
-				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				err = reconciler.Client.Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -242,7 +242,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				By("the remediation should be applied")
 				foundKC := &mcfgv1.KubeletConfig{}
 				mcKey := types.NamespacedName{Name: "compliance-operator-kubelet-" + mcp.GetName()}
-				err = reconciler.client.Get(context.TODO(), mcKey, foundKC)
+				err = reconciler.Client.Get(context.TODO(), mcKey, foundKC)
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -274,7 +274,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 					},
 				}
 				mcp.Spec.Configuration = mcConfig
-				err := reconciler.client.Update(context.TODO(), mcp)
+				err := reconciler.Client.Update(context.TODO(), mcp)
 				Expect(err).NotTo(HaveOccurred())
 
 				rawConfig, _ := json.Marshal(map[string]int{"maxPods": 1123})
@@ -296,7 +296,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
 					Object: unstructuredKC,
 				}
-				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				err = reconciler.Client.Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -309,7 +309,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				By("the remediation should be applied")
 				foundKC := &mcfgv1.KubeletConfig{}
 				mcKey := types.NamespacedName{Name: "compliance-operator-kubelet-" + mcp.GetName()}
-				err = reconciler.client.Get(context.TODO(), mcKey, foundKC)
+				err = reconciler.Client.Get(context.TODO(), mcKey, foundKC)
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -347,7 +347,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 					},
 				}
 				mcp.Spec.Configuration = mcConfig
-				err := reconciler.client.Update(context.TODO(), mcp)
+				err := reconciler.Client.Update(context.TODO(), mcp)
 				Expect(err).NotTo(HaveOccurred())
 
 				//We need to simulate for a exsisting generated kubelet Machine Config
@@ -369,7 +369,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 					},
 				}
 
-				err = reconciler.client.Create(context.TODO(), kMCGenerated)
+				err = reconciler.Client.Create(context.TODO(), kMCGenerated)
 				Expect(err).NotTo(HaveOccurred())
 
 				//create the exsisting kublet config, owner of 99-worker-generated-kubelet-3
@@ -393,7 +393,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 					},
 				}
 
-				err = reconciler.client.Create(context.TODO(), ekc)
+				err = reconciler.Client.Create(context.TODO(), ekc)
 				Expect(err).NotTo(HaveOccurred())
 
 				newRawConfig, _ := json.Marshal(map[string]int{"test-value-2": 1125})
@@ -415,7 +415,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
 					Object: unstructuredKC,
 				}
-				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				err = reconciler.Client.Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -428,12 +428,12 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				By("the remediation should be applied")
 				foundKC := &mcfgv1.KubeletConfig{}
 				mcKey := types.NamespacedName{Name: "custom-kubelet"}
-				err = reconciler.client.Get(context.TODO(), mcKey, foundKC)
+				err = reconciler.Client.Get(context.TODO(), mcKey, foundKC)
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Unapply remediation")
 				remediationinstance.Spec.Apply = false
-				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				err = reconciler.Client.Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = reconciler.reconcileRemediation(remediationinstance, logger)
@@ -443,7 +443,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				// we don't allow kubeletconfig remediation to be unapplied
 				foundKC = &mcfgv1.KubeletConfig{}
 				mcKey = types.NamespacedName{Name: "custom-kubelet"}
-				err = reconciler.client.Get(context.TODO(), mcKey, foundKC)
+				err = reconciler.Client.Get(context.TODO(), mcKey, foundKC)
 				Expect(kerrors.IsNotFound(err)).NotTo(BeTrue())
 			})
 
@@ -487,7 +487,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				remediationinstance.Spec.Outdated.Object = &unstructured.Unstructured{
 					Object: unstructuredOutdated,
 				}
-				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				err = reconciler.Client.Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -498,7 +498,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				Expect(err).To(BeNil())
 				By("the outdated remediation should be applied")
 				foundCM := &corev1.ConfigMap{}
-				err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
+				err = reconciler.Client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(foundCM.GetName()).To(Equal("my-cm"))
 				Expect(foundCM.Data["outdatedkey"]).To(Equal("outdatedval"))
@@ -528,11 +528,11 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				}
 				// NOTE that the Outdated remediation object is nil, which
 				// reflects an admin having removed it.
-				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				err = reconciler.Client.Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 				// mock that the remediation was applied
 				remediationinstance.Status.ApplicationState = compv1alpha1.RemediationApplied
-				err = reconciler.client.Status().Update(context.TODO(), remediationinstance)
+				err = reconciler.Client.Status().Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -543,12 +543,12 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				req := reconcile.Request{
 					NamespacedName: key,
 				}
-				_, err := reconciler.Reconcile(req)
+				_, err := reconciler.Reconcile(context.TODO(), req)
 				Expect(err).To(BeNil())
 
 				By("the outdated remediation label should not be there")
 				foundRem := &compv1alpha1.ComplianceRemediation{}
-				err = reconciler.client.Get(context.TODO(), key, foundRem)
+				err = reconciler.Client.Get(context.TODO(), key, foundRem)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(foundRem.Labels).NotTo(HaveKey(compv1alpha1.OutdatedRemediationLabel))
 			})
@@ -576,11 +576,11 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				}
 				// NOTE that the Outdated remediation object is nil, which
 				// reflects an admin having removed it.
-				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				err = reconciler.Client.Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 				// mock that the remediation was applied
 				remediationinstance.Status.ApplicationState = compv1alpha1.RemediationApplied
-				err = reconciler.client.Status().Update(context.TODO(), remediationinstance)
+				err = reconciler.Client.Status().Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -591,7 +591,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				testRemAnnotations[compv1alpha1.RemediationValueRequiredAnnotation] = ""
 				remediationinstance.Annotations = testRemAnnotations
 
-				err := reconciler.client.Update(context.TODO(), remediationinstance)
+				err := reconciler.Client.Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 
 				key := types.NamespacedName{Name: remediationinstance.GetName()}
@@ -600,7 +600,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				Expect(hasUpdate).To(Equal(false))
 
 				By("running a reconcile loop")
-				err = reconciler.client.Get(context.TODO(), key, remediationinstance)
+				err = reconciler.Client.Get(context.TODO(), key, remediationinstance)
 				Expect(err).ToNot(HaveOccurred())
 
 				hasUpdate, err = reconciler.handleValueRequired(remediationinstance, logger)
@@ -630,10 +630,10 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
 					Object: unstructuredCurrent,
 				}
-				err = reconciler.client.Update(context.TODO(), remediationinstance)
+				err = reconciler.Client.Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 				remediationinstance.Status.ApplicationState = compv1alpha1.RemediationApplied
-				err = reconciler.client.Status().Update(context.TODO(), remediationinstance)
+				err = reconciler.Client.Status().Update(context.TODO(), remediationinstance)
 				Expect(err).NotTo(HaveOccurred())
 			})
 			It("should add unset-label", func() {
@@ -642,11 +642,11 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				req := reconcile.Request{
 					NamespacedName: key,
 				}
-				_, err := reconciler.Reconcile(req)
+				_, err := reconciler.Reconcile(context.TODO(), req)
 				Expect(err).To(BeNil())
 				By("The unset-label should be added")
 				foundRem := &compv1alpha1.ComplianceRemediation{}
-				err = reconciler.client.Get(context.TODO(), key, foundRem)
+				err = reconciler.Client.Get(context.TODO(), key, foundRem)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(foundRem.Labels).To(HaveKey(compv1alpha1.RemediationUnsetValueLabel))
 			})
@@ -658,17 +658,17 @@ var _ = Describe("Testing complianceremediation controller", func() {
 				req := reconcile.Request{
 					NamespacedName: key,
 				}
-				_, err := reconciler.Reconcile(req)
+				_, err := reconciler.Reconcile(context.TODO(), req)
 				Expect(err).To(BeNil())
 				By("running a reconcile loop second time will handle value-required annotation")
-				_, err = reconciler.Reconcile(req)
+				_, err = reconciler.Reconcile(context.TODO(), req)
 				Expect(err).To(BeNil())
 				By("running a reconcile loop third time should update the status to Needs-Review")
-				_, err = reconciler.Reconcile(req)
+				_, err = reconciler.Reconcile(context.TODO(), req)
 				Expect(err).To(BeNil())
 				By("The unset-label should be added")
 				foundRem := &compv1alpha1.ComplianceRemediation{}
-				err = reconciler.client.Get(context.TODO(), key, foundRem)
+				err = reconciler.Client.Get(context.TODO(), key, foundRem)
 				Expect(err).ToNot(HaveOccurred())
 				unSetVals := strings.Split(foundRem.Annotations[compv1alpha1.RemediationUnsetValueAnnotation], ",")
 				Expect(unSetVals).To(ContainElement("req-value-1"))
@@ -685,7 +685,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 	Context("un-applying remediations", func() {
 		BeforeEach(func() {
 			remediationinstance.Spec.Apply = false
-			err := reconciler.client.Update(context.TODO(), remediationinstance)
+			err := reconciler.Client.Update(context.TODO(), remediationinstance)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -712,7 +712,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 					remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
 						Object: unstructuredCM,
 					}
-					err = reconciler.client.Update(context.TODO(), remediationinstance)
+					err = reconciler.Client.Update(context.TODO(), remediationinstance)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -724,7 +724,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 
 					By("the remediation should not be applied")
 					foundCM := &corev1.ConfigMap{}
-					err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
+					err = reconciler.Client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
 					By("should return a NotFound error")
 					Expect(kerrors.IsNotFound(err)).To(BeTrue())
 				})
@@ -754,16 +754,16 @@ var _ = Describe("Testing complianceremediation controller", func() {
 					remediationinstance.Spec.Current.Object = &unstructured.Unstructured{
 						Object: unstructuredCM,
 					}
-					err = reconciler.client.Update(context.TODO(), remediationinstance)
+					err = reconciler.Client.Update(context.TODO(), remediationinstance)
 					Expect(err).NotTo(HaveOccurred())
-					err = reconciler.client.Create(context.TODO(), cm)
+					err = reconciler.Client.Create(context.TODO(), cm)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("should delete the remediation", func() {
 					By("checking that the object is there")
 					foundCM := &corev1.ConfigMap{}
-					err := reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
+					err := reconciler.Client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(foundCM.GetName()).To(Equal("my-cm"))
 					Expect(foundCM.Data["key"]).To(Equal("val"))
@@ -774,7 +774,7 @@ var _ = Describe("Testing complianceremediation controller", func() {
 					Expect(err).To(BeNil())
 
 					By("the remediation should be un-applied")
-					err = reconciler.client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
+					err = reconciler.Client.Get(context.TODO(), types.NamespacedName{Name: "my-cm", Namespace: "test-ns"}, foundCM)
 					By("should return a NotFound error")
 					Expect(kerrors.IsNotFound(err)).To(BeTrue())
 				})

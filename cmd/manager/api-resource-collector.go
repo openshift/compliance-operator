@@ -13,14 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package main
+package manager
 
 import (
 	"flag"
 	"k8s.io/apimachinery/pkg/runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
@@ -28,7 +27,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-var apiResourceCollectorCmd = &cobra.Command{
+var ApiResourceCollectorCmd = &cobra.Command{
 	Use:   "api-resource-collector",
 	Short: "Stages cluster resources for OpenSCAP scanning.",
 	Long:  "Stages cluster resources for OpenSCAP scanning.",
@@ -36,8 +35,7 @@ var apiResourceCollectorCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(apiResourceCollectorCmd)
-	defineAPIResourceCollectorFlags(apiResourceCollectorCmd)
+	defineAPIResourceCollectorFlags(ApiResourceCollectorCmd)
 }
 
 // ResourceFetcher sources content for resource paths to gather, and then saves the path contents.
@@ -75,7 +73,6 @@ func defineAPIResourceCollectorFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("debug", false, "Print debug messages.")
 
 	flags := cmd.Flags()
-	flags.AddFlagSet(zap.FlagSet())
 
 	// Add flags registered by imported packages (e.g. glog and
 	// controller-runtime)

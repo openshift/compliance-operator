@@ -7,12 +7,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
 )
 
 func (r *ReconcileComplianceScan) handleRootCASecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	exist, err := secretExists(r.client, RootCAPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	exist, err := secretExists(r.Client, RootCAPrefix+instance.Name, common.GetComplianceOperatorNamespace())
 	if err != nil {
 		return err
 	}
@@ -27,7 +27,7 @@ func (r *ReconcileComplianceScan) handleRootCASecret(instance *compv1alpha1.Comp
 	}
 
 	// Create the CA secret.
-	err = r.client.Create(context.TODO(), secret)
+	err = r.Client.Create(context.TODO(), secret)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
@@ -36,7 +36,7 @@ func (r *ReconcileComplianceScan) handleRootCASecret(instance *compv1alpha1.Comp
 }
 
 func (r *ReconcileComplianceScan) handleResultServerSecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	exist, err := secretExists(r.client, ServerCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	exist, err := secretExists(r.Client, ServerCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
 	if err != nil {
 		return err
 	}
@@ -45,13 +45,13 @@ func (r *ReconcileComplianceScan) handleResultServerSecret(instance *compv1alpha
 	}
 
 	logger.Info("creating server cert", "ComplianceScan.Name", instance.Name)
-	secret, err := makeServerCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
+	secret, err := makeServerCertSecret(r.Client, instance, common.GetComplianceOperatorNamespace())
 	if err != nil {
 		return err
 	}
 
 	// Create the server cert secret.
-	err = r.client.Create(context.TODO(), secret)
+	err = r.Client.Create(context.TODO(), secret)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
@@ -59,7 +59,7 @@ func (r *ReconcileComplianceScan) handleResultServerSecret(instance *compv1alpha
 }
 
 func (r *ReconcileComplianceScan) handleResultClientSecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	exist, err := secretExists(r.client, ClientCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
+	exist, err := secretExists(r.Client, ClientCertPrefix+instance.Name, common.GetComplianceOperatorNamespace())
 	if err != nil {
 		return err
 	}
@@ -67,14 +67,14 @@ func (r *ReconcileComplianceScan) handleResultClientSecret(instance *compv1alpha
 		return nil
 	}
 
-	logger.Info("creating client cert", "ComplianceScan.Name", instance.Name)
-	secret, err := makeClientCertSecret(r.client, instance, common.GetComplianceOperatorNamespace())
+	logger.Info("creating Client cert", "ComplianceScan.Name", instance.Name)
+	secret, err := makeClientCertSecret(r.Client, instance, common.GetComplianceOperatorNamespace())
 	if err != nil {
 		return err
 	}
 
-	// Create the client cert secret.
-	err = r.client.Create(context.TODO(), secret)
+	// Create the Client cert secret.
+	err = r.Client.Create(context.TODO(), secret)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
@@ -97,15 +97,15 @@ func (r *ReconcileComplianceScan) deleteResultServerSecret(instance *compv1alpha
 }
 
 func (r *ReconcileComplianceScan) deleteResultClientSecret(instance *compv1alpha1.ComplianceScan, logger logr.Logger) error {
-	logger.Info("deleting client cert", "ComplianceScan.Name", instance.Name)
+	logger.Info("deleting Client cert", "ComplianceScan.Name", instance.Name)
 	ns := common.GetComplianceOperatorNamespace()
 	secret := certSecret(getClientCertSecretName(instance), ns, []byte{}, []byte{}, []byte{})
 	return r.deleteSecret(secret)
 }
 
 func (r *ReconcileComplianceScan) deleteSecret(secret *corev1.Secret) error {
-	// Delete the client cert secret.
-	err := r.client.Delete(context.TODO(), secret)
+	// Delete the Client cert secret.
+	err := r.Client.Delete(context.TODO(), secret)
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}

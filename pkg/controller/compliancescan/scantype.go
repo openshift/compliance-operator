@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
+	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 	"github.com/go-logr/logr"
-	compv1alpha1 "github.com/openshift/compliance-operator/pkg/apis/compliance/v1alpha1"
-	"github.com/openshift/compliance-operator/pkg/controller/common"
-	"github.com/openshift/compliance-operator/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
@@ -91,7 +91,7 @@ func (nh *nodeScanTypeHandler) getTargetNodes() ([]corev1.Node, error) {
 			LabelSelector: labels.SelectorFromSet(labels.Merge(nh.scan.Spec.NodeSelector, nodeScanSelector)),
 		}
 
-		if err := nh.r.client.List(context.TODO(), &nodes, &listOpts); err != nil {
+		if err := nh.r.Client.List(context.TODO(), &nodes, &listOpts); err != nil {
 			return nodes.Items, err
 		}
 	}
@@ -103,7 +103,7 @@ func (nh *nodeScanTypeHandler) validate() (bool, error) {
 	if len(nh.nodes) == 0 {
 		warning := "No nodes matched the nodeSelector"
 		nh.l.Info(warning)
-		nh.r.recorder.Event(nh.scan, corev1.EventTypeWarning, "NoMatchingNodes", warning)
+		nh.r.Recorder.Event(nh.scan, corev1.EventTypeWarning, "NoMatchingNodes", warning)
 		instanceCopy := nh.scan.DeepCopy()
 		instanceCopy.Status.Result = compv1alpha1.ResultNotApplicable
 		instanceCopy.Status.Phase = compv1alpha1.PhaseDone
@@ -117,7 +117,7 @@ func (nh *nodeScanTypeHandler) validate() (bool, error) {
 		if nh.getScan().IsStrictNodeScan() && node.Spec.Unschedulable {
 			nh.l.Info(nodeWarning, "Node.Name", node.GetName())
 			eventFmt := fmt.Sprintf("%s: %s", nodeWarning, node.GetName())
-			nh.r.recorder.Event(nh.scan, corev1.EventTypeWarning, "UnschedulableNode", eventFmt)
+			nh.r.Recorder.Event(nh.scan, corev1.EventTypeWarning, "UnschedulableNode", eventFmt)
 			return false, nil
 		}
 	}
@@ -132,9 +132,9 @@ func (nh *nodeScanTypeHandler) createScanWorkload() error {
 		// ..schedule a pod..
 		nh.l.Info("Creating a pod for node", "Pod.Name", node.Name)
 		pod := newScanPodForNode(nh.scan, node, nh.l)
-		if priorityClassExist, why := utils.ValidatePriorityClassExist(nh.scan.Spec.PriorityClass, nh.r.client); !priorityClassExist {
+		if priorityClassExist, why := utils.ValidatePriorityClassExist(nh.scan.Spec.PriorityClass, nh.r.Client); !priorityClassExist {
 			nh.l.Info(why, "Scan.Name", nh.scan.Name)
-			nh.r.recorder.Eventf(nh.scan, corev1.EventTypeWarning, "PriorityClass", why+" Scan:"+nh.scan.Name)
+			nh.r.Recorder.Eventf(nh.scan, corev1.EventTypeWarning, "PriorityClass", why+" Scan:"+nh.scan.Name)
 			pod.Spec.PriorityClassName = ""
 		}
 		if err := nh.r.launchScanPod(nh.scan, pod, nh.l); err != nil {
@@ -155,7 +155,7 @@ func (nh *nodeScanTypeHandler) handleRunningScan() (bool, error) {
 			nh.l.Info("Phase: Running: A pod is missing. Going to state LAUNCHING to make sure we launch it",
 				"compliancescan", nh.scan.ObjectMeta.Name, "node", node.Name)
 			nh.scan.Status.Phase = compv1alpha1.PhaseLaunching
-			err = nh.r.client.Status().Update(context.TODO(), nh.scan)
+			err = nh.r.Client.Status().Update(context.TODO(), nh.scan)
 			if err != nil {
 				return true, err
 			}
@@ -168,10 +168,10 @@ func (nh *nodeScanTypeHandler) handleRunningScan() (bool, error) {
 				errorReader, false, common.PodUnschedulableExitCode, "")
 			cmKey := types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}
 			foundcm := corev1.ConfigMap{}
-			cmGetErr := nh.r.client.Get(context.TODO(), cmKey, &foundcm)
+			cmGetErr := nh.r.Client.Get(context.TODO(), cmKey, &foundcm)
 
 			if errors.IsNotFound(cmGetErr) {
-				if cmCreateErr := nh.r.client.Create(context.TODO(), cm); cmCreateErr != nil {
+				if cmCreateErr := nh.r.Client.Create(context.TODO(), cm); cmCreateErr != nil {
 					if !errors.IsAlreadyExists(cmCreateErr) {
 						return true, cmCreateErr
 					}
@@ -255,7 +255,7 @@ func (nh *nodeScanTypeHandler) gatherResults() (compv1alpha1.ComplianceScanStatu
 					skipWarn := "Skipping result for scan: Node is unschedulable"
 					nh.l.Info(skipWarn, "Node.Name", node.GetName())
 					eventFmt := fmt.Sprintf("%s: %s", skipWarn, node.GetName())
-					nh.r.recorder.Event(nh.scan, corev1.EventTypeWarning, "UnschedulableNode", eventFmt)
+					nh.r.Recorder.Event(nh.scan, corev1.EventTypeWarning, "UnschedulableNode", eventFmt)
 					continue
 				}
 			}
@@ -314,8 +314,8 @@ func (ph *platformScanTypeHandler) validate() (bool, error) {
 func (ph *platformScanTypeHandler) createScanWorkload() error {
 	ph.l.Info("Creating a Platform scan pod")
 	pod := ph.r.newPlatformScanPod(ph.scan, ph.l)
-	if priorityClassExist, why := utils.ValidatePriorityClassExist(ph.scan.Spec.PriorityClass, ph.r.client); !priorityClassExist {
-		ph.r.recorder.Eventf(ph.scan, corev1.EventTypeWarning, "PriorityClass", why+" Scan:"+ph.scan.Name)
+	if priorityClassExist, why := utils.ValidatePriorityClassExist(ph.scan.Spec.PriorityClass, ph.r.Client); !priorityClassExist {
+		ph.r.Recorder.Eventf(ph.scan, corev1.EventTypeWarning, "PriorityClass", why+" Scan:"+ph.scan.Name)
 		pod.Spec.PriorityClassName = ""
 	}
 	return ph.r.launchScanPod(ph.scan, pod, ph.l)
@@ -328,7 +328,7 @@ func (ph *platformScanTypeHandler) handleRunningScan() (bool, error) {
 		ph.l.Info("Phase: Running: The platform scan pod is missing. Going to state LAUNCHING to make sure we launch it",
 			"compliancescan")
 		ph.scan.Status.Phase = compv1alpha1.PhaseLaunching
-		err = ph.r.client.Status().Update(context.TODO(), ph.scan)
+		err = ph.r.Client.Status().Update(context.TODO(), ph.scan)
 		if err != nil {
 			return true, err
 		}
