@@ -29,6 +29,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   resources would error out. This manifested as the `api-checks-pod` ending up in
   a `CrashLoopBackOff`. More information can be found in the related
   [bug](https://bugzilla.redhat.com/show_bug.cgi?id=2117268)
+- When the scan settings set the `debug` attribute to `true`, Compliance Operator
+  wasn't deleting the scan pods properly when the scan was deleted. This
+  [bug](https://bugzilla.redhat.com/show_bug.cgi?id=2092913) was fixed and
+  the scanner pods are deleted when the scan is removed regardless of the
+  value of the `debug` attribute.
 
 
 ### Internal Changes
