@@ -50,7 +50,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/openshift/api v0.0.0-20220826140015-b21e86c742e7
-	github.com/openshift/library-go v0.0.0-20220523142556-5bcfed822fc6
+	github.com/openshift/library-go v0.0.0-20220826132527-2b7a682a2de4
 	github.com/openshift/machine-config-operator v0.0.1-0.20201123223240-d4188ac400eb
 	github.com/operator-framework/operator-registry v1.24.0
 	github.com/pborman/uuid v1.2.0
@@ -175,7 +175,7 @@ require (
 	github.com/olekukonko/tablewriter v0.0.4 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
-	github.com/openshift/client-go v0.0.0-20220504114320-6aec01bb0754 // indirect
+	github.com/openshift/client-go v0.0.0-20220525160904-9e1acff93e4a // indirect
 	github.com/operator-framework/api v0.15.0 // indirect
 	github.com/otiai10/copy v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
