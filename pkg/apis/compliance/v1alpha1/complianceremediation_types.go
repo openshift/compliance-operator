@@ -58,6 +58,8 @@ const (
 	// created by the Compliance Operator; this is used for the Compliance Operator to
 	// know whether it can delete the object or not when un-applying a remediation.
 	RemediationCreatedByOperatorAnnotation = "compliance.openshift.io/remediation"
+	// RemediationNodeRoleAnnotation specifies that a remediation applies to a node role.
+	RemediationNodeRoleAnnotation = "compliance.openshift.io/node-role"
 	// RemediationDependencyAnnotation specifies that a remediation depends on
 	// an XCCDF rule passing in order to be applied.
 	RemediationDependencyAnnotation = "compliance.openshift.io/depends-on"

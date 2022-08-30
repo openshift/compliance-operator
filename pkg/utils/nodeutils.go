@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -71,6 +71,23 @@ func GetFirstNodeRole(nodeSelector map[string]string) string {
 	}
 
 	return ""
+}
+
+func GetNodeRoles(nodeSelector map[string]string) []string {
+	roles := []string{}
+	if nodeSelector == nil {
+		return roles
+	}
+
+	// FIXME: should we protect against multiple labels and return
+	// an empty string if there are multiple?
+	for k := range nodeSelector {
+		if strings.HasPrefix(k, nodeRolePrefix) {
+			roles = append(roles, strings.TrimPrefix(k, nodeRolePrefix))
+		}
+	}
+
+	return roles
 }
 
 // AnyMcfgPoolLabelMatches verifies if the given nodeSelector matches the nodeSelector
@@ -252,5 +269,15 @@ func GetNodeRoleSelector(role string) map[string]string {
 	}
 	return map[string]string{
 		nodeRolePrefix + role: "",
+	}
+}
+
+func GetNodeRoleSelectorFromRemediation(rem *cmpv1alpha1.ComplianceRemediation) map[string]string {
+	nodeRoles := rem.Annotations[cmpv1alpha1.RemediationNodeRoleAnnotation]
+	if nodeRoles == "" {
+		return map[string]string{}
+	}
+	return map[string]string{
+		nodeRolePrefix + nodeRoles: "",
 	}
 }

@@ -585,7 +585,7 @@ func (r *ReconcileComplianceSuite) applyRemediation(rem compv1alpha1.ComplianceR
 	logger logr.Logger) error {
 	if utils.IsMachineConfig(rem.Spec.Current.Object) || utils.IsKubeletConfig(rem.Spec.Current.Object) {
 		// get affected pool
-		pool := r.getAffectedMcfgPool(scan, mcfgpools)
+		pool := r.getAffectedMcfgPool(scan, &rem, mcfgpools)
 		// we only need to operate on pools that are affected
 		if pool != nil {
 			foundPool, poolIsTracked := affectedMcfgPools[pool.Name]
@@ -652,10 +652,16 @@ func (r *ReconcileComplianceSuite) applyMcfgRemediationAndPausePool(rem compv1al
 	return nil
 }
 
-func (r *ReconcileComplianceSuite) getAffectedMcfgPool(scan *compv1alpha1.ComplianceScan, mcfgpools *mcfgv1.MachineConfigPoolList) *mcfgv1.MachineConfigPool {
+func (r *ReconcileComplianceSuite) getAffectedMcfgPool(scan *compv1alpha1.ComplianceScan, rem *compv1alpha1.ComplianceRemediation, mcfgpools *mcfgv1.MachineConfigPoolList) *mcfgv1.MachineConfigPool {
 	for i := range mcfgpools.Items {
 		pool := &mcfgpools.Items[i]
-		if utils.McfgPoolLabelMatches(scan.Spec.NodeSelector, pool) {
+		nodeSelector := map[string]string{}
+		if scan.Spec.ScanType == compv1alpha1.ScanTypePlatform {
+			nodeSelector = utils.GetNodeRoleSelectorFromRemediation(rem)
+		} else {
+			nodeSelector = scan.Spec.NodeSelector
+		}
+		if utils.McfgPoolLabelMatches(nodeSelector, pool) {
 			return pool
 		}
 	}

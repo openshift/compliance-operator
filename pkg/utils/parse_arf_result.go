@@ -42,6 +42,8 @@ const (
 const (
 	// Establishes that a remediation depends on an XCCDF check
 	dependencyAnnotationKey = "complianceascode.io/depends-on"
+	// Establishes that a remediation is applicable to specific node role
+	nodeRoleAnnotationKey = "complianceascode.io/node-role"
 	// Establishes that is meant for policy enforcement of a certain type
 	enforcementTypeAnnotationKey = "complianceascode.io/enforcement-type"
 	// Establishes that a remediation is applicable to a certain range of Kubernetes version
@@ -60,10 +62,11 @@ const (
 
 // Constants useful for parsing warnings
 const (
-	endPointTag           = "ocp-api-endpoint"
-	dumpLocationClass     = "ocp-dump-location"
-	filterTypeClass       = "ocp-api-filter"
-	filteredEndpointClass = "filtered"
+	endPointTag              = "ocp-api-endpoint"
+	endPointTagKubeletconfig = "ocp-api-endpoint-kubeletconfig"
+	dumpLocationClass        = "ocp-dump-location"
+	filterTypeClass          = "ocp-api-filter"
+	filteredEndpointClass    = "filtered"
 )
 
 type ParseResult struct {
@@ -80,8 +83,8 @@ type ResourcePath struct {
 
 // getPathsFromRuleWarning finds the API endpoint from in. The expected structure is:
 //
-//  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
-//  </code></warning>
+//	<warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
+//	</code></warning>
 func GetPathFromWarningXML(in *xmlquery.Node, valuesList map[string]string) ([]ResourcePath, error) {
 	apiPaths := []ResourcePath{}
 
@@ -127,7 +130,7 @@ func warningHasApiObjects(in *xmlquery.Node) bool {
 	codeNodes := in.SelectElements("//html:code")
 
 	for _, codeNode := range codeNodes {
-		if codeNode.SelectAttr("class") == endPointTag {
+		if codeNode.SelectAttr("class") == endPointTag || codeNode.SelectAttr("class") == endPointTagKubeletconfig {
 			return true
 		}
 	}
@@ -707,6 +710,10 @@ func remediationsFromString(scheme *runtime.Scheme, name string, namespace strin
 			annotations = handleDependencyAnnotation(obj, annotations)
 		}
 
+		if hasNodeRoleAnnotation(obj) {
+			annotations = handleNodeRoleAnnotation(obj, annotations)
+		}
+
 		if hasOptionalAnnotation(obj) {
 			annotations = handleOptionalAnnotation(obj, annotations)
 		}
@@ -761,9 +768,9 @@ func toArrayByComma(format string) []string {
 	return strings.Split(format, ",")
 }
 
-//This function will take orginal remediation content, and a list of all values found in the configMap
-//It will processed and substitue the value in remediation content, and return processed Remediation content
-//The return will be Processed-Remdiation Content, Value-Used List, Un-Set List, and err if possible
+// This function will take original remediation content, and a list of all values found in the configMap
+// It will processed and substitue the value in remediation content, and return processed Remediation content
+// The return will be Processed-Remdiation Content, Value-Used List, Un-Set List, and err if possible
 func parseValues(remContent string, resultValues map[string]string) (string, []string, []string, error) {
 	var valuesUsedList []string
 	var valuesMissingList []string
@@ -856,7 +863,7 @@ func getParsedValueName(t *template.Template) []string {
 	return trimToValue(valueToBeTrimmed)
 }
 
-//trim {{value | urlquery}} list to value list
+// trim {{value | urlquery}} list to value list
 func trimToValue(listToBeTrimmed []string) []string {
 	trimmedValuesList := listToBeTrimmed[:0]
 	for _, oriVal := range listToBeTrimmed {
@@ -884,6 +891,10 @@ func listNodeFields(node parse.Node, res []string) []string {
 
 func hasDependencyAnnotation(u *unstructured.Unstructured) bool {
 	return hasAnnotation(u, dependencyAnnotationKey) || hasAnnotation(u, kubeDependencyAnnotationKey)
+}
+
+func hasNodeRoleAnnotation(u *unstructured.Unstructured) bool {
+	return hasAnnotation(u, nodeRoleAnnotationKey)
 }
 
 func hasValueRequiredAnnotation(u *unstructured.Unstructured) bool {
@@ -940,6 +951,21 @@ func handleDependencyAnnotation(u *unstructured.Unstructured, annotations map[st
 
 	u.SetAnnotations(inAnns)
 
+	return annotations
+}
+
+func handleNodeRoleAnnotation(u *unstructured.Unstructured, annotations map[string]string) map[string]string {
+	// We already assume this has some annotation
+	inAnns := u.GetAnnotations()
+
+	// parse
+	if nodeRole, hasNodeRoleKey := inAnns[nodeRoleAnnotationKey]; hasNodeRoleKey {
+		// set node role
+		annotations[compv1alpha1.RemediationNodeRoleAnnotation] = nodeRole
+		// reset metadata of output object
+		delete(inAnns, nodeRoleAnnotationKey)
+	}
+	u.SetAnnotations(inAnns)
 	return annotations
 }
 

@@ -43,6 +43,7 @@ rules:
       - componentstatuses
       - nodes
       - nodes/status
+      - nodes/proxy
       - persistentvolumeclaims/status
       - persistentvolumes
       - persistentvolumes/status

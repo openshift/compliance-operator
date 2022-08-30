@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 )
 
 // JSONDiff represents the whole diff
@@ -20,6 +21,38 @@ type JSONDiffRow struct {
 // JSONIsSubset checks if a is a subset json of b
 func JSONIsSubset(a, b []byte) (bool, *JSONDiff, error) {
 	return jsonIsSubsetR(a, b, nil, nil)
+}
+
+// find intersection of two json
+func JSONIntersection(a, b []byte) ([]byte, error) {
+	var ai map[string]interface{}
+	if err := json.Unmarshal([]byte(a), &ai); err != nil {
+		return nil, err
+	}
+	var bi map[string]interface{}
+	if err := json.Unmarshal([]byte(b), &bi); err != nil {
+		return nil, err
+	}
+	dst := procMap(ai, bi)
+	return json.Marshal(dst)
+}
+
+func procMap(a, b map[string]interface{}) (dst map[string]interface{}) {
+	dst = map[string]interface{}{}
+	for k, v := range a {
+		if innerMap, ok := v.(map[string]interface{}); ok {
+			if b[k] != nil {
+				dst[k] = procMap(innerMap, b[k].(map[string]interface{}))
+			}
+		} else {
+			if b[k] != nil {
+				if reflect.DeepEqual(v, b[k]) {
+					dst[k] = b[k]
+				}
+			}
+		}
+	}
+	return dst
 }
 
 func jsonIsSubsetR(a, b []byte, diff *JSONDiff, prefix interface{}) (bool, *JSONDiff, error) {
