@@ -1183,6 +1183,8 @@ github.com/openshift/library-go v0.0.0-20191003152030-97c62d8a2901/go.mod h1:NBt
 github.com/openshift/library-go v0.0.0-20200831114015-2ab0c61c15de/go.mod h1:6vwp+YhYOIlj8MpkQKkebTTSn2TuYyvgiAFQ206jIEQ=
 github.com/openshift/library-go v0.0.0-20220523142556-5bcfed822fc6 h1:HSmUjhgHhwxdNPvq8xPf19BV67wf1GIepefPOl7dsIU=
 github.com/openshift/library-go v0.0.0-20220523142556-5bcfed822fc6/go.mod h1:1QSdymJBGXSOgBj7tWhj4cV+i1+AvkQ/Tq78ebWjXCU=
+github.com/openshift/library-go v0.0.0-20220826132527-2b7a682a2de4 h1:DYBdGhxAjm1u+kTF9Q+IoJGVZkNpBEYdCxdLat1jNXQ=
+github.com/openshift/library-go v0.0.0-20220826132527-2b7a682a2de4/go.mod h1:WxNbXze1t8lSQUI9HBE6T2OvSI3QBpZPuPZDI9W/Ddw=
 github.com/openshift/machine-config-operator v0.0.1-0.20201123223240-d4188ac400eb h1:ah3SvhRj2UASB9OVqU5Kz01HW8KUBAon+5ZVguXF4Ac=
 github.com/openshift/machine-config-operator v0.0.1-0.20201123223240-d4188ac400eb/go.mod h1:pQd41inXjgdP0h0tSYxtv+KGC9H5fmRlhpZE/qXGOmk=
 github.com/openshift/runtime-utils v0.0.0-20200415173359-c45d4ff3f912/go.mod h1:0OXNy7VoqFexkxKqyQbHJLPwn1MFp1/CxRJAgKHM+/o=
