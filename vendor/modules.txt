@@ -486,7 +486,6 @@ github.com/mitchellh/go-homedir
 github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/hashstructure/v2 v2.0.2
 ## explicit; go 1.14
-github.com/mitchellh/hashstructure/v2
 # github.com/mitchellh/mapstructure v1.4.1
 ## explicit; go 1.14
 github.com/mitchellh/mapstructure
@@ -704,7 +703,7 @@ github.com/operator-framework/api/pkg/validation
 github.com/operator-framework/api/pkg/validation/errors
 github.com/operator-framework/api/pkg/validation/interfaces
 github.com/operator-framework/api/pkg/validation/internal
-# github.com/operator-framework/operator-registry v1.24.0
+# github.com/operator-framework/operator-registry v1.26.0
 ## explicit; go 1.18
 github.com/operator-framework/operator-registry/alpha/action
 github.com/operator-framework/operator-registry/alpha/declcfg
@@ -715,8 +714,8 @@ github.com/operator-framework/operator-registry/alpha/veneer/semver
 github.com/operator-framework/operator-registry/cmd/opm
 github.com/operator-framework/operator-registry/cmd/opm/alpha
 github.com/operator-framework/operator-registry/cmd/opm/alpha/bundle
-github.com/operator-framework/operator-registry/cmd/opm/alpha/diff
 github.com/operator-framework/operator-registry/cmd/opm/alpha/list
+github.com/operator-framework/operator-registry/cmd/opm/alpha/render-graph
 github.com/operator-framework/operator-registry/cmd/opm/alpha/veneer
 github.com/operator-framework/operator-registry/cmd/opm/generate
 github.com/operator-framework/operator-registry/cmd/opm/index

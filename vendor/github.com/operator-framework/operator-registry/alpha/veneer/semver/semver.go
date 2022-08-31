@@ -3,7 +3,7 @@ package semver
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"sort"
 
 	"github.com/blang/semver/v4"
@@ -18,8 +18,8 @@ import (
 
 // data passed into this module externally
 type Veneer struct {
-	Ref string
-	Reg image.Registry
+	Data     io.Reader
+	Registry image.Registry
 }
 
 // IO structs -- BEGIN
@@ -78,17 +78,23 @@ type semverRenderedChannelVersions map[string]map[string]semver.Version // e.g. 
 func (v Veneer) Render(ctx context.Context) (*declcfg.DeclarativeConfig, error) {
 	var out declcfg.DeclarativeConfig
 
-	sv, err := readFile(v.Ref)
+	sv, err := readFile(v.Data)
 	if err != nil {
 		return nil, fmt.Errorf("semver-render: unable to read file: %v", err)
 	}
 
 	var cfgs []declcfg.DeclarativeConfig
-	for _, b := range sv.Candidate.Bundles {
+
+	bundleDict := make(map[string]struct{})
+	buildBundleList(&sv.Candidate.Bundles, &bundleDict)
+	buildBundleList(&sv.Fast.Bundles, &bundleDict)
+	buildBundleList(&sv.Stable.Bundles, &bundleDict)
+
+	for b, _ := range bundleDict {
 		r := action.Render{
 			AllowedRefMask: action.RefBundleImage,
-			Refs:           []string{b.Image},
-			Registry:       v.Reg,
+			Refs:           []string{b},
+			Registry:       v.Registry,
 		}
 		c, err := r.Run(ctx)
 		if err != nil {
@@ -114,8 +120,16 @@ func (v Veneer) Render(ctx context.Context) (*declcfg.DeclarativeConfig, error) 
 	return &out, nil
 }
 
-func readFile(ref string) (*semverVeneer, error) {
-	data, err := ioutil.ReadFile(ref)
+func buildBundleList(bundles *[]semverVeneerBundleEntry, dict *map[string]struct{}) {
+	for _, b := range *bundles {
+		if _, ok := (*dict)[b.Image]; !ok {
+			(*dict)[b.Image] = struct{}{}
+		}
+	}
+}
+
+func readFile(reader io.Reader) (*semverVeneer, error) {
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}

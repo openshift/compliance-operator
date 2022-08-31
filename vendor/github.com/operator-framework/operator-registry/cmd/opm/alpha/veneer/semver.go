@@ -18,16 +18,19 @@ import (
 func newSemverCmd() *cobra.Command {
 	output := ""
 	cmd := &cobra.Command{
-		Use:   "semver <filename>",
-		Short: "Generate a file-based catalog from a single 'semver veneer' file",
-		Long:  `Generate a file-based catalog from a single 'semver veneer' file`,
-		Args:  cobra.MinimumNArgs(1),
+		Use:   "semver [FILE]",
+		Short: "Generate a file-based catalog from a single 'semver veneer' file \nWhen FILE is '-' or not provided, the veneer is read from standard input",
+		Long:  "Generate a file-based catalog from a single 'semver veneer' file \nWhen FILE is '-' or not provided, the veneer is read from standard input",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ref := args[0]
-
-			var (
-				err error
-			)
+			// Handle different input argument types
+			// When no arguments or "-" is passed to the command,
+			// assume input is coming from stdin
+			// Otherwise open the file passed to the command
+			data, err := openFileOrReadStdin(cmd, args)
+			if err != nil {
+				return err
+			}
 
 			var write func(declcfg.DeclarativeConfig, io.Writer) error
 			switch output {
@@ -36,7 +39,10 @@ func newSemverCmd() *cobra.Command {
 			case "yaml":
 				write = declcfg.WriteYAML
 			case "mermaid":
-				write = declcfg.WriteMermaidChannels
+				write = func(cfg declcfg.DeclarativeConfig, writer io.Writer) error {
+					startVersion := ""
+					return declcfg.WriteMermaidChannels(cfg, writer, startVersion)
+				}
 			default:
 				return fmt.Errorf("invalid output format %q", output)
 			}
@@ -53,12 +59,12 @@ func newSemverCmd() *cobra.Command {
 			defer reg.Destroy()
 
 			veneer := semver.Veneer{
-				Ref: ref,
-				Reg: reg,
+				Data:     data,
+				Registry: reg,
 			}
 			out, err := veneer.Render(cmd.Context())
 			if err != nil {
-				log.Fatalf("semver %q: %v", ref, err)
+				log.Fatalf("semver %q: %v", data, err)
 			}
 
 			if out != nil {
@@ -73,4 +79,11 @@ func newSemverCmd() *cobra.Command {
 
 	cmd.Flags().StringVarP(&output, "output", "o", "json", "Output format (json|yaml|mermaid)")
 	return cmd
+}
+
+func openFileOrReadStdin(cmd *cobra.Command, args []string) (io.Reader, error) {
+	if len(args) == 0 || args[0] == "-" {
+		return cmd.InOrStdin(), nil
+	}
+	return os.Open(args[0])
 }
