@@ -80,3 +80,5 @@ tags
 # End of https://www.gitignore.io/api/go,vim,emacs,visualstudiocode
 # GoLand files
 .idea
+# Generated files for E2E test setup
+tests/_setup
