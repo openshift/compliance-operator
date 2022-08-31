@@ -190,6 +190,18 @@ spec:
                   for a specific rule. Note that when leaving this empty, the scan
                   will check for all the rules for a specific profile.
                 type: string
+              scanLimits:
+                additionalProperties:
+                  anyOf:
+                  - type: integer
+                  - type: string
+                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                  x-kubernetes-int-or-string: true
+                description: ScanLimits allows to set the resource limits that the
+                  scan pods are allowed to use. By default, compliance operator will
+                  use sensible defaults (500Mi memory, 100m CPU for the scanner container
+                  and 200Mi memory with 100m CPU for the api-resource-collector container).
+                type: object
               scanTolerations:
                 default:
                 - operator: Exists

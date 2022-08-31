@@ -23,6 +23,7 @@ package v1alpha1
 
 import (
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -293,6 +294,13 @@ func (in *ComplianceScanSettings) DeepCopyInto(out *ComplianceScanSettings) {
 		in, out := &in.StrictNodeScan, &out.StrictNodeScan
 		*out = new(bool)
 		**out = **in
+	}
+	if in.ScanLimits != nil {
+		in, out := &in.ScanLimits, &out.ScanLimits
+		*out = make(map[v1.ResourceName]resource.Quantity, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val.DeepCopy()
+		}
 	}
 }
 

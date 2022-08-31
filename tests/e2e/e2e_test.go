@@ -2222,6 +2222,8 @@ func TestE2E(t *testing.T) {
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
 				objName := getObjNameFromTest(t)
+				const defaultCpuLimit = "100m"
+				const testMemoryLimit = "432Mi"
 
 				rhcos4e8profile := &compv1alpha1.Profile{}
 				key := types.NamespacedName{Namespace: namespace, Name: rhcosPb.Name + "-e8"}
@@ -2240,6 +2242,9 @@ func TestE2E(t *testing.T) {
 					},
 					ComplianceScanSettings: compv1alpha1.ComplianceScanSettings{
 						Debug: true,
+						ScanLimits: map[corev1.ResourceName]resource.Quantity{
+							corev1.ResourceMemory: resource.MustParse(testMemoryLimit),
+						},
 					},
 					Roles: []string{"master", "worker"},
 				}
@@ -2296,6 +2301,21 @@ func TestE2E(t *testing.T) {
 
 				if workerScan.Spec.Debug != true {
 					E2EErrorf(t, "Expected that the settings set debug to true in workers scan")
+				}
+
+				podList := &corev1.PodList{}
+				if err := f.Client.List(goctx.TODO(), podList, client.InNamespace(namespace), client.MatchingLabels(map[string]string{
+					"workload": "scanner",
+				})); err != nil {
+					return err
+				}
+				// check if the scanning pod has properly been created and has priority class set
+				for _, pod := range podList.Items {
+					if strings.Contains(pod.Name, workerScan.Name) {
+						if err := waitForPod(checkPodLimit(t, f.KubeClient, pod.Name, namespace, defaultCpuLimit, testMemoryLimit)); err != nil {
+							return err
+						}
+					}
 				}
 
 				return nil

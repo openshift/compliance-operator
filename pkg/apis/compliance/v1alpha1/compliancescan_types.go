@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -197,6 +198,12 @@ type ComplianceScanSettings struct {
 	// the Name of a desired PriorityClass should be set here, this is an
 	// optional field, if PriorityClass is invalid or not found, it will be ignored.
 	PriorityClass string `json:"priorityClass,omitempty"`
+
+	// ScanLimits allows to set the resource limits that the scan pods are allowed to use.
+	// By default, compliance operator will use sensible defaults (500Mi memory, 100m CPU
+	// for the scanner container and 200Mi memory with 100m CPU for the api-resource-collector
+	// container).
+	ScanLimits map[corev1.ResourceName]resource.Quantity `json:"scanLimits,omitempty"`
 }
 
 // ComplianceScanSpec defines the desired state of ComplianceScan
