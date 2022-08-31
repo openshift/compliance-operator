@@ -8,18 +8,6 @@ LABEL \
     io.openshift.tags="compliance openscap scan" \
     io.openshift.wants="scap-content"
 
-RUN echo $'[openscap-1-3-5-copr]\n\
-name=Copr repo for openscap-1-3-5 owned by jhrozek\n\
-baseurl=https://download.copr.fedorainfracloud.org/results/jhrozek/openscap-1-3-5/epel-8-$basearch/\n\
-type=rpm-md\n\
-skip_if_unavailable=True\n\
-gpgcheck=1\n\
-gpgkey=https://download.copr.fedorainfracloud.org/results/jhrozek/openscap-1-3-5/pubkey.gpg\n\
-repo_gpgcheck=0\n\
-enabled=1\n\
-enabled_metadata=1\n '\
->> /etc/yum.repos.d/openscap.repo
-
 RUN true \
     && microdnf install -y openscap-scanner \
     && microdnf clean all \
