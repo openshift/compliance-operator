@@ -40,6 +40,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   how they configure their remotes. See the corresponding
   [issue](https://github.com/ComplianceAsCode/compliance-operator/issues/8) for
   more information.
+- Updated Operator SDK version from 0.18.2 to 1.20.0. This updates transitive
+  dependencies used in the Compliance Operator through Operator SDK. It also
+  allows developers to use more automation for maintaining dependencies.
 
 ### Deprecations
 
