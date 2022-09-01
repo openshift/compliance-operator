@@ -6,19 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
-	"sync"
-
 	"net/http"
 	endpoint "net/http/pprof"
+	"os"
 	"runtime/pprof"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/operator-framework/operator-registry/alpha/declcfg"
 	"github.com/operator-framework/operator-registry/pkg/api"
 	health "github.com/operator-framework/operator-registry/pkg/api/grpc_health_v1"
 	"github.com/operator-framework/operator-registry/pkg/lib/dns"
@@ -30,6 +28,8 @@ import (
 
 type serve struct {
 	configDir string
+	cacheDir  string
+	cacheOnly bool
 
 	port           string
 	terminationLog string
@@ -75,12 +75,16 @@ will not be reflected in the served content.
 	cmd.Flags().StringVarP(&s.terminationLog, "termination-log", "t", "/dev/termination-log", "path to a container termination log file")
 	cmd.Flags().StringVarP(&s.port, "port", "p", "50051", "port number to serve on")
 	cmd.Flags().StringVar(&s.pprofAddr, "pprof-addr", "", "address of startup profiling endpoint (addr:port format)")
+	cmd.Flags().StringVar(&s.cacheDir, "cache-dir", "", "if set, sync and persist server cache directory")
+	cmd.Flags().BoolVar(&s.cacheOnly, "cache-only", false, "sync the serve cache and exit without serving")
 	return cmd
 }
 
 func (s *serve) run(ctx context.Context) error {
 	p := newProfilerInterface(s.pprofAddr, s.logger)
-	p.startEndpoint()
+	if err := p.startEndpoint(); err != nil {
+		return fmt.Errorf("could not start pprof endpoint: %v", err)
+	}
 	if err := p.startCpuProfileCache(); err != nil {
 		return fmt.Errorf("could not start CPU profile: %v", err)
 	}
@@ -98,24 +102,18 @@ func (s *serve) run(ctx context.Context) error {
 
 	s.logger = s.logger.WithFields(logrus.Fields{"configs": s.configDir, "port": s.port})
 
-	cfg, err := declcfg.LoadFS(os.DirFS(s.configDir))
-	if err != nil {
-		return fmt.Errorf("load declarative config directory: %v", err)
-	}
-
-	m, err := declcfg.ConvertToModel(*cfg)
-	if err != nil {
-		return fmt.Errorf("could not build index model from declarative config: %v", err)
-	}
-	store, err := registry.NewQuerier(m)
+	store, err := registry.NewQuerierFromFS(os.DirFS(s.configDir), s.cacheDir)
 	defer store.Close()
 	if err != nil {
 		return err
 	}
+	if s.cacheOnly {
+		return nil
+	}
 
 	lis, err := net.Listen("tcp", ":"+s.port)
 	if err != nil {
-		s.logger.Fatalf("failed to listen: %s", err)
+		return fmt.Errorf("failed to listen: %s", err)
 	}
 
 	grpcServer := grpc.NewServer()
@@ -129,7 +127,9 @@ func (s *serve) run(ctx context.Context) error {
 		return grpcServer.Serve(lis)
 	}, func() {
 		grpcServer.GracefulStop()
-		p.stopEndpoint(p.logger.Context)
+		if err := p.stopEndpoint(ctx); err != nil {
+			s.logger.Warnf("error shutting down pprof server: %v", err)
+		}
 	})
 
 }
@@ -147,7 +147,8 @@ type profilerInterface struct {
 	cacheReady bool
 	cacheLock  sync.RWMutex
 
-	logger *logrus.Entry
+	logger   *logrus.Entry
+	closeErr chan error
 }
 
 func newProfilerInterface(a string, log *logrus.Entry) *profilerInterface {
@@ -162,10 +163,10 @@ func (p *profilerInterface) isEnabled() bool {
 	return p.addr != ""
 }
 
-func (p *profilerInterface) startEndpoint() {
+func (p *profilerInterface) startEndpoint() error {
 	// short-circuit if not enabled
 	if !p.isEnabled() {
-		return
+		return nil
 	}
 
 	mux := http.NewServeMux()
@@ -181,14 +182,22 @@ func (p *profilerInterface) startEndpoint() {
 		Handler: mux,
 	}
 
-	// goroutine exits with main
-	go func() {
+	lis, err := net.Listen("tcp", p.addr)
+	if err != nil {
+		return err
+	}
 
-		p.logger.Info("starting pprof endpoint")
-		if err := p.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			p.logger.Fatal(err)
-		}
+	p.closeErr = make(chan error)
+	go func() {
+		p.closeErr <- func() error {
+			p.logger.Info("starting pprof endpoint")
+			if err := p.server.Serve(lis); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				return err
+			}
+			return nil
+		}()
 	}()
+	return nil
 }
 
 func (p *profilerInterface) startCpuProfileCache() error {
@@ -222,10 +231,14 @@ func (p *profilerInterface) httpHandler(w http.ResponseWriter, r *http.Request) 
 	w.Write(p.cache.Bytes())
 }
 
-func (p *profilerInterface) stopEndpoint(ctx context.Context) {
-	if err := p.server.Shutdown(ctx); err != nil {
-		p.logger.Fatal(err)
+func (p *profilerInterface) stopEndpoint(ctx context.Context) error {
+	if !p.isEnabled() {
+		return nil
 	}
+	if err := p.server.Shutdown(ctx); err != nil {
+		return err
+	}
+	return <-p.closeErr
 }
 
 func (p *profilerInterface) isCacheReady() bool {
