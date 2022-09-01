@@ -13,6 +13,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   will be launched using the `PriorityClass` if set. This is an optional attribute, the
   scan pods will be launched without `PriorityClass` if not set.
 
+- Added the ability to check default `KubeletConfig` configuration. Compliance Operator
+  will fetch `KubeletConfig` for each node and save it to `/kubeletconfig/role/{{role}}`.
+
 ### Fixes
 
 - Compliance Operator failed to resume `MachineConfigPool` after remediation

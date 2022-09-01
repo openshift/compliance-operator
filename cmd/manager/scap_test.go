@@ -3,6 +3,10 @@ package manager
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"io/ioutil"
+	"os"
+
 	"github.com/ComplianceAsCode/compliance-operator/pkg/controller/common"
 	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 	"github.com/antchfx/xmlquery"
@@ -10,14 +14,13 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	"io"
-	"io/ioutil"
+	"github.com/wI2L/jsondiff"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
-	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -400,4 +403,329 @@ var _ = Describe("Testing fetching", func() {
 			})
 		})
 	})
+
+	Context("Test fetching KubeletConfig", func() {
+		var fetchedResult map[string][]byte
+		var fetchedInconsistentResult map[string][]byte
+		var warnings []string
+		var err error
+		var roleNodesList map[string][]string
+		var expectedNodeList map[string][]string
+		var expectedFiguredResources []utils.ResourcePath
+		var figuredResources []utils.ResourcePath
+		var expectedAggregatedResult map[string][]byte
+		var expectedInconsistentResult map[string][]byte
+		JustBeforeEach(func() {
+
+			// Fake KubeletConfig
+			kubeletConfig := []byte(`{
+				"enableServer": false,
+				"staticPodPath": "/etc/kubernetes/manifests",
+				"syncFrequency": "1m0s",
+				"fileCheckFrequency": "20s",
+				"httpCheckFrequency": "20s",
+				"address": "0.0.0.0",
+				"port": 10250,
+				"tlsCipherSuites": [
+				  "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+				  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+				  "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+				  "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+				  "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+				  "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+				],
+				"tlsMinVersion": "VersionTLS12",
+				"rotateCertificates": true,
+				"serverTLSBootstrap": true,
+				"authentication": {
+				  "x509": {
+					"clientCAFile": "/etc/kubernetes/kubelet-ca.crt"
+				  },
+				  "webhook": {
+					"enabled": true,
+					"cacheTTL": "2m0s"
+				  },
+				  "anonymous": {
+					"enabled": false
+				  }
+				},
+				"authorization": {
+				  "mode": "Webhook",
+				  "webhook": {
+					"cacheAuthorizedTTL": "5m0s",
+					"cacheUnauthorizedTTL": "30s"
+				  }
+				},
+				"registryPullQPS": 5,
+				"registryBurst": 10,
+				"eventRecordQPS": 5,
+				"eventBurst": 10,
+				"enableDebuggingHandlers": true,
+				"healthzPort": 10248,
+				"healthzBindAddress": "127.0.0.1",
+				"oomScoreAdj": -999,
+				"clusterDomain": "cluster.local",
+				"clusterDNS": [
+				  "172.30.0.10"
+				],
+				"streamingConnectionIdleTimeout": "4h0m0s",
+				"nodeStatusUpdateFrequency": "10s",
+				"nodeStatusReportFrequency": "5m0s",
+				"nodeLeaseDurationSeconds": 40,
+				"imageMinimumGCAge": "2m0s",
+				"imageGCHighThresholdPercent": 85,
+				"imageGCLowThresholdPercent": 80,
+				"volumeStatsAggPeriod": "1m0s",
+				"systemCgroups": "/system.slice",
+				"cgroupRoot": "/",
+				"cgroupsPerQOS": true,
+				"cgroupDriver": "systemd",
+				"cpuManagerPolicy": "none",
+				"serializeImagePulls": false,
+				"evictionHard": {
+				  "imagefs.available": "15%",
+				  "memory.available": "100Mi",
+				  "nodefs.available": "10%",
+				  "nodefs.inodesFree": "5%"
+				},
+				"evictionPressureTransitionPeriod": "5m0s",
+				"enableControllerAttachDetach": true,
+				"makeIPTablesUtilChains": true,
+				"iptablesMasqueradeBit": 14,
+				"iptablesDropBit": 15,
+				"featureGates": {
+				  "APIPriorityAndFairness": true,
+				  "CSIMigrationAWS": false,
+				  "CSIMigrationAzureFile": false,
+				  "CSIMigrationGCE": false,
+				  "CSIMigrationvSphere": false,
+				  "DownwardAPIHugePages": true,
+				  "PodSecurity": true,
+				  "RotateKubeletServerCertificate": true
+				},
+				"enableSystemLogHandler": true,
+				"shutdownGracePeriod": "0s",
+				"shutdownGracePeriodCriticalPods": "0s",
+				"enableProfilingHandler": true,
+				"enableDebugFlagsHandler": true,
+				"seccompDefault": false,
+				"memoryThrottlingFactor": 0.8,
+				"registerWithTaints": [
+				  {
+					"key": "node-role.kubernetes.io/master",
+					"effect": "NoSchedule"
+				  }
+				],
+				"registerNode": true,
+				"kind": "KubeletConfiguration"
+			  }
+			  `)
+
+			kubeletConfigInconsistent := []byte(`{
+				"enableSystemLogHandler": true,
+				"shutdownGracePeriod": "1s",
+				"shutdownGracePeriodCriticalPods": "3s",
+				"enableProfilingHandler": true,
+				"enableDebugFlagsHandler": true,
+				"seccompDefault": false,
+				"memoryThrottlingFactor": 0.8,
+				"registerWithTaints": [
+				  {
+					"key": "node-role.kubernetes.io/master",
+					"effect": "NoSchedule"
+				  }
+				],
+				"registerNode": true,
+				"kind": "KubeletConfiguration"
+			  }
+			  `)
+
+			kubeletConfigIntersection := []byte(`{
+				"enableSystemLogHandler": true,
+				"enableProfilingHandler": true,
+				"enableDebugFlagsHandler": true,
+				"seccompDefault": false,
+				"memoryThrottlingFactor": 0.8,
+				"registerWithTaints": [
+				  {
+					"key": "node-role.kubernetes.io/master",
+					"effect": "NoSchedule"
+				  }
+				],
+				"registerNode": true,
+				"kind": "KubeletConfiguration"
+			  }
+			  `)
+
+			// create fake node list
+			fakeNodeList := corev1.NodeList{Items: []corev1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-node-master-0",
+						Labels: map[string]string{
+							"node-role.kubernetes.io/master": "",
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-node-master-1",
+						Labels: map[string]string{
+							"node-role.kubernetes.io/master": "",
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-node-worker-0",
+						Labels: map[string]string{
+							"node-role.kubernetes.io/worker": "",
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-node-worker-1",
+						Labels: map[string]string{
+							"node-role.kubernetes.io/worker": "",
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-node-worker-2",
+						Labels: map[string]string{
+							"node-role.kubernetes.io/worker": "",
+						},
+					},
+				},
+			}}
+
+			// create fake KubeletConfig for each node
+
+			scheme := scheme.Scheme
+			scheme.AddKnownTypes(corev1.SchemeGroupVersion, &fakeNodeList, &fakeNodeList.Items[0])
+
+			client := fake.NewFakeClientWithScheme(scheme, &fakeNodeList)
+			fakeClients = resourceFetcherClients{client: client}
+
+			expectedFiguredResources = []utils.ResourcePath{
+				{
+					ObjPath:  "/api/v1/nodes/test-node-master-0/proxy/configz",
+					DumpPath: "/kubeletconfig/master/test-node-master-0",
+					Filter:   `.kubeletconfig|.kind="KubeletConfiguration"|.apiVersion="kubelet.config.k8s.io/v1beta1"`,
+				},
+				{
+					ObjPath:  "/api/v1/nodes/test-node-master-1/proxy/configz",
+					DumpPath: "/kubeletconfig/master/test-node-master-1",
+					Filter:   `.kubeletconfig|.kind="KubeletConfiguration"|.apiVersion="kubelet.config.k8s.io/v1beta1"`,
+				},
+				{
+					ObjPath:  "/api/v1/nodes/test-node-worker-0/proxy/configz",
+					DumpPath: "/kubeletconfig/worker/test-node-worker-0",
+					Filter:   `.kubeletconfig|.kind="KubeletConfiguration"|.apiVersion="kubelet.config.k8s.io/v1beta1"`,
+				},
+				{
+					ObjPath:  "/api/v1/nodes/test-node-worker-1/proxy/configz",
+					DumpPath: "/kubeletconfig/worker/test-node-worker-1",
+					Filter:   `.kubeletconfig|.kind="KubeletConfiguration"|.apiVersion="kubelet.config.k8s.io/v1beta1"`,
+				},
+				{
+					ObjPath:  "/api/v1/nodes/test-node-worker-2/proxy/configz",
+					DumpPath: "/kubeletconfig/worker/test-node-worker-2",
+					Filter:   `.kubeletconfig|.kind="KubeletConfiguration"|.apiVersion="kubelet.config.k8s.io/v1beta1"`,
+				},
+			}
+			fetchedResult = make(map[string][]byte)
+			fetchedInconsistentResult = make(map[string][]byte)
+			expectedAggregatedResult = make(map[string][]byte)
+			expectedInconsistentResult = make(map[string][]byte)
+			for _, resource := range expectedFiguredResources {
+				fetchedResult[resource.DumpPath] = kubeletConfig
+				if resource.DumpPath == "/kubeletconfig/master/test-node-master-1" {
+					fetchedInconsistentResult[resource.DumpPath] = kubeletConfigInconsistent
+					expectedInconsistentResult[resource.DumpPath] = kubeletConfigInconsistent
+				} else {
+					fetchedInconsistentResult[resource.DumpPath] = kubeletConfig
+					expectedInconsistentResult[resource.DumpPath] = kubeletConfig
+				}
+				expectedAggregatedResult[resource.DumpPath] = kubeletConfig
+			}
+			expectedAggregatedResult["/kubeletconfig/role/worker"] = kubeletConfig
+			expectedAggregatedResult["/kubeletconfig/role/master"] = kubeletConfig
+
+			expectedInconsistentResult["/kubeletconfig/role/master"] = kubeletConfigIntersection
+			expectedInconsistentResult["/kubeletconfig/role/worker"] = kubeletConfig
+
+			expectedNodeList = map[string][]string{
+				"master": {"test-node-master-0", "test-node-master-1"},
+				"worker": {"test-node-worker-0", "test-node-worker-1", "test-node-worker-2"},
+			}
+
+		})
+		When("Fetching NodeList", func() {
+			It("Get Expected Node List", func() {
+				roleNodesList, err = fetchNodesWithRole(context.Background(), fakeClients.client)
+				Expect(err).To(BeNil())
+				Expect(roleNodesList["master"]).To(ConsistOf(expectedNodeList["master"]))
+				Expect(roleNodesList["worker"]).To(ConsistOf(expectedNodeList["worker"]))
+			})
+
+			It("Get expcted KubeletConfig resource path", func() {
+				figuredResources = getKubeletConfigResourcePath(roleNodesList)
+				Expect(compareResourcePaths(figuredResources, expectedFiguredResources)).To(Equal(true))
+			})
+		})
+		When("Test for consistency after fetching api resource", func() {
+			It("Resource is consistent", func() {
+				aggregatedResult, warning, err := saveConsistentKubeletResult(fetchedResult, warnings)
+				Expect(err).To(BeNil())
+				Expect(warning).To(BeNil())
+				Expect(compareFetchedResults(aggregatedResult, expectedAggregatedResult)).To(Equal(true))
+			})
+			It("Resource is not consistent", func() {
+				aggregatedResult, warning, err := saveConsistentKubeletResult(fetchedInconsistentResult, warnings)
+				Expect(err).To(BeNil())
+				Expect(warning[0]).To(ContainSubstring("not consistent"))
+				Expect(compareFetchedResults(aggregatedResult, expectedInconsistentResult)).To(Equal(true))
+			})
+		})
+
+	})
 })
+
+// compare resourcePath arrays
+func compareResourcePaths(a, b []utils.ResourcePath) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !compareResourcePathsHelper(a[i], b) {
+			return false
+		}
+	}
+	return true
+}
+
+func compareResourcePathsHelper(a utils.ResourcePath, b []utils.ResourcePath) bool {
+	for _, v := range b {
+		if a.ObjPath == v.ObjPath && a.DumpPath == v.DumpPath && a.Filter == v.Filter {
+			return true
+		}
+	}
+	return false
+}
+
+// compare parseResults
+func compareFetchedResults(a, b map[string][]byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		diff, err := jsondiff.CompareJSON(b[k], v)
+		if err != nil || diff != nil {
+			return false
+		}
+	}
+	return true
+}

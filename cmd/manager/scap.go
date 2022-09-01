@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,19 +22,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	mcfgcommon "github.com/openshift/machine-config-operator/pkg/controller/common"
 	"html"
 	"io"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/runtime"
-	runtimejson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"os"
 	"path"
 	"path/filepath"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 	"time"
+
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	mcfgcommon "github.com/openshift/machine-config-operator/pkg/controller/common"
+	"github.com/wI2L/jsondiff"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	runtimejson "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 	"github.com/antchfx/xmlquery"
@@ -45,8 +48,10 @@ import (
 )
 
 const (
-	contentFileTimeout = 3600
-	valuePrefix        = "xccdf_org.ssgproject.content_value_"
+	contentFileTimeout          = 3600
+	valuePrefix                 = "xccdf_org.ssgproject.content_value_"
+	kubeletConfigPathPrefix     = "/kubeletconfig/"
+	kubeletConfigRolePathPrefix = "/kubeletconfig/role/"
 )
 
 var (
@@ -180,6 +185,17 @@ func (c *scapContentDataStream) FigureResources(profile string) error {
 			DumpPath: "/api/v1/nodes",
 		},
 	}
+
+	roleNodesList, err := fetchNodesWithRole(context.Background(), c.resourceFetcherClients.client)
+	if err != nil {
+		LOG("Failed to fetch role list with nodes, error: %v", err)
+		return err
+	}
+
+	if len(roleNodesList) > 0 {
+		found = append(found, getKubeletConfigResourcePath(roleNodesList)...)
+	}
+
 	effectiveProfile := profile
 	var valuesList map[string]string
 
@@ -211,8 +227,8 @@ func (c *scapContentDataStream) FigureResources(profile string) error {
 
 // getPathsFromRuleWarning finds the API endpoint from in. The expected structure is:
 //
-//  <warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
-//  </code></warning>
+//	<warning category="general" lang="en-US"><code class="ocp-api-endpoint">/apis/config.openshift.io/v1/oauths/cluster
+//	</code></warning>
 func getPathFromWarningXML(in *xmlquery.Node, valueList map[string]string) []utils.ResourcePath {
 	DBG("Parsing warning %s", in.OutputXML(false))
 	path, err := utils.GetPathFromWarningXML(in, valueList)
@@ -221,6 +237,56 @@ func getPathFromWarningXML(in *xmlquery.Node, valueList map[string]string) []uti
 		LOG("Error message: %s", err)
 	}
 	return path
+}
+
+// Fetch all nodes from the cluster and find all roles for each node.
+func fetchNodesWithRole(ctx context.Context, c runtimeclient.Client) (map[string][]string, error) {
+	nodeList := v1.NodeList{}
+	if err := c.List(ctx, &nodeList); err != nil {
+		return nil, fmt.Errorf("failed to list nodes: %w", err)
+	}
+
+	roleNodesList := make(map[string][]string)
+	for _, node := range nodeList.Items {
+		nodeName := node.Name
+		nodeRoles := utils.GetNodeRoles(node.ObjectMeta.Labels)
+		for _, role := range nodeRoles {
+			roleNodesList[role] = append(roleNodesList[role], nodeName)
+		}
+	}
+
+	return roleNodesList, nil
+
+}
+
+// Get resourcePath for KubeletConfig
+func getKubeletConfigResourcePath(roleNodesList map[string][]string) []utils.ResourcePath {
+	resourcePath := []utils.ResourcePath{}
+	for role, nodeList := range roleNodesList {
+		for _, node := range nodeList {
+			resourcePath = append(resourcePath, utils.ResourcePath{
+				ObjPath:  "/api/v1/nodes/" + node + "/proxy/configz",
+				DumpPath: kubeletConfigPathPrefix + role + "/" + node,
+				Filter:   `.kubeletconfig|.kind="KubeletConfiguration"|.apiVersion="kubelet.config.k8s.io/v1beta1"`,
+			})
+		}
+	}
+	return resourcePath
+}
+
+// Get role name and node name from DumpPath
+func getRoleNodeNameFromDumpPath(dumpPath string) (roleName string, nodeName string) {
+	if strings.HasPrefix(dumpPath, kubeletConfigPathPrefix) {
+		dumpPathSplit := strings.Split(dumpPath, "/")
+		if len(dumpPathSplit) != 4 {
+			return "", ""
+		}
+		// example of DumpPath: /kubeletconfig/master/node-1
+		roleName = dumpPathSplit[2]
+		nodeName = dumpPathSplit[3]
+		return roleName, nodeName
+	}
+	return "", ""
 }
 
 // Collect the resource paths for objects that this scan needs to obtain.
@@ -523,7 +589,47 @@ func fetch(ctx context.Context, streamDispatcher streamerDispatcherFn, rfClients
 			return nil, warnings, err
 		}
 	}
-	return results, warnings, nil
+	results, warnings, err := saveConsistentKubeletResult(results, warnings)
+	return results, warnings, err
+}
+
+// Only save consistent KubeletConfigs per node role.
+func saveConsistentKubeletResult(result map[string][]byte, warning []string) (map[string][]byte, []string, error) {
+	if len(result) == 0 {
+		return result, warning, nil
+	}
+	kubeletConfigsRole := make(map[string][]byte)
+	for dumpPath, content := range result {
+		role, node := getRoleNodeNameFromDumpPath(dumpPath)
+		if role == "" {
+			continue
+		}
+		if existingKC, ok := kubeletConfigsRole[role]; ok {
+			diff, err := jsondiff.CompareJSON(existingKC, content)
+			if err != nil {
+				return nil, nil, fmt.Errorf("couldn't compare kubelet configs: %w for %s", err, node)
+			}
+			if diff != nil {
+				why := fmt.Sprintf("Kubelet configs for %s are not consistent with role %s, Diff: %s of KubeletConfigs for %s role will not be saved.", node, role, diff, role)
+				LOG(why)
+				warning = append(warning, why)
+				intersectionKC, err := utils.JSONIntersection(existingKC, content)
+				if err != nil {
+					return nil, nil, fmt.Errorf("couldn't get intersection of kubelet configs: %w for %s", err, node)
+				}
+				kubeletConfigsRole[role] = intersectionKC
+			}
+		} else {
+			kubeletConfigsRole[role] = content
+		}
+	}
+	for role, content := range kubeletConfigsRole {
+		if role == "" {
+			continue
+		}
+		result[kubeletConfigRolePathPrefix+role] = content
+	}
+	return result, warning, nil
 }
 
 func filter(ctx context.Context, rawobj []byte, filter string) ([]byte, error) {
