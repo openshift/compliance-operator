@@ -56,14 +56,14 @@ repository.
 Make sure you create the namespace prior to running `helm install`:
 
 ```
-$ kubectl create -f deploy/ns.yaml
+$ kubectl create -f config/ns/ns.yaml
 ```
 
 Next, deploy a release of the compliance-operator using `helm install` from
-`deploy/compliance-operator-chart/`:
+`config/helm/`:
 
 ```
-$ cd deploy/compliance-operator-chart
+$ cd config/helm
 $ helm install --namespace openshift-compliance --generate-name .
 ```
 
