@@ -130,7 +130,7 @@ E2E_USE_DEFAULT_IMAGES?=false
 E2E_SKIP_CONTAINER_BUILD?=false
 
 # Used for substitutions
-DEFAULT_CONTENT_IMAGE=$(DEFAULT_REPO)/$(APP_NAME)-content:$(DEFAULT_TAG)
+DEFAULT_CONTENT_IMAGE=ghcr.io/complianceascode/k8scontent:latest
 CONTENT_IMAGE?=$(DEFAULT_CONTENT_IMAGE)
 # Specifies the image path to use for the content in the tests
 E2E_CONTENT_IMAGE_PATH?=ghcr.io/complianceascode/k8scontent:latest
