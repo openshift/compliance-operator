@@ -482,10 +482,10 @@ func (r *ReconcileComplianceScan) phaseDoneHandler(h scanTypeHandler, instance *
 	var err error
 	logger.Info("Phase: Done")
 
-	// the scan pods and the aggregator are done at this point and can be cleaned up regardless
-	// of the doDelete flag, unless we are running in debug mode and thus requested them to stay
+	// the scan pods and the aggregator are done at this point and can be cleaned up
+	// unless we are running in debug mode and thus requested them to stay
 	// around for later inspection
-	if instance.Spec.Debug == false || instance.NeedsRescan() {
+	if doDelete == true || instance.Spec.Debug == false || instance.NeedsRescan() {
 		// Don't try to clean up scan-type specific resources
 		// if it was an unknown scan type
 		if h != nil {

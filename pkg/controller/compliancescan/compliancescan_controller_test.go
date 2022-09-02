@@ -135,7 +135,8 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 					Name:      compliancescaninstance.Name,
 					Namespace: compliancescaninstance.Namespace,
 				}
-				reconciler.Client.Get(context.TODO(), key, scan)
+				err = reconciler.Client.Get(context.TODO(), key, scan)
+				Expect(err).To(BeNil())
 				Expect(scan.Status.Phase).To(Equal(compv1alpha1.PhasePending))
 			})
 		})
@@ -152,7 +153,8 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 					Name:      compliancescaninstance.Name,
 					Namespace: compliancescaninstance.Namespace,
 				}
-				reconciler.Client.Get(context.TODO(), key, scan)
+				err = reconciler.Client.Get(context.TODO(), key, scan)
+				Expect(err).To(BeNil())
 				Expect(scan.Spec.RawResultStorage.Size).To(Equal(compv1alpha1.DefaultRawStorageSize))
 			})
 		})
@@ -170,7 +172,8 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 					Name:      compliancescaninstance.Name,
 					Namespace: compliancescaninstance.Namespace,
 				}
-				reconciler.Client.Get(context.TODO(), key, scan)
+				err = reconciler.Client.Get(context.TODO(), key, scan)
+				Expect(err).To(BeNil())
 				Expect(scan.Status.Phase).To(Equal(compv1alpha1.PhaseDone))
 				Expect(scan.Status.Result).To(Equal(compv1alpha1.ResultError))
 			})
@@ -202,7 +205,8 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 		BeforeEach(func() {
 			// Set state to RUNNING
 			compliancescaninstance.Status.Phase = compv1alpha1.PhaseLaunching
-			reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+			err := reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+			Expect(err).To(BeNil())
 		})
 		It("should create PVC and stay on the same phase", func() {
 			result, err := reconciler.phaseLaunchingHandler(handler, logger)
@@ -216,14 +220,16 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				Name:      compliancescaninstance.Name,
 				Namespace: compliancescaninstance.Namespace,
 			}
-			reconciler.Client.Get(context.TODO(), key, scan)
+			err = reconciler.Client.Get(context.TODO(), key, scan)
+			Expect(err).To(BeNil())
 			Expect(scan.Status.ResultsStorage.Name).To(Equal(getPVCForScanName(key.Name)))
 		})
 		Context("with the PVC set", func() {
 			BeforeEach(func() {
 				compliancescaninstance.Status.ResultsStorage.Name = getPVCForScanName(compliancescaninstance.Name)
 				compliancescaninstance.Status.ResultsStorage.Namespace = common.GetComplianceOperatorNamespace()
-				reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+				err := reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 			})
 			It("should update the compliancescan instance to phase RUNNING", func() {
 				result, err := reconciler.phaseLaunchingHandler(handler, logger)
@@ -263,18 +269,22 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 					},
 				})
 
-				reconciler.Client.Update(context.TODO(), compliancescaninstance)
+				err := reconciler.Client.Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 
 				// Set state to RUNNING
 				compliancescaninstance.Status.Phase = compv1alpha1.PhaseRunning
-				reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+				err = reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 			})
 
 			It("should stay in RUNNING state", func() {
 				result, err := reconciler.phaseRunningHandler(handler, logger)
-				pods := &corev1.PodList{}
-				reconciler.Client.List(context.TODO(), pods)
+				Expect(err).To(BeNil())
 				Expect(result).ToNot(BeNil())
+
+				pods := &corev1.PodList{}
+				err = reconciler.Client.List(context.TODO(), pods)
 				Expect(err).To(BeNil())
 				Expect(compliancescaninstance.Status.Phase).To(Equal(compv1alpha1.PhaseRunning))
 			})
@@ -305,11 +315,13 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 					},
 				})
 
-				reconciler.Client.Update(context.TODO(), compliancescaninstance)
+				err := reconciler.Client.Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 
 				// Set state to RUNNING
 				compliancescaninstance.Status.Phase = compv1alpha1.PhaseRunning
-				reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+				err = reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 			})
 
 			It("should move to AGGREGATING state", func() {
@@ -330,21 +342,23 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 
 				// Set state to DONE
 				compliancescaninstance.Status.Phase = compv1alpha1.PhaseDone
-				reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+				err := reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 			})
 			It("Should return success & preserve resources", func() {
 				result, err := reconciler.phaseDoneHandler(handler, compliancescaninstance, logger, dontDelete)
+				Expect(err).To(BeNil())
 				Expect(result).ToNot(BeNil())
 
 				// scan pods are cleaned up regardless
 				var pods corev1.PodList
-				reconciler.Client.List(context.TODO(), &pods)
+				err = reconciler.Client.List(context.TODO(), &pods)
 				Expect(err).To(BeNil())
 				Expect(pods.Items).To(BeEmpty())
 
 				// but other resources should be preserved
 				var secrets corev1.SecretList
-				reconciler.Client.List(context.TODO(), &secrets)
+				err = reconciler.Client.List(context.TODO(), &secrets)
 				Expect(err).To(BeNil())
 				Expect(secrets.Items).ToNot(BeEmpty())
 			})
@@ -357,22 +371,52 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 
 				// Set state to DONE
 				compliancescaninstance.Status.Phase = compv1alpha1.PhaseDone
-				reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+				err := reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 			})
 			It("Should return success & clean up resources", func() {
 				result, err := reconciler.phaseDoneHandler(handler, compliancescaninstance, logger, doDelete)
+				Expect(err).To(BeNil())
 				Expect(result).ToNot(BeNil())
 
 				var pods corev1.PodList
-				reconciler.Client.List(context.TODO(), &pods)
+				err = reconciler.Client.List(context.TODO(), &pods)
 				Expect(err).To(BeNil())
 				Expect(pods.Items).To(BeEmpty())
 
 				// also other resources should be gone
 				var secrets corev1.SecretList
-				reconciler.Client.List(context.TODO(), &secrets)
+				err = reconciler.Client.List(context.TODO(), &secrets)
 				Expect(err).To(BeNil())
 				Expect(secrets.Items).To(BeEmpty())
+			})
+		})
+		Context("with delete flag off but debug on as well", func() {
+			BeforeEach(func() {
+				// Create the pods for the test
+				createFakeScanPods(reconciler, compliancescaninstance.Name, nodeinstance1.Name, nodeinstance2.Name)
+				createFakeRsSecret(reconciler, compliancescaninstance.Name)
+
+				// Set state to DONE
+				compliancescaninstance.Status.Phase = compv1alpha1.PhaseDone
+				compliancescaninstance.Spec.Debug = true
+				err := reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
+			})
+			It("Should return success & not delete the scan pods or secrets (doDelete=false)", func() {
+				result, err := reconciler.phaseDoneHandler(handler, compliancescaninstance, logger, dontDelete)
+				Expect(err).To(BeNil())
+				Expect(result).ToNot(BeNil())
+
+				var pods corev1.PodList
+				err = reconciler.Client.List(context.TODO(), &pods)
+				Expect(err).To(BeNil())
+				Expect(pods.Items).ToNot(BeEmpty())
+
+				var secrets corev1.SecretList
+				err = reconciler.Client.List(context.TODO(), &secrets)
+				Expect(err).To(BeNil())
+				Expect(secrets.Items).ToNot(BeEmpty())
 			})
 		})
 		Context("with delete flag on but debug on as well", func() {
@@ -384,22 +428,23 @@ var _ = Describe("Testing compliancescan controller phases", func() {
 				// Set state to DONE
 				compliancescaninstance.Status.Phase = compv1alpha1.PhaseDone
 				compliancescaninstance.Spec.Debug = true
-				reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+				err := reconciler.Client.Status().Update(context.TODO(), compliancescaninstance)
+				Expect(err).To(BeNil())
 			})
-			It("Should return success & not clean up the scan pods", func() {
-				result, err := reconciler.phaseDoneHandler(handler, compliancescaninstance, logger, dontDelete)
+			It("Should return success & delete the scan pods (doDelete=true)", func() {
+				result, err := reconciler.phaseDoneHandler(handler, compliancescaninstance, logger, doDelete)
+				Expect(err).To(BeNil())
 				Expect(result).ToNot(BeNil())
 
 				var pods corev1.PodList
-				reconciler.Client.List(context.TODO(), &pods)
+				err = reconciler.Client.List(context.TODO(), &pods)
 				Expect(err).To(BeNil())
-				Expect(pods.Items).ToNot(BeEmpty())
+				Expect(pods.Items).To(BeEmpty())
 
-				// but other resources should be preserved
 				var secrets corev1.SecretList
-				reconciler.Client.List(context.TODO(), &secrets)
+				err = reconciler.Client.List(context.TODO(), &secrets)
 				Expect(err).To(BeNil())
-				Expect(secrets.Items).ToNot(BeEmpty())
+				Expect(secrets.Items).To(BeEmpty())
 			})
 		})
 	})
