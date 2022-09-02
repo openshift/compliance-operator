@@ -2194,22 +2194,39 @@ func taintNode(t *testing.T, f *framework.Framework, node *corev1.Node, taint co
 }
 
 func removeNodeTaint(t *testing.T, f *framework.Framework, nodeName, taintKey string) error {
-	taintedNode := &corev1.Node{}
-	nodeKey := types.NamespacedName{Name: nodeName}
-	if err := f.Client.Get(goctx.TODO(), nodeKey, taintedNode); err != nil {
-		E2ELogf(t, "Couldn't get node: %s", nodeName)
-		return err
-	}
-	untaintedNode := taintedNode.DeepCopy()
-	untaintedNode.Spec.Taints = []corev1.Taint{}
-	for _, taint := range taintedNode.Spec.Taints {
-		if taint.Key != taintKey {
-			untaintedNode.Spec.Taints = append(untaintedNode.Spec.Taints, taint)
-		}
-	}
+	var lastErr error
 
-	E2ELogf(t, "Removing taint from node: %s", nodeName)
-	return f.Client.Update(goctx.TODO(), untaintedNode)
+	timeoutErr := wait.Poll(retryInterval, timeout, func() (bool, error) {
+		taintedNode := &corev1.Node{}
+		nodeKey := types.NamespacedName{Name: nodeName}
+		if err := f.Client.Get(goctx.TODO(), nodeKey, taintedNode); err != nil {
+			E2ELogf(t, "Couldn't get node: %s", nodeName)
+			return false, nil
+		}
+		untaintedNode := taintedNode.DeepCopy()
+		untaintedNode.Spec.Taints = []corev1.Taint{}
+		for _, taint := range taintedNode.Spec.Taints {
+			if taint.Key != taintKey {
+				untaintedNode.Spec.Taints = append(untaintedNode.Spec.Taints, taint)
+			}
+		}
+
+		E2ELogf(t, "Removing taint from node: %s", nodeName)
+		lastErr = f.Client.Update(goctx.TODO(), untaintedNode)
+		if lastErr != nil {
+			E2ELogf(t, "Got error while trying to remove taint from %s, retrying", nodeName)
+			return false, nil
+		}
+		return true, nil
+	})
+
+	if timeoutErr != nil {
+		return fmt.Errorf("couldn't remove node taint. Timed out: %w", timeoutErr)
+	}
+	if lastErr != nil {
+		return fmt.Errorf("couldn't remove node taint. Errored out: %w", lastErr)
+	}
+	return nil
 }
 
 func getReadyProfileBundle(t *testing.T, f *framework.Framework, name, namespace string) (*compv1alpha1.ProfileBundle, error) {

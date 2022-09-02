@@ -2116,6 +2116,16 @@ func TestE2E(t *testing.T) {
 					E2ELog(t, "Tainting node failed")
 					return err
 				}
+
+				removeTaintClosure := func() {
+					removeTaintErr := removeNodeTaint(t, f, taintedNode.Name, taintKey)
+					if removeTaintErr != nil {
+						E2ELog(t, "Removing taint failed")
+						// not much to do here
+					}
+				}
+				defer removeTaintClosure()
+
 				suiteName := getObjNameFromTest(t)
 				scanName := suiteName
 				suite := &compv1alpha1.ComplianceSuite{
@@ -2159,7 +2169,7 @@ func TestE2E(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				return removeNodeTaint(t, f, taintedNode.Name, taintKey)
+				return nil
 			},
 		},
 		//testExecution{
