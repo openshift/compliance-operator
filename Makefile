@@ -583,6 +583,7 @@ image-to-cluster: image openscap-image namespace openshift-user  ## Builds and p
 	@echo "Removing the route from the image registry"
 	@oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":false}}' --type=merge
 	$(eval OPERATOR_IMAGE = image-registry.openshift-image-registry.svc:5000/openshift/$(APP_NAME):$(TAG))
+	$(eval IMG = image-registry.openshift-image-registry.svc:5000/openshift/$(APP_NAME):$(TAG))
 	$(eval OPENSCAP_IMAGE = image-registry.openshift-image-registry.svc:5000/openshift/$(OPENSCAP_NAME):$(OPENSCAP_TAG))
 
 .PHONY: e2e-content-images
