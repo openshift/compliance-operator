@@ -25,7 +25,7 @@ jobs:
         run: echo RELEASE_TAG=${{ steps.fetch-latest-release.outputs.latest-release }} >> $GITHUB_ENV
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
 
       - name: Build image linux/amd64
         uses: redhat-actions/buildah-build@v2
