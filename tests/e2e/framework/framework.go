@@ -73,6 +73,7 @@ type Framework struct {
 	globalManPath      string
 	localOperatorArgs  string
 	kubeconfigPath     string
+	testType           string
 	schemeMutex        sync.Mutex
 	LocalOperator      bool
 	skipCleanupOnError bool
@@ -84,9 +85,16 @@ type frameworkOpts struct {
 	globalManPath      string
 	namespacedManPath  string
 	localOperatorArgs  string
+	testType           string
 	isLocalOperator    bool
 	skipCleanupOnError bool
 }
+
+const (
+	TestTypeAll      = "all"
+	TestTypeParallel = "parallel"
+	TestTypeSerial   = "serial"
+)
 
 const (
 	ProjRootFlag           = "root"
@@ -96,6 +104,7 @@ const (
 	LocalOperatorFlag      = "localOperator"
 	LocalOperatorArgs      = "localOperatorArgs"
 	SkipCleanupOnErrorFlag = "skipCleanupOnError"
+	TestTypeFlag           = "testType"
 
 	TestOperatorNamespaceEnv = "TEST_OPERATOR_NAMESPACE"
 	TestWatchNamespaceEnv    = "TEST_WATCH_NAMESPACE"
@@ -112,6 +121,8 @@ func (opts *frameworkOpts) addToFlagSet(flagset *flag.FlagSet) {
 	flagset.BoolVar(&opts.skipCleanupOnError, SkipCleanupOnErrorFlag, false,
 		"If set as true, the cleanup function responsible to remove all artifacts "+
 			"will be skipped if an error is faced.")
+	flagset.StringVar(&opts.testType, TestTypeFlag, TestTypeAll,
+		"Defines the type of tests to run. (Options: all, serial, parallel)")
 }
 
 func newFramework(opts *frameworkOpts) (*Framework, error) {

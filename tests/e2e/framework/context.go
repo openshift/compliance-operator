@@ -23,6 +23,7 @@ type Context struct {
 	t                 *testing.T
 
 	namespacedManPath  string
+	testType           string
 	client             *frameworkClient
 	kubeclient         kubernetes.Interface
 	restMapper         *restmapper.DeferredDiscoveryRESTMapper
@@ -71,6 +72,7 @@ func (f *Framework) newContext(t *testing.T) *Context {
 		kubeclient:         f.KubeClient,
 		restMapper:         f.restMapper,
 		skipCleanupOnError: f.skipCleanupOnError,
+		testType:           f.testType,
 	}
 }
 
@@ -106,6 +108,10 @@ func (ctx *Context) Cleanup() {
 	if ctx.t == nil && failed {
 		log.Fatal("A cleanup function failed")
 	}
+}
+
+func (ctx *Context) GetTestType() string {
+	return ctx.testType
 }
 
 func (ctx *Context) AddCleanupFn(fn cleanupFn) {

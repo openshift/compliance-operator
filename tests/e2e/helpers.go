@@ -284,34 +284,43 @@ func executeTests(t *testing.T, tests ...testExecution) {
 	// defer deleting the profiles or else the test namespace get stuck in Terminating
 	defer f.Client.Delete(goctx.TODO(), ocp4Pb)
 
-	t.Run("Parallel tests", func(t *testing.T) {
-		for _, test := range tests {
-			// Don't loose test reference
-			test := test
-			if test.IsParallel {
-				t.Run(test.Name, func(tt *testing.T) {
-					tt.Parallel()
-					if err := test.TestFn(tt, f, ctx, mcTctx, ns); err != nil {
-						tt.Error(err)
-					}
-				})
+	testtype := ctx.GetTestType()
+	if testtype == framework.TestTypeAll || testtype == framework.TestTypeParallel {
+		t.Run("Parallel tests", func(t *testing.T) {
+			for _, test := range tests {
+				// Don't lose test reference
+				test := test
+				if test.IsParallel {
+					t.Run(test.Name, func(tt *testing.T) {
+						tt.Parallel()
+						if err := test.TestFn(tt, f, ctx, mcTctx, ns); err != nil {
+							tt.Error(err)
+						}
+					})
+				}
 			}
-		}
-	})
+		})
+	} else {
+		t.Log("Skipping parallel tests")
+	}
 
-	t.Run("Serial tests", func(t *testing.T) {
-		for _, test := range tests {
-			// Don't loose test reference
-			test := test
-			if !test.IsParallel {
-				t.Run(test.Name, func(t *testing.T) {
-					if err := test.TestFn(t, f, ctx, mcTctx, ns); err != nil {
-						t.Error(err)
-					}
-				})
+	if testtype == framework.TestTypeAll || testtype == framework.TestTypeSerial {
+		t.Run("Serial tests", func(t *testing.T) {
+			for _, test := range tests {
+				// Don't lose test reference
+				test := test
+				if !test.IsParallel {
+					t.Run(test.Name, func(t *testing.T) {
+						if err := test.TestFn(t, f, ctx, mcTctx, ns); err != nil {
+							t.Error(err)
+						}
+					})
+				}
 			}
-		}
-	})
+		})
+	} else {
+		t.Log("Skipping serial tests")
+	}
 }
 
 // setupTestRequirements Adds the items to the client's schema (So we can use our objects in the client)
