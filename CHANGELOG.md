@@ -16,6 +16,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Added the ability to check default `KubeletConfig` configuration. Compliance Operator
   will fetch `KubeletConfig` for each node and save it to `/kubeletconfig/role/{{role}}`.
 
+- `ComplianceScan` custom resources now contain conditions, similar to `ComplianceSuite`
+  conditions that were implemented earlier in 0.1.28. This aids in debugging of scheduled scans.
+
 ### Fixes
 
 - Compliance Operator failed to resume `MachineConfigPool` after remediation

@@ -252,6 +252,8 @@ type ComplianceScanStatus struct {
 	// If there are warnings on the scan, this will be filled up with warning
 	// messages.
 	Warnings string `json:"warnings,omitempty"`
+	// +optional
+	Conditions Conditions `json:"conditions,omitempty"`
 }
 
 // StorageReference stores a reference to where certain objects are being stored
@@ -360,4 +362,20 @@ type ComplianceScanList struct {
 
 func init() {
 	SchemeBuilder.Register(&ComplianceScan{}, &ComplianceScanList{})
+}
+
+func (s *ComplianceScanStatus) SetConditionPending() {
+	s.Conditions.SetConditionPending("scan")
+}
+
+func (s *ComplianceScanStatus) SetConditionInvalid() {
+	s.Conditions.SetConditionInvalid("scan")
+}
+
+func (s *ComplianceScanStatus) SetConditionsProcessing() {
+	s.Conditions.SetConditionsProcessing("scan")
+}
+
+func (s *ComplianceScanStatus) SetConditionReady() {
+	s.Conditions.SetConditionReady("scan")
 }

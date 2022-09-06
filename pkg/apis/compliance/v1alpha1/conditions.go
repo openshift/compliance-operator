@@ -3,6 +3,7 @@ package v1alpha1
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"time"
 
@@ -169,4 +170,54 @@ func (conditions Conditions) MarshalJSON() ([]byte, error) {
 		return conds[a].Type < conds[b].Type
 	})
 	return json.Marshal(conds)
+}
+
+func (conditions *Conditions) SetConditionPending(what string) {
+	conditions.SetCondition(Condition{
+		Type:    "Ready",
+		Status:  corev1.ConditionFalse,
+		Reason:  "Pending",
+		Message: fmt.Sprintf("The compliance %s is waiting to be processed", what),
+	})
+	conditions.RemoveCondition("Processing")
+}
+
+func (conditions *Conditions) SetConditionInvalid(what string) {
+	conditions.SetCondition(Condition{
+		Type:    "Ready",
+		Status:  corev1.ConditionFalse,
+		Reason:  "Invalid",
+		Message: fmt.Sprintf("%s validation failed", what),
+	})
+	conditions.RemoveCondition("Processing")
+}
+
+func (conditions *Conditions) SetConditionsProcessing(what string) {
+	conditions.SetCondition(Condition{
+		Type:    "Ready",
+		Status:  corev1.ConditionFalse,
+		Reason:  "Processing",
+		Message: fmt.Sprintf("Compliance %s doesn't have results yet", what),
+	})
+	conditions.SetCondition(Condition{
+		Type:    "Processing",
+		Status:  corev1.ConditionTrue,
+		Reason:  "Running",
+		Message: fmt.Sprintf("Compliance %s run is running the scans", what),
+	})
+}
+
+func (conditions *Conditions) SetConditionReady(what string) {
+	conditions.SetCondition(Condition{
+		Type:    "Ready",
+		Status:  corev1.ConditionTrue,
+		Reason:  "Done",
+		Message: fmt.Sprintf("Compliance %s run is done and has results", what),
+	})
+	conditions.SetCondition(Condition{
+		Type:    "Processing",
+		Status:  corev1.ConditionFalse,
+		Reason:  "NotRunning",
+		Message: fmt.Sprintf("Compliance %s run is done running the scans", what),
+	})
 }
