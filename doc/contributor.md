@@ -171,9 +171,14 @@ The following is an example release note for a feature with a security note.
 ## Proposing Releases
 
 The release process is separated into three phases, with dedicated `make`
-targets. All targets require that you supply the `OPERATOR_VERSION` prior to
+targets. All targets require that you set the environment variable `VERSION` prior to
 running `make`, which should be a semantic version formatted string (e.g.,
-`OPERATOR_VERSION=0.1.49`).
+`VERSION=0.1.49`).
+
+Additionally, before preparing an official release, it is important to remember
+to unset the `IMAGE_REPO` and  `TAG` environment variables in your shell, if you
+have been previously developing test images. This ensures that the release applies
+to the correct upstream images.
 
 ### Preparing the Release
 
