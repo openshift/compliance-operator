@@ -488,10 +488,10 @@ tear-down: uninstall undeploy ## Run undeploy and uninstall targets.
 .PHONY: catalog-deploy
 catalog-deploy: namespace ## Deploy from the config/catalog sources.
 	@echo "Replacing image reference in $(CATALOG_SRC_FILE)"
-	@sed -i 's%$(DEFAULT_CATALOG_IMAGE)%$(CATALOG_IMG)%' $(CATALOG_SRC_FILE)
+	@sed -i 's%$(DEFAULT_CATALOG_IMG)%$(CATALOG_IMG)%' $(CATALOG_SRC_FILE)
 	@oc apply -f $(CATALOG_SRC_FILE)
 	@echo "Restoring image reference in $(CATALOG_SRC_FILE)"
-	@sed -i 's%$(CATALOG_IMG)%$(DEFAULT_CATALOG_IMAGE)%' $(CATALOG_SRC_FILE)
+	@sed -i 's%$(CATALOG_IMG)%$(DEFAULT_CATALOG_IMG)%' $(CATALOG_SRC_FILE)
 	@echo "Replacing namespace reference in $(CATALOG_GROUP_FILE)"
 	@sed -i 's%$(NAMESPACE)%$(CATALOG_DEPLOY_NS)%' $(CATALOG_GROUP_FILE)
 	@oc apply -f $(CATALOG_GROUP_FILE)
