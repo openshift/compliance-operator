@@ -173,6 +173,7 @@ func newFramework(opts *frameworkOpts) (*Framework, error) {
 		kubeconfigPath:     opts.kubeconfigPath,
 		restMapper:         restMapper,
 		skipCleanupOnError: opts.skipCleanupOnError,
+		testType:           opts.testType,
 	}
 	return framework, nil
 }
