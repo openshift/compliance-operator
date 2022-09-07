@@ -640,7 +640,7 @@ push-release: package-version-to-tag ## Do an official release (Requires permiss
 	git push $(GIT_REMOTE) ocp-0.1
 
 .PHONY: release-images
-release-images: package-version-to-tag push push-index undo-deploy-tag-image
+release-images: package-version-to-tag push catalog
 	# This will ensure that we also push to the latest tag
 	$(MAKE) push TAG=latest
 
