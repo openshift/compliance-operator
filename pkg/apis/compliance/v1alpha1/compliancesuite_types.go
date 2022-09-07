@@ -3,7 +3,6 @@ package v1alpha1
 import (
 	"reflect"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -230,51 +229,17 @@ func (s *ComplianceSuite) RemoveOutdatedAnnotationSet() bool {
 }
 
 func (s *ComplianceSuiteStatus) SetConditionPending() {
-	s.Conditions.SetCondition(Condition{
-		Type:    "Ready",
-		Status:  corev1.ConditionFalse,
-		Reason:  "Pending",
-		Message: "The compliance suite is waiting to be processed",
-	})
-	s.Conditions.RemoveCondition("Processing")
+	s.Conditions.SetConditionPending("suite")
 }
 
 func (s *ComplianceSuiteStatus) SetConditionInvalid() {
-	s.Conditions.SetCondition(Condition{
-		Type:    "Ready",
-		Status:  corev1.ConditionFalse,
-		Reason:  "Invalid",
-		Message: "Suite validation failed",
-	})
-	s.Conditions.RemoveCondition("Processing")
+	s.Conditions.SetConditionInvalid("suite")
 }
 
 func (s *ComplianceSuiteStatus) SetConditionsProcessing() {
-	s.Conditions.SetCondition(Condition{
-		Type:    "Ready",
-		Status:  corev1.ConditionFalse,
-		Reason:  "Processing",
-		Message: "Compliance suite doesn't have results yet",
-	})
-	s.Conditions.SetCondition(Condition{
-		Type:    "Processing",
-		Status:  corev1.ConditionTrue,
-		Reason:  "Running",
-		Message: "Compliance suite run is running the scans",
-	})
+	s.Conditions.SetConditionsProcessing("suite")
 }
 
 func (s *ComplianceSuiteStatus) SetConditionReady() {
-	s.Conditions.SetCondition(Condition{
-		Type:    "Ready",
-		Status:  corev1.ConditionTrue,
-		Reason:  "Done",
-		Message: "Compliance suite run is done and has results",
-	})
-	s.Conditions.SetCondition(Condition{
-		Type:    "Processing",
-		Status:  corev1.ConditionFalse,
-		Reason:  "NotRunning",
-		Message: "Compliance suite run is done running the scans",
-	})
+	s.Conditions.SetConditionReady("suite")
 }

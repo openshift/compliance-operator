@@ -210,6 +210,7 @@ func (r *ReconcileComplianceScan) validate(instance *compv1alpha1.ComplianceScan
 	if instance.Status.Phase == "" {
 		instanceCopy := instance.DeepCopy()
 		instanceCopy.Status.Phase = compv1alpha1.PhasePending
+		instanceCopy.Status.SetConditionPending()
 		updateErr := r.Client.Status().Update(context.TODO(), instanceCopy)
 		if updateErr != nil {
 			return false, updateErr
@@ -234,6 +235,7 @@ func (r *ReconcileComplianceScan) validate(instance *compv1alpha1.ComplianceScan
 		instanceCopy.Status.Result = compv1alpha1.ResultError
 		instanceCopy.Status.ErrorMessage = fmt.Sprintf("Scan type '%s' is not valid", instance.Spec.ScanType)
 		instanceCopy.Status.Phase = compv1alpha1.PhaseDone
+		instanceCopy.Status.SetConditionInvalid()
 		updateErr := r.Client.Status().Update(context.TODO(), instanceCopy)
 		if updateErr != nil {
 			return false, updateErr
@@ -263,6 +265,7 @@ func (r *ReconcileComplianceScan) validate(instance *compv1alpha1.ComplianceScan
 		instanceCopy.Status.ErrorMessage = fmt.Sprintf("Error parsing RawResultsStorageSize: %s", err)
 		instanceCopy.Status.Result = compv1alpha1.ResultError
 		instanceCopy.Status.Phase = compv1alpha1.PhaseDone
+		instanceCopy.Status.SetConditionInvalid()
 		err := r.Client.Status().Update(context.TODO(), instanceCopy)
 		if err != nil {
 			return false, err
@@ -348,6 +351,7 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(h scanTypeHandler, logge
 			scanCopy.Status.ErrorMessage = err.Error()
 			scanCopy.Status.Result = compv1alpha1.ResultError
 			scanCopy.Status.Phase = compv1alpha1.PhaseDone
+			scanCopy.Status.SetConditionInvalid()
 			if updateerr := r.Client.Status().Update(context.TODO(), scanCopy); updateerr != nil {
 				logger.Error(updateerr, "Failed to update a scan")
 				return reconcile.Result{}, updateerr
@@ -358,6 +362,7 @@ func (r *ReconcileComplianceScan) phaseLaunchingHandler(h scanTypeHandler, logge
 	}
 	// if we got here, there are no new pods to be created, move to the next phase
 	scan.Status.Phase = compv1alpha1.PhaseRunning
+	scan.Status.SetConditionsProcessing()
 	err = r.Client.Status().Update(context.TODO(), scan)
 	if err != nil {
 		// metric status update error
@@ -410,6 +415,7 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(h scanTypeHandler, log
 	if err != nil {
 		instance.Status.Phase = compv1alpha1.PhaseDone
 		instance.Status.Result = compv1alpha1.ResultError
+		instance.Status.SetConditionInvalid()
 		instance.Status.ErrorMessage = err.Error()
 		err = r.updateStatusWithEvent(instance, logger)
 		if err != nil {
@@ -469,6 +475,7 @@ func (r *ReconcileComplianceScan) phaseAggregatingHandler(h scanTypeHandler, log
 	}
 
 	instance.Status.Phase = compv1alpha1.PhaseDone
+	instance.Status.SetConditionReady()
 	err = r.updateStatusWithEvent(instance, logger)
 	if err != nil {
 		// metric status update error
