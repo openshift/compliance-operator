@@ -9,7 +9,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Enhancements
 
--
+- Documented support for evaluating rules against default `KubeletConfig` objects.
+  Please refer to the [usage guide](./doc/usage.md) for more information on this feature.
+
 
 ### Fixes
 

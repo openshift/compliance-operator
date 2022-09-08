@@ -166,6 +166,131 @@ $ oc get nodes -w
 Once the nodes reboot, you might want to run another Suite to ensure that
 the remediation that you applied previously was no longer found.
 
+## Evaluating rules against default configuration values
+
+Kubernetes infrastructure may contain incomplete configuration files. At run time, 
+nodes will assume default configuration values for missing configuration options.
+And some configuration can be passed as command line arguments, therefore,
+the Compliance Operator cannot assume the configuration file on the node is complete
+and it may be missing options used in rule checks.
+
+To prevent false negative findings where the default configuration value passes
+a check, the Compliance Operator uses the node proxy API to fetch the configuration
+for each node, then evaluates the properties for each and stores a "consistent" 
+copy to be evaluated against the rules. This increases the accuracy of the
+scan results.
+
+The  enchantment documentation can be found in the [following document](https://github.com/ComplianceAsCode/compliance-operator/blob/master/enhancements/improve-kubeletconfig-default-configuration-check-enhancement.md)
+
+No additional changes are required to use this feature with `master` and
+`worker` node pools. See the following sections for details on how to
+use this feature with custom node pools.
+
+
+
+### Custom node pools
+
+For scalability reasons, the Compliance Operator doesn't persist a copy of
+each node configuration. Instead, it aggregates consistent configuration
+options for all nodes within a single node pool into one copy of the configuration
+file. It then uses the configuration file for a particular node pool to evaluate
+rules against nodes within that pool.
+
+If your cluster uses custom node pools outside the default `worker` and `master`
+node pools, you'll need to supply additional variables to ensure the Compliance
+Operator aggregates a configuration file for that node pool.
+
+For example, in a cluster that has `master`, `worker` and `infra` pools, If a user wants 
+to check against all pools, they need to set the value of `ocp-var-role-master` and
+`ocp-var-role-worker` to `infra` in `TailoredProfile`:
+
+```yaml
+apiVersion: compliance.openshift.io/v1alpha1
+kind: TailoredProfile
+metadata:
+  name: cis-infra-tp
+spec:
+  extends: ocp4-cis
+  title: My modified nist profile with a custom value
+  setValues:
+  - name: ocp4-var-role-master
+    value: infra
+    rationale: test for infra nodes
+  - name: ocp4-var-role-worker
+    value: infra
+    rationale: test for infra nodes
+  description: cis-infra-scan
+```
+
+User will need to add `infra` role to the `ScanSetting` that will be in the `ScanSettingBinding.
+```yaml
+apiVersion: compliance.openshift.io/v1alpha1
+kind: ScanSetting
+metadata:
+  name: default
+  namespace: openshift-compliance
+rawResultStorage:
+  rotation: 3
+  size: 1Gi
+roles:
+- worker
+- master
+- infra
+scanTolerations:
+- effect: NoSchedule
+  key: node-role.kubernetes.io/master
+  operator: Exists
+schedule: '0 1 * * *'
+```
+And launch a scan using `ScanSettingBinding`:
+
+```yaml
+apiVersion: compliance.openshift.io/v1alpha1
+kind: ScanSettingBinding
+metadata:
+  name: cis
+  namespace: openshift-compliance
+profiles:
+- apiGroup: compliance.openshift.io/v1alpha1
+  kind: Profile
+  name: ocp4-cis
+- apiGroup: compliance.openshift.io/v1alpha1
+  kind: Profile
+  name: ocp4-cis-node
+- apiGroup: compliance.openshift.io/v1alpha1
+  kind: TailoredProfile
+  name: cis-infra-tp
+settingsRef:
+  apiGroup: compliance.openshift.io/v1alpha1
+  kind: ScanSetting
+  name: default
+```
+
+#### `KubeletConfig` Remediation on sub-pools
+
+If a user wants to use `KubeletConfig` remediation on sub-pools [Remediation for Customized MachineConfigPool](https://docs.openshift.com/container-platform/4.11/security/compliance_operator/compliance-operator-remediation.html#compliance-operator-apply-remediation-for-customized-mcp), they need to add a label
+to the sub-pool `MachineConfigPool`:
+
+`$ oc label mcp <sub-pool-name> pools.operator.machineconfiguration.openshift.io/<sub-pool-name>=`
+
+### How does it work?
+To give an example on the CIS benchmark:
+Compliance Operator checks runtime `KubeletConfig` through Kubernetes `Node/Proxy` object, and it uses variables
+`ocp-var-role-master` and `ocp-var-role-master` to determine the nodes it performs the check against.
+And in `ComplianceCheckResult`, `KubeletConfig` rules will be shown as `ocp4-cis-kubelet-*`. The scan only
+passes if all selected nodes pass the check.
+
+
+
+### List of `KubeletConfig` rules checked through `Node/Proxy` object:
+
+A user can find out if a rule is checked through `Node/Proxy` object by
+checking if `valuesUsed` of the ComplianceCheckResult contains `ocp4-var-role-master`
+or `ocp4-var-role-worker`:
+
+`oc get ccr -n openshift-compliance -o yaml | jq '.items[] | select(.valuesUsed | contains("ocp4-var-role-master") or contains("ocp4-var-role-worker"))'`
+
+
 ## Extracting raw results
 
 The scans provide two kinds of raw results: the full report in the ARF format
