@@ -9,6 +9,33 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Enhancements
 
+-
+
+### Fixes
+
+-
+
+### Internal Changes
+
+-
+
+### Deprecations
+
+-
+
+### Removals
+
+-
+
+### Security
+
+-
+
+
+## [0.1.54] - 2022-09-08
+
+### Enhancements
+
 - Added the ability to set `PriorityClass` through `ScanSetting`. All the scanner pods
   will be launched using the `PriorityClass` if set. This is an optional attribute, the
   scan pods will be launched without `PriorityClass` if not set.
