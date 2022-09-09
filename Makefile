@@ -76,7 +76,6 @@ CURPATH=$(PWD)
 TARGET_DIR=$(CURPATH)/build/_output
 GOFLAGS?=-mod=vendor
 GO=GOFLAGS=$(GOFLAGS) GO111MODULE=auto go
-GOBUILD=$(GO) build
 BUILD_GOPATH=$(TARGET_DIR):$(CURPATH)/cmd
 TARGET_OPERATOR=$(TARGET_DIR)/bin/$(APP_NAME)
 MAIN_PKG=main.go
@@ -418,7 +417,10 @@ images-extra: openscap-image e2e-content-images  ## Build the openscap and test 
 
 .PHONY: build
 build: generate fmt vet test-unit ## Build the operator binary.
-	$(GO) build -o $(TARGET_OPERATOR) $(MAIN_PKG)
+	$(GO) build \
+		-trimpath \
+		-ldflags=-buildid= \
+		-o $(TARGET_OPERATOR) $(MAIN_PKG)
 
 .PHONY: manager
 manager: build  ## Alias for make build.
