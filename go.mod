@@ -112,7 +112,7 @@ require (
 	github.com/coreos/ign-converter v0.0.0-20201123214124-8dac862888aa // indirect
 	github.com/coreos/ignition v0.35.0 // indirect
 	github.com/coreos/vcontext v0.0.0-20211021162308-f1dbbca7bef4 // indirect
-	github.com/emicklei/go-restful v2.10.0+incompatible // indirect
+	github.com/emicklei/go-restful v2.16.0+incompatible // indirect
 	github.com/fatih/color v1.12.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
