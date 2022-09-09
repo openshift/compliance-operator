@@ -1,0 +1,82 @@
+---
+name: trivy-container-scan
+
+# Run for all pushes to main and pull requests when Go or YAML files change
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '15 15 * * 2'
+  pull_request:
+
+jobs:
+  scan-trivy-openscap:
+    name: Security Scan for OpenSCAP image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 
+        uses: actions/checkout@v3
+
+      - name: Build
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./images/openscap/Dockerfile
+          push: false
+          load: true
+          tags: localbuild/sec-scan-trivy:latest
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: localbuild/sec-scan-trivy:latest
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+  scan-trivy-operator:
+    name: Security scan for Compliance Operator image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 
+        uses: actions/checkout@v3
+
+      - name: Build
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./build/Dockerfile
+          push: false
+          load: true
+          tags: localbuild/sec-scan-trivy:latest
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: localbuild/sec-scan-trivy:latest
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+  scan-trivy-repo:
+    name: Security scan for git repo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 
+        uses: actions/checkout@v3
+
+      - name: Scan repo
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
