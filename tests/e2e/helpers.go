@@ -40,6 +40,7 @@ import (
 
 	"github.com/ComplianceAsCode/compliance-operator/pkg/apis"
 	compv1alpha1 "github.com/ComplianceAsCode/compliance-operator/pkg/apis/compliance/v1alpha1"
+	compscanctrl "github.com/ComplianceAsCode/compliance-operator/pkg/controller/compliancescan"
 	compsuitectrl "github.com/ComplianceAsCode/compliance-operator/pkg/controller/compliancesuite"
 	"github.com/ComplianceAsCode/compliance-operator/pkg/utils"
 	"github.com/ComplianceAsCode/compliance-operator/tests/e2e/e2eutil"
@@ -2119,6 +2120,38 @@ func checkPodPriorityClass(t *testing.T, c kubernetes.Interface, podName, namesp
 		if pod.Spec.PriorityClassName != priorityClass {
 			E2ELogf(t, "pod %s has priority class %s, expected %s", podName, pod.Spec.PriorityClassName, priorityClass)
 			return true, nil
+		}
+
+		return true, nil
+	}
+}
+
+// check if pod name has priority class set to the given value.
+func checkPodLimit(t *testing.T, c kubernetes.Interface, podName, namespace, cpuLimit, memLimit string) wait.ConditionFunc {
+	return func() (bool, error) {
+		pod, err := c.CoreV1().Pods(namespace).Get(goctx.TODO(), podName, metav1.GetOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return false, err
+		}
+
+		if apierrors.IsNotFound(err) {
+			E2ELogf(t, "Pod %s not found yet", podName)
+			return false, nil
+		}
+
+		for i := range pod.Spec.Containers {
+			cnt := &pod.Spec.Containers[i]
+			if cnt.Name != compscanctrl.PlatformScanResourceCollectorName && cnt.Name != compscanctrl.OpenSCAPScanContainerName {
+				continue
+			}
+
+			if cnt.Resources.Limits.Cpu().String() != cpuLimit {
+				return false, fmt.Errorf("container %s in pod %s has cpu limit %s, expected %s", cnt.Name, podName, cnt.Resources.Limits.Cpu().String(), cpuLimit)
+			}
+
+			if cnt.Resources.Limits.Memory().String() != memLimit {
+				return false, fmt.Errorf("container %s in pod %s has memory limit %s, expected %s", cnt.Name, podName, cnt.Resources.Limits.Cpu().String(), cpuLimit)
+			}
 		}
 
 		return true, nil

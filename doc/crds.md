@@ -608,6 +608,8 @@ In the `spec`:
   [Kubernetes documentation on this](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/).
 * **PriorityClass**: Defines the priority class name of the scan(s).
   [Kubernetes documentation on this](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/)
+* **scanLimits**: Allows to override the default memory or CPU limits for the
+  scanner pods. For syntax, refer to the [Kubernetes documentation](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
 
 Regarding the `status`:
 

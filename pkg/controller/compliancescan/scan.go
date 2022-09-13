@@ -47,6 +47,24 @@ func (r *ReconcileComplianceScan) launchScanPod(instance *compv1alpha1.Complianc
 	return nil
 }
 
+func scanLimits(scanInstance *compv1alpha1.ComplianceScan, defaultMem, defaultCpu string) *corev1.ResourceList {
+	limits := corev1.ResourceList{
+		corev1.ResourceMemory: resource.MustParse(defaultMem),
+		corev1.ResourceCPU:    resource.MustParse(defaultCpu),
+	}
+
+	if scanInstance.Spec.ScanLimits != nil {
+		for resource := range limits {
+			customLimit, ok := scanInstance.Spec.ScanLimits[resource]
+			if ok {
+				limits[resource] = customLimit
+			}
+		}
+	}
+
+	return &limits
+}
+
 func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.Node, logger logr.Logger) *corev1.Pod {
 	mode := int32(0744)
 
@@ -172,10 +190,9 @@ func newScanPodForNode(scanInstance *compv1alpha1.ComplianceScan, node *corev1.N
 							corev1.ResourceMemory: resource.MustParse("50Mi"),
 							corev1.ResourceCPU:    resource.MustParse("10m"),
 						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("500Mi"),
-							corev1.ResourceCPU:    resource.MustParse("100m"),
-						},
+						// NOTE: when changing the default limits, remember to also change the
+						// doc text in the CRD.
+						Limits: *scanLimits(scanInstance, "500Mi", "100m"),
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
@@ -375,10 +392,9 @@ func (r *ReconcileComplianceScan) newPlatformScanPod(scanInstance *compv1alpha1.
 							corev1.ResourceMemory: resource.MustParse("20Mi"),
 							corev1.ResourceCPU:    resource.MustParse("10m"),
 						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("200Mi"),
-							corev1.ResourceCPU:    resource.MustParse("100m"),
-						},
+						// NOTE: when changing the default limits, remember to also change the
+						// doc text in the CRD.
+						Limits: *scanLimits(scanInstance, "202Mi", "100m"),
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
@@ -463,10 +479,9 @@ func (r *ReconcileComplianceScan) newPlatformScanPod(scanInstance *compv1alpha1.
 							corev1.ResourceMemory: resource.MustParse("50Mi"),
 							corev1.ResourceCPU:    resource.MustParse("10m"),
 						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("500Mi"),
-							corev1.ResourceCPU:    resource.MustParse("100m"),
-						},
+						// NOTE: when changing the default limits, remember to also change the
+						// doc text in the CRD.
+						Limits: *scanLimits(scanInstance, "500Mi", "100m"),
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
