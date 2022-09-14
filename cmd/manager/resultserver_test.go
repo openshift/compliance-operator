@@ -57,26 +57,26 @@ var _ = Describe("Resultserver testing", func() {
 			ioutil.TempFile(dir1, "baz")
 
 			// Ensure next directory will have significant time difference
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			dir2, err = ioutil.TempDir(rootDir, "rotate-2")
 			Expect(err).To(BeNil())
 			ioutil.TempFile(dir2, "foo")
 			ioutil.TempFile(dir2, "bar")
 
 			// Ensure next directory will have significant time difference
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			dir3, err = ioutil.TempDir(rootDir, "rotate-3")
 			Expect(err).To(BeNil())
 
 			// chmod the dirs in reverse order to make sure we are really relying on
 			// modification time and not change time (see OCPBUGSM-13482)
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			err = os.Chmod(dir3, os.ModePerm)
 			Expect(err).To(BeNil())
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			err = os.Chmod(dir2, os.ModePerm)
 			Expect(err).To(BeNil())
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			err = os.Chmod(dir1, os.ModePerm)
 			Expect(err).To(BeNil())
 
