@@ -11,6 +11,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Documented support for evaluating rules against default `KubeletConfig` objects.
   Please refer to the [usage guide](./doc/usage.md) for more information on this feature.
+- The `ScanSetting` Custom Resource now allows to override the default
+  CPU and memory limits of scanner pods through the `scanLimits` attribute.
+  Please refer to the [Kubernetes documentation](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
+  for syntax reference.
+  In order to set the memory limits of the operator itself, modify the
+  `Subscription` object, if installed through OLM or the operator deployment
+  itself otherwise. Increasing the memory limit for the operator or the scanner
+  might be needed in case the default limits are not sufficient and either the operator
+  or the scanner pods are killed by the OOM killer.
 
 
 ### Fixes
@@ -41,15 +50,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Added the ability to set `PriorityClass` through `ScanSetting`. All the scanner pods
   will be launched using the `PriorityClass` if set. This is an optional attribute, the
   scan pods will be launched without `PriorityClass` if not set.
-- The `ScanSetting` Custom Resource now allows to override the default
-  CPU and memory limits of scanner pods through the `scanLimits` attribute.
-  Please refer to the [Kubernetes documentation](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
-  for syntax reference.
-  In order to set the memory limits of the operator itself, modify the
-  `Subscription` object, if installed through OLM or the operator deployment
-  itself otherwise. Increasing the memory limit for the operator or the scanner
-  might be needed in case the default limits are not sufficient and either the operator
-  or the scanner pods are killed by the OOM killer.
 
 - Added the ability to check default `KubeletConfig` configuration. Compliance Operator
   will fetch `KubeletConfig` for each node and save it to `/kubeletconfig/role/{{role}}`.
