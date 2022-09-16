@@ -152,10 +152,12 @@ to `true`:
 $ oc edit -n $NAMESPACE complianceremediation/workers-scan-no-direct-root-logins
 ```
 
-The operator then creates a `MachineConfig` object per remediation. This
-`MachineConfig` object is rendered to a `MachinePool` and the
-`MachineConfigDeamon` running on nodes in that pool pushes the configuration
-to the nodes and reboots the nodes.
+The operator then creates a `MachineConfig` or `KubeletConfig` object per remediation. 
+This object is rendered to a `MachinePool` and the `MachineConfigDaemon` running on
+nodes in that pool pushes the configuration to the nodes and reboots the nodes.
+
+The more documentation on how `KubeletConfig` remediation work [following document](https://github.com/ComplianceAsCode/compliance-operator/blob/master/doc/kubeletConfig-remediations.md)
+
 
 You can watch the node status with:
 
