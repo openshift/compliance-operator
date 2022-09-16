@@ -68,7 +68,8 @@ OPENSCAP_IMAGE?=$(DEFAULT_OPENSCAP_IMAGE)
 # Image path to use. Set this if you want to use a specific path for building
 # or your e2e tests. This is overwritten if we build the image and push it to
 # the cluster or if we're on CI.
-OPERATOR_IMAGE?=$(IMAGE_REPO)/$(APP_NAME):$(TAG)
+OPERATOR_TAG_BASE=$(IMAGE_REPO)/$(APP_NAME)
+OPERATOR_IMAGE?=$(OPERATOR_TAG_BASE):$(TAG)
 
 # Build variables
 # ===============
@@ -175,7 +176,8 @@ IMAGE_TAG_BASE=$(IMAGE_REPO)/$(APP_NAME)
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
-BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:$(TAG)
+BUNDLE_TAG_BASE= $(IMAGE_TAG_BASE)-bundle
+BUNDLE_IMG ?= $(BUNDLE_TAG_BASE):$(TAG)
 
 # BUNDLE_GEN_FLAGS are the flags passed to the operator-sdk generate bundle command
 BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
@@ -203,7 +205,8 @@ BUNDLE_IMGS ?= $(BUNDLE_IMG)
 # Used for substitutions
 DEFAULT_CATALOG_IMG=$(DEFAULT_REPO)/$(APP_NAME)-catalog:$(DEFAULT_TAG)
 # The image tag given to the resulting catalog image (e.g. make catalog-build CATALOG_IMG=example.com/operator-catalog:v0.2.0).
-CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:$(TAG)
+CATALOG_TAG_BASE=$(IMAGE_TAG_BASE)-catalog
+CATALOG_IMG ?= $(CATALOG_TAG_BASE):$(TAG)
 CATALOG_DIR=config/catalog
 CATALOG_SRC_FILE=$(CATALOG_DIR)/catalog-source.yaml
 CATALOG_GROUP_FILE=$(CATALOG_DIR)/operator-group.yaml
@@ -643,8 +646,12 @@ push-release: package-version-to-tag ## Do an official release (Requires permiss
 
 .PHONY: release-images
 release-images: package-version-to-tag push catalog
+	$(RUNTIME) image tag $(OPERATOR_IMAGE) $(OPERATOR_TAG_BASE):latest
+	$(RUNTIME) image tag $(BUNDLE_IMG) $(BUNDLE_TAG_BASE):latest
+	$(RUNTIME) image tag $(CATALOG_IMG) $(CATALOG_TAG_BASE):latest
 	# This will ensure that we also push to the latest tag
 	$(MAKE) push TAG=latest
+	$(MAKE) catalog-push TAG=latest
 
 .PHONY: changelog
 changelog:
