@@ -3,5 +3,5 @@ kind: ProfileBundle
 metadata:
   name: ocp4
 spec:
-  contentImage: quay.io/compliance-operator/compliance-operator-content:latest
+  contentImage: ghcr.io/complianceascode/k8scontent:latest
   contentFile: ssg-ocp4-ds.xml
