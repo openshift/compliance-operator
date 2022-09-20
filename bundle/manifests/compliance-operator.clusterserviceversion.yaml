@@ -38,7 +38,7 @@ metadata:
             "scans": [
               {
                 "content": "ssg-rhcos4-ds.xml",
-                "contentImage": "quay.io/compliance-operator/compliance-operator-content:latest",
+                "contentImage": "ghcr.io/complianceascode/k8scontent:latest",
                 "name": "workers-scan",
                 "nodeSelector": {
                   "node-role.kubernetes.io/worker": ""
@@ -47,7 +47,7 @@ metadata:
               },
               {
                 "content": "ssg-ocp4-ds.xml",
-                "contentImage": "quay.io/compliance-operator/compliance-operator-content:latest",
+                "contentImage": "ghcr.io/complianceascode/k8scontent:latest",
                 "name": "platform-scan",
                 "profile": "xccdf_org.ssgproject.content_profile_moderate",
                 "scanType": "Platform"
@@ -64,7 +64,7 @@ metadata:
           },
           "spec": {
             "contentFile": "ssg-ocp4-ds.xml",
-            "contentImage": "quay.io/compliance-operator/compliance-operator-content:latest"
+            "contentImage": "ghcr.io/complianceascode/k8scontent:latest"
           }
         },
         {
