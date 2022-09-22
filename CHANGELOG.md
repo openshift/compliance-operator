@@ -17,7 +17,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Internal Changes
 
--
+- Add `KubletConfig` remediation to compliance remediation section in the usage doc.
 
 ### Deprecations
 
