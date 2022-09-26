@@ -386,6 +386,14 @@ func ensureMetricsServiceAndSecret(ctx context.Context, kClient *kubernetes.Clie
 		if !reflect.DeepEqual(curService.Spec, newService.Spec) {
 			serviceCopy := curService.DeepCopy()
 			serviceCopy.Spec = newService.Spec
+
+			// OCP-4.6 only - Retain ClusterIP from the current service in case we overwrite it when copying the updated
+			// service. Avoids "Error creating metrics service/secret","error":"Service \"metrics\" is invalid: spec.clusterIP:
+			// Invalid value: \"\": field is immutable","stacktrace"...
+			if len(serviceCopy.Spec.ClusterIP) == 0 {
+				serviceCopy.Spec.ClusterIP = curService.Spec.ClusterIP
+			}
+
 			updatedService, updateErr := kClient.CoreV1().Services(ns).Update(ctx, serviceCopy, metav1.UpdateOptions{})
 			if updateErr != nil {
 				return nil, updateErr
