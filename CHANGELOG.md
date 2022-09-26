@@ -13,11 +13,20 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixes
 
--
+- Fixed a bug where, if  the Compliance Operator was running on OCP 4.6, it
+  would have failed on startup with the following error message:
+  ```
+  "Error creating metrics service/secret","error":"Service \"metrics\" is invalid: spec.clusterIP:
+  Invalid value: \"\": field is immutable"
+  ```
+  This bug was introduced with the operator-sdk update in 0.1.54.
 
 ### Internal Changes
 
 - Add `KubletConfig` remediation to compliance remediation section in the usage doc.
+- The `batch/v1beta1` Kubernetes API interfaces are no longer used. Instead,
+  the Compliance Operator now uses the `batch/v1` interfaces
+  ([BZ: #2098581](https://bugzilla.redhat.com/show_bug.cgi?id=2098581))
 
 ### Deprecations
 

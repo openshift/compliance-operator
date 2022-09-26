@@ -8,7 +8,6 @@ import (
 	"github.com/go-logr/logr"
 	cron "github.com/robfig/cron/v3"
 	batchv1 "k8s.io/api/batch/v1"
-	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -56,9 +55,9 @@ func (r *ReconcileComplianceSuite) validateSchedule(suite *compv1alpha1.Complian
 	return true, ""
 }
 
-func (r *ReconcileComplianceSuite) handleCreate(suite *compv1alpha1.ComplianceSuite, rerunner *batchv1beta1.CronJob, logger logr.Logger) error {
+func (r *ReconcileComplianceSuite) handleCreate(suite *compv1alpha1.ComplianceSuite, rerunner *batchv1.CronJob, logger logr.Logger) error {
 	key := types.NamespacedName{Name: rerunner.GetName(), Namespace: rerunner.GetNamespace()}
-	found := &batchv1beta1.CronJob{}
+	found := &batchv1.CronJob{}
 	err := r.Client.Get(context.TODO(), key, found)
 	if err != nil && errors.IsNotFound(err) {
 		// No re-runner found, create it
@@ -96,9 +95,9 @@ func (r *ReconcileComplianceSuite) getPriorityClassName(suite *compv1alpha1.Comp
 	return scans.Items[0].Spec.PriorityClass, nil
 }
 
-func (r *ReconcileComplianceSuite) handleRerunnerDelete(rerunner *batchv1beta1.CronJob, suiteName string, logger logr.Logger) error {
+func (r *ReconcileComplianceSuite) handleRerunnerDelete(rerunner *batchv1.CronJob, suiteName string, logger logr.Logger) error {
 	key := types.NamespacedName{Name: rerunner.GetName(), Namespace: rerunner.GetNamespace()}
-	found := &batchv1beta1.CronJob{}
+	found := &batchv1.CronJob{}
 	err := r.Client.Get(context.TODO(), key, found)
 	if err != nil && errors.IsNotFound(err) {
 		// No re-runner found, we're good
@@ -137,17 +136,17 @@ func GetRerunnerName(suiteName string) string {
 	return suiteName + "-rerunner"
 }
 
-func (r *ReconcileComplianceSuite) getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1beta1.CronJob {
+func (r *ReconcileComplianceSuite) getRerunner(suite *compv1alpha1.ComplianceSuite) *batchv1.CronJob {
 	falseP := false
 	trueP := true
-	return &batchv1beta1.CronJob{
+	return &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetRerunnerName(suite.Name),
 			Namespace: common.GetComplianceOperatorNamespace(),
 		},
-		Spec: batchv1beta1.CronJobSpec{
+		Spec: batchv1.CronJobSpec{
 			Schedule: suite.Spec.Schedule,
-			JobTemplate: batchv1beta1.JobTemplateSpec{
+			JobTemplate: batchv1.JobTemplateSpec{
 				Spec: batchv1.JobSpec{
 					Template: corev1.PodTemplateSpec{
 						ObjectMeta: metav1.ObjectMeta{

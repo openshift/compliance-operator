@@ -24,7 +24,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	batchv1beta1 "k8s.io/api/batch/v1beta1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -1864,7 +1864,7 @@ func scanHasValidPVCReference(f *framework.Framework, namespace, scanName string
 }
 
 func waitForCronJobWithSchedule(t *testing.T, f *framework.Framework, namespace, suiteName, schedule string) error {
-	job := &batchv1beta1.CronJob{}
+	job := &batchv1.CronJob{}
 	jobName := compsuitectrl.GetRerunnerName(suiteName)
 	var lastErr error
 	// retry and ignore errors until timeout
