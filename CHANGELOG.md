@@ -13,7 +13,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixes
 
--
+- Fix broken-content script to include a new image tag, and add test content datastream xml files.
+  We pushed a new test content image to `quay.io/compliance-operator/test-broken-content:kublet_default`
+  for our Compliance Operator e2e test. In order to run e2e test on other architectures, we need to store
+  the test content datastream xml files under images/testcontent, and update the broken-content script
+  to include that image tag.
 
 ### Internal Changes
 
