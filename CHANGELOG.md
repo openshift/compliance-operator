@@ -13,6 +13,29 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixes
 
+-
+
+### Internal Changes
+
+-
+
+### Deprecations
+
+-
+
+### Removals
+
+-
+
+### Security
+
+-
+
+
+## [0.1.56] - 2022-09-27
+
+### Fixes
+
 - Fixed a bug where, if  the Compliance Operator was running on OCP 4.6, it
   would have failed on startup with the following error message:
   ```
@@ -27,19 +50,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The `batch/v1beta1` Kubernetes API interfaces are no longer used. Instead,
   the Compliance Operator now uses the `batch/v1` interfaces
   ([BZ: #2098581](https://bugzilla.redhat.com/show_bug.cgi?id=2098581))
-
-### Deprecations
-
--
-
-### Removals
-
--
-
-### Security
-
--
-
 
 ## [0.1.55] - 2022-09-15
 
