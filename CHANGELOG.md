@@ -17,7 +17,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Internal Changes
 
--
+- Added a utility script to make it easier for maintainers to propose releases,
+  regardless of the git remote configuration. See the previously closed
+  [issue](https://github.com/ComplianceAsCode/compliance-operator/issues/8) for
+  more details.
 
 ### Deprecations
 
