@@ -48,8 +48,13 @@ endif
 
 # Git options.
 GIT_OPTS?=
-# Set this to the remote used for the upstream repo (for release)
-GIT_REMOTE?=origin
+# Set this to the remote used for the upstream repo (for release). Different
+# maintainers might use different names for the upstream repository. Since our
+# release process expects maintainers to propose release patches directly to
+# the upstream repository, let's make sure we're proposing it to the right one.
+# We rely on a bash script for this since it's simplier than interating over a
+# list with conditionals in GNU make.
+GIT_REMOTE?=$(shell ./utils/git-remote.sh)
 
 # Image variables
 # ===============
@@ -89,10 +94,6 @@ SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./
 
 MUST_GATHER_IMAGE_PATH?=$(IMAGE_REPO)/must-gather
 MUST_GATHER_IMAGE_TAG?=$(TAG)
-# Set this to the remote used for the upstream repo (for release). Use an
-# absolute reference by default since we don't know if origin is the
-# contributor's fork or if it's the upstream repository.
-GIT_REMOTE?=git@github.com:ComplianceAsCode/compliance-operator.git
 
 # Kubernetes variables
 # ====================
