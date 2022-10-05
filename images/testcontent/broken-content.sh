@@ -14,6 +14,7 @@ declare -a tags=(
     'to'
     'kubeletconfig'
     'variabletemplate'
+    'kubelet_default'
 )
 
 CMD=$1

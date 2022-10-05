@@ -3676,7 +3676,7 @@ func TestE2E(t *testing.T) {
 			Name:       "TestCheckDefaultKubeletConfig",
 			IsParallel: true,
 			TestFn: func(t *testing.T, f *framework.Framework, ctx *framework.Context, mcTctx *mcTestCtx, namespace string) error {
-				var baselineImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "kublet_default")
+				var baselineImage = fmt.Sprintf("%s:%s", brokenContentImagePath, "kubelet_default")
 				const requiredRule = "kubelet-test-cipher"
 				pbName := getObjNameFromTest(t)
 				prefixName := func(profName, ruleBaseName string) string { return profName + "-" + ruleBaseName }
