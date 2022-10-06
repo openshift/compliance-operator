@@ -5,7 +5,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/go-logr/logr"
 	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap/zapcore"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"os"
 	"reflect"
@@ -144,12 +146,22 @@ func printVersion() {
 	setupLog.Info(fmt.Sprintf("Compliance Operator Version: %v", version.Version))
 }
 
+func operatorTimeEncoder() zapcore.TimeEncoder {
+	return zapcore.ISO8601TimeEncoder
+}
+
+func operatorLogger() logr.Logger {
+	return zap.New(zap.UseFlagOptions(&zap.Options{
+		TimeEncoder: operatorTimeEncoder(),
+	}))
+}
+
 func RunOperator(cmd *cobra.Command, args []string) {
 	flags := cmd.Flags()
 	flags.AddGoFlagSet(flag.CommandLine)
 	flags.Parse(args)
 
-	logf.SetLogger(zap.New())
+	logf.SetLogger(operatorLogger())
 
 	printVersion()
 
