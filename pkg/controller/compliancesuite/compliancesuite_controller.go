@@ -203,19 +203,7 @@ func (r *ReconcileComplianceSuite) Reconcile(ctx context.Context, request reconc
 }
 
 func (r *ReconcileComplianceSuite) suiteDeleteHandler(suite *compv1alpha1.ComplianceSuite, logger logr.Logger) error {
-	rerunner := r.getRerunner(suite)
-	priorityClassName, err := r.getPriorityClassName(suite)
-	if err != nil {
-		logger.Error(err, "Cannot get priority class name, scan will not be run with set priority class")
-	}
-	if priorityClassName != "" {
-		if priorityClassExist, why := utils.ValidatePriorityClassExist(priorityClassName, r.Client); !priorityClassExist {
-			log.Info(why, "Suit.Name", suite.Name)
-			r.Recorder.Eventf(suite, corev1.EventTypeWarning, "PriorityClass", why+" Suit:"+suite.Name)
-		}
-		rerunner.Spec.JobTemplate.Spec.Template.Spec.PriorityClassName = priorityClassName
-	}
-	if err = r.handleRerunnerDelete(rerunner, suite.Name, logger); err != nil {
+	if err := r.handleRerunnerDelete(suite, logger); err != nil {
 		return err
 	}
 

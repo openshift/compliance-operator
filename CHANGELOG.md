@@ -19,6 +19,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   the test content datastream xml files under images/testcontent, and update the broken-content script
   to include that image tag.
 
+- The Compliance Operator now falls back to using the v1beta1 CronJob API
+  on clusters where the v1 CronJob API is not available which fixes a
+  [regression](https://issues.redhat.com/browse/OCPBUGS-2156) which was introduced
+  in the previous release (v0.1.56)
+
 ### Internal Changes
 
 - Added a utility script to make it easier for maintainers to propose releases,
