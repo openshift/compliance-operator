@@ -82,3 +82,4 @@ tags
 .idea
 # Generated files for E2E test setup
 tests/_setup
+tests/e2e-test.log
