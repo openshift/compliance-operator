@@ -29,7 +29,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Added a utility script to make it easier for maintainers to propose releases,
   regardless of the git remote configuration. See the previously closed
   [issue](https://github.com/ComplianceAsCode/compliance-operator/issues/8) for
-  more details.
+
+- There was a regression in `quay.io/compliance-operator/test-broken-content:kubelet_default`
+  on OCP 4.12 cluster, which caused the e2e test to fail. Since we have fix the test image,
+  here we updated datastream xml files for the test content image.
 
 ### Deprecations
 
