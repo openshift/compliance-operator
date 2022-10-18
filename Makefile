@@ -614,12 +614,12 @@ must-gather: must-gather-image must-gather-push  ## Build and push the must-gath
 ##@ Release
 
 .PHONY: package-version-to-tag
-package-version-to-tag: check-operator-version
+package-version-to-tag: check-operator-version ## Explicitly override $TAG with $VERSION. This is a useful utility for other release targets.
 	@echo "Overriding default tag '$(TAG)' with release tag '$(VERSION)'"
 	$(eval TAG = $(VERSION))
 
 .PHONY: git-release
-git-release: fetch-git-tags package-version-to-tag changelog
+git-release: fetch-git-tags package-version-to-tag changelog ## Update project files with new version information.
 	git checkout -b "release-v$(TAG)"
 	sed -i "s/\(.*Version = \"\).*/\1$(TAG)\"/" version/version.go
 	sed -i "s/\(.*VERSION?=\).*/\1$(TAG)/" version.Makefile
@@ -628,15 +628,15 @@ git-release: fetch-git-tags package-version-to-tag changelog
 	git restore config/manager/kustomization.yaml
 
 .PHONY: fetch-git-tags
-fetch-git-tags:
+fetch-git-tags: ## Fetch tags for the repository. This is a useful utility for other release targets.
 	# Make sure we are caught up with tags
 	git fetch -t
 
 .PHONY: prepare-release
-prepare-release: package-version-to-tag images git-release
+prepare-release: package-version-to-tag images git-release ## Make local changes to release a new version of the operator. Changes are staged locally for review.
 
 .PHONY: push-release
-push-release: package-version-to-tag ## Do an official release (Requires permissions)
+push-release: package-version-to-tag ## Create a commit for the release change, tag the new version, and push the change for review using a dedicated release branch. Requires a ComplianceAsCode/compliance-operator maintainer.
 	git commit -m "Release v$(TAG)"
 	git tag "v$(TAG)"
 	git push $(GIT_REMOTE) "v$(TAG)"
@@ -646,7 +646,7 @@ push-release: package-version-to-tag ## Do an official release (Requires permiss
 	git push $(GIT_REMOTE) ocp-0.1
 
 .PHONY: release-images
-release-images: package-version-to-tag push catalog
+release-images: package-version-to-tag push catalog ## Build container images, bundle images, and catalog images and push them to an image registry (default: quay.io/compliance-operator).
 	$(RUNTIME) image tag $(OPERATOR_IMAGE) $(OPERATOR_TAG_BASE):latest
 	$(RUNTIME) image tag $(BUNDLE_IMG) $(BUNDLE_TAG_BASE):latest
 	$(RUNTIME) image tag $(CATALOG_IMG) $(CATALOG_TAG_BASE):latest
@@ -655,5 +655,5 @@ release-images: package-version-to-tag push catalog
 	$(MAKE) catalog-push TAG=latest
 
 .PHONY: changelog
-changelog:
+changelog: ## Move all unreleased notes in the CHANGELOG to a section dedicated to $TAG. This is a useful utility for other release targets.
 	@utils/update_changelog.sh "$(TAG)"
