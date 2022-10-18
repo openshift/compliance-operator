@@ -384,16 +384,13 @@ endif
 ##@ Generate
 
 .PHONY: update-skip-range
-update-skip-range: check-operator-version
+update-skip-range: check-operator-version ## Set olm.skipRange attribute in the operator CSV to $VERSION. This assumes upgrades can skip versions (0.1.47 can be upgraded to 0.1.53).
 	sed -i '/replaces:/d' config/manifests/bases/compliance-operator.clusterserviceversion.yaml
 	sed -i "s/\(olm.skipRange: '>=.*\)<.*'/\1<$(VERSION)'/" config/manifests/bases/compliance-operator.clusterserviceversion.yaml
 
 .PHONY: namespace
-namespace:
+namespace: ## Create the default namespace for the operator (e.g., openshift-compliance).
 	@oc apply -f config/ns/ns.yaml
-
-
-##@ Generate
 
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
