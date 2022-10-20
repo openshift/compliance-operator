@@ -160,7 +160,7 @@ metadata:
       ]
     capabilities: Seamless Upgrades
     categories: Monitoring,Security
-    olm.skipRange: '>=0.1.17 <0.1.56'
+    olm.skipRange: '>=0.1.17 <0.1.57'
     operatorframework.io/cluster-monitoring: "true"
     operatorframework.io/suggested-namespace: openshift-compliance
     operators.openshift.io/infrastructure-features: '["disconnected", "fips", "proxy-aware"]'
