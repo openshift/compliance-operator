@@ -18,21 +18,24 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   for our Compliance Operator e2e test. In order to run e2e test on other architectures, we need to store
   the test content datastream xml files under images/testcontent, and update the broken-content script
   to include that image tag.
-
 - The Compliance Operator now falls back to using the v1beta1 CronJob API
   on clusters where the v1 CronJob API is not available which fixes a
   [regression](https://issues.redhat.com/browse/OCPBUGS-2156) which was introduced
   in the previous release (v0.1.56)
+- Minor development enhancements to the `Makefile` help text. See `make help`.
 
 ### Internal Changes
 
 - Added a utility script to make it easier for maintainers to propose releases,
   regardless of the git remote configuration. See the previously closed
   [issue](https://github.com/ComplianceAsCode/compliance-operator/issues/8) for
-
+  more details.
 - There was a regression in `quay.io/compliance-operator/test-broken-content:kubelet_default`
   on OCP 4.12 cluster, which caused the e2e test to fail. Since we have fix the test image,
   here we updated datastream xml files for the test content image.
+- Modify the `make e2e` target to save test logs to `tests/data/e2e-test.log`.
+  This is useful when initiating end-to-end tests locally and debugging the
+  output.
 
 ### Deprecations
 
