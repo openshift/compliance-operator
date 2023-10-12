@@ -51,7 +51,7 @@ scan the actual cluster nodes. All the `rhcos4-*` profiles above can be
 used to create node scans.
 
 Before taking one into use, we'll need to configure how the scans
-will run. We can do this with the `ScanSetttings` custom resource. The
+will run. We can do this with the `ScanSettings` custom resource. The
 compliance-operator already ships with a default `ScanSettings` object
 that you can take into use immediately:
 
