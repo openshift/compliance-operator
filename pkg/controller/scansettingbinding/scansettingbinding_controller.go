@@ -277,7 +277,7 @@ func (r *ReconcileScanSettingBinding) Reconcile(request reconcile.Request) (reco
 			reqLogger.Info("Suite updated", "suite.Name", suite.Name)
 			r.Eventf(
 				instance, corev1.EventTypeNormal, "SuiteUpdated",
-				"ComplianceSuite %s/%s updatd", suite.Namespace, suite.Name,
+				"ComplianceSuite %s/%s updated", suite.Namespace, suite.Name,
 			)
 		} else {
 			reqLogger.Error(err, "Suite failed to update", "suite.Name", suite.Name)
